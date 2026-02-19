@@ -3,6 +3,48 @@ const REQUIRED = {
   partner_copy: ["partner", "doel_van_de_mail", "cta_omschrijving"],
 };
 
+function parseBasicAuth(req) {
+  const header = req.headers.authorization || "";
+  if (!header.startsWith("Basic ")) return null;
+
+  const encoded = header.slice(6).trim();
+  if (!encoded) return null;
+
+  try {
+    const decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const separatorIndex = decoded.indexOf(":");
+    if (separatorIndex === -1) return null;
+
+    return {
+      user: decoded.slice(0, separatorIndex),
+      pass: decoded.slice(separatorIndex + 1),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function authorize(req) {
+  const expectedUser = process.env.PSV_AUTH_USER;
+  const expectedPass = process.env.PSV_AUTH_PASS;
+
+  if (!expectedUser || !expectedPass) {
+    return "Beveiliging is niet geconfigureerd.";
+  }
+
+  const credentials = parseBasicAuth(req);
+  if (!credentials) return "Geen autorisatie meegegeven.";
+
+  if (
+    credentials.user !== expectedUser ||
+    credentials.pass !== expectedPass
+  ) {
+    return "Ongeldige inloggegevens.";
+  }
+
+  return null;
+}
+
 function validatePayload(payload) {
   if (!payload || typeof payload !== "object") {
     return "Payload ontbreekt.";
@@ -32,6 +74,12 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const authError = authorize(req);
+  if (authError) {
+    res.setHeader("WWW-Authenticate", "Basic");
+    return res.status(401).json({ error: authError });
   }
 
   const webhookUrl = process.env.N8N_WEBHOOK_URL;

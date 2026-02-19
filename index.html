@@ -65,8 +65,51 @@
     <div class="min-h-screen bg-[#E82026] px-6 py-12">
       <main class="mx-auto flex w-full max-w-xl flex-col items-center justify-center">
         <section
+          id="auth-view"
+          class="mb-8 w-full rounded-lg border border-border bg-card p-8 shadow-sm"
+        >
+          <div class="space-y-2">
+            <h1 class="text-2xl font-semibold tracking-tight">Beveiligde toegang</h1>
+            <p class="text-sm text-muted-foreground">
+              Log in om de PSV Copy generator te gebruiken.
+            </p>
+          </div>
+          <form id="auth-form" class="mt-6 space-y-4">
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="auth-user">Gebruiker</label>
+              <input
+                id="auth-user"
+                name="auth_user"
+                type="text"
+                autocomplete="username"
+                class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                required
+              />
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="auth-pass">Wachtwoord</label>
+              <input
+                id="auth-pass"
+                name="auth_pass"
+                type="password"
+                autocomplete="current-password"
+                class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                required
+              />
+            </div>
+            <button
+              id="auth-submit"
+              type="submit"
+              class="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Inloggen
+            </button>
+            <p id="auth-status" class="text-sm text-muted-foreground"></p>
+          </form>
+        </section>
+        <section
           id="form-view"
-          class="w-full rounded-lg border border-border bg-card p-8 shadow-sm"
+          class="w-full rounded-lg border border-border bg-card p-8 shadow-sm hidden"
         >
           <div class="space-y-2">
             <h1 class="text-2xl font-semibold tracking-tight">PSV Copy generator</h1>
@@ -207,6 +250,11 @@
       const form = document.getElementById("request-form");
       const statusEl = document.getElementById("status");
       const submitButton = document.getElementById("submit-button");
+      const authView = document.getElementById("auth-view");
+      const authForm = document.getElementById("auth-form");
+      const authStatus = document.getElementById("auth-status");
+      const authUserInput = document.getElementById("auth-user");
+      const authPassInput = document.getElementById("auth-pass");
       const formView = document.getElementById("form-view");
       const thankYouView = document.getElementById("thankyou-view");
       const loadingState = document.getElementById("loading-state");
@@ -225,6 +273,17 @@
       const doelVanDeMailInput = document.getElementById("doel-van-de-mail");
       const ctaOmschrijvingInput = document.getElementById("cta-omschrijving");
       const overigeInputField = document.getElementById("overige-input");
+      let authHeader = "";
+      let isAuthed = false;
+
+      function setAuthState(authed) {
+        isAuthed = authed;
+        authView.classList.toggle("hidden", authed);
+        formView.classList.toggle("hidden", !authed);
+        if (!authed) {
+          thankYouView.classList.add("hidden");
+        }
+      }
 
       function setLoading(isLoading) {
         submitButton.disabled = isLoading;
@@ -521,7 +580,11 @@
         loadingState.classList.remove("hidden");
         outputEl.classList.add("hidden");
         thankYouView.classList.add("hidden");
-        formView.classList.remove("hidden");
+        if (isAuthed) {
+          formView.classList.remove("hidden");
+        } else {
+          authView.classList.remove("hidden");
+        }
         updateFieldsForCategory();
       });
 
@@ -548,6 +611,47 @@
 
       categorySelect.addEventListener("change", updateFieldsForCategory);
       updateFieldsForCategory();
+
+      authForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        authStatus.textContent = "";
+
+        const username = authUserInput.value.trim();
+        const password = authPassInput.value;
+        if (!username || !password) {
+          authStatus.textContent = "Vul je gebruikersnaam en wachtwoord in.";
+          return;
+        }
+
+        authHeader = `Basic ${btoa(`${username}:${password}`)}`;
+
+        try {
+          const response = await fetch("/api/auth", {
+            method: "POST",
+            headers: {
+              Authorization: authHeader,
+            },
+          });
+
+          if (!response.ok) {
+            let message = "Inloggen mislukt.";
+            try {
+              const data = await response.json();
+              message = data?.error || message;
+            } catch (error) {
+              // ignore json errors
+            }
+            throw new Error(message);
+          }
+
+          authPassInput.value = "";
+          setAuthState(true);
+        } catch (error) {
+          authHeader = "";
+          authStatus.textContent =
+            error instanceof Error ? error.message : "Inloggen mislukt.";
+        }
+      });
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -587,6 +691,7 @@
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              ...(authHeader ? { Authorization: authHeader } : {}),
             },
             body: JSON.stringify(payload),
           });
