@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PSV Copy generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              border: "hsl(var(--border))",
+              input: "hsl(var(--input))",
+              ring: "hsl(var(--ring))",
+              background: "hsl(var(--background))",
+              foreground: "hsl(var(--foreground))",
+              primary: {
+                DEFAULT: "hsl(var(--primary))",
+                foreground: "hsl(var(--primary-foreground))",
+              },
+              muted: {
+                DEFAULT: "hsl(var(--muted))",
+                foreground: "hsl(var(--muted-foreground))",
+              },
+              card: {
+                DEFAULT: "hsl(var(--card))",
+                foreground: "hsl(var(--card-foreground))",
+              },
+            },
+            borderRadius: {
+              lg: "var(--radius)",
+            },
+            fontFamily: {
+              sans: ["Noto Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root {
+        --background: 0 0% 100%;
+        --foreground: 0 0% 7%;
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 7%;
+        --muted: 0 0% 96%;
+        --muted-foreground: 0 0% 45%;
+        --border: 0 0% 90%;
+        --input: 0 0% 90%;
+        --ring: 358 81% 52%;
+        --primary: 358 81% 52%;
+        --primary-foreground: 0 0% 100%;
+        --radius: 0.75rem;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-background text-foreground antialiased">
+    <div class="min-h-screen bg-[#E82026] px-6 py-12">
+      <main class="mx-auto flex w-full max-w-xl flex-col items-center justify-center">
+        <section
+          id="form-view"
+          class="w-full rounded-lg border border-border bg-card p-8 shadow-sm"
+        >
+          <div class="space-y-2">
+            <h1 class="text-2xl font-semibold tracking-tight">PSV Copy generator</h1>
+            <p class="text-sm text-muted-foreground">
+              Vul de velden in voor de PSV e-mailtekst.
+            </p>
+          </div>
+          <form id="request-form" class="mt-6 space-y-5">
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="category">Doel</label>
+              <select
+                id="category"
+                name="category"
+                required
+                class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Maak een keuze</option>
+                <option value="mail_nl">PSV Mailing copy</option>
+                <option value="partner_copy">Partner mailing copy</option>
+              </select>
+            </div>
+            <div id="text-field" class="hidden space-y-2">
+              <label class="text-sm font-medium" for="details">Tekst</label>
+              <textarea
+                id="details"
+                name="details"
+                rows="5"
+                placeholder="Schrijf je bericht..."
+                class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              ></textarea>
+            </div>
+            <div id="mail-fields" class="hidden space-y-4">
+              <div id="doelgroep-field" class="space-y-2">
+                <label class="text-sm font-medium" for="doelgroep">Doelgroep</label>
+                <select
+                  id="doelgroep"
+                  name="doelgroep"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Kies een doelgroep</option>
+                  <option value="Seizoenkaarthouders">Seizoenkaarthouders</option>
+                  <option value="Mijn PSV">Mijn PSV</option>
+                  <option value="Mijn PSV+">Mijn PSV+</option>
+                  <option value="Fanclub members">Fanclub members</option>
+                </select>
+              </div>
+              <div id="partner-field" class="hidden space-y-2">
+                <label class="text-sm font-medium" for="partner">Partner</label>
+                <input
+                  id="partner"
+                  name="partner"
+                  type="text"
+                  placeholder="Bijv. Philips"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+              <div id="exploitatie-field" class="space-y-2">
+                <label class="text-sm font-medium" for="exploitatie">Exploitatie</label>
+                <select
+                  id="exploitatie"
+                  name="exploitatie"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Kies een optie</option>
+                  <option value="Ticketing">Ticketing</option>
+                  <option value="Merchandise">Merchandise</option>
+                  <option value="MIJN PSV+">MIJN PSV+</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="doel-van-de-mail">Doel van de mail</label>
+                <input
+                  id="doel-van-de-mail"
+                  name="doel_van_de_mail"
+                  type="text"
+                  placeholder="Bijv. aankondiging, aanbod, nieuws"
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="cta-omschrijving">Omschrijf de CTA</label>
+                <input
+                  id="cta-omschrijving"
+                  name="cta_omschrijving"
+                  type="text"
+                  placeholder="Bijv. Koop tickets voor..."
+                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="overige-input">Overige input</label>
+                <textarea
+                  id="overige-input"
+                  name="overige_input"
+                  rows="4"
+                  placeholder="Extra context, links, key points..."
+                  class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                ></textarea>
+              </div>
+            </div>
+            <button
+              id="submit-button"
+              type="submit"
+              class="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Verstuur
+            </button>
+            <p id="status" class="text-sm text-muted-foreground"></p>
+          </form>
+        </section>
+
+        <section
+          id="thankyou-view"
+          class="mt-10 hidden w-full rounded-lg border border-border bg-card p-8 shadow-sm"
+        >
+          <div id="loading-state" class="flex items-center gap-3 text-sm text-muted-foreground">
+            <span
+              class="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-primary"
+              aria-hidden="true"
+            ></span>
+            <span>Workflow draait... even geduld.</span>
+          </div>
+          <div id="output" class="hidden space-y-6 text-sm text-foreground"></div>
+          <button
+            id="reset-button"
+            type="button"
+            class="mt-6 inline-flex h-10 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Begin opnieuw
+          </button>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const N8N_WEBHOOK_URL = "/api/submit";
+
+      const form = document.getElementById("request-form");
+      const statusEl = document.getElementById("status");
+      const submitButton = document.getElementById("submit-button");
+      const formView = document.getElementById("form-view");
+      const thankYouView = document.getElementById("thankyou-view");
+      const loadingState = document.getElementById("loading-state");
+      const outputEl = document.getElementById("output");
+      const resetButton = document.getElementById("reset-button");
+      const categorySelect = document.getElementById("category");
+      const textField = document.getElementById("text-field");
+      const detailsField = document.getElementById("details");
+      const mailFields = document.getElementById("mail-fields");
+      const doelgroepField = document.getElementById("doelgroep-field");
+      const partnerField = document.getElementById("partner-field");
+      const exploitatieField = document.getElementById("exploitatie-field");
+      const doelgroepSelect = document.getElementById("doelgroep");
+      const partnerInput = document.getElementById("partner");
+      const exploitatieSelect = document.getElementById("exploitatie");
+      const doelVanDeMailInput = document.getElementById("doel-van-de-mail");
+      const ctaOmschrijvingInput = document.getElementById("cta-omschrijving");
+      const overigeInputField = document.getElementById("overige-input");
+
+      function setLoading(isLoading) {
+        submitButton.disabled = isLoading;
+        submitButton.textContent = isLoading ? "Bezig..." : "Verstuur";
+      }
+
+      function normalizeOutput(text) {
+        if (typeof text !== "string") return String(text ?? "");
+        return text
+          .replace(/\\n/g, "\n")
+          .replace(/\\r/g, "\r")
+          .replace(/\\t/g, "\t")
+          .replace(/\\"/g, '"')
+          .replace(/\\'/g, "'");
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function stripCodeFences(text) {
+        if (typeof text !== "string") return text;
+        const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        return match ? match[1].trim() : text;
+      }
+
+      function toList(value) {
+        if (Array.isArray(value)) return value.filter(Boolean);
+        if (typeof value === "string" && value.trim()) return [value.trim()];
+        return [];
+      }
+
+      function extractJsonBlock(text) {
+        if (typeof text !== "string") return null;
+
+        const start = text.search(/[{[]/);
+        if (start === -1) return null;
+
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+
+        for (let i = start; i < text.length; i++) {
+          const c = text[i];
+
+          if (inString) {
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            if (c === "\\") {
+              escape = true;
+              continue;
+            }
+            if (c === '"') inString = false;
+            continue;
+          }
+
+          if (c === '"') {
+            inString = true;
+            continue;
+          }
+
+          if (c === "{" || c === "[") depth++;
+          if (c === "}" || c === "]") {
+            depth--;
+            if (depth === 0) {
+              return text.slice(start, i + 1);
+            }
+          }
+        }
+
+        return null;
+      }
+
+      function formatLinks(links) {
+        if (!links) return [];
+        if (Array.isArray(links)) {
+          return links
+            .map((link) => {
+              if (typeof link === "string") return link;
+              if (link && typeof link === "object") {
+                const label = link.label ? `${link.label}: ` : "";
+                return `${label}${link.url || ""}`.trim();
+              }
+              return "";
+            })
+            .filter(Boolean);
+        }
+        if (typeof links === "string") {
+          return links
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
+        }
+        return [];
+      }
+
+      function formatEmailJson(data) {
+        if (!data || typeof data !== "object") return "";
+        if (!data.subject_lines && !data.email_plaintext_main) return "";
+
+        const sections = [];
+        const subjects = toList(data.subject_lines);
+        if (subjects.length) {
+          sections.push(`
+            <section class="space-y-2">
+              <h2 class="text-base font-semibold">Onderwerpregels</h2>
+              <ul class="list-disc space-y-1 pl-5">
+                ${subjects.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
+              </ul>
+            </section>
+          `);
+        }
+
+        const preheaders = toList(data.preheaders);
+        if (preheaders.length) {
+          sections.push(`
+            <section class="space-y-2">
+              <h2 class="text-base font-semibold">Preheaders</h2>
+              <ul class="list-disc space-y-1 pl-5">
+                ${preheaders.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
+              </ul>
+            </section>
+          `);
+        }
+
+        if (data.email_plaintext_main) {
+          sections.push(`
+            <section class="space-y-2">
+              <h2 class="text-base font-semibold">Hoofdversie</h2>
+              <pre class="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-4 text-sm leading-relaxed">${escapeHtml(
+                data.email_plaintext_main
+              )}</pre>
+            </section>
+          `);
+        }
+
+        if (data.email_plaintext_ab_variant) {
+          sections.push(`
+            <section class="space-y-2">
+              <h2 class="text-base font-semibold">Alternatieve versie</h2>
+              <pre class="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-4 text-sm leading-relaxed">${escapeHtml(
+                data.email_plaintext_ab_variant
+              )}</pre>
+            </section>
+          `);
+        }
+
+        if (data.cta_primary || data.cta_secondary) {
+          sections.push(`
+            <section class="space-y-2">
+              <h2 class="text-base font-semibold">CTA</h2>
+              <div class="rounded-md border border-border bg-muted/40 p-4 space-y-2">
+                ${data.cta_primary ? `<p><span class="font-medium">Primair:</span> ${escapeHtml(data.cta_primary)}</p>` : ""}
+                ${data.cta_secondary ? `<p><span class="font-medium">Secundair:</span> ${escapeHtml(data.cta_secondary)}</p>` : ""}
+              </div>
+            </section>
+          `);
+        }
+
+        const links = formatLinks(data.links_used);
+        if (links.length) {
+          sections.push(`
+            <section class="space-y-2">
+              <h2 class="text-base font-semibold">Links</h2>
+              <ul class="list-disc space-y-1 pl-5">
+                ${links.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
+              </ul>
+            </section>
+          `);
+        }
+
+        const metaItems = [];
+        if (data.doelgroep) metaItems.push({ label: "Doelgroep", value: data.doelgroep });
+        if (data.exploitatie) metaItems.push({ label: "Exploitatie", value: data.exploitatie });
+        if (data.partner) metaItems.push({ label: "Partner", value: data.partner });
+        if (data.doel_van_de_mail)
+          metaItems.push({ label: "Doel van de mail", value: data.doel_van_de_mail });
+        if (data.cta_omschrijving)
+          metaItems.push({ label: "CTA-omschrijving", value: data.cta_omschrijving });
+        if (data.overige_input)
+          metaItems.push({ label: "Overige input", value: data.overige_input });
+
+        if (metaItems.length) {
+          sections.push(`
+            <section class="space-y-3">
+              <h2 class="text-base font-semibold">Ingevoerde velden</h2>
+              <div class="grid gap-3 sm:grid-cols-2">
+                ${metaItems
+                  .map(
+                    (item) => `
+                  <div class="rounded-md border border-border bg-muted/40 p-3">
+                    <p class="text-xs uppercase tracking-wide text-muted-foreground">${escapeHtml(
+                      item.label
+                    )}</p>
+                    <p class="mt-1 text-sm font-medium whitespace-pre-wrap">${escapeHtml(
+                      item.value
+                    )}</p>
+                  </div>`
+                  )
+                  .join("")}
+              </div>
+            </section>
+          `);
+        }
+
+        return sections.join("");
+      }
+
+      function renderOutput(raw) {
+        if (Array.isArray(raw)) {
+          if (raw.length === 1) {
+            return renderOutput(raw[0]);
+          }
+          for (const item of raw) {
+            if (item && typeof item === "object") {
+              const candidates = ["text", "message", "output", "result"];
+              for (const key of candidates) {
+                if (typeof item[key] === "string") {
+                  return renderOutput(item[key]);
+                }
+              }
+              const formatted = formatEmailJson(item);
+              if (formatted) {
+                return { useHtml: true, content: formatted };
+              }
+            }
+          }
+          return { useHtml: false, content: JSON.stringify(raw, null, 2) };
+        }
+
+        if (raw && typeof raw === "object") {
+          const candidates = ["text", "message", "output", "result"];
+          for (const key of candidates) {
+            if (typeof raw[key] === "string") {
+              return renderOutput(raw[key]);
+            }
+          }
+          const formatted = formatEmailJson(raw);
+          return {
+            useHtml: Boolean(formatted),
+            content: formatted || JSON.stringify(raw, null, 2),
+          };
+        }
+
+        if (typeof raw === "string") {
+          const rawText = String(raw);
+          const trimmed = rawText.trim();
+          const stripped = stripCodeFences(trimmed);
+
+          if (stripped.startsWith("{") || stripped.startsWith("[")) {
+            try {
+              const parsed = JSON.parse(stripped);
+              const formatted = formatEmailJson(parsed);
+              return {
+                useHtml: Boolean(formatted),
+                content: formatted || JSON.stringify(parsed, null, 2),
+              };
+            } catch (error) {
+              // valt door naar extract-poging
+            }
+          }
+
+          const jsonBlock = extractJsonBlock(stripped);
+          if (jsonBlock) {
+            try {
+              const parsed = JSON.parse(jsonBlock);
+              const formatted = formatEmailJson(parsed);
+              return {
+                useHtml: Boolean(formatted),
+                content: formatted || JSON.stringify(parsed, null, 2),
+              };
+            } catch (error) {
+              // toon plain text als parsing faalt
+            }
+          }
+
+          return { useHtml: false, content: normalizeOutput(rawText) };
+        }
+
+        return { useHtml: false, content: String(raw ?? "") };
+      }
+
+      resetButton.addEventListener("click", () => {
+        form.reset();
+        statusEl.textContent = "";
+        outputEl.textContent = "";
+        loadingState.classList.remove("hidden");
+        outputEl.classList.add("hidden");
+        thankYouView.classList.add("hidden");
+        formView.classList.remove("hidden");
+        updateFieldsForCategory();
+      });
+
+      function updateFieldsForCategory() {
+        const value = categorySelect.value;
+        const showText = value === "engels" || value === "social_copy";
+        const showMailFields = value === "mail_nl" || value === "partner_copy";
+        const showMailNl = value === "mail_nl";
+        const showPartner = value === "partner_copy";
+
+        textField.classList.toggle("hidden", !showText);
+        mailFields.classList.toggle("hidden", !showMailFields);
+        doelgroepField.classList.toggle("hidden", !showMailNl);
+        exploitatieField.classList.toggle("hidden", !showMailNl);
+        partnerField.classList.toggle("hidden", !showPartner);
+
+        detailsField.required = showText;
+        doelgroepSelect.required = showMailNl;
+        exploitatieSelect.required = showMailNl;
+        partnerInput.required = showPartner;
+        doelVanDeMailInput.required = showMailFields;
+        ctaOmschrijvingInput.required = showMailFields;
+      }
+
+      categorySelect.addEventListener("change", updateFieldsForCategory);
+      updateFieldsForCategory();
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        statusEl.textContent = "";
+
+        const payload = {
+          category: categorySelect.value,
+        };
+
+        const isMailNl = categorySelect.value === "mail_nl";
+        const isPartner = categorySelect.value === "partner_copy";
+
+        if (isMailNl || isPartner) {
+          if (isMailNl) {
+            payload.doelgroep = doelgroepSelect.value;
+            payload.exploitatie = exploitatieSelect.value;
+          }
+          if (isPartner) {
+            payload.partner = partnerInput.value.trim();
+          }
+          payload.doel_van_de_mail = doelVanDeMailInput.value.trim();
+          payload.cta_omschrijving = ctaOmschrijvingInput.value.trim();
+          payload.overige_input = overigeInputField.value.trim();
+          payload.language = "nl";
+        } else {
+          payload.details = detailsField.value.trim();
+        }
+
+        setLoading(true);
+        formView.classList.add("hidden");
+        thankYouView.classList.remove("hidden");
+        loadingState.classList.remove("hidden");
+        outputEl.classList.add("hidden");
+
+        try {
+          const response = await fetch(N8N_WEBHOOK_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const contentType = response.headers.get("content-type") || "";
+          let bodyText = { useHtml: false, content: "" };
+
+          if (contentType.includes("application/json")) {
+            const data = await response.json();
+            bodyText = renderOutput(data);
+          } else {
+            const text = await response.text();
+            bodyText = renderOutput(text);
+          }
+
+          if (!response.ok) {
+            throw new Error(bodyText || "Onverwachte fout bij n8n.");
+          }
+
+          if (bodyText.useHtml) {
+            outputEl.innerHTML = bodyText.content;
+          } else {
+            outputEl.textContent = bodyText.content;
+          }
+          loadingState.classList.add("hidden");
+          outputEl.classList.remove("hidden");
+        } catch (error) {
+          statusEl.textContent =
+            error instanceof Error ? error.message : "Onbekende fout.";
+          thankYouView.classList.add("hidden");
+          formView.classList.remove("hidden");
+        } finally {
+          setLoading(false);
+        }
+      });
+    </script>
+  </body>
+</html>
