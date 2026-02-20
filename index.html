@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PSV Copy generator</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="https://www.psv.nl/upload/23adcb48-abc3-487f-9158-6bc7822599a6_PSV_logo_color.svg"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -220,6 +225,18 @@
             </button>
             <p id="status" class="text-sm text-muted-foreground"></p>
           </form>
+          <div
+            class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2"
+            aria-live="polite"
+          >
+            <a
+              id="feedback-button"
+              href="mailto:r.dankers@psv.nl,m.vanaken@psv.nl?subject=Feedback%20PSV%20Copy%20generator&body=Hi%20Marnix%20en%20Ruud,%20ik%20heb%20feedback%20over%20de%20copy%20generator,%20namelijk:%20"
+              class="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Feedback
+            </a>
+          </div>
         </section>
 
         <section
