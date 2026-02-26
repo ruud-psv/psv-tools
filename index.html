@@ -726,7 +726,8 @@
           }
 
           if (!response.ok) {
-            throw new Error(bodyText || "Onverwachte fout bij n8n.");
+            console.error("Workflow fout:", bodyText.content);
+            throw new Error("Het genereren van de tekst is mislukt. Controleer je invoer en probeer het opnieuw, of gebruik de feedbackknop als het probleem aanhoudt.");
           }
 
           if (bodyText.useHtml) {
