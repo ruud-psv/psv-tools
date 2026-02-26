@@ -229,14 +229,16 @@
             class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2"
             aria-live="polite"
           >
-            <button
+            <a
               id="feedback-button"
-              type="button"
+              href="https://form.asana.com/?k=8cmANuEgVHFzoChIx2aRbw&d=1113382548430224"
+              target="_blank"
+              rel="noopener noreferrer"
               class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               Feedback
-            </button>
+            </a>
           </div>
         </section>
 
@@ -261,50 +263,6 @@
           </button>
         </section>
       </main>
-    </div>
-
-    <!-- Feedback modal -->
-    <div
-      id="feedback-modal"
-      class="fixed inset-0 z-[100] hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="feedback-modal-title"
-    >
-      <!-- Backdrop -->
-      <div
-        id="feedback-backdrop"
-        class="absolute inset-0 bg-black/50 backdrop-blur-sm"
-      ></div>
-      <!-- Modal panel -->
-      <div class="relative flex min-h-full items-center justify-center p-4">
-        <div class="relative flex w-full max-w-2xl flex-col rounded-xl border border-border bg-card shadow-xl" style="max-height: calc(100dvh - 2rem);">
-          <!-- Header -->
-          <div class="flex items-center justify-between border-b border-border px-6 py-4 flex-shrink-0">
-            <h2 id="feedback-modal-title" class="text-base font-semibold">Feedback geven</h2>
-            <button
-              id="feedback-close"
-              type="button"
-              aria-label="Sluiten"
-              class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          <!-- Iframe -->
-          <div class="flex-1 overflow-hidden rounded-b-xl" style="min-height: 520px;">
-            <iframe
-              id="feedback-iframe"
-              src=""
-              data-src="https://form.asana.com/?k=8cmANuEgVHFzoChIx2aRbw&d=1113382548430224"
-              title="Feedback formulier"
-              class="h-full w-full border-0"
-              style="min-height: 520px;"
-              loading="lazy"
-            ></iframe>
-          </div>
-        </div>
-      </div>
     </div>
 
     <script>
@@ -792,34 +750,6 @@
         }
       });
 
-      // Feedback modal
-      const feedbackModal = document.getElementById("feedback-modal");
-      const feedbackBackdrop = document.getElementById("feedback-backdrop");
-      const feedbackClose = document.getElementById("feedback-close");
-      const feedbackIframe = document.getElementById("feedback-iframe");
-      const feedbackButton = document.getElementById("feedback-button");
-
-      function openFeedbackModal() {
-        if (!feedbackIframe.src) {
-          feedbackIframe.src = feedbackIframe.dataset.src;
-        }
-        feedbackModal.classList.remove("hidden");
-        document.body.style.overflow = "hidden";
-        feedbackClose.focus();
-      }
-
-      function closeFeedbackModal() {
-        feedbackModal.classList.add("hidden");
-        document.body.style.overflow = "";
-        feedbackButton.focus();
-      }
-
-      feedbackButton.addEventListener("click", openFeedbackModal);
-      feedbackClose.addEventListener("click", closeFeedbackModal);
-      feedbackBackdrop.addEventListener("click", closeFeedbackModal);
-      feedbackModal.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeFeedbackModal();
-      });
     </script>
   </body>
 </html>
