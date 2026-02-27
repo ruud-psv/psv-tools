@@ -246,12 +246,16 @@
           id="thankyou-view"
           class="mt-10 hidden w-full rounded-lg border border-border bg-card p-8 shadow-sm"
         >
-          <div id="loading-state" class="flex items-center gap-3 text-sm text-muted-foreground">
-            <span
-              class="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-primary"
-              aria-hidden="true"
-            ></span>
-            <span>Workflow draait... even geduld. Het duurt tussen de 30 en 60 seconden.</span>
+          <div id="loading-state" class="space-y-3">
+            <p class="text-sm text-muted-foreground">Workflow draait... even geduld.</p>
+            <div class="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                id="progress-bar"
+                class="h-full rounded-full bg-primary"
+                style="width: 0%; transition: width 0.15s linear"
+              ></div>
+            </div>
+            <p id="progress-label" class="text-xs text-muted-foreground text-right">0 / 75 sec</p>
           </div>
           <div id="output" class="hidden space-y-6 text-sm text-foreground"></div>
           <button
@@ -296,6 +300,45 @@
       const overigeInputField = document.getElementById("overige-input");
       let authHeader = "";
       let isAuthed = false;
+      let progressTimer = null;
+      const PROGRESS_DURATION = 75000;
+
+      function startProgressBar() {
+        const bar = document.getElementById("progress-bar");
+        const label = document.getElementById("progress-label");
+        clearInterval(progressTimer);
+        const start = Date.now();
+        bar.style.width = "0%";
+        if (label) label.textContent = "0 / 75 sec";
+        progressTimer = setInterval(() => {
+          const elapsed = Date.now() - start;
+          const pct = Math.min((elapsed / PROGRESS_DURATION) * 100, 99);
+          bar.style.width = pct + "%";
+          const secs = Math.min(Math.floor(elapsed / 1000), 74);
+          if (label) label.textContent = `${secs} / 75 sec`;
+          if (elapsed >= PROGRESS_DURATION) {
+            clearInterval(progressTimer);
+          }
+        }, 50);
+      }
+
+      function stopProgressBar() {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        const bar = document.getElementById("progress-bar");
+        const label = document.getElementById("progress-label");
+        if (bar) bar.style.width = "100%";
+        if (label) label.textContent = "75 / 75 sec";
+      }
+
+      function resetProgressBar() {
+        clearInterval(progressTimer);
+        progressTimer = null;
+        const bar = document.getElementById("progress-bar");
+        const label = document.getElementById("progress-label");
+        if (bar) bar.style.width = "0%";
+        if (label) label.textContent = "0 / 75 sec";
+      }
 
       function setAuthState(authed) {
         isAuthed = authed;
@@ -598,6 +641,7 @@
         form.reset();
         statusEl.textContent = "";
         outputEl.textContent = "";
+        resetProgressBar();
         loadingState.classList.remove("hidden");
         outputEl.classList.add("hidden");
         thankYouView.classList.add("hidden");
@@ -706,6 +750,7 @@
         thankYouView.classList.remove("hidden");
         loadingState.classList.remove("hidden");
         outputEl.classList.add("hidden");
+        startProgressBar();
 
         try {
           const response = await fetch(N8N_WEBHOOK_URL, {
@@ -738,6 +783,7 @@
           } else {
             outputEl.textContent = bodyText.content;
           }
+          stopProgressBar();
           loadingState.classList.add("hidden");
           outputEl.classList.remove("hidden");
         } catch (error) {
