@@ -255,7 +255,6 @@
                 style="width: 0%; transition: width 0.15s linear"
               ></div>
             </div>
-            <p id="progress-label" class="text-xs text-muted-foreground text-right">0 / 75 sec</p>
           </div>
           <div id="output" class="hidden space-y-6 text-sm text-foreground"></div>
           <button
@@ -305,17 +304,13 @@
 
       function startProgressBar() {
         const bar = document.getElementById("progress-bar");
-        const label = document.getElementById("progress-label");
         clearInterval(progressTimer);
         const start = Date.now();
         bar.style.width = "0%";
-        if (label) label.textContent = "0 / 75 sec";
         progressTimer = setInterval(() => {
           const elapsed = Date.now() - start;
           const pct = Math.min((elapsed / PROGRESS_DURATION) * 100, 99);
           bar.style.width = pct + "%";
-          const secs = Math.min(Math.floor(elapsed / 1000), 74);
-          if (label) label.textContent = `${secs} / 75 sec`;
           if (elapsed >= PROGRESS_DURATION) {
             clearInterval(progressTimer);
           }
@@ -326,18 +321,14 @@
         clearInterval(progressTimer);
         progressTimer = null;
         const bar = document.getElementById("progress-bar");
-        const label = document.getElementById("progress-label");
         if (bar) bar.style.width = "100%";
-        if (label) label.textContent = "75 / 75 sec";
       }
 
       function resetProgressBar() {
         clearInterval(progressTimer);
         progressTimer = null;
         const bar = document.getElementById("progress-bar");
-        const label = document.getElementById("progress-label");
         if (bar) bar.style.width = "0%";
-        if (label) label.textContent = "0 / 75 sec";
       }
 
       function setAuthState(authed) {
