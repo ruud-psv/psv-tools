@@ -9,12 +9,6 @@
       type="image/svg+xml"
       href="https://www.psv.nl/upload/23adcb48-abc3-487f-9158-6bc7822599a6_PSV_logo_color.svg"
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -43,13 +37,29 @@
               lg: "var(--radius)",
             },
             fontFamily: {
-              sans: ["Noto Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+              sans: ["PSVText-Regular", "ui-sans-serif", "system-ui", "sans-serif"],
+              heading: ["PSVCondensed-Bold", "ui-sans-serif", "system-ui", "sans-serif"],
             },
           },
         },
       };
     </script>
     <style>
+      @font-face {
+        font-family: "PSVText-Regular";
+        src: url("fonts/PSVText-Regular.ttf") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: "PSVCondensed-Bold";
+        src: url("fonts/PSVCondensed-Bold.otf") format("opentype");
+        font-weight: bold;
+        font-style: normal;
+      }
+      h1, h2 {
+        font-family: "PSVCondensed-Bold", sans-serif;
+      }
       :root {
         --background: 0 0% 100%;
         --foreground: 0 0% 7%;
