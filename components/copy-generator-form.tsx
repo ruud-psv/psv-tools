@@ -13,7 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { MessageSquare, RotateCcw, Loader2 } from "lucide-react";
+import { MessageSquare, RotateCcw, Loader2, Send } from "lucide-react";
+
+interface ConversationMessage {
+  role: "assistant" | "user";
+  content: string;
+}
 
 // ─── Output parsing helpers ───────────────────────────────────────────────────
 
@@ -294,6 +299,13 @@ export function CopyGeneratorForm() {
   const [output, setOutput] = useState<OutputResult | null>(null);
   const [progress, setProgress] = useState(0);
 
+  // Conversation / follow-up state
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [originalPayload, setOriginalPayload] = useState<Record<string, string> | null>(null);
+  const [followUpInput, setFollowUpInput] = useState("");
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [followUpError, setFollowUpError] = useState("");
+
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const PROGRESS_DURATION = 75000;
 
@@ -334,7 +346,64 @@ export function CopyGeneratorForm() {
     setErrorMsg("");
     setOutput(null);
     setProgress(0);
+    setConversation([]);
+    setOriginalPayload(null);
+    setFollowUpInput("");
+    setFollowUpError("");
     if (progressRef.current) clearInterval(progressRef.current);
+  }
+
+  function outputToText(result: OutputResult): string {
+    if (result.kind === "text") return result.content;
+    // Serialize email output as readable text for n8n context
+    return JSON.stringify(result.data);
+  }
+
+  async function handleFollowUp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!followUpInput.trim() || !originalPayload) return;
+
+    setFollowUpError("");
+    setFollowUpLoading(true);
+
+    const updatedConversation: ConversationMessage[] = [
+      ...conversation,
+      { role: "user", content: followUpInput.trim() },
+    ];
+
+    try {
+      const response = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...originalPayload,
+          conversation: updatedConversation,
+        }),
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const raw = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+
+      if (!response.ok) {
+        throw new Error("Het bijsturen is mislukt. Probeer het opnieuw.");
+      }
+
+      const newOutput = parseOutput(raw);
+      const assistantMessage: ConversationMessage = {
+        role: "assistant",
+        content: outputToText(newOutput),
+      };
+
+      setConversation([...updatedConversation, assistantMessage]);
+      setOutput(newOutput);
+      setFollowUpInput("");
+    } catch (err) {
+      setFollowUpError(err instanceof Error ? err.message : "Onbekende fout.");
+    } finally {
+      setFollowUpLoading(false);
+    }
   }
 
   const isMailNl = category === "mail_nl";
@@ -386,7 +455,10 @@ export function CopyGeneratorForm() {
       }
 
       stopProgress();
-      setOutput(parseOutput(raw));
+      const parsed = parseOutput(raw);
+      setOutput(parsed);
+      setOriginalPayload(payload);
+      setConversation([{ role: "assistant", content: outputToText(parsed) }]);
       setStatus("done");
     } catch (err) {
       stopProgress();
@@ -415,16 +487,48 @@ export function CopyGeneratorForm() {
 
   // ── Output state ───────────────────────────────────────────────────────────
   if (status === "done" && output) {
+    // Previous user feedback messages (everything except first assistant message)
+    const feedbackHistory = conversation.filter((m) => m.role === "user");
+
     return (
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Resultaat</h2>
+          <h2 className="text-lg font-semibold">
+            Resultaat
+            {feedbackHistory.length > 0 && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                · versie {feedbackHistory.length + 1}
+              </span>
+            )}
+          </h2>
           <Button variant="outline" size="sm" onClick={reset} className="gap-2">
             <RotateCcw className="h-3.5 w-3.5" />
             Opnieuw
           </Button>
         </div>
 
+        {/* Feedback history (collapsed) */}
+        {feedbackHistory.length > 0 && (
+          <div className="space-y-2">
+            {feedbackHistory.map((msg, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
+              >
+                <MessageSquare className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                <span>
+                  <span className="font-medium text-foreground">
+                    Aanpassing {i + 1}:
+                  </span>{" "}
+                  {msg.content}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Current output */}
         {output.kind === "email" ? (
           <EmailOutput data={output.data} />
         ) : (
@@ -432,6 +536,35 @@ export function CopyGeneratorForm() {
             {output.content}
           </pre>
         )}
+
+        {/* Follow-up input */}
+        <div className="border-t border-border pt-5">
+          <p className="mb-3 text-sm font-medium">Wil je iets aanpassen?</p>
+          <form onSubmit={handleFollowUp} className="flex gap-2">
+            <Input
+              placeholder='Bijv. "Maak de CTA krachtiger" of "Herschrijf de tweede alinea"'
+              value={followUpInput}
+              onChange={(e) => setFollowUpInput(e.target.value)}
+              disabled={followUpLoading}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              disabled={followUpLoading || !followUpInput.trim()}
+              className="gap-2"
+            >
+              {followUpLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {followUpLoading ? "Bezig…" : "Stuur"}
+            </Button>
+          </form>
+          {followUpError && (
+            <p className="mt-2 text-sm text-destructive">{followUpError}</p>
+          )}
+        </div>
       </div>
     );
   }
