@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const REQUIRED: Record<string, string[]> = {
   mail_nl: ["doelgroep", "exploitatie", "doel_van_de_mail", "cta_omschrijving"],
   partner_copy: ["partner", "doel_van_de_mail", "cta_omschrijving"],
+  huisstijl_check: ["tekst"],
 };
 
 function parseBasicAuth(header: string | null) {
