@@ -19,7 +19,7 @@ const navItems = [
 
 const tools = [
   {
-    name: "Copy Generator",
+    name: "Mail tekst generator",
     href: "/dashboard/copy-generator",
     icon: FileText,
     badge: null as string | null,
