@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { FileText, LayoutDashboard, LogOut } from "lucide-react";
+import { FileText, LayoutDashboard, Link2, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,12 @@ const tools = [
     icon: FileText,
     badge: null as string | null,
   },
-  // Future tools can be added here
+  {
+    name: "UTM Builder",
+    href: "/dashboard/utm-builder",
+    icon: Link2,
+    badge: null as string | null,
+  },
 ];
 
 export function AppSidebar() {
