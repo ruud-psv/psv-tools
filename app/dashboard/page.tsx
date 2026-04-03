@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 
 const tools = [
   {
-    name: "Copy Generator",
+    name: "Mail tekst generator",
     description:
       "Genereer PSV e-mail copy en partner mailings met behulp van AI. Vul de benodigde velden in en ontvang kant-en-klare teksten.",
     href: "/dashboard/copy-generator",
