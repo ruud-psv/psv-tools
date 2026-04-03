@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, ArrowRight } from "lucide-react";
+import { FileText, Link2, ArrowRight } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -17,6 +17,15 @@ const tools = [
       "Genereer PSV e-mail copy en partner mailings met behulp van AI. Vul de benodigde velden in en ontvang kant-en-klare teksten.",
     href: "/dashboard/copy-generator",
     icon: FileText,
+    badge: "Beschikbaar",
+    badgeVariant: "default" as const,
+  },
+  {
+    name: "UTM Builder",
+    description:
+      "Bouw Google UTM-links voor campagnetracking. Vul de URL en UTM-parameters in en kopieer de gegenereerde link direct naar klembord.",
+    href: "/dashboard/utm-builder",
+    icon: Link2,
     badge: "Beschikbaar",
     badgeVariant: "default" as const,
   },
