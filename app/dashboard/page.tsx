@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Link2, ArrowRight } from "lucide-react";
+import { ClipboardCheck, FileText, Link2, ArrowRight } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -26,6 +26,15 @@ const tools = [
       "Bouw Google UTM-links voor campagnetracking. Vul de URL en UTM-parameters in en kopieer de gegenereerde link direct naar klembord.",
     href: "/dashboard/utm-builder",
     icon: Link2,
+    badge: "Beschikbaar",
+    badgeVariant: "default" as const,
+  },
+  {
+    name: "Huisstijl Checker",
+    description:
+      "Laat teksten controleren door de PSV Huisstijl Agent. De agent corrigeert op basis van Het Rood-Witte Boekje en geeft de verbeterde tekst direct terug.",
+    href: "/dashboard/huisstijl-checker",
+    icon: ClipboardCheck,
     badge: "Beschikbaar",
     badgeVariant: "default" as const,
   },

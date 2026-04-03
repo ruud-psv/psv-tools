@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { FileText, LayoutDashboard, Link2, LogOut } from "lucide-react";
+import { ClipboardCheck, FileText, LayoutDashboard, Link2, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,12 @@ const tools = [
     name: "UTM Builder",
     href: "/dashboard/utm-builder",
     icon: Link2,
+    badge: null as string | null,
+  },
+  {
+    name: "Huisstijl Checker",
+    href: "/dashboard/huisstijl-checker",
+    icon: ClipboardCheck,
     badge: null as string | null,
   },
 ];
