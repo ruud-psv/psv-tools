@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardCheck, FileText, Link2, ArrowRight } from "lucide-react";
+import { BarChart2, ClipboardCheck, FileText, Link2, ArrowRight } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -35,6 +35,15 @@ const tools = [
       "Laat teksten controleren door de PSV Huisstijl Agent. De agent corrigeert op basis van Het Rood-Witte Boekje en geeft de verbeterde tekst direct terug.",
     href: "/dashboard/huisstijl-checker",
     icon: ClipboardCheck,
+    badge: "Beschikbaar",
+    badgeVariant: "default" as const,
+  },
+  {
+    name: "Rapportage generator",
+    description:
+      "Upload een Excel bestand en ontvang automatisch een analyse met KPI's, grafieken en concrete inzichten — ongeacht hoe het bestand is opgebouwd.",
+    href: "/dashboard/rapportage-generator",
+    icon: BarChart2,
     badge: "Beschikbaar",
     badgeVariant: "default" as const,
   },
