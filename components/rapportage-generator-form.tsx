@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil } from "lucide-react";
+import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -282,6 +282,9 @@ export function RapportageGeneratorForm() {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
+  const [refineInput, setRefineInput] = useState("");
+  const [refineStatus, setRefineStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [refineError, setRefineError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const progress = useProgressBar(status === "loading");
@@ -338,6 +341,29 @@ export function RapportageGeneratorForm() {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function handleRefine(e: React.FormEvent) {
+    e.preventDefault();
+    if (!refineInput.trim() || !result) return;
+    setRefineStatus("loading");
+    setRefineError("");
+
+    try {
+      const res = await fetch("/api/refine-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentResult: result, prompt: refineInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRefineError(data.error ?? "Er is een fout opgetreden."); setRefineStatus("error"); return; }
+      setResult(data as AnalysisResult);
+      setRefineInput("");
+      setRefineStatus("idle");
+    } catch {
+      setRefineError("Kon de server niet bereiken.");
+      setRefineStatus("error");
+    }
   }
 
   function updateKPI(index: number, updated: KPI) {
@@ -533,6 +559,41 @@ export function RapportageGeneratorForm() {
             </CardContent>
           </Card>
         )}
+
+        <Separator />
+
+        {/* Follow-up prompt */}
+        <form onSubmit={handleRefine} className="space-y-3 max-w-2xl">
+          <div className="space-y-1.5">
+            <Label htmlFor="refine" className="text-sm font-medium">Opdracht of aanpassing</Label>
+            <Textarea
+              id="refine"
+              placeholder="Bijv. voeg een grafiek toe voor de CTR per week, pas de samenvatting aan, of bereken de gemiddelde open rate..."
+              value={refineInput}
+              onChange={(e) => setRefineInput(e.target.value)}
+              rows={3}
+              className="resize-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRefine(e as unknown as React.FormEvent);
+              }}
+            />
+          </div>
+          {refineError && (
+            <p className="text-sm text-destructive rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2">
+              {refineError}
+            </p>
+          )}
+          <Button type="submit" disabled={!refineInput.trim() || refineStatus === "loading"} className="gap-2">
+            {refineStatus === "loading" ? (
+              "Verwerken..."
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Verwerk opdracht
+              </>
+            )}
+          </Button>
+        </form>
       </div>
     );
   }
