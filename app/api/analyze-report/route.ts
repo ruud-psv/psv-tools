@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicApiKey } from "@/lib/settings";
+import { getAnthropicApiKey, ANTHROPIC_KEY_COOKIE } from "@/lib/settings";
 
 const MAX_ROWS_PER_SHEET = 500;
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: authError }, { status: 401 });
   }
 
-  const apiKey = getAnthropicApiKey();
+  const apiKey = getAnthropicApiKey(req.cookies.get(ANTHROPIC_KEY_COOKIE)?.value);
   if (!apiKey) {
     return NextResponse.json(
       { error: "Anthropic API-sleutel ontbreekt. Voeg deze toe via Instellingen." },

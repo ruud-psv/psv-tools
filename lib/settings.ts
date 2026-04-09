@@ -1,27 +1,9 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+export const ANTHROPIC_KEY_COOKIE = "psv_anthropic_key";
 
-const SETTINGS_PATH = join(process.cwd(), "config", "settings.json");
-
-export interface AppSettings {
-  anthropicApiKey?: string;
-}
-
-export function readSettings(): AppSettings {
-  try {
-    if (!existsSync(SETTINGS_PATH)) return {};
-    const raw = readFileSync(SETTINGS_PATH, "utf8");
-    return JSON.parse(raw) as AppSettings;
-  } catch {
-    return {};
-  }
-}
-
-export function writeSettings(settings: AppSettings): void {
-  mkdirSync(dirname(SETTINGS_PATH), { recursive: true });
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf8");
-}
-
-export function getAnthropicApiKey(): string | undefined {
-  return process.env.ANTHROPIC_API_KEY || readSettings().anthropicApiKey;
+/**
+ * Returns the Anthropic API key from the environment variable (priority)
+ * or from the request cookie set via the Settings page.
+ */
+export function getAnthropicApiKey(cookieValue?: string): string | undefined {
+  return process.env.ANTHROPIC_API_KEY || cookieValue || undefined;
 }

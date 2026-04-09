@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readSettings, writeSettings } from "@/lib/settings";
+
+const COOKIE_NAME = "psv_anthropic_key";
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 jaar
 
 function parseBasicAuth(header: string | null) {
   if (!header?.startsWith("Basic ")) return null;
@@ -37,14 +39,12 @@ export async function GET(req: NextRequest) {
   const authError = authorize(sessionCookie);
   if (authError) return NextResponse.json({ error: authError }, { status: 401 });
 
-  const settings = readSettings();
+  const savedKey = req.cookies.get(COOKIE_NAME)?.value;
   const envKeySet = !!process.env.ANTHROPIC_API_KEY;
 
   return NextResponse.json({
-    anthropicApiKey: settings.anthropicApiKey
-      ? maskKey(settings.anthropicApiKey)
-      : null,
-    anthropicApiKeySet: !!(settings.anthropicApiKey || envKeySet),
+    anthropicApiKey: savedKey ? maskKey(savedKey) : null,
+    anthropicApiKeySet: !!(savedKey || envKeySet),
     fromEnv: envKeySet,
   });
 }
@@ -56,12 +56,17 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  if (typeof body.anthropicApiKey !== "string") {
+  if (typeof body.anthropicApiKey !== "string" || !body.anthropicApiKey.trim()) {
     return NextResponse.json({ error: "Ongeldig verzoek." }, { status: 400 });
   }
 
-  const current = readSettings();
-  writeSettings({ ...current, anthropicApiKey: body.anthropicApiKey.trim() });
-
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(COOKIE_NAME, body.anthropicApiKey.trim(), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: COOKIE_MAX_AGE,
+  });
+  return res;
 }
