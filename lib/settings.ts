@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
 
 const SETTINGS_PATH = join(process.cwd(), "config", "settings.json");
 
@@ -18,6 +18,7 @@ export function readSettings(): AppSettings {
 }
 
 export function writeSettings(settings: AppSettings): void {
+  mkdirSync(dirname(SETTINGS_PATH), { recursive: true });
   writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf8");
 }
 
