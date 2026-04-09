@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { BarChart2, ClipboardCheck, FileText, LayoutDashboard, Link2, LogOut, Settings } from "lucide-react";
+import { BarChart2, ClipboardCheck, FileText, LayoutDashboard, Link2, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -185,19 +185,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-4 border-t border-sidebar-border space-y-0.5">
-        <Link
-          href="/dashboard/instellingen"
-          className={cn(
-            "flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-            pathname.startsWith("/dashboard/instellingen")
-              ? "bg-sidebar-primary text-sidebar-primary-foreground"
-              : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          )}
-        >
-          <Settings className="h-4 w-4 flex-shrink-0" />
-          <span>Instellingen</span>
-        </Link>
+      <div className="px-3 py-4 border-t border-sidebar-border">
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
