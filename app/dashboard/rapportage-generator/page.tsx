@@ -6,7 +6,7 @@ export const metadata = {
 
 export default function RapportageGeneratorPage() {
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8">
       <h1 className="text-3xl font-bold mb-2">Rapportage generator</h1>
       <p className="text-muted-foreground mb-6">
         Upload een Excel bestand en Claude analyseert de data automatisch. Je

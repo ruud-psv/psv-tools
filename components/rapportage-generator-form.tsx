@@ -1,25 +1,20 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
+  BarChart, Bar,
+  LineChart, Line,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
 } from "recharts";
 
 interface KPI {
@@ -66,48 +61,160 @@ function useProgressBar(running: boolean) {
       const start = Date.now();
       intervalRef.current = setInterval(() => {
         const elapsed = Date.now() - start;
-        const pct = Math.min(99, (elapsed / PROGRESS_DURATION) * 100);
-        setProgress(pct);
+        setProgress(Math.min(99, (elapsed / PROGRESS_DURATION) * 100));
       }, 200);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
       setProgress(100);
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
   return progress;
 }
 
-function KPICard({ kpi }: { kpi: KPI }) {
+// Inline editable single-line text
+function EditableText({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { onChange(draft); setEditing(false); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { onChange(draft); setEditing(false); }
+          if (e.key === "Escape") { setDraft(value); setEditing(false); }
+        }}
+        className={cn(
+          "bg-transparent border-b border-primary outline-none w-full",
+          className
+        )}
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={() => { setDraft(value); setEditing(true); }}
+      title="Klik om te bewerken"
+      className={cn(
+        "cursor-text group-hover:underline group-hover:decoration-dashed decoration-muted-foreground",
+        className
+      )}
+    >
+      {value}
+    </span>
+  );
+}
+
+// Inline editable multi-line text
+function EditableArea({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing && ref.current) {
+      ref.current.focus();
+      ref.current.style.height = "auto";
+      ref.current.style.height = ref.current.scrollHeight + "px";
+    }
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <textarea
+        ref={ref}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          e.target.style.height = "auto";
+          e.target.style.height = e.target.scrollHeight + "px";
+        }}
+        onBlur={() => { onChange(draft); setEditing(false); }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { setDraft(value); setEditing(false); }
+        }}
+        className={cn(
+          "bg-transparent border-b border-primary outline-none w-full resize-none leading-relaxed",
+          className
+        )}
+      />
+    );
+  }
+
+  return (
+    <p
+      onClick={() => { setDraft(value); setEditing(true); }}
+      title="Klik om te bewerken"
+      className={cn("cursor-text leading-relaxed hover:underline hover:decoration-dashed decoration-muted-foreground", className)}
+    >
+      {value}
+    </p>
+  );
+}
+
+function KPICard({ kpi, onUpdate }: { kpi: KPI; onUpdate: (updated: KPI) => void }) {
   const isPositive = kpi.change?.startsWith("+");
   const isNegative = kpi.change?.startsWith("-");
 
   return (
-    <Card>
+    <Card className="group">
       <CardContent className="pt-4 pb-4">
-        <p className="text-xs text-muted-foreground mb-1">{kpi.label}</p>
-        <p className="text-2xl font-bold">{kpi.value}</p>
+        <p className="text-xs text-muted-foreground mb-1">
+          <EditableText
+            value={kpi.label}
+            onChange={(v) => onUpdate({ ...kpi, label: v })}
+            className="text-xs text-muted-foreground"
+          />
+        </p>
+        <p className="text-2xl font-bold">
+          <EditableText
+            value={kpi.value}
+            onChange={(v) => onUpdate({ ...kpi, value: v })}
+            className="text-2xl font-bold"
+          />
+        </p>
         {kpi.change && (
           <p
             className={`text-xs mt-1 flex items-center gap-1 ${
-              isPositive
-                ? "text-green-600"
-                : isNegative
-                ? "text-red-600"
-                : "text-muted-foreground"
+              isPositive ? "text-green-600" : isNegative ? "text-red-600" : "text-muted-foreground"
             }`}
           >
             {isPositive ? (
-              <TrendingUp className="h-3 w-3" />
+              <TrendingUp className="h-3 w-3 flex-shrink-0" />
             ) : isNegative ? (
-              <TrendingDown className="h-3 w-3" />
+              <TrendingDown className="h-3 w-3 flex-shrink-0" />
             ) : (
-              <Minus className="h-3 w-3" />
+              <Minus className="h-3 w-3 flex-shrink-0" />
             )}
-            {kpi.change}
+            <EditableText
+              value={kpi.change}
+              onChange={(v) => onUpdate({ ...kpi, change: v })}
+            />
           </p>
         )}
       </CardContent>
@@ -119,12 +226,12 @@ function ChartCard({ chart }: { chart: ChartSpec }) {
   const data = chart.data ?? [];
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{chart.title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={300}>
           {chart.type === "pie" ? (
             <PieChart>
               <Pie
@@ -133,16 +240,13 @@ function ChartCard({ chart }: { chart: ChartSpec }) {
                 nameKey={chart.categoryKey}
                 cx="50%"
                 cy="50%"
-                outerRadius={90}
+                outerRadius={100}
                 label={({ name, percent }) =>
                   `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`
                 }
               >
                 {data.map((_, i) => (
-                  <Cell
-                    key={i}
-                    fill={CHART_COLORS[i % CHART_COLORS.length]}
-                  />
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -151,40 +255,18 @@ function ChartCard({ chart }: { chart: ChartSpec }) {
           ) : chart.type === "line" ? (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis
-                dataKey={chart.categoryKey}
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-              />
+              <XAxis dataKey={chart.categoryKey} tick={{ fontSize: 11 }} tickLine={false} />
               <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <Tooltip />
-              <Line
-                type="monotone"
-                dataKey={chart.dataKey}
-                stroke={CHART_COLORS[0]}
-                strokeWidth={2}
-                dot={false}
-              />
+              <Line type="monotone" dataKey={chart.dataKey} stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} />
             </LineChart>
           ) : (
             <BarChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                className="stroke-border"
-              />
-              <XAxis
-                dataKey={chart.categoryKey}
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-              />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+              <XAxis dataKey={chart.categoryKey} tick={{ fontSize: 11 }} tickLine={false} />
               <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <Tooltip />
-              <Bar
-                dataKey={chart.dataKey}
-                fill={CHART_COLORS[0]}
-                radius={[4, 4, 0, 0]}
-              />
+              <Bar dataKey={chart.dataKey} fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
             </BarChart>
           )}
         </ResponsiveContainer>
@@ -195,10 +277,9 @@ function ChartCard({ chart }: { chart: ChartSpec }) {
 
 export function RapportageGeneratorForm() {
   const [file, setFile] = useState<File | null>(null);
+  const [promptInput, setPromptInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
-    "idle"
-  );
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -230,21 +311,12 @@ export function RapportageGeneratorForm() {
 
     const formData = new FormData();
     formData.append("file", file);
+    if (promptInput.trim()) formData.append("prompt", promptInput.trim());
 
     try {
-      const res = await fetch("/api/analyze-report", {
-        method: "POST",
-        body: formData,
-      });
-
+      const res = await fetch("/api/analyze-report", { method: "POST", body: formData });
       const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? "Er is een fout opgetreden.");
-        setStatus("error");
-        return;
-      }
-
+      if (!res.ok) { setError(data.error ?? "Er is een fout opgetreden."); setStatus("error"); return; }
       setResult(data as AnalysisResult);
       setStatus("done");
     } catch {
@@ -255,6 +327,7 @@ export function RapportageGeneratorForm() {
 
   function handleReset() {
     setFile(null);
+    setPromptInput("");
     setStatus("idle");
     setResult(null);
     setError("");
@@ -267,15 +340,26 @@ export function RapportageGeneratorForm() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  function updateKPI(index: number, updated: KPI) {
+    if (!result) return;
+    const kpis = [...result.kpis];
+    kpis[index] = updated;
+    setResult({ ...result, kpis });
+  }
+
+  function updateInsight(index: number, value: string) {
+    if (!result) return;
+    const insights = [...result.insights];
+    insights[index] = value;
+    setResult({ ...result, insights });
+  }
+
   // Upload state
   if (status === "idle" || status === "error") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-2xl">
         <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
@@ -290,15 +374,10 @@ export function RapportageGeneratorForm() {
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFile(f);
-            }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
           <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-          <p className="text-sm font-medium mb-1">
-            Sleep een Excel bestand hierheen, of klik om te uploaden
-          </p>
+          <p className="text-sm font-medium mb-1">Sleep een Excel bestand hierheen, of klik om te uploaden</p>
           <p className="text-xs text-muted-foreground">.xlsx of .xls</p>
         </div>
 
@@ -307,15 +386,27 @@ export function RapportageGeneratorForm() {
             <FileSpreadsheet className="h-5 w-5 text-green-600 flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{file.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatFileSize(file.size)}
-              </p>
+              <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleReset}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleReset(); }}>
               Verwijderen
             </Button>
           </div>
         )}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="prompt" className="text-sm font-medium">
+            Specifieke inzichten <span className="text-muted-foreground font-normal">(optioneel)</span>
+          </Label>
+          <Textarea
+            id="prompt"
+            placeholder="Bijv. focus op de open rates per doelgroep, of vergelijk de prestaties van campagnes uit Q1 en Q2..."
+            value={promptInput}
+            onChange={(e) => setPromptInput(e.target.value)}
+            rows={3}
+            className="resize-none"
+          />
+        </div>
 
         {error && (
           <p className="text-sm text-destructive rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2">
@@ -323,11 +414,7 @@ export function RapportageGeneratorForm() {
           </p>
         )}
 
-        <Button
-          onClick={handleSubmit}
-          disabled={!file}
-          className="w-full"
-        >
+        <Button onClick={handleSubmit} disabled={!file} className="w-full">
           Analyseer bestand
         </Button>
       </div>
@@ -337,7 +424,7 @@ export function RapportageGeneratorForm() {
   // Loading state
   if (status === "loading") {
     return (
-      <Card>
+      <Card className="max-w-2xl">
         <CardContent className="pt-6 pb-6 space-y-4">
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="h-5 w-5 text-muted-foreground flex-shrink-0" />
@@ -345,9 +432,7 @@ export function RapportageGeneratorForm() {
           </div>
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />
-            <p className="text-sm text-muted-foreground">
-              Claude analyseert de data...
-            </p>
+            <p className="text-sm text-muted-foreground">Claude analyseert de data...</p>
           </div>
         </CardContent>
       </Card>
@@ -360,29 +445,39 @@ export function RapportageGeneratorForm() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold">{result.title}</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Gebaseerd op {file?.name}
-            </p>
+          <div className="group min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold">
+                <EditableText
+                  value={result.title}
+                  onChange={(v) => setResult({ ...result, title: v })}
+                  className="text-xl font-bold"
+                />
+              </h2>
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">Gebaseerd op {file?.name}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleReset}>
+          <Button variant="outline" size="sm" onClick={handleReset} className="flex-shrink-0">
             <RotateCcw className="h-4 w-4 mr-2" />
             Nieuw bestand
           </Button>
         </div>
+
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Pencil className="h-3 w-3" />
+          Klik op tekst om te bewerken
+        </p>
 
         <Separator />
 
         {/* KPIs */}
         {result.kpis?.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Kerncijfers
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Kerncijfers</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
               {result.kpis.map((kpi, i) => (
-                <KPICard key={i} kpi={kpi} />
+                <KPICard key={i} kpi={kpi} onUpdate={(updated) => updateKPI(i, updated)} />
               ))}
             </div>
           </div>
@@ -391,10 +486,8 @@ export function RapportageGeneratorForm() {
         {/* Charts */}
         {result.charts?.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Visualisaties
-            </h3>
-            <div className="grid grid-cols-1 gap-4">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Visualisaties</h3>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {result.charts.map((chart, i) => (
                 <ChartCard key={i} chart={chart} />
               ))}
@@ -409,7 +502,11 @@ export function RapportageGeneratorForm() {
               <CardTitle className="text-base">Samenvatting</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm leading-relaxed">{result.summary}</p>
+              <EditableArea
+                value={result.summary}
+                onChange={(v) => setResult({ ...result, summary: v })}
+                className="text-sm"
+              />
             </CardContent>
           </Card>
         )}
@@ -423,9 +520,13 @@ export function RapportageGeneratorForm() {
             <CardContent>
               <ul className="space-y-2">
                 {result.insights.map((insight, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
-                    {insight}
+                  <li key={i} className="flex items-start gap-2 text-sm group">
+                    <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
+                    <EditableArea
+                      value={insight}
+                      onChange={(v) => updateInsight(i, v)}
+                      className="text-sm flex-1"
+                    />
                   </li>
                 ))}
               </ul>

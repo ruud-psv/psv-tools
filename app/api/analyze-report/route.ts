@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const extraPrompt = (formData.get("prompt") as string | null)?.trim() || null;
   const file = formData.get("file") as File | null;
   if (!file) {
     return NextResponse.json({ error: "Geen bestand ontvangen." }, { status: 400 });
@@ -177,7 +178,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Analyseer de volgende Excel data en retourneer een JSON rapport:\n\n${dataDescription}`,
+          content: `Analyseer de volgende Excel data en retourneer een JSON rapport:${extraPrompt ? `\n\nExtra instructies van de gebruiker: ${extraPrompt}` : ""}\n\n${dataDescription}`,
         },
       ],
     });
