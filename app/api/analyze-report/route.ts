@@ -206,6 +206,18 @@ Social media (sport):
 - Engagement rate: <1% = laag, 1-3% = gemiddeld, >3% = goed
 - Bereikgroei: vergelijk met vorige periodes
 
+BESCHIKBARE GRAFIEK-TYPES:
+- "bar"           Verticale staafdiagram, één reeks → vergelijkingen
+- "bar-horizontal" Horizontale staafdiagram, één reeks → ranglijsten, lange labels
+- "bar-grouped"   Gegroepeerde staafdiagram, meerdere reeksen naast elkaar → gebruik dataKeys
+- "bar-stacked"   Gestapelde staafdiagram, meerdere reeksen op elkaar → gebruik dataKeys
+- "line"          Lijndiagram, één of meerdere reeksen → trends over tijd; gebruik dataKeys voor meerdere lijnen
+- "area"          Vlakdiagram, één reeks → trend met volume-gevoel
+- "area-stacked"  Gestapeld vlakdiagram, meerdere reeksen → gebruik dataKeys
+- "pie"           Taartdiagram, één reeks → verdeling/aandelen (max ~8 segmenten)
+- "composed"      Gecombineerd diagram (mix bar/line/area) → gebruik dataKeys + seriesTypes
+- "scatter"       Spreidingsdiagram → correlaties tussen twee numerieke kolommen
+
 VERPLICHT RESPONSE FORMAT (retourneer ALLEEN geldige JSON, geen markdown, geen tekst buiten de JSON):
 {
   "reportType": "campaign_performance" | "ticket_sales" | "social_media" | "general",
@@ -216,10 +228,12 @@ VERPLICHT RESPONSE FORMAT (retourneer ALLEEN geldige JSON, geen markdown, geen t
   ],
   "charts": [
     {
-      "type": "bar" | "line" | "pie",
+      "type": "bar" | "bar-horizontal" | "bar-grouped" | "bar-stacked" | "line" | "area" | "area-stacked" | "pie" | "composed" | "scatter",
       "title": "Grafiek titel",
-      "dataKey": "kolom naam voor de y-as (numerieke waarde)",
-      "categoryKey": "kolom naam voor de x-as of categorie",
+      "categoryKey": "kolom voor x-as of categorie",
+      "dataKey": "kolom voor y-as (alleen bij één reeks: bar, bar-horizontal, line, area, pie, scatter)",
+      "dataKeys": ["kolom1", "kolom2"],
+      "seriesTypes": { "kolom1": "bar", "kolom2": "line" },
       "data": [{ "key": "waarde" }]
     }
   ],
@@ -227,7 +241,9 @@ VERPLICHT RESPONSE FORMAT (retourneer ALLEEN geldige JSON, geen markdown, geen t
 }
 
 REGELS:
-- Maximaal 3 zinvolle grafieken; kies het type op basis van de data (trend → line, vergelijking → bar, verdeling → pie)
+- Maximaal 4 zinvolle grafieken; kies het type dat de data het beste communiceert
+- Gebruik dataKeys (array) voor alle multi-reeks types (bar-grouped, bar-stacked, area-stacked, composed, meerdere lines)
+- Bij composed: geef altijd seriesTypes mee om per sleutel het type (bar/line/area) aan te geven
 - KPI's: 3-6 meest relevante cijfers, vergelijk met benchmarks waar mogelijk
 - Inzichten: minimaal één anomalie/uitschieter benoemen, minimaal één concrete aanbeveling met cijfermatige onderbouwing
 - Formatteer getallen leesbaar: "12.450" of "€ 45.230" of "24,3%"

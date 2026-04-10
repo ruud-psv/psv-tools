@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils";
 import {
   BarChart, Bar,
   LineChart, Line,
+  AreaChart, Area,
+  ComposedChart,
+  ScatterChart, Scatter,
   PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -24,10 +27,25 @@ interface KPI {
 }
 
 interface ChartSpec {
-  type: "bar" | "line" | "pie";
+  type:
+    | "bar"
+    | "bar-horizontal"
+    | "bar-stacked"
+    | "bar-grouped"
+    | "line"
+    | "area"
+    | "area-stacked"
+    | "pie"
+    | "composed"
+    | "scatter";
   title: string;
-  dataKey: string;
   categoryKey: string;
+  /** Single-series charts (bar, bar-horizontal, line, area, pie, scatter) */
+  dataKey?: string;
+  /** Multi-series charts (bar-grouped, bar-stacked, area-stacked, composed) */
+  dataKeys?: string[];
+  /** Only for composed: maps each key to "bar" | "line" | "area" */
+  seriesTypes?: Record<string, "bar" | "line" | "area">;
   data: Record<string, unknown>[];
 }
 
@@ -273,6 +291,139 @@ function KPICard({ kpi, onUpdate }: { kpi: KPI; onUpdate: (updated: KPI) => void
 
 function ChartCard({ chart }: { chart: ChartSpec }) {
   const data = chart.data ?? [];
+  const keys = chart.dataKeys ?? (chart.dataKey ? [chart.dataKey] : []);
+  const singleKey = keys[0] ?? "";
+
+  const grid = <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />;
+  const xAxis = (dataKey: string) => <XAxis dataKey={dataKey} tick={{ fontSize: 11 }} tickLine={false} />;
+  const yAxis = <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />;
+  const yAxisNumber = <YAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />;
+
+  let chartEl: React.ReactElement;
+
+  switch (chart.type) {
+    case "bar":
+      chartEl = (
+        <BarChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          <Bar dataKey={singleKey} fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      );
+      break;
+
+    case "bar-horizontal":
+      chartEl = (
+        <BarChart data={data} layout="vertical">
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
+          <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+          <YAxis dataKey={chart.categoryKey} type="category" tick={{ fontSize: 11 }} tickLine={false} width={110} />
+          <Tooltip /><Legend />
+          <Bar dataKey={singleKey} fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      );
+      break;
+
+    case "bar-grouped":
+      chartEl = (
+        <BarChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          {keys.map((k, i) => (
+            <Bar key={k} dataKey={k} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} />
+          ))}
+        </BarChart>
+      );
+      break;
+
+    case "bar-stacked":
+      chartEl = (
+        <BarChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          {keys.map((k, i) => (
+            <Bar key={k} dataKey={k} stackId="stack" fill={CHART_COLORS[i % CHART_COLORS.length]} radius={i === keys.length - 1 ? [4, 4, 0, 0] : undefined} />
+          ))}
+        </BarChart>
+      );
+      break;
+
+    case "line":
+      chartEl = (
+        <LineChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          {keys.map((k, i) => (
+            <Line key={k} type="monotone" dataKey={k} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
+          ))}
+        </LineChart>
+      );
+      break;
+
+    case "area":
+      chartEl = (
+        <AreaChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          <Area type="monotone" dataKey={singleKey} fill={CHART_COLORS[0]} stroke={CHART_COLORS[0]} fillOpacity={0.2} strokeWidth={2} dot={false} />
+        </AreaChart>
+      );
+      break;
+
+    case "area-stacked":
+      chartEl = (
+        <AreaChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          {keys.map((k, i) => (
+            <Area key={k} type="monotone" dataKey={k} stackId="1" fill={CHART_COLORS[i % CHART_COLORS.length]} stroke={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.4} strokeWidth={2} dot={false} />
+          ))}
+        </AreaChart>
+      );
+      break;
+
+    case "composed":
+      chartEl = (
+        <ComposedChart data={data}>
+          {grid}{xAxis(chart.categoryKey)}{yAxis}<Tooltip /><Legend />
+          {keys.map((k, i) => {
+            const st = chart.seriesTypes?.[k] ?? "bar";
+            const color = CHART_COLORS[i % CHART_COLORS.length];
+            if (st === "line") return <Line key={k} type="monotone" dataKey={k} stroke={color} strokeWidth={2} dot={false} />;
+            if (st === "area") return <Area key={k} type="monotone" dataKey={k} fill={color} stroke={color} fillOpacity={0.2} strokeWidth={2} dot={false} />;
+            return <Bar key={k} dataKey={k} fill={color} radius={[4, 4, 0, 0]} />;
+          })}
+        </ComposedChart>
+      );
+      break;
+
+    case "scatter":
+      chartEl = (
+        <ScatterChart>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <XAxis dataKey={chart.categoryKey} type="number" name={chart.categoryKey} tick={{ fontSize: 11 }} tickLine={false} />
+          {yAxisNumber}
+          <Tooltip cursor={{ strokeDasharray: "3 3" }} />
+          <Scatter data={data} dataKey={singleKey} fill={CHART_COLORS[0]} />
+        </ScatterChart>
+      );
+      break;
+
+    case "pie":
+    default:
+      chartEl = (
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey={singleKey}
+            nameKey={chart.categoryKey}
+            cx="50%"
+            cy="50%"
+            outerRadius={100}
+            label={({ name, percent }) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip /><Legend />
+        </PieChart>
+      );
+  }
 
   return (
     <Card className="w-full">
@@ -281,43 +432,7 @@ function ChartCard({ chart }: { chart: ChartSpec }) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          {chart.type === "pie" ? (
-            <PieChart>
-              <Pie
-                data={data}
-                dataKey={chart.dataKey}
-                nameKey={chart.categoryKey}
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                label={({ name, percent }) =>
-                  `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`
-                }
-              >
-                {data.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          ) : chart.type === "line" ? (
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey={chart.categoryKey} tick={{ fontSize: 11 }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip />
-              <Line type="monotone" dataKey={chart.dataKey} stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} />
-            </LineChart>
-          ) : (
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-              <XAxis dataKey={chart.categoryKey} tick={{ fontSize: 11 }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip />
-              <Bar dataKey={chart.dataKey} fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          )}
+          {chartEl}
         </ResponsiveContainer>
       </CardContent>
     </Card>
