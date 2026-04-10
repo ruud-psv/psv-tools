@@ -74,11 +74,11 @@ const PII_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
 
 function detectPii(result: AnalysisResult): PiiMatch[] {
   const text = [
-    result.title,
-    result.summary,
-    ...result.insights,
-    ...result.kpis.map((k) => `${k.label} ${k.value} ${k.change ?? ""}`),
-    ...result.charts.map((c) => c.title),
+    result.title ?? "",
+    result.summary ?? "",
+    ...(result.insights ?? []),
+    ...(result.kpis ?? []).map((k) => `${k.label} ${k.value} ${k.change ?? ""}`),
+    ...(result.charts ?? []).map((c) => c.title),
   ].join(" ");
 
   return PII_PATTERNS.flatMap(({ label, pattern }) => {
@@ -390,6 +390,8 @@ export function RapportageGeneratorForm() {
     setStatus("idle");
     setResult(null);
     setError("");
+    setPiiWarnings([]);
+    setPiiDismissed(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
