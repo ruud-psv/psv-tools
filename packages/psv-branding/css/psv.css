@@ -1,0 +1,5 @@
+/* PSV Branding — Alles-in-één
+   Importeert tokens, fonts en componenten */
+@import './tokens.css';
+@import './fonts.css';
+@import './components.css';

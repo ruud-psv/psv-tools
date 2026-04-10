@@ -1,0 +1,42 @@
+{
+  "name": "@psv/branding",
+  "version": "2.0.0",
+  "description": "PSV huisstijl: design tokens, fonts, icons, logos en component styles",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ruud-psv/psv-branding.git"
+  },
+  "style": "css/psv.css",
+  "exports": {
+    ".": "./css/psv.css",
+    "./css/psv.css": "./css/psv.css",
+    "./css/tokens.css": "./css/tokens.css",
+    "./css/fonts.css": "./css/fonts.css",
+    "./css/components.css": "./css/components.css",
+    "./scss/*": "./scss/*",
+    "./tokens/tokens.json": "./tokens/tokens.json",
+    "./font/*": "./font/*",
+    "./icons/*": "./icons/*",
+    "./logo/*": "./logo/*"
+  },
+  "files": [
+    "css",
+    "scss",
+    "tokens",
+    "font",
+    "icons",
+    "logo",
+    "guidelines",
+    "tekst"
+  ],
+  "keywords": [
+    "psv",
+    "branding",
+    "huisstijl",
+    "design-tokens",
+    "fonts",
+    "icons"
+  ],
+  "license": "UNLICENSED",
+  "private": true
+}

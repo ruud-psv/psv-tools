@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 24.3.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Laag_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 50 50" style="enable-background:new 0 0 50 50;" xml:space="preserve">
+<style type="text/css">
+	.st0{display:none;}
+	.st1{display:inline;}
+	.st2{fill:none;stroke:#231F20;stroke-width:0.1;stroke-miterlimit:10;}
+	.st3{fill:#FFFFFF;stroke:#FFFFFF;stroke-miterlimit:10;}
+</style>
+<g id="GRID" class="st0">
+	<g class="st1">
+		<rect class="st2" width="50" height="50"/>
+		<circle class="st2" cx="25" cy="25" r="25"/>
+		<circle class="st2" cx="25" cy="25" r="18"/>
+		<circle class="st2" cx="25" cy="25" r="13"/>
+		<circle class="st2" cx="25" cy="25" r="7"/>
+		<line class="st2" x1="25" y1="0" x2="25" y2="50"/>
+		<line class="st2" x1="25" y1="0" x2="25" y2="50"/>
+		<line class="st2" x1="0" y1="25" x2="50" y2="25"/>
+		<line class="st2" x1="0" y1="0" x2="50" y2="50"/>
+		<line class="st2" x1="50" y1="0" x2="0" y2="50"/>
+		<rect x="7" y="7" class="st2" width="36" height="36"/>
+		<rect x="12" y="12" class="st2" width="26" height="26"/>
+	</g>
+</g>
+<g id="LETTER">
+	<g>
+		<path class="st3" d="M41.16,27.41l-2.71,2.71V17.73l4.24-4.24l-1.5-1.5l-4.17,4.17L32.2,15.4c-4.79-0.95-9.64-0.95-14.43,0
+			l-4.83,0.76L8.8,12.02l-1.5,1.5l4.21,4.21v12.38L8.8,27.4l-1.5,1.5l4.51,4.51c0.1,0.1,0.21,0.17,0.32,0.22
+			c0.07,0.03,3.66,3.17,3.67,3.18c6.14,2.08,12.01,2.14,18.32,0c0.01,0,3.65-3.16,3.76-3.22c0.2-0.11-0.16,0.22,4.75-4.69
+			L41.16,27.41z M33.45,34.82c-5.78,1.95-11.16,1.95-16.93,0l-2.89-2.88V18.2c5.01-0.79,4.5-0.71,4.53-0.72
+			c4.53-0.91,9.11-0.91,13.64,0c0.03,0.01-0.48-0.08,4.53,0.72v13.74L33.45,34.82z"/>
+		<path class="st3" d="M32.9,22.79H17.1v-2.12h15.8V22.79z"/>
+		<path class="st3" d="M17.1,25.19h15.8v2.12H17.1V25.19z"/>
+		<path class="st3" d="M32.9,31.82H17.1V29.7h15.8V31.82z"/>
+	</g>
+</g>
+</svg>

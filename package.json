@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.86.1",
-    "@psv/branding": "github:ruud-psv/psv-branding",
+    "@psv/branding": "file:./packages/psv-branding",
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-progress": "^1.1.0",
     "@radix-ui/react-select": "^2.1.6",
