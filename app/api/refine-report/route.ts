@@ -43,7 +43,15 @@ JSON schema (zelfde als input):
   "title": string,
   "summary": string,
   "kpis": [{ "label": string, "value": string, "change": string }],
-  "charts": [{ "type": "bar"|"line"|"pie", "title": string, "dataKey": string, "categoryKey": string, "data": array }],
+  "charts": [{
+    "type": "bar"|"bar-horizontal"|"bar-grouped"|"bar-stacked"|"line"|"area"|"area-stacked"|"pie"|"composed"|"scatter",
+    "title": string,
+    "categoryKey": string,
+    "dataKey": string,
+    "dataKeys": string[],
+    "seriesTypes": Record<string, "bar"|"line"|"area">,
+    "data": array
+  }],
   "insights": [string]
 }`;
 
