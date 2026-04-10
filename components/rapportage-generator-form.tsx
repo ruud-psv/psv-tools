@@ -497,30 +497,6 @@ export function RapportageGeneratorForm() {
 
         <Separator />
 
-        {/* KPIs */}
-        {result.kpis?.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Kerncijfers</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {result.kpis.map((kpi, i) => (
-                <KPICard key={i} kpi={kpi} onUpdate={(updated) => updateKPI(i, updated)} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Charts */}
-        {result.charts?.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Visualisaties</h3>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {result.charts.map((chart, i) => (
-                <ChartCard key={i} chart={chart} />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Summary */}
         {result.summary && (
           <Card>
@@ -558,6 +534,30 @@ export function RapportageGeneratorForm() {
               </ul>
             </CardContent>
           </Card>
+        )}
+
+        {/* KPIs */}
+        {result.kpis?.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Kerncijfers</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {result.kpis.map((kpi, i) => (
+                <KPICard key={i} kpi={kpi} onUpdate={(updated) => updateKPI(i, updated)} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Charts */}
+        {result.charts?.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Visualisaties</h3>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {result.charts.map((chart, i) => (
+                <ChartCard key={i} chart={chart} />
+              ))}
+            </div>
+          </div>
         )}
 
         <Separator />
