@@ -342,6 +342,47 @@ export function RapportageGeneratorForm() {
 
   const progress = useProgressBar(status === "loading");
 
+  const exportPdf = useCallback(async () => {
+    if (!reportRef.current) return;
+    setIsExporting(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const { default: jsPDF } = await import("jspdf");
+
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeightMm = (canvas.height / canvas.width) * pageWidth;
+
+      let heightLeft = imgHeightMm;
+      let offsetY = 0;
+
+      pdf.addImage(imgData, "PNG", 0, offsetY, pageWidth, imgHeightMm);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        offsetY -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, offsetY, pageWidth, imgHeightMm);
+        heightLeft -= pageHeight;
+      }
+
+      const filename = result?.title
+        ? `${result.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`
+        : "rapportage.pdf";
+      pdf.save(filename);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [result]);
+
   const handleFile = useCallback((f: File) => {
     const validExtensions = [".xlsx", ".xls"];
     if (!validExtensions.some((ext) => f.name.toLowerCase().endsWith(ext))) {
@@ -525,47 +566,6 @@ export function RapportageGeneratorForm() {
       </Card>
     );
   }
-
-  const exportPdf = useCallback(async () => {
-    if (!reportRef.current) return;
-    setIsExporting(true);
-    try {
-      const { default: html2canvas } = await import("html2canvas");
-      const { default: jsPDF } = await import("jspdf");
-
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeightMm = (canvas.height / canvas.width) * pageWidth;
-
-      let heightLeft = imgHeightMm;
-      let offsetY = 0;
-
-      pdf.addImage(imgData, "PNG", 0, offsetY, pageWidth, imgHeightMm);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        offsetY -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, offsetY, pageWidth, imgHeightMm);
-        heightLeft -= pageHeight;
-      }
-
-      const filename = result?.title
-        ? `${result.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`
-        : "rapportage.pdf";
-      pdf.save(filename);
-    } finally {
-      setIsExporting(false);
-    }
-  }, [result]);
 
   // Done state
   if (status === "done" && result) {
