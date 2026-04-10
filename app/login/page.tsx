@@ -55,7 +55,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-[#E82026]"
+      className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-primary"
       style={{
         backgroundImage: "url('/images/background-image.png')",
         backgroundSize: "cover",

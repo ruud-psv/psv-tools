@@ -58,7 +58,7 @@ export function AppSidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-64 flex-shrink-0 flex-col border-r bg-sidebar">
+    <aside className="flex h-screen w-64 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-sidebar-border">
         <Image
@@ -69,10 +69,10 @@ export function AppSidebar() {
           className="flex-shrink-0"
         />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-sidebar-foreground truncate">
+          <p className="text-sm font-heading uppercase tracking-wide text-sidebar-foreground truncate">
             PSV Tools
           </p>
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="text-xs text-psv-gray-09 truncate">
             Content platform
           </p>
         </div>
@@ -82,7 +82,7 @@ export function AppSidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
         {/* Main */}
         <div>
-          <p className="px-2 mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
             Navigatie
           </p>
           <ul className="space-y-0.5">
@@ -115,7 +115,7 @@ export function AppSidebar() {
 
         {/* Tools */}
         <div>
-          <p className="px-2 mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
             Tools
           </p>
           <ul className="space-y-0.5">
@@ -151,7 +151,7 @@ export function AppSidebar() {
 
         {/* Inzichten */}
         <div>
-          <p className="px-2 mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
             Inzichten
           </p>
           <ul className="space-y-0.5">
@@ -188,7 +188,7 @@ export function AppSidebar() {
       <div className="px-3 py-4 border-t border-sidebar-border">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           <span>Uitloggen</span>
