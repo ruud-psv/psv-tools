@@ -1,0 +1,232 @@
+// =============================================
+// PSV DESIGN TOKENS — SCSS Variabelen
+// Bron: psv.nl general.css + Brand Guidelines OKT 2025
+// =============================================
+
+// --- KLEUREN: Brand ---
+$color-red-primary:    #e82026;
+$color-red-secondary:  #c00d0d;
+$color-red-dark:       #9c1006;
+$color-red-light:      #f79da1;
+$color-red-lighter:    #fbc9ca;
+$color-gold:           #bb9753;
+
+// --- KLEUREN: Neutral ---
+$color-black:          #000000;
+$color-neutral-dark:   #09101d;
+$color-gray-11:        #333333;
+$color-gray-10:        #666666;
+$color-gray-09:        #999999;
+$color-gray-08:        #cccccc;
+$color-gray-07:        #eeeeee;
+$color-off-white:      #f5f5f5;
+$color-white:          #ffffff;
+
+// --- KLEUREN: Status ---
+$color-success:        #287d3c;
+$color-success-bg:     #edf9f0;
+$color-warning:        #b95000;
+$color-warning-bg:     #fff4ec;
+$color-error:          #da1414;
+$color-error-bg:       #feefef;
+$color-info:           #2e5aac;
+$color-info-bg:        #eef2fa;
+
+// --- KLEUREN: Semantisch ---
+$color-brand:          $color-red-primary;
+$color-interactive:    $color-red-primary;
+$color-interactive-hover: $color-red-dark;
+$color-bg-page:        $color-gray-07;
+$color-bg-header:      $color-red-primary;
+$color-bg-footer:      $color-black;
+$color-text-default:   $color-black;
+$color-text-inverted:  $color-white;
+$color-border-accent:  $color-red-primary;
+
+// --- TYPOGRAFIE: Families ---
+$font-branding:   'psv-condensed', sans-serif;
+$font-condensed:  'psv-condensed', sans-serif;
+$font-sans:       'psv-sans', 'Helvetica Neue', Helvetica, sans-serif;
+$font-text:       'psv-text', Georgia, serif;
+
+// --- TYPOGRAFIE: Schaalverdeling ---
+$text-xs:    12px;
+$text-sm:    14px;
+$text-base:  16px;
+$text-lg:    20px;
+$text-xl:    22px;
+$text-2xl:   26px;
+$text-3xl:   36px;
+$text-4xl:   52px;
+$text-5xl:   72px;
+$text-hero:  96px;
+
+// --- TYPOGRAFIE: Lijnhoogtes ---
+$leading-tight:  1.1;
+$leading-snug:   1.2;
+$leading-normal: 1.25;
+$leading-loose:  1.5;
+
+// --- RUIMTE (spacing) ---
+$space-1:   4px;
+$space-2:   8px;
+$space-3:  12px;
+$space-4:  16px;
+$space-5:  20px;
+$space-6:  24px;
+$space-8:  32px;
+$space-10: 40px;
+$space-12: 48px;
+$space-16: 64px;
+$space-20: 80px;
+
+// --- AFMETINGEN: Layout ---
+$max-width:            1248px;
+$header-height:        112px;
+$header-height-mobile: 64px;
+
+// --- BREAKPOINTS ---
+$bp-mobile:  375px;
+$bp-tablet:  580px;
+$bp-desktop: 960px;
+$bp-wide:    1280px;
+$bp-full:    1920px;
+
+// --- VORMEN & EFFECTEN ---
+$radius-sm:   4px;
+$radius-md:   8px;
+$border-accent-width: 4px;
+
+// --- SCHADUWEN ---
+$shadow-card:  0 1px 3px rgba(0, 0, 0, 0.5);
+$shadow-lg:    0 4px 16px rgba(0, 0, 0, 0.2);
+
+// --- ANIMATIE ---
+$transition-default: all 0.3s ease-out;
+$transition-fast:    all 0.15s ease-out;
+
+// --- BUTTON tokens ---
+$btn-padding-y:       7px;
+$btn-padding-x:       13px;
+$btn-padding-y-md:   17px;
+$btn-padding-x-md:   25px;
+$btn-line-height:    26px;
+$btn-skew-offset:    20px;
+
+// =============================================
+// MIXIN: Genereer CSS custom properties vanuit SCSS variabelen
+// Gebruik: @include psv-tokens;
+// =============================================
+@mixin psv-tokens {
+  :root {
+    // Kleuren: Brand
+    --color-red-primary: #{$color-red-primary};
+    --color-red-secondary: #{$color-red-secondary};
+    --color-red-dark: #{$color-red-dark};
+    --color-red-light: #{$color-red-light};
+    --color-red-lighter: #{$color-red-lighter};
+    --color-gold: #{$color-gold};
+
+    // Kleuren: Neutral
+    --color-black: #{$color-black};
+    --color-neutral-dark: #{$color-neutral-dark};
+    --color-gray-11: #{$color-gray-11};
+    --color-gray-10: #{$color-gray-10};
+    --color-gray-09: #{$color-gray-09};
+    --color-gray-08: #{$color-gray-08};
+    --color-gray-07: #{$color-gray-07};
+    --color-off-white: #{$color-off-white};
+    --color-white: #{$color-white};
+
+    // Kleuren: Status
+    --color-success: #{$color-success};
+    --color-success-bg: #{$color-success-bg};
+    --color-warning: #{$color-warning};
+    --color-warning-bg: #{$color-warning-bg};
+    --color-error: #{$color-error};
+    --color-error-bg: #{$color-error-bg};
+    --color-info: #{$color-info};
+    --color-info-bg: #{$color-info-bg};
+
+    // Kleuren: Semantisch
+    --color-brand: #{$color-brand};
+    --color-interactive: #{$color-interactive};
+    --color-interactive-hover: #{$color-interactive-hover};
+    --color-bg-page: #{$color-bg-page};
+    --color-bg-header: #{$color-bg-header};
+    --color-bg-footer: #{$color-bg-footer};
+    --color-text-default: #{$color-text-default};
+    --color-text-inverted: #{$color-text-inverted};
+    --color-border-accent: #{$color-border-accent};
+
+    // Typografie: Families
+    --font-branding: #{$font-branding};
+    --font-condensed: #{$font-condensed};
+    --font-sans: #{$font-sans};
+    --font-text: #{$font-text};
+
+    // Typografie: Schaalverdeling
+    --text-xs: #{$text-xs};
+    --text-sm: #{$text-sm};
+    --text-base: #{$text-base};
+    --text-lg: #{$text-lg};
+    --text-xl: #{$text-xl};
+    --text-2xl: #{$text-2xl};
+    --text-3xl: #{$text-3xl};
+    --text-4xl: #{$text-4xl};
+    --text-5xl: #{$text-5xl};
+    --text-hero: #{$text-hero};
+
+    // Typografie: Lijnhoogtes
+    --leading-tight: #{$leading-tight};
+    --leading-snug: #{$leading-snug};
+    --leading-normal: #{$leading-normal};
+    --leading-loose: #{$leading-loose};
+
+    // Ruimte
+    --space-1: #{$space-1};
+    --space-2: #{$space-2};
+    --space-3: #{$space-3};
+    --space-4: #{$space-4};
+    --space-5: #{$space-5};
+    --space-6: #{$space-6};
+    --space-8: #{$space-8};
+    --space-10: #{$space-10};
+    --space-12: #{$space-12};
+    --space-16: #{$space-16};
+    --space-20: #{$space-20};
+
+    // Afmetingen
+    --max-width: #{$max-width};
+    --header-height: #{$header-height};
+    --header-height-mobile: #{$header-height-mobile};
+
+    // Breakpoints
+    --bp-mobile: #{$bp-mobile};
+    --bp-tablet: #{$bp-tablet};
+    --bp-desktop: #{$bp-desktop};
+    --bp-wide: #{$bp-wide};
+    --bp-full: #{$bp-full};
+
+    // Vormen & Effecten
+    --radius-sm: #{$radius-sm};
+    --radius-md: #{$radius-md};
+    --border-accent-width: #{$border-accent-width};
+
+    // Schaduwen
+    --shadow-card: #{$shadow-card};
+    --shadow-lg: #{$shadow-lg};
+
+    // Animatie
+    --transition-default: #{$transition-default};
+    --transition-fast: #{$transition-fast};
+
+    // Button tokens
+    --btn-padding-y: #{$btn-padding-y};
+    --btn-padding-x: #{$btn-padding-x};
+    --btn-padding-y-md: #{$btn-padding-y-md};
+    --btn-padding-x-md: #{$btn-padding-x-md};
+    --btn-line-height: #{$btn-line-height};
+    --btn-skew-offset: #{$btn-skew-offset};
+  }
+}

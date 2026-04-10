@@ -1,0 +1,81 @@
+// =============================================
+// PSV FONTS — @font-face declaraties (SCSS)
+// Gebruik $psv-font-path om het pad te overschrijven
+// =============================================
+
+$psv-font-path: '../font' !default;
+
+// --- PSV Condensed ---
+@font-face {
+  font-family: 'psv-condensed';
+  src: url('#{$psv-font-path}/PSV Condensed/PSVCondensed-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+// --- PSV Sans ---
+@font-face {
+  font-family: 'psv-sans';
+  src: url('#{$psv-font-path}/PSV Sans/PSVSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'psv-sans';
+  src: url('#{$psv-font-path}/PSV Sans/PSVSans-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'psv-sans';
+  src: url('#{$psv-font-path}/PSV Sans/PSVSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'psv-sans';
+  src: url('#{$psv-font-path}/PSV Sans/PSVSans-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+// --- PSV Text ---
+@font-face {
+  font-family: 'psv-text';
+  src: url('#{$psv-font-path}/PSV Text/PSVText-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'psv-text';
+  src: url('#{$psv-font-path}/PSV Text/PSVText-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'psv-text';
+  src: url('#{$psv-font-path}/PSV Text/PSVText-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'psv-text';
+  src: url('#{$psv-font-path}/PSV Text/PSVText-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
