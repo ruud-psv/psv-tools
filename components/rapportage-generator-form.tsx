@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil, Send } from "lucide-react";
+import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil, Send, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -285,7 +285,9 @@ export function RapportageGeneratorForm() {
   const [refineInput, setRefineInput] = useState("");
   const [refineStatus, setRefineStatus] = useState<"idle" | "loading" | "error">("idle");
   const [refineError, setRefineError] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const progress = useProgressBar(status === "loading");
 
@@ -465,13 +467,72 @@ export function RapportageGeneratorForm() {
     );
   }
 
+  const exportPdf = useCallback(async () => {
+    if (!reportRef.current) return;
+    setIsExporting(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const { default: jsPDF } = await import("jspdf");
+
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeightMm = (canvas.height / canvas.width) * pageWidth;
+
+      let heightLeft = imgHeightMm;
+      let offsetY = 0;
+
+      pdf.addImage(imgData, "PNG", 0, offsetY, pageWidth, imgHeightMm);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        offsetY -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, offsetY, pageWidth, imgHeightMm);
+        heightLeft -= pageHeight;
+      }
+
+      const filename = result?.title
+        ? `${result.title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`
+        : "rapportage.pdf";
+      pdf.save(filename);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [result]);
+
   // Done state
   if (status === "done" && result) {
     return (
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="group min-w-0 flex-1">
+        {/* Action buttons */}
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={exportPdf} disabled={isExporting} className="flex-shrink-0">
+            <FileDown className="h-4 w-4 mr-2" />
+            {isExporting ? "Exporteren..." : "Exporteer als PDF"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleReset} className="flex-shrink-0">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Nieuw bestand
+          </Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Pencil className="h-3 w-3" />
+          Klik op tekst om te bewerken
+        </p>
+
+        {/* Exportable content */}
+        <div ref={reportRef} className="space-y-6 bg-white rounded-lg p-6">
+          {/* Title */}
+          <div className="group min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold">
                 <EditableText
@@ -484,81 +545,72 @@ export function RapportageGeneratorForm() {
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">Gebaseerd op {file?.name}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleReset} className="flex-shrink-0">
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Nieuw bestand
-          </Button>
-        </div>
 
-        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Pencil className="h-3 w-3" />
-          Klik op tekst om te bewerken
-        </p>
+          <Separator />
 
-        <Separator />
+          {/* Summary */}
+          {result.summary && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Samenvatting</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <EditableArea
+                  value={result.summary}
+                  onChange={(v) => setResult({ ...result, summary: v })}
+                  className="text-sm"
+                />
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Summary */}
-        {result.summary && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Samenvatting</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EditableArea
-                value={result.summary}
-                onChange={(v) => setResult({ ...result, summary: v })}
-                className="text-sm"
-              />
-            </CardContent>
-          </Card>
-        )}
+          {/* Insights */}
+          {result.insights?.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Inzichten</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {result.insights.map((insight, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm group">
+                      <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
+                      <EditableArea
+                        value={insight}
+                        onChange={(v) => updateInsight(i, v)}
+                        className="text-sm flex-1"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Insights */}
-        {result.insights?.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Inzichten</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {result.insights.map((insight, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm group">
-                    <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
-                    <EditableArea
-                      value={insight}
-                      onChange={(v) => updateInsight(i, v)}
-                      className="text-sm flex-1"
-                    />
-                  </li>
+          {/* KPIs */}
+          {result.kpis?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Kerncijfers</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                {result.kpis.map((kpi, i) => (
+                  <KPICard key={i} kpi={kpi} onUpdate={(updated) => updateKPI(i, updated)} />
                 ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* KPIs */}
-        {result.kpis?.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Kerncijfers</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {result.kpis.map((kpi, i) => (
-                <KPICard key={i} kpi={kpi} onUpdate={(updated) => updateKPI(i, updated)} />
-              ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Charts */}
-        {result.charts?.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Visualisaties</h3>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {result.charts.map((chart, i) => (
-                <ChartCard key={i} chart={chart} />
-              ))}
+          {/* Charts */}
+          {result.charts?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Visualisaties</h3>
+              <div className="grid grid-cols-1 gap-4">
+                {result.charts.map((chart, i) => (
+                  <ChartCard key={i} chart={chart} />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <Separator />
 
