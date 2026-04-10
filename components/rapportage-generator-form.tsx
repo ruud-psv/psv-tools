@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil, Send, FileDown } from "lucide-react";
+import { Upload, FileSpreadsheet, RotateCcw, TrendingUp, TrendingDown, Minus, Pencil, Send, FileDown, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -38,6 +38,55 @@ interface AnalysisResult {
   kpis: KPI[];
   charts: ChartSpec[];
   insights: string[];
+}
+
+interface PiiMatch {
+  label: string;
+  examples: string[];
+}
+
+const PII_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: "E-mailadressen",
+    pattern: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
+  },
+  {
+    label: "Telefoonnummers",
+    pattern: /(?:\+31|0031|0)[.\- ]?(?:6[.\- ]?\d{8}|[1-9]\d(?:[.\- ]?\d){6,7})/g,
+  },
+  {
+    label: "IBAN-bankrekeningnummers",
+    pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,}\b/g,
+  },
+  {
+    label: "Burgerservicenummers (BSN)",
+    pattern: /\b\d{9}\b/g,
+  },
+  {
+    label: "Postcodes (mogelijk adresgegevens)",
+    pattern: /\b[1-9]\d{3}\s?[A-Z]{2}\b/g,
+  },
+  {
+    label: "Straatnamen met huisnummers",
+    pattern: /[A-Z][a-zÀ-ÿ]+(?:straat|laan|weg|plein|kade|gracht|dreef|singel|dijk|pad|steeg|hof|allee)\s+\d+/gi,
+  },
+];
+
+function detectPii(result: AnalysisResult): PiiMatch[] {
+  const text = [
+    result.title,
+    result.summary,
+    ...result.insights,
+    ...result.kpis.map((k) => `${k.label} ${k.value} ${k.change ?? ""}`),
+    ...result.charts.map((c) => c.title),
+  ].join(" ");
+
+  return PII_PATTERNS.flatMap(({ label, pattern }) => {
+    const matches = [...text.matchAll(pattern)].map((m) => m[0]);
+    if (matches.length === 0) return [];
+    const examples = [...new Set(matches)].slice(0, 3);
+    return [{ label, examples }];
+  });
 }
 
 const CHART_COLORS = [
@@ -286,6 +335,8 @@ export function RapportageGeneratorForm() {
   const [refineStatus, setRefineStatus] = useState<"idle" | "loading" | "error">("idle");
   const [refineError, setRefineError] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [piiWarnings, setPiiWarnings] = useState<PiiMatch[]>([]);
+  const [piiDismissed, setPiiDismissed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -322,7 +373,10 @@ export function RapportageGeneratorForm() {
       const res = await fetch("/api/analyze-report", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Er is een fout opgetreden."); setStatus("error"); return; }
-      setResult(data as AnalysisResult);
+      const analysisResult = data as AnalysisResult;
+      setResult(analysisResult);
+      setPiiWarnings(detectPii(analysisResult));
+      setPiiDismissed(false);
       setStatus("done");
     } catch {
       setError("Kon de server niet bereiken. Probeer het opnieuw.");
@@ -359,7 +413,10 @@ export function RapportageGeneratorForm() {
       });
       const data = await res.json();
       if (!res.ok) { setRefineError(data.error ?? "Er is een fout opgetreden."); setRefineStatus("error"); return; }
-      setResult(data as AnalysisResult);
+      const refinedResult = data as AnalysisResult;
+      setResult(refinedResult);
+      setPiiWarnings(detectPii(refinedResult));
+      setPiiDismissed(false);
       setRefineInput("");
       setRefineStatus("idle");
     } catch {
@@ -512,6 +569,38 @@ export function RapportageGeneratorForm() {
   if (status === "done" && result) {
     return (
       <div className="space-y-6">
+        {/* PII warning */}
+        {piiWarnings.length > 0 && !piiDismissed && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">Mogelijk persoonsgegevens gevonden</p>
+                  <p className="text-xs text-amber-800">
+                    Controleer de rapportage vóór het exporteren of delen. Gevonden in:
+                  </p>
+                  <ul className="text-xs text-amber-800 space-y-0.5">
+                    {piiWarnings.map((w) => (
+                      <li key={w.label} className="flex items-start gap-1">
+                        <span className="font-medium">{w.label}:</span>
+                        <span className="font-mono">{w.examples.join(", ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <button
+                onClick={() => setPiiDismissed(true)}
+                className="text-amber-600 hover:text-amber-900 flex-shrink-0"
+                aria-label="Sluit melding"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Action buttons */}
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" onClick={exportPdf} disabled={isExporting} className="flex-shrink-0">
