@@ -108,12 +108,12 @@ function detectPii(result: AnalysisResult): PiiMatch[] {
 }
 
 const CHART_COLORS = [
-  "hsl(358, 81%, 52%)",
-  "hsl(215, 70%, 50%)",
-  "hsl(142, 60%, 45%)",
-  "hsl(45, 90%, 55%)",
-  "hsl(280, 65%, 55%)",
-  "hsl(195, 75%, 50%)",
+  "#e82026",  /* PSV rood primary */
+  "#bb9753",  /* PSV goud */
+  "#09101d",  /* PSV neutral dark */
+  "#c00d0d",  /* PSV rood secondary */
+  "#2e5aac",  /* PSV info blauw */
+  "#287d3c",  /* PSV success groen */
 ];
 
 const PROGRESS_DURATION = 45_000;

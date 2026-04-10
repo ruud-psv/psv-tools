@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
 
+const tokens = require("@psv/branding/tokens/tokens.json");
+
 const config: Config = {
   darkMode: ["class"],
   content: [
@@ -17,6 +19,7 @@ const config: Config = {
     },
     extend: {
       colors: {
+        /* Shadcn/UI semantic tokens (via CSS custom properties) */
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -60,6 +63,33 @@ const config: Config = {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+
+        /* PSV branding kleuren (direct uit tokens) */
+        psv: {
+          red: tokens.color.red,
+          gold: tokens.color.gold,
+          black: tokens.color.black,
+          neutralDark: tokens.color.neutralDark,
+          gray: tokens.color.gray,
+          offWhite: tokens.color.offWhite,
+          white: tokens.color.white,
+        },
+        success: {
+          DEFAULT: tokens.color.success,
+          bg: tokens.color.successBg,
+        },
+        warning: {
+          DEFAULT: tokens.color.warning,
+          bg: tokens.color.warningBg,
+        },
+        error: {
+          DEFAULT: tokens.color.error,
+          bg: tokens.color.errorBg,
+        },
+        info: {
+          DEFAULT: tokens.color.info,
+          bg: tokens.color.infoBg,
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -67,13 +97,23 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["PSVText-Regular", "ui-sans-serif", "system-ui", "sans-serif"],
-        heading: [
-          "PSVCondensed-Bold",
+        sans: [
+          "psv-sans",
+          "Helvetica Neue",
+          "Helvetica",
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
         ],
+        heading: ["psv-condensed", "ui-sans-serif", "system-ui", "sans-serif"],
+        text: ["psv-text", "Georgia", "serif"],
+      },
+      fontSize: {
+        hero: tokens.fontSize.hero,
+      },
+      boxShadow: {
+        card: tokens.shadow.card,
+        "psv-lg": tokens.shadow.lg,
       },
       keyframes: {
         "accordion-down": {

@@ -71,7 +71,7 @@ export default function DashboardPage() {
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <div className="flex h-10 w-10 items-center justify-center bg-primary text-primary-foreground">
                     <Icon className="h-5 w-5" />
                   </div>
                   <Badge variant={tool.badgeVariant}>{tool.badge}</Badge>
@@ -97,7 +97,7 @@ export default function DashboardPage() {
         <Card className="flex flex-col border-dashed opacity-60">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <div className="flex h-10 w-10 items-center justify-center bg-muted text-muted-foreground">
                 <span className="text-lg">+</span>
               </div>
               <Badge variant="outline">Binnenkort</Badge>

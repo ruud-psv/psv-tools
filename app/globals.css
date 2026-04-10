@@ -1,78 +1,68 @@
+@import "@psv/branding/css/fonts.css";
+@import "@psv/branding/css/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: "PSVText-Regular";
-  src: url("/fonts/PSVText-Regular.ttf") format("truetype");
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "PSVCondensed-Bold";
-  src: url("/fonts/PSVCondensed-Bold.otf") format("opentype");
-  font-weight: bold;
-  font-style: normal;
-  font-display: swap;
-}
-
 @layer base {
   :root {
+    /* Shadcn/UI semantic tokens — mapped to PSV branding */
     --background: 0 0% 100%;
-    --foreground: 0 0% 7%;
+    --foreground: 0 0% 0%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 7%;
+    --card-foreground: 0 0% 0%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 7%;
+    --popover-foreground: 0 0% 0%;
 
+    /* PSV Rood (#e82026) */
     --primary: 358 81% 52%;
     --primary-foreground: 0 0% 100%;
 
+    /* Donkergrijs achtergrond (#f5f5f5) */
     --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary-foreground: 0 0% 20%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 40%;
 
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 0 0% 93%;
+    --accent-foreground: 0 0% 20%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    /* PSV Error rood (#da1414) */
+    --destructive: 0 83% 47%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
+    --border: 0 0% 80%;
+    --input: 0 0% 80%;
     --ring: 358 81% 52%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    /* Sidebar */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 7%;
+    /* Sidebar — PSV donker thema */
+    --sidebar-background: 222 57% 7%;
+    --sidebar-foreground: 0 0% 100%;
     --sidebar-primary: 358 81% 52%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 93%;
-    --sidebar-accent-foreground: 0 0% 7%;
-    --sidebar-border: 0 0% 90%;
+    --sidebar-accent: 0 0% 20%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 20%;
     --sidebar-ring: 358 81% 52%;
   }
 
-  h1,
-  h2,
-  h3 {
-    font-family: "PSVCondensed-Bold", sans-serif;
-  }
-}
-
-@layer base {
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-condensed);
+    text-transform: uppercase;
   }
 }
