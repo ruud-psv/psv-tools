@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
 
-const MAX_ROWS_PER_SHEET = 500;
-
 function parseBasicAuth(header: string | null) {
   if (!header?.startsWith("Basic ")) return null;
   const encoded = header.slice(6).trim();
@@ -35,6 +33,138 @@ function authorize(sessionCookie: string | undefined): string | null {
   return null;
 }
 
+interface ColumnStats {
+  name: string;
+  type: "numeric" | "categorical" | "date";
+  // numeric
+  min?: number;
+  max?: number;
+  sum?: number;
+  mean?: number;
+  nullCount?: number;
+  // categorical / date
+  uniqueCount?: number;
+  topValues?: { value: string; count: number }[];
+}
+
+interface SheetStats {
+  totalRows: number;
+  columns: ColumnStats[];
+  sampleRows: unknown[];
+}
+
+function isNumeric(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return false;
+  return typeof value === "number" || (!isNaN(Number(value)) && String(value).trim() !== "");
+}
+
+function isDateLike(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return false;
+  if (typeof value === "number") return false;
+  const s = String(value);
+  return /^\d{1,4}[-/\.]\d{1,2}[-/\.]\d{1,4}/.test(s) || /^\d{4}-\d{2}-\d{2}/.test(s);
+}
+
+function computeSheetStats(rows: unknown[]): SheetStats {
+  if (rows.length === 0) return { totalRows: 0, columns: [], sampleRows: [] };
+
+  const firstRow = rows[0] as Record<string, unknown>;
+  const colNames = Object.keys(firstRow);
+
+  const columns: ColumnStats[] = colNames.map((name) => {
+    const values = rows.map((r) => (r as Record<string, unknown>)[name]);
+    const nonNull = values.filter((v) => v !== null && v !== undefined && v !== "");
+
+    // Type detection: numeric if ≥80% of non-null values are numeric
+    const numericCount = nonNull.filter(isNumeric).length;
+    const dateCount = nonNull.filter(isDateLike).length;
+
+    if (nonNull.length > 0 && numericCount / nonNull.length >= 0.8) {
+      const nums = nonNull.map(Number).filter((n) => !isNaN(n));
+      const sum = nums.reduce((a, b) => a + b, 0);
+      return {
+        name,
+        type: "numeric",
+        min: Math.min(...nums),
+        max: Math.max(...nums),
+        sum,
+        mean: nums.length > 0 ? sum / nums.length : 0,
+        nullCount: values.length - nonNull.length,
+      };
+    }
+
+    if (nonNull.length > 0 && dateCount / nonNull.length >= 0.7) {
+      const freqMap = new Map<string, number>();
+      for (const v of nonNull) {
+        const key = String(v);
+        freqMap.set(key, (freqMap.get(key) ?? 0) + 1);
+      }
+      const topValues = [...freqMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([value, count]) => ({ value, count }));
+      return {
+        name,
+        type: "date",
+        uniqueCount: freqMap.size,
+        topValues,
+        nullCount: values.length - nonNull.length,
+      };
+    }
+
+    // Categorical
+    const freqMap = new Map<string, number>();
+    for (const v of nonNull) {
+      const key = String(v);
+      freqMap.set(key, (freqMap.get(key) ?? 0) + 1);
+    }
+    const topValues = [...freqMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([value, count]) => ({ value, count }));
+    return {
+      name,
+      type: "categorical",
+      uniqueCount: freqMap.size,
+      topValues,
+      nullCount: values.length - nonNull.length,
+    };
+  });
+
+  return {
+    totalRows: rows.length,
+    columns,
+    sampleRows: rows.slice(0, 20),
+  };
+}
+
+function formatSheetStats(name: string, stats: SheetStats): string {
+  if (stats.totalRows === 0) return null!;
+
+  const lines: string[] = [`Sheet "${name}": ${stats.totalRows.toLocaleString("nl-NL")} rijen totaal`];
+
+  for (const col of stats.columns) {
+    if (col.type === "numeric") {
+      lines.push(
+        `\nKolom "${col.name}" (numeriek):` +
+        `\n  Min: ${col.min} | Max: ${col.max} | Gemiddelde: ${col.mean!.toFixed(2)} | Som: ${col.sum!.toLocaleString("nl-NL")} | Leeg: ${col.nullCount}`
+      );
+    } else {
+      const topStr = (col.topValues ?? [])
+        .map((t) => `${t.value} (${t.count})`)
+        .join(", ");
+      lines.push(
+        `\nKolom "${col.name}" (${col.type === "date" ? "datum" : "categorie"}):` +
+        `\n  Unieke waarden: ${col.uniqueCount} | Leeg: ${col.nullCount}` +
+        `\n  Top waarden: ${topStr}`
+      );
+    }
+  }
+
+  lines.push(`\nEerste 20 rijen (ter referentie van structuur):\n${JSON.stringify(stats.sampleRows, null, 2)}`);
+  return lines.join("\n");
+}
+
 function parseExcel(buffer: ArrayBuffer): Record<string, unknown[]> {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheets: Record<string, unknown[]> = {};
@@ -42,7 +172,7 @@ function parseExcel(buffer: ArrayBuffer): Record<string, unknown[]> {
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-    sheets[sheetName] = rows.slice(0, MAX_ROWS_PER_SHEET);
+    sheets[sheetName] = rows;
   }
 
   return sheets;
@@ -50,9 +180,11 @@ function parseExcel(buffer: ArrayBuffer): Record<string, unknown[]> {
 
 const SYSTEM_PROMPT = `Je bent een senior data-analist voor PSV Eindhoven met diepgaande kennis van marketing, e-mail, ticketverkoop en social media metrics.
 
+BELANGRIJK: De data die je ontvangt bevat pre-berekende statistieken over het VOLLEDIGE dataset (niet alleen een steekproef). Gebruik de exacte cijfers uit deze statistieken in KPI's en inzichten — doe geen eigen schattingen of berekeningen als de statistieken al beschikbaar zijn.
+
 WERKWIJZE — volg altijd deze stappen intern voordat je output genereert:
 1. Begrijp de datastructuur: welke kolommen zijn er, wat zijn de datatypes, welke tijdsperiode dekt de data?
-2. Bereken statistische basiswaarden per numerieke kolom (min, max, gemiddelde, uitschieters)
+2. Lees de pre-berekende statistieken: gebruik exact de waarden uit min, max, gemiddelde, som, top-waarden
 3. Identificeer opvallende patronen, anomalieën of uitschieters die aandacht verdienen
 4. Bepaal het rapport-type en kies de meest informatieve visualisaties
 5. Formuleer concrete, actionable aanbevelingen — geen vage observaties
@@ -173,8 +305,8 @@ export async function POST(req: NextRequest) {
     .map((name) => {
       const rows = sheets[name];
       if (rows.length === 0) return null;
-      const columns = Object.keys(rows[0] as object);
-      return `Sheet "${name}": ${rows.length} rijen, kolommen: ${columns.join(", ")}\nData (eerste 50 rijen):\n${JSON.stringify(rows.slice(0, 50), null, 2)}`;
+      const stats = computeSheetStats(rows);
+      return formatSheetStats(name, stats);
     })
     .filter(Boolean)
     .join("\n\n---\n\n");
@@ -191,7 +323,7 @@ export async function POST(req: NextRequest) {
   try {
     const message = await client.messages.create({
       model: "claude-opus-4-6",
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {
