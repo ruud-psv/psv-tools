@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 28.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Laag_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 50 50" style="enable-background:new 0 0 50 50;" xml:space="preserve">
+<style type="text/css">
+	.st0{display:none;}
+	.st1{display:inline;}
+	.st2{fill:none;stroke:#241F20;stroke-width:0.1;stroke-miterlimit:10;}
+	.st3{fill:#ED1C24;}
+	.st4{fill:#FFFFFF;}
+</style>
+<g id="Laag_2_00000170975528480872682790000006655253251825133457_" class="st0">
+	<g class="st1">
+		<rect y="0" class="st2" width="50" height="50"/>
+		<circle class="st2" cx="25" cy="25" r="25"/>
+		<circle class="st2" cx="25" cy="25" r="18"/>
+		<circle class="st2" cx="25" cy="25" r="13"/>
+		<circle class="st2" cx="25" cy="25" r="7"/>
+		<line class="st2" x1="25" y1="0" x2="25" y2="50"/>
+		<line class="st2" x1="25" y1="0" x2="25" y2="50"/>
+		<line class="st2" x1="0" y1="25" x2="50" y2="25"/>
+		<line class="st2" x1="0" y1="0" x2="50" y2="50"/>
+		<line class="st2" x1="50" y1="0" x2="0" y2="50"/>
+		<rect x="7" y="7" class="st2" width="36" height="36"/>
+		<rect x="12" y="12" class="st2" width="26" height="26"/>
+	</g>
+</g>
+<g id="Laag_1_00000021109828927016030140000006073713362190927293_">
+	<g>
+		<polygon class="st3" points="32,24.1 32,37.9 35.2,37.9 35.2,24.9 		"/>
+	</g>
+	<rect x="22" y="24.4" class="st4" width="2" height="13.5"/>
+	<path class="st3" d="M25,25.7c-0.3,0-0.7,0-1-0.1v12.3h2V25.6C25.7,25.7,25.3,25.7,25,25.7z"/>
+	<path class="st3" d="M20,24.2v13.7h2V25.2C21.3,24.9,20.6,24.6,20,24.2z"/>
+	<polygon class="st3" points="32,24.1 32,37.9 35.2,37.9 35.2,24.9 	"/>
+	<polygon class="st3" points="14.8,24.9 14.8,37.9 18,37.9 18,24.1 	"/>
+	<path class="st3" d="M28,25.2v12.7h2V24.4h-0.4C29.1,24.7,28.6,25,28,25.2z"/>
+	<g>
+		<g>
+			<path class="st4" d="M25,24.2c-3.6,0-6.5-2.9-6.5-6.5s2.9-6.5,6.5-6.5s6.5,2.9,6.5,6.5S28.6,24.2,25,24.2z M25,13.1
+				c-2.5,0-4.5,2-4.5,4.5s2,4.5,4.5,4.5s4.5-2,4.5-4.5S27.5,13.1,25,13.1z"/>
+		</g>
+	</g>
+</g>
+</svg>

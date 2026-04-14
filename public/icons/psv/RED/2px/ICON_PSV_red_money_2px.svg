@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Laag_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 50 50">
+  <!-- Generator: Adobe Illustrator 29.2.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 116)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+        stroke: #241f20;
+        stroke-miterlimit: 10;
+        stroke-width: .1px;
+      }
+
+      .st1 {
+        fill: #e82026;
+      }
+
+      .st2 {
+        display: none;
+      }
+    </style>
+  </defs>
+  <g id="Laag_2" class="st2">
+    <g>
+      <rect class="st0" y="0" width="50" height="50"/>
+      <circle class="st0" cx="25" cy="25" r="25"/>
+      <circle class="st0" cx="25" cy="25" r="18"/>
+      <circle class="st0" cx="25" cy="25" r="13"/>
+      <circle class="st0" cx="25" cy="25" r="7"/>
+      <line class="st0" x1="25" y1="0" x2="25" y2="50"/>
+      <line class="st0" x1="25" y1="0" x2="25" y2="50"/>
+      <line class="st0" y1="25" x2="50" y2="25"/>
+      <line class="st0" y1="0" x2="50" y2="50"/>
+      <line class="st0" x1="50" y1="0" y2="50"/>
+      <rect class="st0" x="7" y="7" width="36" height="36"/>
+      <rect class="st0" x="12" y="12" width="26" height="26"/>
+    </g>
+  </g>
+  <g>
+    <path class="st1" d="M38,18v12H14v-12h24M40,16H12v16h28v-16h0Z"/>
+    <polygon class="st1" points="37 35 9 35 9 19 11 19 11 33 37 33 37 35"/>
+    <polygon class="st1" points="23 20.3 23 22.5 22 22.5 22 23.5 23 23.5 23 24.5 22 24.5 22 25.5 23 25.5 23 27.7 27.1 29.1 30 27.6 30 26 28 26 28 26.4 26.9 26.9 25 26.3 25 25.5 27 25.5 27 24.5 25 24.5 25 23.5 27 23.5 27 22.5 25 22.5 25 21.7 26.9 21.1 28 21.6 28 22 30 22 30 20.4 27.1 18.9 23 20.3"/>
+  </g>
+</svg>

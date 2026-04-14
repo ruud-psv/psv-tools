@@ -25,6 +25,43 @@ Dit project volgt de PSV huisstijl. Het pakket `@psv/branding` is geinstalleerd.
 - Grijs schaal: `#333` - `#eee`
 - Status: success `#287d3c`, warning `#b95000`, error `#da1414`, info `#2e5aac`
 
+### PSV Component Classes
+
+Beschikbaar via `globals.css` (in `@layer components`):
+
+| Component | Classes |
+|---|---|
+| **Typografie** | `.lead`, `.label`, `.branding-display` |
+| **Knoppen** | `.btn`, `.btn--medium`, `.btn--secondary`, `.btn--outlined`, `.btn--ghost`, `.btn--skewed`, `.btn--white` |
+| **Tags** | `.tag`, `.tag--black`, `.tag--gold`, `.tag--outlined` |
+| **Kaarten** | `.card__image`, `.card__body`, `.card__title`, `.card__meta`, `.card--overlay`, `.card--list`, `.card__title-highlight` |
+| **Wedstrijd** | `.match-card`, `.match-card__score`, `.match-card__teams`, `.match-card__team`, `.match-card__meta` |
+| **Accordeon** | `details.accordion`, `.accordion__content` |
+| **Formulieren** | `.form-group`, `.form-label`, `.form-hint`, `.form-error` |
+| **Alerts** | `.alert`, `.alert--success`, `.alert--warning`, `.alert--error`, `.alert--info` |
+| **Hero/Banner** | `.hero`, `.hero--red`, `.hero__title`, `.hero__content`, `.hero__bg`, `.hero__tag` |
+| **Secties** | `.section`, `.section--white`, `.section--gray`, `.section--red`, `.section--black`, `.section--accent`, `.section__title` |
+| **Grid** | `.grid-2`, `.grid-3`, `.grid-4` (responsive) |
+
+### PSV Iconen
+
+531 SVG iconen beschikbaar in `/public/icons/psv/` in drie kleurvarianten:
+
+```
+/public/icons/psv/
+├── BLACK/          # Zwarte iconen (4px stroke)
+│   └── 2px/        # Zwarte iconen (2px stroke)
+├── RED/            # Rode iconen (4px stroke)
+│   └── 2px/        # Rode iconen (2px stroke)
+└── WHITE/          # Witte iconen (4px stroke)
+    └── 2px/        # Witte iconen (2px stroke)
+```
+
+Gebruik in componenten:
+```tsx
+<img src="/icons/psv/RED/ICON_PSV_red_arrow_right.svg" alt="" />
+```
+
 ### Regels
 
 - Bij alle UI-wijzigingen: gebruik de PSV design tokens en component classes

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Laag_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 50 50">
+  <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #e82026;
+      }
+    </style>
+  </defs>
+  <polygon class="st0" points="18 21 16 21 16 24 13 24 13 26 16 26 16 29 18 29 18 26 21 26 21 24 18 24 18 21"/>
+  <rect class="st0" x="32" y="21" width="2" height="2"/>
+  <rect class="st0" x="35" y="24" width="2" height="2"/>
+  <rect class="st0" x="29" y="24" width="2" height="2"/>
+  <rect class="st0" x="32" y="27" width="2" height="2"/>
+  <path class="st0" d="M31.5,36l-4-4h-4.9l-4,4h-6.2l-4.4-4.4v-12.2l4.4-4.4h25.2l4.5,4.4v12.2l-4.4,4.4h-6.2ZM32.4,34h4.4l3.2-3.2v-10.5l-3.3-3.3H13.3l-3.3,3.3v10.5l3.2,3.2h4.4l3.8-4h7.1l3.8,4Z"/>
+</svg>

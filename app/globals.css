@@ -66,3 +66,370 @@
     text-transform: uppercase;
   }
 }
+
+/* =============================================
+   PSV COMPONENT CLASSES
+   Uit @psv/branding/css/components.css
+   Zonder reset/base — die worden door Tailwind afgehandeld.
+   ============================================= */
+
+@layer components {
+  /* --- Typografie helpers --- */
+  .lead {
+    font-size: var(--text-lg);
+    line-height: var(--leading-loose);
+    color: var(--color-gray-10);
+  }
+  .label {
+    font-family: var(--font-condensed);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .branding-display {
+    font-family: var(--font-branding);
+    font-size: var(--text-hero);
+    text-transform: uppercase;
+    line-height: 0.9;
+  }
+
+  /* --- Knoppen (PSV) --- */
+  .btn {
+    display: inline-block;
+    border: 0;
+    padding: var(--btn-padding-y) var(--btn-padding-x);
+    background: var(--color-red-primary);
+    color: var(--color-white);
+    font-family: var(--font-condensed);
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    line-height: var(--btn-line-height);
+    text-decoration: none;
+    cursor: pointer;
+    transition: var(--transition-default);
+    letter-spacing: 0.03em;
+  }
+  .btn:hover, .btn:focus-visible {
+    background: var(--color-red-dark);
+    color: var(--color-white);
+    text-decoration: none;
+  }
+  .btn--medium {
+    padding: var(--btn-padding-y-md) var(--btn-padding-x-md);
+  }
+  .btn--secondary {
+    background: var(--color-gray-11);
+  }
+  .btn--secondary:hover, .btn--secondary:focus-visible {
+    background: var(--color-black);
+  }
+  .btn--outlined {
+    background: transparent;
+    border: 1px solid var(--color-red-primary);
+    color: var(--color-red-primary);
+    line-height: 24px;
+  }
+  .btn--outlined:hover, .btn--outlined:focus-visible {
+    background: var(--color-red-primary);
+    color: var(--color-white);
+  }
+  .btn--ghost {
+    background: transparent;
+    color: var(--color-red-primary);
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .btn--ghost:hover, .btn--ghost:focus-visible {
+    color: var(--color-red-dark);
+  }
+  .btn--skewed {
+    clip-path: polygon(var(--btn-skew-offset) 0, 100% 0, calc(100% - var(--btn-skew-offset)) 100%, 0 100%);
+    padding-left: calc(var(--btn-padding-x-md) + var(--btn-skew-offset) / 2);
+    padding-right: calc(var(--btn-padding-x-md) + var(--btn-skew-offset) / 2);
+  }
+  .btn--white {
+    background: var(--color-white);
+    color: var(--color-black);
+  }
+  .btn--white:hover {
+    background: var(--color-off-white);
+    color: var(--color-black);
+  }
+
+  /* --- Tags --- */
+  .tag {
+    display: inline-block;
+    position: relative;
+    padding: 2px 10px;
+    font-family: var(--font-condensed);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    background: var(--color-red-primary);
+    color: var(--color-white);
+    line-height: 24px;
+  }
+  .tag--black { background: var(--color-black); }
+  .tag--gold { background: var(--color-gold); color: var(--color-black); }
+  .tag--outlined {
+    background: transparent;
+    border: 1px solid var(--color-red-primary);
+    color: var(--color-red-primary);
+  }
+
+  /* --- Kaarten (PSV BEM) --- */
+  .card__image {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+  }
+  .card__image--diagonal {
+    clip-path: polygon(0 0, 100% 0, 76% 100%, 0% 100%);
+  }
+  .card__body {
+    padding: var(--space-4) var(--space-4) var(--space-5);
+  }
+  .card__label {
+    display: block;
+    margin-bottom: var(--space-2);
+  }
+  .card__title {
+    font-family: var(--font-condensed);
+    font-size: var(--text-xl);
+    text-transform: uppercase;
+    line-height: var(--leading-tight);
+    margin-bottom: var(--space-3);
+  }
+  .card__meta {
+    font-size: var(--text-sm);
+    color: var(--color-gray-09);
+  }
+  .card--overlay {
+    aspect-ratio: 1.41;
+  }
+  .card--overlay .card__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: unset;
+  }
+  .card--overlay .card__body {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: var(--space-4);
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+  }
+  .card--overlay .card__title {
+    color: var(--color-white);
+  }
+  .card__title-highlight {
+    font-family: var(--font-condensed);
+    font-size: var(--text-xl);
+    text-transform: uppercase;
+    line-height: 28px;
+  }
+  .card__title-highlight span {
+    background: var(--color-black);
+    color: var(--color-white);
+    padding: 1px 5px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .card--list {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    border-bottom: 2px solid var(--color-red-primary);
+    max-height: 100px;
+  }
+  .card--list .card__image {
+    height: 100%;
+    aspect-ratio: unset;
+  }
+
+  /* --- Wedstrijd / Score --- */
+  .match-card {
+    background: var(--color-white);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-card);
+    text-align: center;
+  }
+  .match-card__teams {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+  .match-card__score {
+    font-family: var(--font-condensed);
+    font-size: var(--text-4xl);
+    font-weight: 700;
+    font-style: italic;
+    line-height: 1;
+    color: var(--color-black);
+    min-width: 80px;
+  }
+  .match-card__team {
+    font-family: var(--font-condensed);
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .match-card__meta {
+    font-size: var(--text-sm);
+    color: var(--color-gray-09);
+  }
+
+  /* --- Accordeon --- */
+  details.accordion {
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-gray-08);
+  }
+  details.accordion > summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4) 0;
+    font-family: var(--font-condensed);
+    font-size: var(--text-xl);
+    text-transform: uppercase;
+    cursor: pointer;
+    list-style: none;
+  }
+  details.accordion > summary::after {
+    content: '+';
+    font-size: var(--text-2xl);
+    font-weight: 300;
+    color: var(--color-red-primary);
+    transition: var(--transition-fast);
+  }
+  details.accordion[open] > summary::after { content: '\2212'; }
+  details.accordion .accordion__content {
+    padding-bottom: var(--space-5);
+    color: var(--color-gray-10);
+    line-height: var(--leading-loose);
+  }
+
+  /* --- Formulier helpers --- */
+  .form-group {
+    margin-bottom: var(--space-5);
+  }
+  .form-label {
+    display: block;
+    font-family: var(--font-condensed);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    margin-bottom: var(--space-2);
+    color: var(--color-gray-11);
+  }
+  .form-hint {
+    font-size: var(--text-xs);
+    color: var(--color-gray-09);
+    margin-top: var(--space-1);
+  }
+  .form-error {
+    font-size: var(--text-xs);
+    color: var(--color-error);
+    margin-top: var(--space-1);
+  }
+
+  /* --- Alerts --- */
+  .alert {
+    padding: var(--space-4) var(--space-5);
+    border-left: 4px solid;
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+  }
+  .alert--success { background: var(--color-success-bg); border-color: var(--color-success); color: var(--color-success); }
+  .alert--warning { background: var(--color-warning-bg); border-color: var(--color-warning); color: var(--color-warning); }
+  .alert--error   { background: var(--color-error-bg);   border-color: var(--color-error);   color: var(--color-error); }
+  .alert--info    { background: var(--color-info-bg);    border-color: var(--color-info);     color: var(--color-info); }
+
+  /* --- Hero / Banner --- */
+  .hero {
+    position: relative;
+    background: var(--color-black);
+    color: var(--color-white);
+    min-height: 480px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+  }
+  .hero__bg {
+    position: absolute;
+    inset: 0;
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    opacity: 0.5;
+  }
+  .hero__content {
+    position: relative;
+    z-index: 1;
+    padding: var(--space-12) var(--space-8);
+    max-width: var(--max-width);
+    margin: 0 auto;
+    width: 100%;
+  }
+  .hero__tag { margin-bottom: var(--space-4); }
+  .hero__title {
+    font-family: var(--font-branding);
+    font-size: var(--text-hero);
+    text-transform: uppercase;
+    line-height: 0.9;
+    margin-bottom: var(--space-6);
+  }
+  .hero--red {
+    background: var(--color-red-primary);
+    min-height: 320px;
+  }
+  .hero--red::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 40%;
+    height: 100%;
+    background: var(--color-red-dark);
+    clip-path: polygon(30% 0, 100% 0, 100% 100%, 0% 100%);
+  }
+
+  /* --- Sectie achtergronden --- */
+  .section { padding: var(--space-12) var(--space-8); }
+  .section--white   { background: var(--color-white); }
+  .section--gray    { background: var(--color-gray-07); }
+  .section--red     { background: var(--color-red-primary); color: var(--color-white); }
+  .section--black   { background: var(--color-black); color: var(--color-white); }
+  .section--accent  {
+    border-top: var(--border-accent-width) solid var(--color-red-primary);
+  }
+  .section__title {
+    margin-bottom: var(--space-8);
+  }
+  .section__title::after {
+    content: '';
+    display: block;
+    width: 48px;
+    height: 4px;
+    background: var(--color-red-primary);
+    margin-top: var(--space-3);
+  }
+  .section--red .section__title::after,
+  .section--black .section__title::after {
+    background: var(--color-white);
+  }
+
+  /* --- Grid --- */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-6); }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); }
+  @media (max-width: 960px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 580px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+}
