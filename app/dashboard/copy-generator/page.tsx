@@ -15,7 +15,7 @@ export default function CopyGeneratorPage() {
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Mail tekst generator</h1>
+        <h1 className="text-3xl tracking-tight">Mail tekst generator</h1>
         <p className="mt-1 text-muted-foreground">
           Genereer PSV e-mail copy en partner mailings met AI.
         </p>
