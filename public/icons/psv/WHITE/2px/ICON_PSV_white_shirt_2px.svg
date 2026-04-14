@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Laag_1" data-name="Laag 1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 33.2 27">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: none;
+        stroke: #241f20;
+        stroke-miterlimit: 10;
+        stroke-width: .1px;
+      }
+
+      .cls-2 {
+        fill: #fff;
+        stroke-width: 0px;
+      }
+
+      .cls-3 {
+        display: none;
+      }
+    </style>
+  </defs>
+  <g id="Laag_2" data-name="Laag 2" class="cls-3">
+    <g>
+      <rect class="cls-1" x="-8.4" y="-12" width="50" height="50"/>
+      <circle class="cls-1" cx="16.6" cy="13" r="25"/>
+      <circle class="cls-1" cx="16.6" cy="13" r="18"/>
+      <circle class="cls-1" cx="16.6" cy="13" r="13"/>
+      <circle class="cls-1" cx="16.6" cy="13" r="7"/>
+      <line class="cls-1" x1="16.6" y1="-12" x2="16.6" y2="38"/>
+      <line class="cls-1" x1="16.6" y1="-12" x2="16.6" y2="38"/>
+      <line class="cls-1" x1="-8.4" y1="13" x2="41.6" y2="13"/>
+      <line class="cls-1" x1="-8.4" y1="-12" x2="41.6" y2="38"/>
+      <line class="cls-1" x1="41.6" y1="-12" x2="-8.4" y2="38"/>
+      <rect class="cls-1" x="-1.4" y="-5" width="36" height="36"/>
+      <rect class="cls-1" x="3.6" width="26" height="26"/>
+    </g>
+  </g>
+  <g id="Laag_1-2" data-name="Laag 1">
+    <polygon class="cls-2" points="7.6 27 7.6 12 9.6 12 9.6 25 23.6 25 23.6 12 25.6 12 25.6 27 7.6 27"/>
+    <polygon class="cls-2" points="26.8 12.1 30.4 8.6 23.8 2 20.8 2 16.6 6.3 12.3 2 9.4 2 2.8 8.6 6.5 12.2 5.1 13.6 0 8.5 8.5 0 13.2 0 16.6 3.4 20 0 24.7 0 33.2 8.5 28.2 13.5 26.8 12.1"/>
+  </g>
+</svg>
