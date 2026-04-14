@@ -15,7 +15,7 @@ export default function UtmBuilderPage() {
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">UTM Builder</h1>
+        <h1 className="text-3xl tracking-tight">UTM Builder</h1>
         <p className="mt-1 text-muted-foreground">
           Genereer Google UTM-links voor campagnetracking.
         </p>
