@@ -50,35 +50,65 @@ interface TicketEvent {
   lastUpdate: string;
   availableForDisplay: boolean;
   category: string;
+  subCategory: string;
+  matchGroup: string;
   eventName: string;
+}
+
+function isMatchEvent(name: string): boolean {
+  const n = name.toLowerCase();
+  // Main match, package, fietsenstalling, or PSV Direct
+  if (
+    n.startsWith("package ") ||
+    n.startsWith("fietsenstalling") ||
+    n.startsWith("psv direct")
+  ) return true;
+  // "Team - Opponent" or "Opponent - Team" with PSV/Jong PSV/PSV Vrouwen
+  if (
+    /^(psv|jong psv|psv vrouwen)\s*-\s*.+/.test(n) ||
+    /^.+\s*-\s*(psv|jong psv|psv vrouwen)\b/.test(n)
+  ) {
+    // Exclude tours that have " - " in the name (e.g. bekerfinale description won't match these)
+    if (n.includes("stadiontour") || n.includes("kampioenstour") || n.includes("legend tour") || n.includes("matchday tour")) return false;
+    return true;
+  }
+  // Women's match patterns (e.g. "FC Twente Vrouwen - PSV Vrouwen")
+  if (/vrouwen.*-.*psv|psv.*vrouwen.*-/.test(n)) return true;
+  return false;
+}
+
+function getMatchSubCategory(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("jong psv")) return "Jong PSV";
+  if (n.includes("psv vrouwen") || n.includes("vrouwen")) return "PSV Vrouwen";
+  return "PSV";
+}
+
+function getMatchItemType(name: string): string {
+  const n = name.toLowerCase();
+  if (n.startsWith("package ")) return "package";
+  if (n.startsWith("fietsenstalling")) return "fietsenstalling";
+  if (n.startsWith("psv direct")) return "direct";
+  return "match";
+}
+
+/** Extract a stable match group key from the event name (opponent + date) */
+function getMatchGroup(name: string): string {
+  const n = name.toLowerCase();
+  // Strip prefixes to get base match name
+  let base = n
+    .replace(/^package\s+/i, "")
+    .replace(/^fietsenstalling\s*\|\s*/i, "")
+    .replace(/^psv direct\s*\|\s*/i, "");
+  // Normalize whitespace
+  base = base.replace(/\s+/g, " ").trim();
+  return base;
 }
 
 function categorizeEvent(name: string): string {
   const n = name.toLowerCase();
 
-  // Wedstrijden: "PSV - Opponent" or "Opponent - PSV" patterns (but not Package/Fietsenstalling/Direct)
-  if (
-    /^(psv|jong psv|psv vrouwen)\s*-\s*.+\d{2}\/\d{2}\/\d{4}/.test(n) ||
-    /^.+\s*-\s*(psv|jong psv|psv vrouwen)\s/.test(n)
-  ) {
-    if (
-      !n.startsWith("package") &&
-      !n.startsWith("fietsenstalling") &&
-      !n.startsWith("psv direct") &&
-      !n.startsWith("matchday tour")
-    ) {
-      return "Wedstrijden";
-    }
-  }
-
-  // Wedstrijd-gerelateerd
-  if (
-    n.startsWith("package ") ||
-    n.startsWith("fietsenstalling") ||
-    n.startsWith("psv direct")
-  ) {
-    return "Wedstrijden";
-  }
+  if (isMatchEvent(name)) return "Wedstrijden";
 
   // Tours
   if (
@@ -166,6 +196,9 @@ function parseXML(xml: string): TicketEvent[] {
     const sold = parseInt(get("SoldTickets"), 10) || 0;
     const available = parseInt(get("AvailableCapacity"), 10) || 0;
 
+    const category = categorizeEvent(nameAndDate);
+    const isMatch = category === "Wedstrijden";
+
     events.push({
       nameAndDate,
       showId: get("ShowId"),
@@ -179,7 +212,9 @@ function parseXML(xml: string): TicketEvent[] {
       endSaleAt: get("EndSaleAt"),
       lastUpdate: get("LastUpdate"),
       availableForDisplay: get("AvailableForDisplay") === "True",
-      category: categorizeEvent(nameAndDate),
+      category,
+      subCategory: isMatch ? getMatchSubCategory(nameAndDate) : "",
+      matchGroup: isMatch ? getMatchGroup(nameAndDate) : "",
       eventName: extractEventName(nameAndDate),
     });
   }

@@ -32,7 +32,14 @@ interface TicketEvent {
   lastUpdate: string;
   availableForDisplay: boolean;
   category: string;
+  subCategory: string;
+  matchGroup: string;
   eventName: string;
+}
+
+interface MatchGroup {
+  main: TicketEvent;
+  related: TicketEvent[]; // package, fietsenstalling, psv direct
 }
 
 interface FeedData {
@@ -220,6 +227,296 @@ function EventDetailPanel({
   );
 }
 
+const MATCH_SUB_FILTERS = ["Alle", "PSV", "Jong PSV", "PSV Vrouwen"];
+
+function itemTypeLabel(name: string): string {
+  const n = name.toLowerCase();
+  if (n.startsWith("package ")) return "Package";
+  if (n.startsWith("fietsenstalling")) return "Fietsenstalling";
+  if (n.startsWith("psv direct")) return "PSV Direct";
+  return "";
+}
+
+function isRelatedMatchItem(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.startsWith("package ") || n.startsWith("fietsenstalling") || n.startsWith("psv direct");
+}
+
+/** Groups match events: main match + related items (package, fietsenstalling, direct) */
+function groupMatchEvents(events: TicketEvent[]): MatchGroup[] {
+  const groups: Map<string, MatchGroup> = new Map();
+  const mainMatches: TicketEvent[] = [];
+  const relatedItems: TicketEvent[] = [];
+
+  for (const e of events) {
+    if (isRelatedMatchItem(e.nameAndDate)) {
+      relatedItems.push(e);
+    } else {
+      mainMatches.push(e);
+    }
+  }
+
+  // Create groups from main matches
+  for (const m of mainMatches) {
+    groups.set(m.matchGroup, { main: m, related: [] });
+  }
+
+  // Attach related items to their match group
+  for (const r of relatedItems) {
+    const group = groups.get(r.matchGroup);
+    if (group) {
+      group.related.push(r);
+    } else {
+      // No matching parent found, show as standalone
+      groups.set(r.eventId, { main: r, related: [] });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+function RelatedItemRow({ event }: { event: TicketEvent }) {
+  const pct = occupancyPct(event);
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-3 py-2 items-center bg-muted/20 border-t border-border/50">
+      <div className="flex items-center gap-2 min-w-0">
+        <Badge variant="outline" className="text-[10px] shrink-0 px-1.5 py-0">
+          {itemTypeLabel(event.nameAndDate)}
+        </Badge>
+      </div>
+      <span className="text-sm text-right whitespace-nowrap">
+        {event.soldTickets.toLocaleString("nl-NL")}
+      </span>
+      <span className={`text-sm font-medium text-right whitespace-nowrap ${availabilityColor(event)}`}>
+        {event.availableCapacity.toLocaleString("nl-NL")}
+      </span>
+      <div className="flex items-center gap-2">
+        {availabilityBadge(event)}
+      </div>
+    </div>
+  );
+}
+
+function MatchEventsTable({
+  events,
+  allEvents,
+}: {
+  events: TicketEvent[];
+  allEvents: TicketEvent[];
+}) {
+  const [search, setSearch] = useState("");
+  const [matchFilter, setMatchFilter] = useState("Alle");
+  const [sortKey, setSortKey] = useState<SortKey>("eventDate");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  // Sub-filter counts
+  const subCounts = useMemo(() => {
+    const m: Record<string, number> = { Alle: 0 };
+    const seen = new Set<string>();
+    for (const e of events) {
+      if (!isRelatedMatchItem(e.nameAndDate)) {
+        m[e.subCategory] = (m[e.subCategory] ?? 0) + 1;
+        m.Alle++;
+        seen.add(e.subCategory);
+      }
+    }
+    return m;
+  }, [events]);
+
+  // Filter by sub-category and search
+  const filteredEvents = useMemo(() => {
+    const q = search.toLowerCase();
+    return events.filter((e) => {
+      if (matchFilter !== "Alle" && e.subCategory !== matchFilter) return false;
+      if (q && !e.nameAndDate.toLowerCase().includes(q) && !e.eventName.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [events, matchFilter, search]);
+
+  // Group into match groups
+  const groups = useMemo(() => {
+    const g = groupMatchEvents(filteredEvents);
+    return g.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "eventDate") cmp = a.main.eventDate.localeCompare(b.main.eventDate);
+      else if (sortKey === "availableCapacity") cmp = a.main.availableCapacity - b.main.availableCapacity;
+      else if (sortKey === "soldTickets") cmp = a.main.soldTickets - b.main.soldTickets;
+      else if (sortKey === "occupancy") cmp = occupancyPct(a.main) - occupancyPct(b.main);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filteredEvents, sortKey, sortDir]);
+
+  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
+    <button
+      onClick={() => toggleSort(k)}
+      className="flex items-center gap-1 hover:text-foreground transition-colors group"
+    >
+      {label}
+      <ArrowUpDown
+        className={`h-3 w-3 transition-colors ${
+          sortKey === k ? "text-primary" : "text-muted-foreground/50 group-hover:text-muted-foreground"
+        }`}
+      />
+    </button>
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Sub-filter pills */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {MATCH_SUB_FILTERS.map((f) => (
+          <button
+            key={f}
+            onClick={() => setMatchFilter(f)}
+            className={`px-3 py-1 text-xs font-heading uppercase tracking-wide rounded-full border transition-colors ${
+              matchFilter === f
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50"
+            }`}
+          >
+            {f}
+            {subCounts[f] != null && (
+              <span className="ml-1.5 opacity-60">{subCounts[f]}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Zoek op wedstrijd..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {groups.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          Geen wedstrijden gevonden{search ? ` voor "${search}"` : ""}.
+        </div>
+      ) : (
+        <div className="border border-border rounded-md overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
+            <span>Wedstrijd</span>
+            <SortBtn k="eventDate" label="Datum" />
+            <SortBtn k="soldTickets" label="Verkocht" />
+            <SortBtn k="availableCapacity" label="Beschikbaar" />
+            <SortBtn k="occupancy" label="Bezetting" />
+            <span>Status</span>
+          </div>
+
+          <div className="divide-y divide-border">
+            {groups.map(({ main, related }) => {
+              const pct = occupancyPct(main);
+              const isExpanded = expandedId === main.eventId;
+
+              return (
+                <div key={main.eventId}>
+                  <button
+                    className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-3 w-full text-left hover:bg-muted/30 transition-colors items-center"
+                    onClick={() => setExpandedId(isExpanded ? null : main.eventId)}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate leading-tight">
+                          {main.eventName || main.nameAndDate}
+                        </p>
+                        {related.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            +{related.length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {main.subCategory}
+                      </p>
+                    </div>
+
+                    <span className="text-xs text-muted-foreground whitespace-nowrap text-right">
+                      {formatDate(main.eventDate)}
+                    </span>
+
+                    <span className="text-sm text-right whitespace-nowrap">
+                      {main.soldTickets.toLocaleString("nl-NL")}
+                    </span>
+
+                    <span className={`text-sm font-medium text-right whitespace-nowrap ${availabilityColor(main)}`}>
+                      {main.availableCapacity.toLocaleString("nl-NL")}
+                    </span>
+
+                    <div className="flex items-center gap-2 w-28">
+                      <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${progressColor(pct)}`}
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground w-8 text-right shrink-0">
+                        {pct}%
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {availabilityBadge(main)}
+                      {isExpanded ? (
+                        <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Related items (always visible when present) */}
+                  {related.length > 0 && !isExpanded && (
+                    <div className="ml-6 mr-4 mb-2">
+                      {related.map((r) => (
+                        <RelatedItemRow key={r.eventId} event={r} />
+                      ))}
+                    </div>
+                  )}
+
+                  {isExpanded && (
+                    <div className="px-4 pb-3 space-y-3">
+                      {/* Related items in expanded view */}
+                      {related.length > 0 && (
+                        <div className="ml-2">
+                          <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-1.5">
+                            Gerelateerd
+                          </p>
+                          {related.map((r) => (
+                            <RelatedItemRow key={r.eventId} event={r} />
+                          ))}
+                        </div>
+                      )}
+                      <EventDetailPanel event={main} allEvents={allEvents} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground text-right">
+        {groups.length} wedstrijden
+      </p>
+    </div>
+  );
+}
+
 function EventsTable({
   events,
   allEvents,
@@ -293,7 +590,6 @@ function EventsTable({
         </div>
       ) : (
         <div className="border border-border rounded-md overflow-hidden">
-          {/* Tabel header */}
           <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
             <span>Evenement</span>
             <SortBtn k="eventDate" label="Datum" />
@@ -303,7 +599,6 @@ function EventsTable({
             <span>Status</span>
           </div>
 
-          {/* Rijen */}
           <div className="divide-y divide-border">
             {sorted.map((event) => {
               const pct = occupancyPct(event);
@@ -317,7 +612,6 @@ function EventsTable({
                       setExpandedId(isExpanded ? null : event.eventId)
                     }
                   >
-                    {/* Naam */}
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate leading-tight">
                         {event.eventName || event.nameAndDate}
@@ -327,24 +621,20 @@ function EventsTable({
                       </p>
                     </div>
 
-                    {/* Datum */}
                     <span className="text-xs text-muted-foreground whitespace-nowrap text-right">
                       {formatDate(event.eventDate)}
                     </span>
 
-                    {/* Verkocht */}
                     <span className="text-sm text-right whitespace-nowrap">
                       {event.soldTickets.toLocaleString("nl-NL")}
                     </span>
 
-                    {/* Beschikbaar */}
                     <span
                       className={`text-sm font-medium text-right whitespace-nowrap ${availabilityColor(event)}`}
                     >
                       {event.availableCapacity.toLocaleString("nl-NL")}
                     </span>
 
-                    {/* Bezetting progress */}
                     <div className="flex items-center gap-2 w-28">
                       <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                         <div
@@ -357,7 +647,6 @@ function EventsTable({
                       </span>
                     </div>
 
-                    {/* Status + expand */}
                     <div className="flex items-center gap-2">
                       {availabilityBadge(event)}
                       {isExpanded ? (
@@ -610,7 +899,11 @@ export function TicketInzichtenDashboard() {
               </TabsList>
               {CATEGORIES.map((cat) => (
                 <TabsContent key={cat} value={cat} className="mt-0">
-                  <EventsTable events={tabEvents} allEvents={events} />
+                  {(activeTab === "Wedstrijden" && cat === "Wedstrijden") ? (
+                    <MatchEventsTable events={tabEvents} allEvents={events} />
+                  ) : (
+                    <EventsTable events={tabEvents} allEvents={events} />
+                  )}
                 </TabsContent>
               ))}
             </Tabs>
