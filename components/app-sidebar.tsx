@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { BarChart2, ClipboardCheck, FileText, LayoutDashboard, Link2, LogOut } from "lucide-react";
+import { BarChart2, ClipboardCheck, FileText, LayoutDashboard, Link2, LogOut, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,12 @@ const insights = [
     name: "Rapportage generator",
     href: "/dashboard/rapportage-generator",
     icon: BarChart2,
+    badge: null as string | null,
+  },
+  {
+    name: "Ticket Inzichten",
+    href: "/dashboard/ticket-inzichten",
+    icon: Ticket,
     badge: null as string | null,
   },
 ];
