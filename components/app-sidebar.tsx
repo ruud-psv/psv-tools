@@ -8,6 +8,7 @@ import {
   BarChart2,
   ClipboardCheck,
   FileText,
+  Globe,
   LayoutDashboard,
   Link2,
   LogOut,
@@ -67,6 +68,12 @@ const insights = [
     name: "DM Performance",
     href: "/dashboard/dm-performance",
     icon: Mail,
+    badge: null as string | null,
+  },
+  {
+    name: "Web Verkeer",
+    href: "/dashboard/web-verkeer",
+    icon: Globe,
     badge: null as string | null,
   },
 ];
