@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,6 +17,10 @@ import {
   ChevronUp,
   RefreshCw,
   ArrowUpDown,
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 
 interface TicketEvent {
@@ -110,6 +115,156 @@ function progressColor(pct: number): string {
   if (pct >= 85) return "bg-warning";
   return "bg-success";
 }
+
+/* ---------- AI Insights ---------- */
+
+interface TicketInsightsResponse {
+  summary: string;
+  highlights: { type: "trend" | "anomaly" | "achievement" | "warning" | "opportunity"; text: string }[];
+  recommendations: string[];
+  highestDemand: { name: string; metric: string; action: string } | null;
+  mostAvailable: { name: string; metric: string; action: string } | null;
+}
+
+function TicketInsightsPanel({
+  onAnalyze,
+  insights,
+  loading,
+  error,
+  hasData,
+}: {
+  onAnalyze: () => void;
+  insights: TicketInsightsResponse | null;
+  loading: boolean;
+  error: string | null;
+  hasData: boolean;
+}) {
+  const highlightIcon = (type: TicketInsightsResponse["highlights"][0]["type"]) => {
+    switch (type) {
+      case "achievement": return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      case "opportunity": return <TrendingUp className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+      case "trend":       return <TrendingUp className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+      case "warning":     return <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />;
+      case "anomaly":     return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center gap-3 py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-psv-gold" />
+          <span className="text-sm text-muted-foreground">AI-inzichten worden gegenereerd...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="border-destructive">
+        <CardContent className="flex items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Analyse mislukt</p>
+              <p className="text-xs text-muted-foreground">{error}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onAnalyze}>Opnieuw proberen</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!insights) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex items-center justify-between gap-4 py-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
+            <div>
+              <p className="text-sm font-medium">AI Inzichten</p>
+              <p className="text-xs text-muted-foreground">
+                Laat het model urgentie, kansen en patronen analyseren in de huidige ticketdata.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onAnalyze} disabled={!hasData} className="shrink-0">
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            Analyseren
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-t-2 border-t-psv-gold">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-psv-gold" />
+            AI Inzichten
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onAnalyze} className="text-xs text-muted-foreground h-7">
+            Vernieuwen
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <p className="text-sm leading-relaxed">{String(insights.summary ?? "")}</p>
+
+        {insights.highlights?.length > 0 && (
+          <div className="space-y-2">
+            {insights.highlights.map((h, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                {highlightIcon(h.type)}
+                <span>{String(h.text ?? "")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(insights.highestDemand || insights.mostAvailable) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {insights.highestDemand && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-1">
+                <p className="text-xs font-heading uppercase tracking-wide text-destructive">Hoogste vraag</p>
+                <p className="text-sm font-medium truncate">{String(insights.highestDemand.name ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.highestDemand.metric ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.highestDemand.action ?? "")}</p>
+              </div>
+            )}
+            {insights.mostAvailable && (
+              <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 space-y-1">
+                <p className="text-xs font-heading uppercase tracking-wide text-blue-600">Meeste ruimte</p>
+                <p className="text-sm font-medium truncate">{String(insights.mostAvailable.name ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.mostAvailable.metric ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.mostAvailable.action ?? "")}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {insights.recommendations?.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Aanbevelingen</p>
+            <ul className="space-y-2">
+              {insights.recommendations.map((r, i) => (
+                <li key={i} className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground">
+                  {String(r ?? "")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ---------- KPI Card ---------- */
 
 function KpiCard({
   icon: Icon,
@@ -731,6 +886,11 @@ export function TicketInzichtenDashboard() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState("Alle");
 
+  const [insights, setInsights] = useState<TicketInsightsResponse | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+  const insightsCached = useRef(false);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/ticket-feed", { cache: "no-store" });
@@ -742,12 +902,40 @@ export function TicketInzichtenDashboard() {
       setData(json);
       setError(null);
       setLastRefresh(new Date());
+      // Clear insights cache on data refresh so AI works with fresh data
+      insightsCached.current = false;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Onbekende fout");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const fetchInsights = useCallback(async () => {
+    const events = data?.events;
+    if (!events?.length) return;
+    if (insightsCached.current && insights) return;
+    setInsightsLoading(true);
+    setInsightsError(null);
+    try {
+      const res = await fetch("/api/ticket-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `API gaf status ${res.status}`);
+      }
+      const result: TicketInsightsResponse = await res.json();
+      setInsights(result);
+      insightsCached.current = true;
+    } catch (e) {
+      setInsightsError(e instanceof Error ? e.message : "Analyse mislukt");
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, [data, insights]);
 
   useEffect(() => {
     fetchData();
@@ -857,6 +1045,15 @@ export function TicketInzichtenDashboard() {
           sub="komende 7 dagen"
         />
       </div>
+
+      {/* AI Insights Panel */}
+      <TicketInsightsPanel
+        onAnalyze={fetchInsights}
+        insights={insights}
+        loading={insightsLoading}
+        error={insightsError}
+        hasData={events.length > 0}
+      />
 
       {/* Hoofdpanel: tabs + content */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
