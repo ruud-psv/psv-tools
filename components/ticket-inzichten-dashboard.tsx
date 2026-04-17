@@ -408,7 +408,7 @@ function MatchEventsTable({
         </div>
       ) : (
         <div className="border border-border rounded-md overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
             <span>Wedstrijd</span>
             <SortBtn k="eventDate" label="Datum" />
             <SortBtn k="soldTickets" label="Verkocht" />
@@ -425,7 +425,7 @@ function MatchEventsTable({
               return (
                 <div key={main.eventId}>
                   <button
-                    className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-3 w-full text-left hover:bg-muted/30 transition-colors items-center"
+                    className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-3 w-full text-left hover:bg-muted/30 transition-colors items-center"
                     onClick={() => setExpandedId(isExpanded ? null : main.eventId)}
                   >
                     <div className="min-w-0">
@@ -590,7 +590,7 @@ function EventsTable({
         </div>
       ) : (
         <div className="border border-border rounded-md overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
             <span>Evenement</span>
             <SortBtn k="eventDate" label="Datum" />
             <SortBtn k="soldTickets" label="Verkocht" />
@@ -607,7 +607,7 @@ function EventsTable({
               return (
                 <div key={event.eventId}>
                   <button
-                    className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-3 w-full text-left hover:bg-muted/30 transition-colors items-center"
+                    className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-3 w-full text-left hover:bg-muted/30 transition-colors items-center"
                     onClick={() =>
                       setExpandedId(isExpanded ? null : event.eventId)
                     }
