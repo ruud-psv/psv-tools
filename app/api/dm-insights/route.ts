@@ -254,6 +254,31 @@ export async function POST(req: NextRequest) {
     }
 
     const result = JSON.parse(jsonMatch[1].trim());
+
+    // Normalise: ensure arrays contain plain strings/objects regardless of how
+    // the model formatted them (e.g. recommendations as [{text:"..."}, ...]).
+    function toStr(v: unknown): string {
+      if (typeof v === "string") return v;
+      if (v && typeof v === "object") {
+        const o = v as Record<string, unknown>;
+        return String(o.text ?? o.value ?? o.content ?? JSON.stringify(v));
+      }
+      return String(v ?? "");
+    }
+
+    if (Array.isArray(result.recommendations)) {
+      result.recommendations = result.recommendations.map(toStr);
+    }
+    if (Array.isArray(result.highlights)) {
+      result.highlights = result.highlights.map((h: unknown) => {
+        if (h && typeof h === "object") {
+          const o = h as Record<string, unknown>;
+          return { type: String(o.type ?? "trend"), text: toStr(o.text ?? h) };
+        }
+        return { type: "trend", text: toStr(h) };
+      });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof SyntaxError) {

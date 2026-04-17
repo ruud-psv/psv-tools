@@ -732,7 +732,7 @@ function DmInsightsPanel({
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Summary */}
-        <p className="text-sm leading-relaxed">{insights.summary}</p>
+        <p className="text-sm leading-relaxed">{String(insights.summary ?? "")}</p>
 
         {/* Highlights */}
         {insights.highlights?.length > 0 && (
@@ -740,7 +740,7 @@ function DmInsightsPanel({
             {insights.highlights.map((h, i) => (
               <div key={i} className="flex items-start gap-2 text-sm">
                 {highlightIcon(h.type)}
-                <span>{h.text}</span>
+                <span>{String(h.text ?? "")}</span>
               </div>
             ))}
           </div>
@@ -754,9 +754,9 @@ function DmInsightsPanel({
                 <p className="text-xs font-heading uppercase tracking-wide text-emerald-600">
                   Beste mailing
                 </p>
-                <p className="text-sm font-medium truncate">{insights.topPerformer.name}</p>
-                <p className="text-xs text-muted-foreground">{insights.topPerformer.metric}</p>
-                <p className="text-xs text-muted-foreground">{insights.topPerformer.why}</p>
+                <p className="text-sm font-medium truncate">{String(insights.topPerformer.name ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.topPerformer.metric ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.topPerformer.why ?? "")}</p>
               </div>
             )}
             {insights.bottomPerformer && (
@@ -764,9 +764,9 @@ function DmInsightsPanel({
                 <p className="text-xs font-heading uppercase tracking-wide text-amber-600">
                   Verbeterpunt
                 </p>
-                <p className="text-sm font-medium truncate">{insights.bottomPerformer.name}</p>
-                <p className="text-xs text-muted-foreground">{insights.bottomPerformer.metric}</p>
-                <p className="text-xs text-muted-foreground">{insights.bottomPerformer.suggestion}</p>
+                <p className="text-sm font-medium truncate">{String(insights.bottomPerformer.name ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.bottomPerformer.metric ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(insights.bottomPerformer.suggestion ?? "")}</p>
               </div>
             )}
           </div>
@@ -784,7 +784,7 @@ function DmInsightsPanel({
                   key={i}
                   className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground"
                 >
-                  {r}
+                  {String(r ?? "")}
                 </li>
               ))}
             </ul>
