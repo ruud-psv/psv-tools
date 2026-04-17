@@ -712,7 +712,7 @@ export function DmPerformanceDashboard() {
 
       {/* KPI Cards */}
       {totals && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <KpiCard
             title="Mailings"
             value={formatNumber(totals.mailings)}
@@ -746,6 +746,13 @@ export function DmPerformanceDashboard() {
             value={formatNumber(totals.bounces)}
             subtitle={`${formatPct(totals.avgBounceRate)} bounce rate`}
             icon={AlertTriangle}
+            color="text-psv-gold"
+          />
+          <KpiCard
+            title="Uitschrijvingen"
+            value={formatNumber(totals.unsubscriptions)}
+            subtitle={`${formatPct(totals.avgUnsubRate)} unsub rate`}
+            icon={UserMinus}
             color="text-psv-gold"
           />
         </div>
