@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -25,6 +26,8 @@ import {
   ChevronUp,
   TrendingUp,
   Loader2,
+  Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import {
   BarChart,
@@ -605,6 +608,193 @@ function RateBadge({
   );
 }
 
+/* ---------- AI Insights ---------- */
+
+interface DmInsightsResponse {
+  summary: string;
+  highlights: { type: "trend" | "anomaly" | "achievement" | "warning"; text: string }[];
+  recommendations: string[];
+  topPerformer: { name: string; metric: string; why: string } | null;
+  bottomPerformer: { name: string; metric: string; suggestion: string } | null;
+}
+
+function DmInsightsPanel({
+  mailings,
+  totals,
+  preset,
+  onAnalyze,
+  insights,
+  loading,
+  error,
+}: {
+  mailings: MailingSummary[];
+  totals: Totals | undefined;
+  preset: string;
+  onAnalyze: () => void;
+  insights: DmInsightsResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const presetLabels: Record<string, string> = {
+    "7d": "laatste 7 dagen",
+    "30d": "laatste 30 dagen",
+    "90d": "laatste 90 dagen",
+    "6m": "laatste 6 maanden",
+    "1y": "laatste jaar",
+  };
+
+  const highlightIcon = (type: DmInsightsResponse["highlights"][0]["type"]) => {
+    switch (type) {
+      case "achievement":
+        return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
+      case "trend":
+        return <TrendingUp className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+      case "warning":
+        return <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />;
+      case "anomaly":
+        return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="mb-2">
+        <CardContent className="flex items-center justify-center gap-3 py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-psv-gold" />
+          <span className="text-sm text-muted-foreground">AI-inzichten worden gegenereerd...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="border-destructive mb-2">
+        <CardContent className="flex items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Analyse mislukt</p>
+              <p className="text-xs text-muted-foreground">{error}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onAnalyze}>
+            Opnieuw proberen
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!insights) {
+    return (
+      <Card className="mb-2 border-dashed">
+        <CardContent className="flex items-center justify-between gap-4 py-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
+            <div>
+              <p className="text-sm font-medium">AI Inzichten</p>
+              <p className="text-xs text-muted-foreground">
+                Laat het model patronen, anomalieën en aanbevelingen analyseren voor de {presetLabels[preset] ?? preset}.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAnalyze}
+            disabled={!mailings.length || !totals}
+            className="shrink-0"
+          >
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            Analyseren
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="mb-2 border-t-2 border-t-psv-gold">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-psv-gold" />
+            AI Inzichten
+            <span className="text-xs font-normal text-muted-foreground ml-1">
+              {presetLabels[preset] ?? preset}
+            </span>
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onAnalyze} className="text-xs text-muted-foreground h-7">
+            Vernieuwen
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Summary */}
+        <p className="text-sm leading-relaxed">{insights.summary}</p>
+
+        {/* Highlights */}
+        {insights.highlights?.length > 0 && (
+          <div className="space-y-2">
+            {insights.highlights.map((h, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                {highlightIcon(h.type)}
+                <span>{h.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Top / Bottom performer */}
+        {(insights.topPerformer || insights.bottomPerformer) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {insights.topPerformer && (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 space-y-1">
+                <p className="text-xs font-heading uppercase tracking-wide text-emerald-600">
+                  Beste mailing
+                </p>
+                <p className="text-sm font-medium truncate">{insights.topPerformer.name}</p>
+                <p className="text-xs text-muted-foreground">{insights.topPerformer.metric}</p>
+                <p className="text-xs text-muted-foreground">{insights.topPerformer.why}</p>
+              </div>
+            )}
+            {insights.bottomPerformer && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-1">
+                <p className="text-xs font-heading uppercase tracking-wide text-amber-600">
+                  Verbeterpunt
+                </p>
+                <p className="text-sm font-medium truncate">{insights.bottomPerformer.name}</p>
+                <p className="text-xs text-muted-foreground">{insights.bottomPerformer.metric}</p>
+                <p className="text-xs text-muted-foreground">{insights.bottomPerformer.suggestion}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recommendations */}
+        {insights.recommendations?.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+              Aanbevelingen
+            </p>
+            <ul className="space-y-2">
+              {insights.recommendations.map((r, i) => (
+                <li
+                  key={i}
+                  className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground"
+                >
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ---------- Main Dashboard ---------- */
 
 const PRESET_OPTIONS = [
@@ -623,9 +813,16 @@ export function DmPerformanceDashboard() {
   const [selectedMailing, setSelectedMailing] = useState<MailingSummary | null>(null);
   const [lastFetched, setLastFetched] = useState<string | null>(null);
 
+  const [insights, setInsights] = useState<DmInsightsResponse | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+  const insightsCache = useRef<Map<string, DmInsightsResponse>>(new Map());
+
   const fetchData = useCallback(async (datePreset: string) => {
     setLoading(true);
     setError(null);
+    // Clear cached insights for this preset so a refresh also refreshes AI
+    insightsCache.current.delete(datePreset);
     try {
       const { from, to } = getDateRange(datePreset);
       const res = await fetch(`/api/maileon?from=${from}&to=${to}`);
@@ -643,9 +840,46 @@ export function DmPerformanceDashboard() {
     }
   }, []);
 
+  const fetchInsights = useCallback(async () => {
+    if (!data?.mailings.length || !data.totals) return;
+    const cached = insightsCache.current.get(preset);
+    if (cached) {
+      setInsights(cached);
+      setInsightsError(null);
+      return;
+    }
+    setInsightsLoading(true);
+    setInsightsError(null);
+    try {
+      const { from, to } = getDateRange(preset);
+      const res = await fetch("/api/dm-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mailings: data.mailings, totals: data.totals, dateRange: { preset, from, to } }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `API gaf status ${res.status}`);
+      }
+      const result: DmInsightsResponse = await res.json();
+      setInsights(result);
+      insightsCache.current.set(preset, result);
+    } catch (err) {
+      setInsightsError(err instanceof Error ? err.message : "Analyse mislukt");
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, [data, preset]);
+
   useEffect(() => {
     fetchData(preset);
   }, [preset, fetchData]);
+
+  // Reset insights panel when switching presets
+  useEffect(() => {
+    setInsights(null);
+    setInsightsError(null);
+  }, [preset]);
 
   const totals = data?.totals;
   const mailings = data?.mailings ?? [];
@@ -708,6 +942,19 @@ export function DmPerformanceDashboard() {
             Maileon data ophalen...
           </span>
         </div>
+      )}
+
+      {/* AI Insights Panel */}
+      {!loading && !error && mailings.length > 0 && (
+        <DmInsightsPanel
+          mailings={mailings}
+          totals={totals}
+          preset={preset}
+          onAnalyze={fetchInsights}
+          insights={insights}
+          loading={insightsLoading}
+          error={insightsError}
+        />
       )}
 
       {/* KPI Cards */}
