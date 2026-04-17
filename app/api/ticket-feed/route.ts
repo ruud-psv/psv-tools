@@ -167,10 +167,9 @@ function categorizeEvent(name: string): string {
 }
 
 function extractEventName(nameAndDate: string): string {
-  // Remove date/time suffix like "15/04/2026 14:00" or just "15/04/2026"
   return nameAndDate
-    .replace(/\s*\d{2}\/\d{2}\/\d{4}\s*\d{2}:\d{2}\s*$/, "")
-    .replace(/\s*\d{2}\/\d{2}\/\d{4}\s*$/, "")
+    .replace(/\s*\d{2}[\/-]\d{2}[\/-]\d{4}\s*\d{2}:\d{2}\s*$/, "")
+    .replace(/\s*\d{2}[\/-]\d{2}[\/-]\d{4}\s*$/, "")
     .trim();
 }
 
