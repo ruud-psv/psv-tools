@@ -326,8 +326,11 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
         label = `${date} (${idx})`;
       }
 
+      const tooltipName = m.name.replace(/^\d{4}\.\d{2}\.\d{2}\s*/, "");
+
       return {
         name: m.name.length > 25 ? m.name.slice(0, 25) + "..." : m.name,
+        tooltipName,
         label,
         date,
         openRate: parseFloat(m.openRate.toFixed(1)),
@@ -370,11 +373,10 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
                   `${value}%`,
                   name === "openRate" ? "Open rate" : "Click rate",
                 ]}
-                labelFormatter={(_label: unknown, payload: unknown[]) => {
-                  const item = payload?.[0]?.payload as
-                    | { name: string; date: string }
-                    | undefined;
-                  return item ? `${item.date} — ${item.name}` : String(_label);
+                labelFormatter={(_label, payload) => {
+                  const item = (payload as { payload?: { tooltipName?: string } }[])?.[0]
+                    ?.payload;
+                  return item?.tooltipName ?? String(_label);
                 }}
               />
               <Bar
