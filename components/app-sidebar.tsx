@@ -48,15 +48,15 @@ const tools = [
     icon: ClipboardCheck,
     badge: null as string | null,
   },
-];
-
-const insights = [
   {
     name: "Rapportage generator",
     href: "/dashboard/rapportage-generator",
     icon: BarChart2,
     badge: null as string | null,
   },
+];
+
+const insights = [
   {
     name: "Ticket Inzichten",
     href: "/dashboard/ticket-inzichten",
