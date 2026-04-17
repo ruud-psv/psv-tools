@@ -92,17 +92,19 @@ function getMatchItemType(name: string): string {
   return "match";
 }
 
-/** Extract a stable match group key from the event name (opponent + date) */
-function getMatchGroup(name: string): string {
+/** Extract a stable match group key from the event name (opponent only) */
+function getMatchGroup(name: string, eventDate: string): string {
   const n = name.toLowerCase();
-  // Strip prefixes to get base match name
   let base = n
     .replace(/^package\s+/i, "")
     .replace(/^fietsenstalling\s*\|\s*/i, "")
     .replace(/^psv direct\s*\|\s*/i, "");
-  // Normalize whitespace
-  base = base.replace(/\s+/g, " ").trim();
-  return base;
+  base = base
+    .replace(/\s*\d{2}[\/-]\d{2}[\/-]\d{4}\s*\d{2}:\d{2}\s*$/, "")
+    .replace(/\s*\d{2}[\/-]\d{2}[\/-]\d{4}\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${base}|${eventDate}`;
 }
 
 function categorizeEvent(name: string): string {
@@ -193,6 +195,7 @@ function parseXML(xml: string): TicketEvent[] {
     };
 
     const nameAndDate = get("NameAndDate");
+    const eventDate = get("ActualEventDate");
     const sold = parseInt(get("SoldTickets"), 10) || 0;
     const available = parseInt(get("AvailableCapacity"), 10) || 0;
 
@@ -203,7 +206,7 @@ function parseXML(xml: string): TicketEvent[] {
       nameAndDate,
       showId: get("ShowId"),
       eventId: get("EventId"),
-      eventDate: get("ActualEventDate"),
+      eventDate,
       saleStatus: get("SaleStatus"),
       soldTickets: sold,
       availableCapacity: available,
@@ -214,7 +217,7 @@ function parseXML(xml: string): TicketEvent[] {
       availableForDisplay: get("AvailableForDisplay") === "True",
       category,
       subCategory: isMatch ? getMatchSubCategory(nameAndDate) : "",
-      matchGroup: isMatch ? getMatchGroup(nameAndDate) : "",
+      matchGroup: isMatch ? getMatchGroup(nameAndDate, eventDate) : "",
       eventName: extractEventName(nameAndDate),
     });
   }
