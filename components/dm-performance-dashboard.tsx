@@ -299,7 +299,6 @@ function Stat({
 /* ---------- Performance Chart ---------- */
 
 function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
-  // Show last 20 mailings in chronological order for the chart
   const chartData = useMemo(() => {
     const sorted = [...mailings]
       .filter((m) => m.scheduleTime)
@@ -310,13 +309,31 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
       )
       .slice(-20);
 
-    return sorted.map((m) => ({
-      name:
-        m.name.length > 25 ? m.name.slice(0, 25) + "..." : m.name,
-      date: formatDateShort(m.scheduleTime),
-      openRate: parseFloat(m.openRate.toFixed(1)),
-      clickRate: parseFloat(m.clickRate.toFixed(1)),
-    }));
+    const dateCounts = new Map<string, number>();
+    for (const m of sorted) {
+      const d = formatDateShort(m.scheduleTime);
+      dateCounts.set(d, (dateCounts.get(d) ?? 0) + 1);
+    }
+
+    const dateIndex = new Map<string, number>();
+    return sorted.map((m) => {
+      const date = formatDateShort(m.scheduleTime);
+      const count = dateCounts.get(date) ?? 1;
+      let label = date;
+      if (count > 1) {
+        const idx = (dateIndex.get(date) ?? 0) + 1;
+        dateIndex.set(date, idx);
+        label = `${date} (${idx})`;
+      }
+
+      return {
+        name: m.name.length > 25 ? m.name.slice(0, 25) + "..." : m.name,
+        label,
+        date,
+        openRate: parseFloat(m.openRate.toFixed(1)),
+        clickRate: parseFloat(m.clickRate.toFixed(1)),
+      };
+    });
   }, [mailings]);
 
   if (chartData.length === 0) return null;
@@ -332,7 +349,7 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
             <BarChart data={chartData} barGap={2}>
               <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.2} />
               <XAxis
-                dataKey="date"
+                dataKey="label"
                 tick={{ fontSize: 11 }}
                 stroke="#999"
               />
@@ -353,7 +370,12 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
                   `${value}%`,
                   name === "openRate" ? "Open rate" : "Click rate",
                 ]}
-                labelFormatter={(label: unknown) => String(label)}
+                labelFormatter={(_label: unknown, payload: unknown[]) => {
+                  const item = payload?.[0]?.payload as
+                    | { name: string; date: string }
+                    | undefined;
+                  return item ? `${item.date} — ${item.name}` : String(_label);
+                }}
               />
               <Bar
                 dataKey="openRate"
