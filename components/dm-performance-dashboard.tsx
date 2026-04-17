@@ -374,9 +374,8 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
                   name === "openRate" ? "Open rate" : "Click rate",
                 ]}
                 labelFormatter={(_label, payload) => {
-                  const item = (payload as { payload?: { tooltipName?: string } }[])?.[0]
-                    ?.payload;
-                  return item?.tooltipName ?? String(_label);
+                  const items = payload as unknown as { payload?: { tooltipName?: string } }[];
+                  return items?.[0]?.payload?.tooltipName ?? String(_label);
                 }}
               />
               <Bar
