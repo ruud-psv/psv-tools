@@ -71,6 +71,7 @@ interface AnalyticsResponse {
     totals: { sessions: number; users: number; pageviews: number };
     dailyTrend: DailyPoint[];
   };
+  siteErrors?: Record<string, string>;
   fetchedAt: string;
 }
 
@@ -459,6 +460,23 @@ export function WebVerkeerDashboard() {
             <div>
               <p className="font-medium">Fout bij ophalen data</p>
               <p className="text-sm text-muted-foreground">{error}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Partial errors */}
+      {data?.siteErrors && Object.keys(data.siteErrors).length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="flex items-start gap-3 py-4">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Sommige sites konden niet worden opgehaald</p>
+              <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                {Object.entries(data.siteErrors).map(([key, msg]) => (
+                  <li key={key}><span className="font-medium">{key}:</span> {msg}</li>
+                ))}
+              </ul>
             </div>
           </CardContent>
         </Card>

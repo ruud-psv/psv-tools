@@ -52,14 +52,17 @@ function getSites(): SiteConfig[] {
   return sites;
 }
 
-function getClient(): BetaAnalyticsDataClient | null {
+function getClient(): { client: BetaAnalyticsDataClient | null; error: string | null } {
   const json = process.env.GA_SERVICE_ACCOUNT_JSON;
-  if (!json) return null;
+  if (!json) return { client: null, error: "GA_SERVICE_ACCOUNT_JSON ontbreekt." };
   try {
     const credentials = JSON.parse(json);
-    return new BetaAnalyticsDataClient({ credentials });
-  } catch {
-    return null;
+    if (!credentials.client_email || !credentials.private_key) {
+      return { client: null, error: "GA_SERVICE_ACCOUNT_JSON mist client_email of private_key." };
+    }
+    return { client: new BetaAnalyticsDataClient({ credentials }), error: null };
+  } catch (e) {
+    return { client: null, error: `GA_SERVICE_ACCOUNT_JSON kon niet worden geparsed: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
 
@@ -200,10 +203,10 @@ export async function GET(req: NextRequest) {
   const authError = authorize(sessionCookie);
   if (authError) return NextResponse.json({ error: authError }, { status: 401 });
 
-  const client = getClient();
+  const { client, error: clientError } = getClient();
   if (!client) {
     return NextResponse.json(
-      { error: "Google Analytics is nog niet geconfigureerd. Stel GA_SERVICE_ACCOUNT_JSON in als environment variable." },
+      { error: clientError ?? "Google Analytics is nog niet geconfigureerd." },
       { status: 500 }
     );
   }
@@ -219,49 +222,59 @@ export async function GET(req: NextRequest) {
   const period = req.nextUrl.searchParams.get("period") ?? "30d";
   const dateRange = getDateRange(period);
 
-  try {
-    const results = await Promise.all(
-      sites.map((site) => fetchSiteData(client, site, dateRange).then((data) => ({ key: site.key, data })))
-    );
+  const settled = await Promise.allSettled(
+    sites.map((site) => fetchSiteData(client, site, dateRange).then((data) => ({ key: site.key, data })))
+  );
 
-    const sitesMap: Record<string, SiteData> = {};
-    for (const r of results) sitesMap[r.key] = r.data;
+  const sitesMap: Record<string, SiteData> = {};
+  const errors: Record<string, string> = {};
 
-    // Build combined totals + trend
-    const allTrends = new Map<string, { sessions: number; users: number; pageviews: number }>();
-    let combinedSessions = 0;
-    let combinedUsers = 0;
-    let combinedPageviews = 0;
-
-    for (const r of results) {
-      combinedSessions += r.data.totals.sessions;
-      combinedUsers += r.data.totals.users;
-      combinedPageviews += r.data.totals.pageviews;
-      for (const d of r.data.dailyTrend) {
-        const existing = allTrends.get(d.date) ?? { sessions: 0, users: 0, pageviews: 0 };
-        existing.sessions += d.sessions;
-        existing.users += d.users;
-        existing.pageviews += d.pageviews;
-        allTrends.set(d.date, existing);
-      }
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i];
+    if (result.status === "fulfilled") {
+      sitesMap[result.value.key] = result.value.data;
+    } else {
+      errors[sites[i].key] = result.reason instanceof Error ? result.reason.message : String(result.reason);
     }
+  }
 
-    const combinedDailyTrend = [...allTrends.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, v]) => ({ date, ...v }));
-
-    return NextResponse.json({
-      sites: sitesMap,
-      combined: {
-        totals: { sessions: combinedSessions, users: combinedUsers, pageviews: combinedPageviews },
-        dailyTrend: combinedDailyTrend,
-      },
-      fetchedAt: new Date().toISOString(),
-    });
-  } catch (err) {
+  if (Object.keys(sitesMap).length === 0) {
     return NextResponse.json(
-      { error: "Ophalen analytics data mislukt.", details: err instanceof Error ? err.message : String(err) },
+      { error: "Ophalen analytics data mislukt voor alle sites.", siteErrors: errors },
       { status: 502 }
     );
   }
+
+  // Build combined totals + trend
+  const allTrends = new Map<string, { sessions: number; users: number; pageviews: number }>();
+  let combinedSessions = 0;
+  let combinedUsers = 0;
+  let combinedPageviews = 0;
+
+  for (const data of Object.values(sitesMap)) {
+    combinedSessions += data.totals.sessions;
+    combinedUsers += data.totals.users;
+    combinedPageviews += data.totals.pageviews;
+    for (const d of data.dailyTrend) {
+      const existing = allTrends.get(d.date) ?? { sessions: 0, users: 0, pageviews: 0 };
+      existing.sessions += d.sessions;
+      existing.users += d.users;
+      existing.pageviews += d.pageviews;
+      allTrends.set(d.date, existing);
+    }
+  }
+
+  const combinedDailyTrend = [...allTrends.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({ date, ...v }));
+
+  return NextResponse.json({
+    sites: sitesMap,
+    combined: {
+      totals: { sessions: combinedSessions, users: combinedUsers, pageviews: combinedPageviews },
+      dailyTrend: combinedDailyTrend,
+    },
+    ...(Object.keys(errors).length > 0 && { siteErrors: errors }),
+    fetchedAt: new Date().toISOString(),
+  });
 }
