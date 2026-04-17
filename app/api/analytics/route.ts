@@ -56,13 +56,35 @@ function getClient(): { client: BetaAnalyticsDataClient | null; error: string | 
   const json = process.env.GA_SERVICE_ACCOUNT_JSON;
   if (!json) return { client: null, error: "GA_SERVICE_ACCOUNT_JSON ontbreekt." };
   try {
-    const credentials = JSON.parse(json);
-    if (!credentials.client_email || !credentials.private_key) {
-      return { client: null, error: "GA_SERVICE_ACCOUNT_JSON mist client_email of private_key." };
+    let credentials: unknown = JSON.parse(json);
+    // Handle double-encoded JSON (value was wrapped in extra quotes)
+    if (typeof credentials === "string") {
+      credentials = JSON.parse(credentials);
     }
-    return { client: new BetaAnalyticsDataClient({ credentials }), error: null };
+    if (!credentials || typeof credentials !== "object") {
+      return { client: null, error: `GA_SERVICE_ACCOUNT_JSON is geen object na parsen (type: ${typeof credentials}).` };
+    }
+    const creds = credentials as Record<string, unknown>;
+    if (!creds.client_email || !creds.private_key) {
+      const keys = Object.keys(creds).join(", ") || "geen";
+      return {
+        client: null,
+        error: `GA_SERVICE_ACCOUNT_JSON mist client_email of private_key. Gevonden velden: ${keys}.`,
+      };
+    }
+    // Normalize escaped newlines in private_key (common issue when env var is stored as single-line)
+    if (typeof creds.private_key === "string" && !creds.private_key.includes("\n")) {
+      creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+    }
+    return {
+      client: new BetaAnalyticsDataClient({ credentials: creds }),
+      error: null,
+    };
   } catch (e) {
-    return { client: null, error: `GA_SERVICE_ACCOUNT_JSON kon niet worden geparsed: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      client: null,
+      error: `GA_SERVICE_ACCOUNT_JSON kon niet worden geparsed: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
 }
 
