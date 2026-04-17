@@ -108,18 +108,29 @@ export function AppSidebar() {
           alt="PSV"
           width={40}
           height={40}
-          className="flex-shrink-0 mx-auto"
+          className="flex-shrink-0"
           style={collapsed ? { margin: "0 auto" } : { margin: 0 }}
         />
         {!collapsed && (
-          <div className="min-w-0">
-            <p className="text-sm font-heading uppercase tracking-wide text-sidebar-foreground truncate">
+          <>
+            <p className="text-sm font-heading uppercase tracking-wide text-sidebar-foreground truncate flex-1">
               PSV Tools
             </p>
-            <p className="text-xs text-psv-gray-09 truncate">
-              Content platform
-            </p>
-          </div>
+            <button
+              onClick={toggleCollapsed}
+              className="flex-shrink-0 p-1 rounded-md text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </>
+        )}
+        {collapsed && (
+          <button
+            onClick={toggleCollapsed}
+            className="mx-auto p-1 rounded-md text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </button>
         )}
       </div>
 
@@ -250,7 +261,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-2 py-4 border-t border-sidebar-border space-y-1">
+      <div className="px-2 py-4 border-t border-sidebar-border">
         <button
           onClick={handleLogout}
           title={collapsed ? "Uitloggen" : undefined}
@@ -261,22 +272,6 @@ export function AppSidebar() {
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           {!collapsed && <span>Uitloggen</span>}
-        </button>
-        <button
-          onClick={toggleCollapsed}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed && "justify-center"
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4 flex-shrink-0" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-4 w-4 flex-shrink-0" />
-              <span>Inklappen</span>
-            </>
-          )}
         </button>
       </div>
     </aside>
