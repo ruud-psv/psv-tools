@@ -276,20 +276,21 @@ function groupMatchEvents(events: TicketEvent[]): MatchGroup[] {
 }
 
 function RelatedItemRow({ event }: { event: TicketEvent }) {
-  const pct = occupancyPct(event);
   return (
-    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-3 py-2 items-center bg-muted/20 border-t border-border/50">
+    <div className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-2 items-center bg-muted/20 border-t border-border/50">
       <div className="flex items-center gap-2 min-w-0">
         <Badge variant="outline" className="text-[10px] shrink-0 px-1.5 py-0">
           {itemTypeLabel(event.nameAndDate)}
         </Badge>
       </div>
+      <span />
       <span className="text-sm text-right whitespace-nowrap">
         {event.soldTickets.toLocaleString("nl-NL")}
       </span>
       <span className={`text-sm font-medium text-right whitespace-nowrap ${availabilityColor(event)}`}>
         {event.availableCapacity.toLocaleString("nl-NL")}
       </span>
+      <span />
       <div className="flex items-center gap-2">
         {availabilityBadge(event)}
       </div>
@@ -479,29 +480,20 @@ function MatchEventsTable({
                   </button>
 
                   {/* Related items (always visible when present) */}
-                  {related.length > 0 && !isExpanded && (
-                    <div className="ml-6 mr-4 mb-2">
+                  {related.length > 0 && !isExpanded &&
+                    related.map((r) => (
+                      <RelatedItemRow key={r.eventId} event={r} />
+                    ))}
+
+                  {isExpanded && (
+                    <>
                       {related.map((r) => (
                         <RelatedItemRow key={r.eventId} event={r} />
                       ))}
-                    </div>
-                  )}
-
-                  {isExpanded && (
-                    <div className="px-4 pb-3 space-y-3">
-                      {/* Related items in expanded view */}
-                      {related.length > 0 && (
-                        <div className="ml-2">
-                          <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-1.5">
-                            Gerelateerd
-                          </p>
-                          {related.map((r) => (
-                            <RelatedItemRow key={r.eventId} event={r} />
-                          ))}
-                        </div>
-                      )}
-                      <EventDetailPanel event={main} allEvents={allEvents} />
-                    </div>
+                      <div className="px-4 pb-3">
+                        <EventDetailPanel event={main} allEvents={allEvents} />
+                      </div>
+                    </>
                   )}
                 </div>
               );
