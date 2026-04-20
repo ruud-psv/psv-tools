@@ -445,8 +445,8 @@ function MailingTable({
       const q = search.toLowerCase();
       list = list.filter(
         (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.subject.toLowerCase().includes(q)
+          (m.name ?? "").toLowerCase().includes(q) ||
+          (m.subject ?? "").toLowerCase().includes(q)
       );
     }
     return [...list].sort((a, b) => {
