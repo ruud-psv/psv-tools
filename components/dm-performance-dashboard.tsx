@@ -28,6 +28,7 @@ import {
   Loader2,
   Sparkles,
   CheckCircle2,
+  Calendar,
 } from "lucide-react";
 import {
   BarChart,
@@ -129,7 +130,10 @@ function formatDateShort(iso: string): string {
   }
 }
 
-function getDateRange(preset: string): { from: string; to: string } {
+function getDateRange(preset: string, customFrom?: string, customTo?: string): { from: string; to: string } {
+  if (preset === "custom" && customFrom && customTo) {
+    return { from: customFrom, to: customTo };
+  }
   const now = new Date();
   const to = now.toISOString().slice(0, 10);
 
@@ -441,8 +445,8 @@ function MailingTable({
       const q = search.toLowerCase();
       list = list.filter(
         (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.subject.toLowerCase().includes(q)
+          (m.name ?? "").toLowerCase().includes(q) ||
+          (m.subject ?? "").toLowerCase().includes(q)
       );
     }
     return [...list].sort((a, b) => {
@@ -622,6 +626,7 @@ function DmInsightsPanel({
   mailings,
   totals,
   preset,
+  dateLabel,
   onAnalyze,
   insights,
   loading,
@@ -630,18 +635,12 @@ function DmInsightsPanel({
   mailings: MailingSummary[];
   totals: Totals | undefined;
   preset: string;
+  dateLabel: string;
   onAnalyze: () => void;
   insights: DmInsightsResponse | null;
   loading: boolean;
   error: string | null;
 }) {
-  const presetLabels: Record<string, string> = {
-    "7d": "laatste 7 dagen",
-    "30d": "laatste 30 dagen",
-    "90d": "laatste 90 dagen",
-    "6m": "laatste 6 maanden",
-    "1y": "laatste jaar",
-  };
 
   const highlightIcon = (type: DmInsightsResponse["highlights"][0]["type"]) => {
     switch (type) {
@@ -695,7 +694,7 @@ function DmInsightsPanel({
             <div>
               <p className="text-sm font-medium">AI Inzichten</p>
               <p className="text-xs text-muted-foreground">
-                Laat het model patronen, anomalieën en aanbevelingen analyseren voor de {presetLabels[preset] ?? preset}.
+                Laat het model patronen, anomalieën en aanbevelingen analyseren voor {dateLabel}.
               </p>
             </div>
           </div>
@@ -722,7 +721,7 @@ function DmInsightsPanel({
             <Sparkles className="h-4 w-4 text-psv-gold" />
             AI Inzichten
             <span className="text-xs font-normal text-muted-foreground ml-1">
-              {presetLabels[preset] ?? preset}
+              {dateLabel}
             </span>
           </CardTitle>
           <Button variant="ghost" size="sm" onClick={onAnalyze} className="text-xs text-muted-foreground h-7">
@@ -798,12 +797,21 @@ function DmInsightsPanel({
 /* ---------- Main Dashboard ---------- */
 
 const PRESET_OPTIONS = [
-  { value: "7d", label: "Laatste 7 dagen" },
-  { value: "30d", label: "Laatste 30 dagen" },
-  { value: "90d", label: "Laatste 90 dagen" },
-  { value: "6m", label: "Laatste 6 maanden" },
-  { value: "1y", label: "Laatste jaar" },
+  { value: "7d", label: "Afgelopen week" },
+  { value: "30d", label: "Afgelopen maand" },
+  { value: "90d", label: "Afgelopen kwartaal" },
+  { value: "6m", label: "Afgelopen halfjaar" },
+  { value: "1y", label: "Afgelopen jaar" },
+  { value: "custom", label: "Aangepast bereik" },
 ];
+
+const PRESET_LABELS: Record<string, string> = {
+  "7d": "afgelopen week",
+  "30d": "afgelopen maand",
+  "90d": "afgelopen kwartaal",
+  "6m": "afgelopen halfjaar",
+  "1y": "afgelopen jaar",
+};
 
 export function DmPerformanceDashboard() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -813,18 +821,46 @@ export function DmPerformanceDashboard() {
   const [selectedMailing, setSelectedMailing] = useState<MailingSummary | null>(null);
   const [lastFetched, setLastFetched] = useState<string | null>(null);
 
+  const defaultCustomFrom = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  })();
+  const defaultCustomTo = new Date().toISOString().slice(0, 10);
+  const [customFrom, setCustomFrom] = useState(defaultCustomFrom);
+  const [customTo, setCustomTo] = useState(defaultCustomTo);
+
   const [insights, setInsights] = useState<DmInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const insightsCache = useRef<Map<string, DmInsightsResponse>>(new Map());
 
-  const fetchData = useCallback(async (datePreset: string) => {
+  const getActiveDateRange = useCallback(() => {
+    return getDateRange(preset, customFrom, customTo);
+  }, [preset, customFrom, customTo]);
+
+  const getInsightsCacheKey = useCallback(() => {
+    if (preset === "custom") {
+      const { from, to } = getDateRange("custom", customFrom, customTo);
+      return `custom:${from}:${to}`;
+    }
+    return preset;
+  }, [preset, customFrom, customTo]);
+
+  const getDateLabel = useCallback(() => {
+    if (preset === "custom") {
+      return `${formatDate(customFrom)} – ${formatDate(customTo)}`;
+    }
+    return PRESET_LABELS[preset] ?? preset;
+  }, [preset, customFrom, customTo]);
+
+  const fetchData = useCallback(async (datePreset: string, cfrom?: string, cto?: string) => {
+    const cacheKey = datePreset === "custom" ? `custom:${cfrom}:${cto}` : datePreset;
     setLoading(true);
     setError(null);
-    // Clear cached insights for this preset so a refresh also refreshes AI
-    insightsCache.current.delete(datePreset);
+    insightsCache.current.delete(cacheKey);
     try {
-      const { from, to } = getDateRange(datePreset);
+      const { from, to } = getDateRange(datePreset, cfrom, cto);
       const res = await fetch(`/api/maileon?from=${from}&to=${to}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -842,7 +878,9 @@ export function DmPerformanceDashboard() {
 
   const fetchInsights = useCallback(async () => {
     if (!data?.mailings.length || !data.totals) return;
-    const cached = insightsCache.current.get(preset);
+    const { from, to } = getActiveDateRange();
+    const cacheKey = getInsightsCacheKey();
+    const cached = insightsCache.current.get(cacheKey);
     if (cached) {
       setInsights(cached);
       setInsightsError(null);
@@ -851,7 +889,6 @@ export function DmPerformanceDashboard() {
     setInsightsLoading(true);
     setInsightsError(null);
     try {
-      const { from, to } = getDateRange(preset);
       const res = await fetch("/api/dm-insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -863,16 +900,18 @@ export function DmPerformanceDashboard() {
       }
       const result: DmInsightsResponse = await res.json();
       setInsights(result);
-      insightsCache.current.set(preset, result);
+      insightsCache.current.set(cacheKey, result);
     } catch (err) {
       setInsightsError(err instanceof Error ? err.message : "Analyse mislukt");
     } finally {
       setInsightsLoading(false);
     }
-  }, [data, preset]);
+  }, [data, preset, getActiveDateRange, getInsightsCacheKey]);
 
   useEffect(() => {
-    fetchData(preset);
+    if (preset !== "custom") {
+      fetchData(preset);
+    }
   }, [preset, fetchData]);
 
   // Reset insights panel when switching presets
@@ -884,11 +923,13 @@ export function DmPerformanceDashboard() {
   const totals = data?.totals;
   const mailings = data?.mailings ?? [];
 
+  const dateLabel = getDateLabel();
+
   return (
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Select value={preset} onValueChange={setPreset}>
             <SelectTrigger className="w-52">
               <SelectValue />
@@ -901,14 +942,46 @@ export function DmPerformanceDashboard() {
               ))}
             </SelectContent>
           </Select>
-          <button
-            onClick={() => fetchData(preset)}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Vernieuwen
-          </button>
+
+          {preset === "custom" && (
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-psv-red-primary"
+              />
+              <span className="text-sm text-muted-foreground">t/m</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-psv-red-primary"
+              />
+              <button
+                onClick={() => fetchData("custom", customFrom, customTo)}
+                disabled={loading || !customFrom || !customTo}
+                className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors disabled:opacity-50"
+              >
+                Ophalen
+              </button>
+            </div>
+          )}
+
+          {preset !== "custom" && (
+            <button
+              onClick={() => fetchData(preset)}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Vernieuwen
+            </button>
+          )}
         </div>
         {lastFetched && (
           <span className="text-xs text-muted-foreground">
@@ -950,6 +1023,7 @@ export function DmPerformanceDashboard() {
           mailings={mailings}
           totals={totals}
           preset={preset}
+          dateLabel={dateLabel}
           onAnalyze={fetchInsights}
           insights={insights}
           loading={insightsLoading}
