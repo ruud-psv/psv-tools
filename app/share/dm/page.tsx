@@ -447,7 +447,7 @@ function ShareDmContent() {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground pt-4 border-t border-border">
-          Automatisch ververst elke 5 minuten · PSV Eindhoven
+          PSV
         </p>
       </div>
     </div>
