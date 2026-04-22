@@ -649,7 +649,7 @@ function DmInsightsPanel({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [questionLoading, setQuestionLoading] = useState(false);
   const [questionError, setQuestionError] = useState<string | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setQuestionText("");
@@ -658,7 +658,8 @@ function DmInsightsPanel({
   }, [insights]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [chatMessages, questionLoading]);
 
   const handleAskQuestion = async () => {
@@ -690,7 +691,13 @@ function DmInsightsPanel({
     while (i < lines.length) {
       const line = lines[i].trim();
       if (!line) { i++; continue; }
-      if (line.startsWith("- ") || line.startsWith("* ")) {
+      if (line.startsWith("### ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(4))}</p>); i++;
+      } else if (line.startsWith("## ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(3))}</p>); i++;
+      } else if (line.startsWith("# ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(2))}</p>); i++;
+      } else if (line.startsWith("- ") || line.startsWith("* ")) {
         const items: string[] = [];
         while (i < lines.length && (lines[i].trim().startsWith("- ") || lines[i].trim().startsWith("* "))) {
           items.push(lines[i].trim().slice(2));
@@ -705,8 +712,7 @@ function DmInsightsPanel({
         }
         out.push(<ol key={i} className="list-decimal list-inside space-y-0.5">{items.map((it, j) => <li key={j}>{bold(it)}</li>)}</ol>);
       } else {
-        out.push(<p key={i}>{bold(line)}</p>);
-        i++;
+        out.push(<p key={i}>{bold(line)}</p>); i++;
       }
     }
     return out;
@@ -740,7 +746,7 @@ function DmInsightsPanel({
     <div className="pt-2 border-t space-y-3">
       <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
       {(chatMessages.length > 0 || questionLoading) && (
-        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+        <div ref={chatContainerRef} className="flex flex-col gap-2 max-h-64 overflow-y-auto">
           {chatMessages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
@@ -759,7 +765,6 @@ function DmInsightsPanel({
               </div>
             </div>
           )}
-          <div ref={chatEndRef} />
         </div>
       )}
       {questionError && <p className="text-xs text-destructive">{questionError}</p>}
