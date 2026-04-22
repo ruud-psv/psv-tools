@@ -30,6 +30,8 @@ import {
   CheckCircle2,
   Calendar,
   Send,
+  Filter,
+  X,
 } from "lucide-react";
 import {
   BarChart,
@@ -84,6 +86,29 @@ interface ApiResponse {
   mailings: MailingSummary[];
   totals: Totals;
   fetchedAt: string;
+}
+
+function computeTotals(mailings: MailingSummary[]): Totals {
+  if (mailings.length === 0) {
+    return { mailings: 0, recipients: 0, opens: 0, uniqueOpens: 0, clicks: 0, uniqueClicks: 0, bounces: 0, unsubscriptions: 0, avgOpenRate: 0, avgClickRate: 0, avgBounceRate: 0, avgUnsubRate: 0, avgCtor: 0 };
+  }
+  const sum = (key: keyof MailingSummary) => mailings.reduce((a, m) => a + ((m[key] as number) || 0), 0);
+  const avg = (key: keyof MailingSummary) => sum(key) / mailings.length;
+  return {
+    mailings: mailings.length,
+    recipients: sum("recipients"),
+    opens: sum("opens"),
+    uniqueOpens: sum("uniqueOpens"),
+    clicks: sum("clicks"),
+    uniqueClicks: sum("uniqueClicks"),
+    bounces: sum("bounces"),
+    unsubscriptions: sum("unsubscriptions"),
+    avgOpenRate: avg("openRate"),
+    avgClickRate: avg("clickRate"),
+    avgBounceRate: avg("bounceRate"),
+    avgUnsubRate: avg("unsubscribeRate"),
+    avgCtor: avg("clickToOpenRate"),
+  };
 }
 
 /* ---------- Helpers ---------- */
@@ -429,13 +454,16 @@ function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
 function MailingTable({
   mailings,
   onSelect,
+  onFilterApply,
 }: {
   mailings: MailingSummary[];
   onSelect: (m: MailingSummary) => void;
+  onFilterApply: (filtered: MailingSummary[]) => void;
 }) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("scheduleTime");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [filterActive, setFilterActive] = useState(false);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -482,15 +510,44 @@ function MailingTable({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4">
-        <CardTitle className="text-base">Mailings</CardTitle>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Zoek op naam of onderwerp..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">Mailings</CardTitle>
+          {filterActive && (
+            <Badge variant="secondary" className="text-xs gap-1">
+              <Filter className="h-3 w-3" />
+              Gefilterd ({filtered.length})
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Zoek op naam of onderwerp..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <button
+            onClick={() => { onFilterApply(filtered); setFilterActive(true); }}
+            disabled={!search.trim()}
+            title="Pas filter toe op grafiek en kerncijfers"
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Pas toe
+          </button>
+          {filterActive && (
+            <button
+              onClick={() => { setSearch(""); onFilterApply(mailings); setFilterActive(false); }}
+              title="Reset filter"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm border hover:bg-muted transition-colors shrink-0"
+            >
+              <X className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -972,6 +1029,8 @@ export function DmPerformanceDashboard() {
   const [customFrom, setCustomFrom] = useState(defaultCustomFrom);
   const [customTo, setCustomTo] = useState(defaultCustomTo);
 
+  const [activeMailings, setActiveMailings] = useState<MailingSummary[]>([]);
+
   const [insights, setInsights] = useState<DmInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -1010,6 +1069,7 @@ export function DmPerformanceDashboard() {
       }
       const json: ApiResponse = await res.json();
       setData(json);
+      setActiveMailings(json.mailings);
       setLastFetched(json.fetchedAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ophalen mislukt");
@@ -1075,8 +1135,8 @@ export function DmPerformanceDashboard() {
     setInsightsError(null);
   }, [preset]);
 
-  const totals = data?.totals;
   const mailings = data?.mailings ?? [];
+  const totals = activeMailings.length > 0 ? computeTotals(activeMailings) : data?.totals;
 
   const dateLabel = getDateLabel();
 
@@ -1236,7 +1296,7 @@ export function DmPerformanceDashboard() {
       )}
 
       {/* Chart */}
-      {mailings.length > 0 && <PerformanceChart mailings={mailings} />}
+      {activeMailings.length > 0 && <PerformanceChart mailings={activeMailings} />}
 
       {/* Selected mailing detail */}
       {selectedMailing && (
@@ -1248,7 +1308,11 @@ export function DmPerformanceDashboard() {
 
       {/* Mailing table */}
       {mailings.length > 0 && (
-        <MailingTable mailings={mailings} onSelect={setSelectedMailing} />
+        <MailingTable
+          mailings={mailings}
+          onSelect={setSelectedMailing}
+          onFilterApply={setActiveMailings}
+        />
       )}
 
       {/* Empty state */}
