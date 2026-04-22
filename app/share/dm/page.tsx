@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { RefreshCw, X } from "lucide-react";
+import { RefreshCw, X, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /* ---------- Types ---------- */
 
@@ -118,13 +119,22 @@ function computeTotals(mailings: MailingSummary[]): Totals {
 
 /* ---------- KPI Card ---------- */
 
-function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KpiCard({ label, value, sub, icon: Icon, color = "text-psv-red-primary" }: {
+  label: string; value: string; sub?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color?: string;
+}) {
   return (
-    <div className="bg-card border border-border rounded-lg p-4">
-      <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
-      <p className="text-2xl font-heading uppercase text-foreground">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-    </div>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-heading uppercase tracking-wide">{label}</CardTitle>
+        <Icon className={`h-5 w-5 ${color}`} />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-heading uppercase">{value}</div>
+        {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -308,14 +318,15 @@ function ShareDmContent() {
 
       {/* KPI's */}
       {!error && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <KpiCard label="Mailings" value={formatNumber(totals.mailings)} />
-          <KpiCard label="Ontvangers" value={formatNumber(totals.recipients)} />
-          <KpiCard label="Gem. Open Rate" value={formatPct(totals.avgOpenRate)} sub={`${formatNumber(totals.uniqueOpens)} unieke opens`} />
-          <KpiCard label="Gem. Click Rate" value={formatPct(totals.avgClickRate)} sub={`${formatNumber(totals.uniqueClicks)} unieke clicks`} />
-          <KpiCard label="Click-to-Open" value={formatPct(totals.avgCtor)} />
-          <KpiCard label="Bounces" value={formatNumber(totals.bounces)} sub={formatPct(totals.avgBounceRate)} />
-          <KpiCard label="Uitschrijvingen" value={formatNumber(totals.unsubscriptions)} sub={formatPct(totals.avgUnsubRate)} />
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+          <KpiCard label="Mailings" value={formatNumber(totals.mailings)} icon={Mail} />
+          <KpiCard label="Ontvangers" value={formatNumber(totals.recipients)} icon={Users} />
+          <KpiCard label="Totaal clicks" value={formatNumber(totals.uniqueClicks)} sub={`${formatPct(totals.avgClickRate)} click rate`} icon={MousePointerClick} />
+          <KpiCard label="Gem. Open Rate" value={formatPct(totals.avgOpenRate)} sub={`${formatNumber(totals.uniqueOpens)} unieke opens`} icon={Eye} />
+          <KpiCard label="Gem. Click Rate" value={formatPct(totals.avgClickRate)} sub={`${formatNumber(totals.uniqueClicks)} unieke clicks`} icon={MousePointerClick} color="text-psv-gold" />
+          <KpiCard label="Click-to-Open" value={formatPct(totals.avgCtor)} icon={TrendingUp} color="text-blue-500" />
+          <KpiCard label="Bounces" value={formatNumber(totals.bounces)} sub={formatPct(totals.avgBounceRate)} icon={AlertTriangle} color="text-warning" />
+          <KpiCard label="Uitschrijvingen" value={formatNumber(totals.unsubscriptions)} sub={formatPct(totals.avgUnsubRate)} icon={UserMinus} color="text-psv-gold" />
         </div>
       )}
 
