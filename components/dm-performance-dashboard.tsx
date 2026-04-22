@@ -694,20 +694,53 @@ function DmInsightsPanel({
     );
   }
 
+  const qaBlock = (
+    <div className="pt-2 border-t space-y-3">
+      <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
+      <div className="flex gap-2">
+        <Input
+          value={questionText}
+          onChange={(e) => setQuestionText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !questionLoading && questionText.trim()) handleAskQuestion(); }}
+          placeholder="Bijv. welke mailing had de beste CTOR?"
+          className="text-sm focus-visible:ring-psv-red-primary"
+          disabled={questionLoading}
+        />
+        <Button
+          size="sm"
+          onClick={handleAskQuestion}
+          disabled={!questionText.trim() || questionLoading}
+          className="shrink-0"
+        >
+          {questionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+      {questionError && <p className="text-xs text-destructive">{questionError}</p>}
+      {questionAnswer && (
+        <p className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground leading-relaxed">
+          {questionAnswer}
+        </p>
+      )}
+    </div>
+  );
+
   if (error) {
     return (
       <Card className="border-destructive mb-2">
-        <CardContent className="flex items-center justify-between gap-3 py-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-            <div>
-              <p className="text-sm font-medium">Analyse mislukt</p>
-              <p className="text-xs text-muted-foreground">{error}</p>
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Analyse mislukt</p>
+                <p className="text-xs text-muted-foreground">{error}</p>
+              </div>
             </div>
+            <Button variant="outline" size="sm" onClick={onAnalyze}>
+              Opnieuw proberen
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onAnalyze}>
-            Opnieuw proberen
-          </Button>
+          {qaBlock}
         </CardContent>
       </Card>
     );
@@ -716,26 +749,29 @@ function DmInsightsPanel({
   if (!insights) {
     return (
       <Card className="mb-2 border-dashed">
-        <CardContent className="flex items-center justify-between gap-4 py-4">
-          <div className="flex items-center gap-3">
-            <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
-            <div>
-              <p className="text-sm font-medium">AI Inzichten</p>
-              <p className="text-xs text-muted-foreground">
-                Laat het model patronen, anomalieën en aanbevelingen analyseren voor {dateLabel}.
-              </p>
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
+              <div>
+                <p className="text-sm font-medium">AI Inzichten</p>
+                <p className="text-xs text-muted-foreground">
+                  Laat het model patronen, anomalieën en aanbevelingen analyseren voor {dateLabel}.
+                </p>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onAnalyze}
+              disabled={!mailings.length || !totals}
+              className="shrink-0"
+            >
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              Analyseren
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onAnalyze}
-            disabled={!mailings.length || !totals}
-            className="shrink-0"
-          >
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            Analyseren
-          </Button>
+          {qaBlock}
         </CardContent>
       </Card>
     );
@@ -819,33 +855,7 @@ function DmInsightsPanel({
         )}
 
         {/* Q&A */}
-        <div className="pt-2 border-t space-y-3">
-          <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
-          <div className="flex gap-2">
-            <Input
-              value={questionText}
-              onChange={(e) => setQuestionText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !questionLoading && questionText.trim()) handleAskQuestion(); }}
-              placeholder="Bijv. welke mailing had de beste CTOR?"
-              className="text-sm focus-visible:ring-psv-red-primary"
-              disabled={questionLoading}
-            />
-            <Button
-              size="sm"
-              onClick={handleAskQuestion}
-              disabled={!questionText.trim() || questionLoading}
-              className="shrink-0"
-            >
-              {questionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            </Button>
-          </div>
-          {questionError && <p className="text-xs text-destructive">{questionError}</p>}
-          {questionAnswer && (
-            <p className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground leading-relaxed">
-              {questionAnswer}
-            </p>
-          )}
-        </div>
+        {qaBlock}
       </CardContent>
     </Card>
   );
