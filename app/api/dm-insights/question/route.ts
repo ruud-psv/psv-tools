@@ -32,8 +32,13 @@ function authorize(sessionCookie: string | undefined): string | null {
 
 /* ---------- Types ---------- */
 
+interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface RequestBody {
-  question: string;
+  messages: ConversationMessage[];
   mailings: MailingSummary[];
   totals: Totals;
   dateRange: { preset: string; from: string; to: string };
@@ -41,15 +46,15 @@ interface RequestBody {
 
 /* ---------- System Prompt ---------- */
 
-const SYSTEM_PROMPT = `Je bent een senior e-mail marketing strateeg voor PSV Eindhoven. Je beantwoordt vragen over Maileon mailing-prestaties op basis van de aangeleverde data.
+const ROLE_INSTRUCTIONS = `Je bent een senior e-mail marketing strateeg voor PSV Eindhoven. Je beantwoordt vragen over Maileon mailing-prestaties op basis van de aangeleverde data.
 
 CONTEXT: PSV is een profvoetbalclub. Mailings gaan over wedstrijden, merchandise, seizoenskaarten, acties, en clubnieuws.
 
 REGELS:
-- Beantwoord alleen de gestelde vraag — geef geen uitgebreide analyse
-- Wees concreet: noem mailingnamen, datums en percentages waar relevant
+- Beantwoord de gestelde vraag direct en concreet
+- Noem mailingnamen, datums en percentages waar relevant
 - Schrijf altijd in het Nederlands
-- Maximaal 4 zinnen tenzij de vraag een langere toelichting vereist
+- Gebruik **vetgedrukte tekst** voor nadruk en - voor opsommingen waar passend
 - Als de data onvoldoende is om de vraag te beantwoorden, zeg dat dan eerlijk`;
 
 /* ---------- POST Handler ---------- */
@@ -70,23 +75,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ongeldige request body." }, { status: 400 });
   }
 
-  if (!body.question?.trim()) return NextResponse.json({ error: "Geen vraag opgegeven." }, { status: 400 });
+  if (!body.messages?.length) return NextResponse.json({ error: "Geen berichten opgegeven." }, { status: 400 });
   if (!body.mailings?.length) return NextResponse.json({ error: "Geen data beschikbaar om de vraag te beantwoorden." }, { status: 400 });
 
   const context = buildAnalysisContext(body.mailings, body.totals, body.dateRange);
+  const systemPrompt = `${ROLE_INSTRUCTIONS}\n\nHUIDIGE DATA:\n${context}`;
   const client = new Anthropic({ apiKey });
 
   try {
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `DATA:\n${context}\n\nVRAAG: ${body.question.trim()}`,
-        },
-      ],
+      system: systemPrompt,
+      messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
     const answer = message.content[0].type === "text" ? message.content[0].text.trim() : "";
