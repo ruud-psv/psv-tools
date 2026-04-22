@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildAnalysisContext } from "../route";
+import { buildAnalysisContext } from "@/lib/ticket-analysis";
+import type { TicketEvent } from "@/lib/ticket-analysis";
 
 /* ---------- Auth ---------- */
 
@@ -30,18 +31,6 @@ function authorize(sessionCookie: string | undefined): string | null {
 }
 
 /* ---------- Types ---------- */
-
-interface TicketEvent {
-  eventId: string;
-  eventName: string;
-  eventDate: string;
-  category: string;
-  subCategory: string;
-  soldTickets: number;
-  availableCapacity: number;
-  totalCapacity: number;
-  saleStatus: string;
-}
 
 interface RequestBody {
   question: string;

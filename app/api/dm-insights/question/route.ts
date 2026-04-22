@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildAnalysisContext } from "../route";
+import { buildAnalysisContext } from "@/lib/dm-analysis";
+import type { MailingSummary, Totals } from "@/lib/dm-analysis";
 
 /* ---------- Auth ---------- */
 
@@ -30,40 +31,6 @@ function authorize(sessionCookie: string | undefined): string | null {
 }
 
 /* ---------- Types ---------- */
-
-interface MailingSummary {
-  id: number;
-  name: string;
-  scheduleTime: string;
-  recipients: number;
-  opens: number;
-  uniqueOpens: number;
-  clicks: number;
-  uniqueClicks: number;
-  bounces: number;
-  unsubscriptions: number;
-  openRate: number;
-  clickRate: number;
-  bounceRate: number;
-  unsubscribeRate: number;
-  clickToOpenRate: number;
-}
-
-interface Totals {
-  mailings: number;
-  recipients: number;
-  opens: number;
-  uniqueOpens: number;
-  clicks: number;
-  uniqueClicks: number;
-  bounces: number;
-  unsubscriptions: number;
-  avgOpenRate: number;
-  avgClickRate: number;
-  avgBounceRate: number;
-  avgUnsubRate: number;
-  avgCtor: number;
-}
 
 interface RequestBody {
   question: string;
