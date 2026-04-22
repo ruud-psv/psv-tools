@@ -86,7 +86,7 @@ REGELS:
 
 /* ---------- Context Builder ---------- */
 
-function buildAnalysisContext(events: TicketEvent[]): string {
+export function buildAnalysisContext(events: TicketEvent[]): string {
   const lines: string[] = [];
 
   const mainEvents = events.filter(

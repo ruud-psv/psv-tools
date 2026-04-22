@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  Send,
 } from "lucide-react";
 
 interface TicketEvent {
@@ -128,17 +129,44 @@ interface TicketInsightsResponse {
 
 function TicketInsightsPanel({
   onAnalyze,
+  onAskQuestion,
   insights,
   loading,
   error,
   hasData,
 }: {
   onAnalyze: () => void;
+  onAskQuestion: (question: string) => Promise<string>;
   insights: TicketInsightsResponse | null;
   loading: boolean;
   error: string | null;
   hasData: boolean;
 }) {
+  const [questionText, setQuestionText] = useState("");
+  const [questionAnswer, setQuestionAnswer] = useState<string | null>(null);
+  const [questionLoading, setQuestionLoading] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuestionText("");
+    setQuestionAnswer(null);
+    setQuestionError(null);
+  }, [insights]);
+
+  const handleAskQuestion = async () => {
+    if (!questionText.trim() || questionLoading) return;
+    setQuestionLoading(true);
+    setQuestionError(null);
+    setQuestionAnswer(null);
+    try {
+      const answer = await onAskQuestion(questionText.trim());
+      setQuestionAnswer(answer);
+    } catch (e) {
+      setQuestionError(e instanceof Error ? e.message : "Vraag mislukt");
+    } finally {
+      setQuestionLoading(false);
+    }
+  };
   const highlightIcon = (type: TicketInsightsResponse["highlights"][0]["type"]) => {
     switch (type) {
       case "achievement": return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
@@ -259,6 +287,35 @@ function TicketInsightsPanel({
             </ul>
           </div>
         )}
+
+        {/* Q&A */}
+        <div className="pt-2 border-t space-y-3">
+          <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
+          <div className="flex gap-2">
+            <Input
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !questionLoading && questionText.trim()) handleAskQuestion(); }}
+              placeholder="Bijv. welk event dreigt het eerste uitverkocht te raken?"
+              className="text-sm focus-visible:ring-psv-red-primary"
+              disabled={questionLoading}
+            />
+            <Button
+              size="sm"
+              onClick={handleAskQuestion}
+              disabled={!questionText.trim() || questionLoading}
+              className="shrink-0"
+            >
+              {questionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+          {questionError && <p className="text-xs text-destructive">{questionError}</p>}
+          {questionAnswer && (
+            <p className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground leading-relaxed">
+              {questionAnswer}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -937,6 +994,19 @@ export function TicketInzichtenDashboard() {
     }
   }, [data, insights]);
 
+  const fetchTicketAnswer = useCallback(async (question: string): Promise<string> => {
+    const events = data?.events;
+    if (!events?.length) throw new Error("Geen data beschikbaar.");
+    const res = await fetch("/api/ticket-insights/question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, events }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `API gaf status ${res.status}`);
+    return json.answer;
+  }, [data]);
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, POLL_INTERVAL);
@@ -1049,6 +1119,7 @@ export function TicketInzichtenDashboard() {
       {/* AI Insights Panel */}
       <TicketInsightsPanel
         onAnalyze={fetchInsights}
+        onAskQuestion={fetchTicketAnswer}
         insights={insights}
         loading={insightsLoading}
         error={insightsError}

@@ -29,6 +29,7 @@ import {
   Sparkles,
   CheckCircle2,
   Calendar,
+  Send,
 } from "lucide-react";
 import {
   BarChart,
@@ -628,6 +629,7 @@ function DmInsightsPanel({
   preset,
   dateLabel,
   onAnalyze,
+  onAskQuestion,
   insights,
   loading,
   error,
@@ -637,10 +639,36 @@ function DmInsightsPanel({
   preset: string;
   dateLabel: string;
   onAnalyze: () => void;
+  onAskQuestion: (question: string) => Promise<string>;
   insights: DmInsightsResponse | null;
   loading: boolean;
   error: string | null;
 }) {
+  const [questionText, setQuestionText] = useState("");
+  const [questionAnswer, setQuestionAnswer] = useState<string | null>(null);
+  const [questionLoading, setQuestionLoading] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuestionText("");
+    setQuestionAnswer(null);
+    setQuestionError(null);
+  }, [insights]);
+
+  const handleAskQuestion = async () => {
+    if (!questionText.trim() || questionLoading) return;
+    setQuestionLoading(true);
+    setQuestionError(null);
+    setQuestionAnswer(null);
+    try {
+      const answer = await onAskQuestion(questionText.trim());
+      setQuestionAnswer(answer);
+    } catch (e) {
+      setQuestionError(e instanceof Error ? e.message : "Vraag mislukt");
+    } finally {
+      setQuestionLoading(false);
+    }
+  };
 
   const highlightIcon = (type: DmInsightsResponse["highlights"][0]["type"]) => {
     switch (type) {
@@ -789,6 +817,35 @@ function DmInsightsPanel({
             </ul>
           </div>
         )}
+
+        {/* Q&A */}
+        <div className="pt-2 border-t space-y-3">
+          <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
+          <div className="flex gap-2">
+            <Input
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !questionLoading && questionText.trim()) handleAskQuestion(); }}
+              placeholder="Bijv. welke mailing had de beste CTOR?"
+              className="text-sm focus-visible:ring-psv-red-primary"
+              disabled={questionLoading}
+            />
+            <Button
+              size="sm"
+              onClick={handleAskQuestion}
+              disabled={!questionText.trim() || questionLoading}
+              className="shrink-0"
+            >
+              {questionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+          {questionError && <p className="text-xs text-destructive">{questionError}</p>}
+          {questionAnswer && (
+            <p className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground leading-relaxed">
+              {questionAnswer}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -908,6 +965,19 @@ export function DmPerformanceDashboard() {
     }
   }, [data, preset, getActiveDateRange, getInsightsCacheKey]);
 
+  const fetchDmAnswer = useCallback(async (question: string): Promise<string> => {
+    if (!data?.mailings.length || !data.totals) throw new Error("Geen data beschikbaar.");
+    const { from, to } = getActiveDateRange();
+    const res = await fetch("/api/dm-insights/question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, mailings: data.mailings, totals: data.totals, dateRange: { preset, from, to } }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `API gaf status ${res.status}`);
+    return json.answer;
+  }, [data, preset, getActiveDateRange]);
+
   useEffect(() => {
     if (preset !== "custom") {
       fetchData(preset);
@@ -1025,6 +1095,7 @@ export function DmPerformanceDashboard() {
           preset={preset}
           dateLabel={dateLabel}
           onAnalyze={fetchInsights}
+          onAskQuestion={fetchDmAnswer}
           insights={insights}
           loading={insightsLoading}
           error={insightsError}

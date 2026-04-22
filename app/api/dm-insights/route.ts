@@ -112,7 +112,7 @@ REGELS:
 
 /* ---------- Context Builder ---------- */
 
-function buildAnalysisContext(mailings: MailingSummary[], totals: Totals, dateRange: RequestBody["dateRange"]): string {
+export function buildAnalysisContext(mailings: MailingSummary[], totals: Totals, dateRange: RequestBody["dateRange"]): string {
   const lines: string[] = [];
 
   const presetLabels: Record<string, string> = {
