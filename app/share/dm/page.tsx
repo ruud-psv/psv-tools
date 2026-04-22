@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { RefreshCw, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus } from "lucide-react";
+import { RefreshCw, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus, Send, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -171,6 +171,24 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose: () => void }) {
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
+  const handleViewEmail = useCallback(async () => {
+    setArchiveLoading(true);
+    setArchiveError(null);
+    try {
+      const res = await fetch(`/api/maileon/archive?mailingId=${mailing.id}`);
+      const data = await res.json();
+      if (!res.ok || !data.archiveUrl) throw new Error(data.error ?? "Ophalen mislukt");
+      window.open(data.archiveUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setArchiveError(err instanceof Error ? err.message : "Ophalen mislukt");
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [mailing.id]);
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between">
@@ -189,11 +207,26 @@ function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose:
             )}
           </div>
         </div>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm font-heading uppercase tracking-wide">
-          Sluiten
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={handleViewEmail}
+            disabled={archiveLoading}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors disabled:opacity-50 font-heading uppercase tracking-wide"
+          >
+            {archiveLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Send className="h-3.5 w-3.5" />}
+            Bekijk email
+          </button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm font-heading uppercase tracking-wide">
+            Sluiten
+          </button>
+        </div>
       </CardHeader>
       <CardContent>
+        {archiveError && (
+          <p className="text-xs text-destructive mb-4">{archiveError}</p>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label="Ontvangers" value={formatNumber(mailing.recipients)} />
           <Stat label="Unieke opens" value={formatNumber(mailing.uniqueOpens)} sub={formatPct(mailing.openRate)} />
