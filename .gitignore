@@ -19,3 +19,6 @@ npm-debug.log*
 
 # App settings (contains API keys)
 config/settings.json
+
+# Runtime data (ticket snapshots groeien continu)
+data/ticket-snapshots.json
