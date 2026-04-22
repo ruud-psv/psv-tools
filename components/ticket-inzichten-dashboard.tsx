@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -183,7 +183,7 @@ function TicketInsightsPanel({
         i % 2 === 1 ? <strong key={i} className="font-semibold">{p}</strong> : p
       );
     const lines = text.split("\n");
-    const out: JSX.Element[] = [];
+    const out: ReactNode[] = [];
     let i = 0;
     while (i < lines.length) {
       const line = lines[i].trim();
