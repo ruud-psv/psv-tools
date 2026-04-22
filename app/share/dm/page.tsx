@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { RefreshCw, X, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 /* ---------- Types ---------- */
 
@@ -60,7 +61,7 @@ function formatDate(iso: string) {
   } catch { return iso; }
 }
 
-/** Strip DMID-suffix én datumpatronen (dd-mm-jjjj, jjjj.mm.dd, 15 april 2026, etc.) */
+/** Strip DMID-suffix, datumpatronen én achtergebleven " - " separatoren */
 function stripName(name: string): string {
   const MONTHS = "januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|okt|nov|dec";
   return name
@@ -70,6 +71,8 @@ function stripName(name: string): string {
     .replace(new RegExp(`\\s*\\b\\d{1,2}\\s+(${MONTHS})\\.?\\s*\\d{0,4}\\b`, "gi"), "")
     .replace(new RegExp(`\\s*\\b(${MONTHS})\\.?\\s+\\d{4}\\b`, "gi"), "")
     .replace(/\s+/g, " ")
+    .replace(/(\s*-)+\s*$/, "")
+    .replace(/^\s*(-\s*)+/, "")
     .trim() || name;
 }
 
@@ -138,6 +141,22 @@ function KpiCard({ label, value, sub, icon: Icon, color = "text-psv-red-primary"
   );
 }
 
+/* ---------- RateBadge ---------- */
+
+function RateBadge({ rate, thresholds, inverted = false }: {
+  rate: number; thresholds: [number, number]; inverted?: boolean;
+}) {
+  let variant: "destructive" | "warning" | "success" = "success";
+  if (inverted) {
+    if (rate >= thresholds[0]) variant = "destructive";
+    else if (rate >= thresholds[1]) variant = "warning";
+  } else {
+    if (rate < thresholds[0]) variant = "destructive";
+    else if (rate < thresholds[1]) variant = "warning";
+  }
+  return <Badge variant={variant} className="text-xs tabular-nums">{formatPct(rate)}</Badge>;
+}
+
 /* ---------- Mailing detail panel ---------- */
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -152,82 +171,100 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose: () => void }) {
   return (
-    <div className="bg-card border border-border rounded-lg p-5 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-heading text-base uppercase">{stripName(mailing.name)}</p>
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <CardTitle className="text-lg">{stripName(mailing.name)}</CardTitle>
           {mailing.subject && (
-            <p className="text-sm text-muted-foreground mt-0.5 truncate">Onderwerp: {mailing.subject}</p>
+            <p className="text-sm text-muted-foreground mt-1 truncate">Onderwerp: {mailing.subject}</p>
           )}
-          {mailing.scheduleTime && (
-            <p className="text-xs text-muted-foreground mt-1">Verzonden: {formatDate(mailing.scheduleTime)}</p>
-          )}
+          <div className="flex items-center gap-2 mt-2">
+            {mailing.type && <Badge variant="secondary">{mailing.type}</Badge>}
+            {mailing.state && (
+              <Badge variant={mailing.state === "done" ? "success" : "info"}>{mailing.state}</Badge>
+            )}
+            {mailing.scheduleTime && (
+              <span className="text-xs text-muted-foreground">Verzonden: {formatDate(mailing.scheduleTime)}</span>
+            )}
+          </div>
         </div>
-        <button onClick={onClose} className="shrink-0 text-muted-foreground hover:text-foreground">
-          <X className="h-4 w-4" />
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm font-heading uppercase tracking-wide">
+          Sluiten
         </button>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-border">
-        <Stat label="Ontvangers" value={formatNumber(mailing.recipients)} />
-        <Stat label="Unieke opens" value={formatNumber(mailing.uniqueOpens)} sub={formatPct(mailing.openRate)} />
-        <Stat label="Unieke clicks" value={formatNumber(mailing.uniqueClicks)} sub={formatPct(mailing.clickRate)} />
-        <Stat label="Click-to-open" value={formatPct(mailing.clickToOpenRate)} />
-        <Stat label="Totaal opens" value={formatNumber(mailing.opens)} />
-        <Stat label="Totaal clicks" value={formatNumber(mailing.clicks)} />
-        <Stat label="Bounces" value={formatNumber(mailing.bounces)} sub={formatPct(mailing.bounceRate)} />
-        <Stat label="Uitschrijvingen" value={formatNumber(mailing.unsubscriptions)} sub={formatPct(mailing.unsubscribeRate)} />
-      </div>
-    </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Stat label="Ontvangers" value={formatNumber(mailing.recipients)} />
+          <Stat label="Unieke opens" value={formatNumber(mailing.uniqueOpens)} sub={formatPct(mailing.openRate)} />
+          <Stat label="Unieke clicks" value={formatNumber(mailing.uniqueClicks)} sub={formatPct(mailing.clickRate)} />
+          <Stat label="Click-to-open" value={formatPct(mailing.clickToOpenRate)} />
+          <Stat label="Totaal opens" value={formatNumber(mailing.opens)} />
+          <Stat label="Totaal clicks" value={formatNumber(mailing.clicks)} />
+          <Stat label="Bounces" value={formatNumber(mailing.bounces)} sub={formatPct(mailing.bounceRate)} />
+          <Stat label="Uitschrijvingen" value={formatNumber(mailing.unsubscriptions)} sub={formatPct(mailing.unsubscribeRate)} />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 /* ---------- Mailings tabel ---------- */
 
-function MailingsTable({ mailings, onSelect, selected }: { mailings: MailingSummary[]; onSelect: (m: MailingSummary) => void; selected: MailingSummary | null }) {
+function MailingsTable({ mailings, onSelect, selected }: {
+  mailings: MailingSummary[];
+  onSelect: (m: MailingSummary | null) => void;
+  selected: MailingSummary | null;
+}) {
   const sorted = useMemo(
     () => [...mailings].sort((a, b) => new Date(b.scheduleTime).getTime() - new Date(a.scheduleTime).getTime()),
     [mailings]
   );
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
-        <p className="text-sm font-heading uppercase tracking-wide text-muted-foreground">Mailings</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40">
-              <th className="text-left px-4 py-2.5 text-xs font-heading uppercase tracking-wide text-muted-foreground">Naam</th>
-              <th className="text-right px-4 py-2.5 text-xs font-heading uppercase tracking-wide text-muted-foreground">Datum</th>
-              <th className="text-right px-4 py-2.5 text-xs font-heading uppercase tracking-wide text-muted-foreground">Ontvangers</th>
-              <th className="text-right px-4 py-2.5 text-xs font-heading uppercase tracking-wide text-muted-foreground">Open %</th>
-              <th className="text-right px-4 py-2.5 text-xs font-heading uppercase tracking-wide text-muted-foreground">Click %</th>
-              <th className="text-right px-4 py-2.5 text-xs font-heading uppercase tracking-wide text-muted-foreground">Bounce %</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((m) => (
-              <tr
-                key={m.id}
-                onClick={() => onSelect(m.id === selected?.id ? null as unknown as MailingSummary : m)}
-                className={`border-b border-border last:border-0 cursor-pointer transition-colors ${m.id === selected?.id ? "bg-primary/5 border-l-2 border-l-primary" : "hover:bg-muted/20"}`}
-              >
-                <td className="px-4 py-2.5 max-w-xs">
-                  <div className="font-medium truncate">{stripName(m.name)}</div>
-                  {m.subject && <div className="text-xs text-muted-foreground truncate">{m.subject}</div>}
-                </td>
-                <td className="px-4 py-2.5 text-right text-muted-foreground whitespace-nowrap">{formatDate(m.scheduleTime)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatNumber(m.recipients)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatPct(m.openRate)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatPct(m.clickRate)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatPct(m.bounceRate)}</td>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Mailings</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Naam</th>
+                <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Datum</th>
+                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Ontvangers</th>
+                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Opens</th>
+                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Open %</th>
+                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Clicks</th>
+                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Click %</th>
+                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Bounce %</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            </thead>
+            <tbody>
+              {sorted.map((m) => (
+                <tr
+                  key={m.id}
+                  onClick={() => onSelect(m.id === selected?.id ? null : m)}
+                  className={`border-b hover:bg-muted/30 cursor-pointer transition-colors ${m.id === selected?.id ? "bg-primary/5" : ""}`}
+                >
+                  <td className="px-4 py-3 max-w-xs">
+                    <div className="font-medium truncate">{stripName(m.name)}</div>
+                    {m.subject && <div className="text-xs text-muted-foreground truncate">{m.subject}</div>}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDate(m.scheduleTime)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(m.recipients)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(m.uniqueOpens)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums"><RateBadge rate={m.openRate} thresholds={[15, 25]} /></td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(m.uniqueClicks)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums"><RateBadge rate={m.clickRate} thresholds={[2, 5]} /></td>
+                  <td className="px-4 py-3 text-right tabular-nums"><RateBadge rate={m.bounceRate} thresholds={[5, 2]} inverted /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -287,64 +324,79 @@ function ShareDmContent() {
     : (PRESET_LABELS[preset] ?? preset);
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <img src="https://www.psv.nl/upload/23adcb48-abc3-487f-9158-6bc7822599a6_PSV_logo_color.svg" alt="PSV" className="h-8 w-8" />
-            <h1 className="text-2xl font-heading uppercase">Mailing rapportage</h1>
+    <div className="min-h-screen bg-background">
+      {/* Full-width header bar */}
+      <header className="bg-sidebar border-b border-sidebar-border w-full">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <img
+              src="https://www.psv.nl/upload/23adcb48-abc3-487f-9158-6bc7822599a6_PSV_logo_color.svg"
+              alt="PSV"
+              className="h-9 w-9 shrink-0"
+            />
+            <div>
+              <h1 className="text-xl font-heading uppercase text-sidebar-foreground leading-tight">
+                Mailing rapportage
+              </h1>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="bg-sidebar-accent text-sidebar-foreground px-2 py-0.5 rounded text-xs font-heading uppercase">
+                  {dateLabel}
+                </span>
+                {q && (
+                  <span className="bg-psv-red-primary/20 text-psv-red-primary px-2 py-0.5 rounded text-xs font-heading uppercase">
+                    Filter: {q}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span className="bg-muted px-2 py-0.5 rounded text-xs font-heading uppercase">{dateLabel}</span>
-            {q && (
-              <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-heading uppercase">
-                Filter: {q}
-              </span>
-            )}
+          <div className="flex items-center gap-2 text-xs text-sidebar-foreground/60 shrink-0">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            {lastFetched
+              ? `Ververst om ${lastFetched.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`
+              : "Laden…"}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          {lastFetched
-            ? `Ververst om ${lastFetched.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`
-            : "Laden…"}
-        </div>
+      </header>
+
+      {/* Content */}
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        {error && (
+          <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
+        )}
+
+        {/* KPI's */}
+        {!error && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard label="Mailings" value={formatNumber(totals.mailings)} icon={Mail} />
+            <KpiCard label="Ontvangers" value={formatNumber(totals.recipients)} icon={Users} />
+            <KpiCard label="Totaal clicks" value={formatNumber(totals.uniqueClicks)} sub={`${formatPct(totals.avgClickRate)} click rate`} icon={MousePointerClick} />
+            <KpiCard label="Gem. Open Rate" value={formatPct(totals.avgOpenRate)} sub={`${formatNumber(totals.uniqueOpens)} unieke opens`} icon={Eye} />
+            <KpiCard label="Gem. Click Rate" value={formatPct(totals.avgClickRate)} sub={`${formatNumber(totals.uniqueClicks)} unieke clicks`} icon={MousePointerClick} color="text-psv-gold" />
+            <KpiCard label="Click-to-Open" value={formatPct(totals.avgCtor)} icon={TrendingUp} color="text-blue-500" />
+            <KpiCard label="Bounces" value={formatNumber(totals.bounces)} sub={formatPct(totals.avgBounceRate)} icon={AlertTriangle} color="text-warning" />
+            <KpiCard label="Uitschrijvingen" value={formatNumber(totals.unsubscriptions)} sub={formatPct(totals.avgUnsubRate)} icon={UserMinus} color="text-psv-gold" />
+          </div>
+        )}
+
+        {/* Detail panel */}
+        {selected && <MailingDetail mailing={selected} onClose={() => setSelected(null)} />}
+
+        {/* Tabel */}
+        {!error && filtered.length > 0 && (
+          <MailingsTable mailings={filtered} onSelect={setSelected} selected={selected} />
+        )}
+
+        {/* Lege state */}
+        {!loading && !error && filtered.length === 0 && (
+          <p className="text-center py-12 text-muted-foreground text-sm">Geen mailings gevonden voor dit filter.</p>
+        )}
+
+        {/* Footer */}
+        <p className="text-center text-xs text-muted-foreground pt-4 border-t border-border">
+          Automatisch ververst elke 5 minuten · PSV Eindhoven
+        </p>
       </div>
-
-      {error && (
-        <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
-      )}
-
-      {/* KPI's */}
-      {!error && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
-          <KpiCard label="Mailings" value={formatNumber(totals.mailings)} icon={Mail} />
-          <KpiCard label="Ontvangers" value={formatNumber(totals.recipients)} icon={Users} />
-          <KpiCard label="Totaal clicks" value={formatNumber(totals.uniqueClicks)} sub={`${formatPct(totals.avgClickRate)} click rate`} icon={MousePointerClick} />
-          <KpiCard label="Gem. Open Rate" value={formatPct(totals.avgOpenRate)} sub={`${formatNumber(totals.uniqueOpens)} unieke opens`} icon={Eye} />
-          <KpiCard label="Gem. Click Rate" value={formatPct(totals.avgClickRate)} sub={`${formatNumber(totals.uniqueClicks)} unieke clicks`} icon={MousePointerClick} color="text-psv-gold" />
-          <KpiCard label="Click-to-Open" value={formatPct(totals.avgCtor)} icon={TrendingUp} color="text-blue-500" />
-          <KpiCard label="Bounces" value={formatNumber(totals.bounces)} sub={formatPct(totals.avgBounceRate)} icon={AlertTriangle} color="text-warning" />
-          <KpiCard label="Uitschrijvingen" value={formatNumber(totals.unsubscriptions)} sub={formatPct(totals.avgUnsubRate)} icon={UserMinus} color="text-psv-gold" />
-        </div>
-      )}
-
-      {/* Detail panel */}
-      {selected && <MailingDetail mailing={selected} onClose={() => setSelected(null)} />}
-
-      {/* Tabel */}
-      {!error && filtered.length > 0 && <MailingsTable mailings={filtered} onSelect={setSelected} selected={selected} />}
-
-      {/* Lege state */}
-      {!loading && !error && filtered.length === 0 && (
-        <p className="text-center py-12 text-muted-foreground text-sm">Geen mailings gevonden voor dit filter.</p>
-      )}
-
-      {/* Footer */}
-      <p className="text-center text-xs text-muted-foreground pt-4 border-t border-border">
-        Automatisch ververst elke 5 minuten · PSV Eindhoven
-      </p>
     </div>
   );
 }
