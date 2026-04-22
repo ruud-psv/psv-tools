@@ -1,41 +1,17 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { sql, ensureSchema } from "@/lib/db";
 
-const DATA_FILE = path.join(process.cwd(), "data", "ticket-snapshots.json");
 const FEED_URL = "https://ticketshop.psv.nl/feed/eventsavailability";
-const MAX_SNAPSHOTS = 720; // 30 dagen × 24 uur
-
-interface SnapshotStore {
-  snapshots: Array<{
-    ts: string;
-    events: Record<string, { a: number; s: number }>;
-  }>;
-}
-
-async function readStore(): Promise<SnapshotStore> {
-  try {
-    const content = await fs.readFile(DATA_FILE, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return { snapshots: [] };
-  }
-}
-
-async function writeStore(store: SnapshotStore): Promise<void> {
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  await fs.writeFile(DATA_FILE, JSON.stringify(store), "utf-8");
-}
+const RETENTION_DAYS = 30;
 
 function isAuthorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return true;
-  // Vercel cron stuurt: Authorization: Bearer <secret>
+  // Vercel Cron stuurt: Authorization: Bearer <secret>
   const authHeader = request.headers.get("authorization");
   if (authHeader === `Bearer ${cronSecret}`) return true;
-  // Handmatige POST via x-cron-secret header
-  const manualHeader = request.headers.get("x-cron-secret");
-  return manualHeader === cronSecret;
+  // Handmatige aanroep via x-cron-secret header
+  return request.headers.get("x-cron-secret") === cronSecret;
 }
 
 async function takeSnapshot(): Promise<NextResponse> {
@@ -52,7 +28,7 @@ async function takeSnapshot(): Promise<NextResponse> {
   }
 
   const xml = await res.text();
-  const events: Record<string, { a: number; s: number }> = {};
+  const events: Array<{ eventId: string; available: number; sold: number }> = [];
 
   const eventRegex = /<Event>([\s\S]*?)<\/Event>/g;
   let match;
@@ -65,24 +41,34 @@ async function takeSnapshot(): Promise<NextResponse> {
     };
     const eventId = get("EventId");
     if (!eventId) continue;
-    events[eventId] = {
-      a: parseInt(get("AvailableCapacity"), 10) || 0,
-      s: parseInt(get("SoldTickets"), 10) || 0,
-    };
+    events.push({
+      eventId,
+      available: parseInt(get("AvailableCapacity"), 10) || 0,
+      sold: parseInt(get("SoldTickets"), 10) || 0,
+    });
   }
 
-  const store = await readStore();
-  store.snapshots.push({ ts: new Date().toISOString(), events });
-  if (store.snapshots.length > MAX_SNAPSHOTS) {
-    store.snapshots = store.snapshots.slice(-MAX_SNAPSHOTS);
+  await ensureSchema();
+
+  // Sla alle events van dit moment op in één transactie
+  const now = new Date().toISOString();
+  for (const e of events) {
+    await sql`
+      INSERT INTO ticket_snapshots (ts, event_id, available, sold)
+      VALUES (${now}, ${e.eventId}, ${e.available}, ${e.sold})
+    `;
   }
-  await writeStore(store);
+
+  // Verwijder metingen ouder dan RETENTION_DAYS
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  await sql`
+    DELETE FROM ticket_snapshots WHERE ts < ${cutoff}
+  `;
 
   return NextResponse.json({
     saved: true,
-    snapshotCount: store.snapshots.length,
-    eventCount: Object.keys(events).length,
-    timestamp: store.snapshots[store.snapshots.length - 1].ts,
+    eventCount: events.length,
+    timestamp: now,
   });
 }
 
@@ -101,7 +87,7 @@ export async function GET(request: Request) {
   }
 }
 
-// Handmatige trigger via POST (bijv. vanuit cURL of dashboard)
+// Handmatige trigger
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
-
-const DATA_FILE = path.join(process.cwd(), "data", "ticket-snapshots.json");
+import { sql, ensureSchema } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,24 +10,26 @@ export async function GET(request: Request) {
   }
 
   try {
-    const content = await fs.readFile(DATA_FILE, "utf-8");
-    const store = JSON.parse(content) as {
-      snapshots: Array<{
-        ts: string;
-        events: Record<string, { a: number; s: number }>;
-      }>;
-    };
+    await ensureSchema();
 
-    const history = store.snapshots
-      .filter((s) => s.events[eventId] !== undefined)
-      .map((s) => ({
-        ts: s.ts,
-        available: s.events[eventId].a,
-        sold: s.events[eventId].s,
-      }));
+    const result = await sql`
+      SELECT ts, available, sold
+      FROM ticket_snapshots
+      WHERE event_id = ${eventId}
+      ORDER BY ts ASC
+    `;
+
+    const history = result.rows.map((row) => ({
+      ts: new Date(row.ts).toISOString(),
+      available: row.available,
+      sold: row.sold,
+    }));
 
     return NextResponse.json({ history, eventId });
-  } catch {
-    return NextResponse.json({ history: [], eventId });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Query mislukt" },
+      { status: 500 }
+    );
   }
 }

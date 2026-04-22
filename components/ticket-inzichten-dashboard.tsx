@@ -518,7 +518,7 @@ function AvailabilityHistoryChart({ eventId }: { eventId: string }) {
             fontSize: "11px",
             color: "hsl(var(--popover-foreground))",
           }}
-          formatter={(value: number) => [value.toLocaleString("nl-NL"), "Beschikbaar"]}
+          formatter={(value) => [Number(value).toLocaleString("nl-NL"), "Beschikbaar"]}
           labelFormatter={(label) => label}
         />
         <Area
