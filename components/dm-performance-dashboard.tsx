@@ -371,112 +371,92 @@ function Stat({
 
 /* ---------- Performance Chart ---------- */
 
+interface DayBucket {
+  sortKey: string;   // yyyy-mm-dd for sorting
+  date: string;      // dd-mm display label
+  count: number;
+  names: string[];
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: { payload: DayBucket }[];
+  label?: string;
+}
+
+function ChartTooltip({ active, payload }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const { date, count, names } = payload[0].payload;
+  return (
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md max-w-xs">
+      <p className="font-heading uppercase tracking-wide text-foreground mb-1">{date}</p>
+      <p className="text-psv-red-primary font-semibold mb-2">
+        {count} mailing{count !== 1 ? "s" : ""}
+      </p>
+      <ul className="space-y-0.5">
+        {names.map((n, i) => (
+          <li key={i} className="text-muted-foreground truncate">• {n}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
-  const chartData = useMemo(() => {
-    const sorted = [...mailings]
-      .filter((m) => m.scheduleTime)
-      .sort(
-        (a, b) =>
-          new Date(a.scheduleTime).getTime() -
-          new Date(b.scheduleTime).getTime()
-      )
-      .slice(-20);
-
-    const dateCounts = new Map<string, number>();
-    for (const m of sorted) {
-      const d = formatDateShort(m.scheduleTime);
-      dateCounts.set(d, (dateCounts.get(d) ?? 0) + 1);
-    }
-
-    const dateIndex = new Map<string, number>();
-    return sorted.map((m) => {
-      const date = formatDateShort(m.scheduleTime);
-      const count = dateCounts.get(date) ?? 1;
-      let label = date;
-      if (count > 1) {
-        const idx = (dateIndex.get(date) ?? 0) + 1;
-        dateIndex.set(date, idx);
-        label = `${date} (${idx})`;
+  const chartData = useMemo((): DayBucket[] => {
+    const dayMap = new Map<string, DayBucket>();
+    for (const m of mailings) {
+      if (!m.scheduleTime) continue;
+      const dt = new Date(m.scheduleTime.replace(" ", "T"));
+      const sortKey = dt.toISOString().slice(0, 10);
+      const date = dt.toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit" });
+      if (!dayMap.has(sortKey)) {
+        dayMap.set(sortKey, { sortKey, date, count: 0, names: [] });
       }
-
-      const tooltipName = m.name.replace(/^\d{4}\.\d{2}\.\d{2}\s*/, "");
-
-      return {
-        name: m.name.length > 25 ? m.name.slice(0, 25) + "..." : m.name,
-        tooltipName,
-        label,
-        date,
-        openRate: parseFloat(m.openRate.toFixed(1)),
-        clickRate: parseFloat(m.clickRate.toFixed(1)),
-      };
-    });
+      const bucket = dayMap.get(sortKey)!;
+      bucket.count++;
+      bucket.names.push(m.name);
+    }
+    return Array.from(dayMap.values()).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   }, [mailings]);
 
   if (chartData.length === 0) return null;
 
+  const maxCount = Math.max(...chartData.map((d) => d.count));
+
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle className="text-base">Open & Click Rate per Mailing</CardTitle>
+        <CardTitle className="text-base">Mailings per dag</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-72">
+        <div className="h-52">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.2} />
+            <BarChart data={chartData} barGap={2} barCategoryGap="30%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.2} vertical={false} />
               <XAxis
-                dataKey="label"
+                dataKey="date"
                 tick={{ fontSize: 11 }}
                 stroke="#999"
+                interval="preserveStartEnd"
               />
               <YAxis
                 tick={{ fontSize: 11 }}
                 stroke="#999"
-                tickFormatter={(v: number) => `${v}%`}
+                allowDecimals={false}
+                width={28}
+                domain={[0, maxCount + 1]}
+                tickCount={Math.min(maxCount + 2, 6)}
               />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#1a1a2e",
-                  border: "1px solid #333",
-                  borderRadius: "6px",
-                  color: "#fff",
-                  fontSize: 12,
-                }}
-                formatter={(value: unknown, name: unknown) => [
-                  `${value}%`,
-                  name === "openRate" ? "Open rate" : "Click rate",
-                ]}
-                labelFormatter={(_label, payload) => {
-                  const items = payload as unknown as { payload?: { tooltipName?: string } }[];
-                  return items?.[0]?.payload?.tooltipName ?? String(_label);
-                }}
-              />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
               <Bar
-                dataKey="openRate"
-                name="openRate"
+                dataKey="count"
                 fill="#e82026"
                 radius={[3, 3, 0, 0]}
-                maxBarSize={32}
-              />
-              <Bar
-                dataKey="clickRate"
-                name="clickRate"
-                fill="#bb9753"
-                radius={[3, 3, 0, 0]}
-                maxBarSize={32}
+                maxBarSize={40}
               />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-        <div className="flex items-center gap-6 mt-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-psv-red-primary" />
-            Open rate
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-psv-gold" />
-            Click rate
-          </span>
         </div>
       </CardContent>
     </Card>
