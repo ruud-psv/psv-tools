@@ -7,9 +7,10 @@ export function middleware(request: NextRequest) {
 
   const isLoginPage = pathname === "/login";
   const isApiRoute = pathname.startsWith("/api/");
+  const isShareRoute = pathname.startsWith("/share/");
 
-  // Always allow API routes through
-  if (isApiRoute) return NextResponse.next();
+  // Always allow API routes and share routes through
+  if (isApiRoute || isShareRoute) return NextResponse.next();
 
   // Redirect unauthenticated users to login
   if (!session && !isLoginPage) {

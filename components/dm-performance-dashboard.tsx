@@ -32,6 +32,7 @@ import {
   Send,
   Filter,
   X,
+  Share2,
 } from "lucide-react";
 import {
   BarChart,
@@ -455,15 +456,37 @@ function MailingTable({
   mailings,
   onSelect,
   onFilterApply,
+  preset,
+  customFrom,
+  customTo,
 }: {
   mailings: MailingSummary[];
   onSelect: (m: MailingSummary) => void;
   onFilterApply: (filtered: MailingSummary[]) => void;
+  preset: string;
+  customFrom: string;
+  customTo: string;
 }) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("scheduleTime");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterActive, setFilterActive] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = useCallback(() => {
+    const base = window.location.origin;
+    const params = new URLSearchParams({ q: search });
+    if (preset === "custom") {
+      params.set("from", customFrom);
+      params.set("to", customTo);
+      params.set("preset", "custom");
+    } else {
+      params.set("preset", preset);
+    }
+    navigator.clipboard.writeText(`${base}/share/dm?${params.toString()}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [search, preset, customFrom, customTo]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -538,6 +561,16 @@ function MailingTable({
             <Filter className="h-3.5 w-3.5" />
             Pas toe
           </button>
+          {search.trim() && (
+            <button
+              onClick={handleShare}
+              title="Kopieer deelbare link"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm border hover:bg-muted transition-colors shrink-0"
+            >
+              {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <Share2 className="h-3.5 w-3.5" />}
+              {copied ? "Gekopieerd!" : "Deel link"}
+            </button>
+          )}
           {filterActive && (
             <button
               onClick={() => { setSearch(""); onFilterApply(mailings); setFilterActive(false); }}
@@ -1312,6 +1345,9 @@ export function DmPerformanceDashboard() {
           mailings={mailings}
           onSelect={setSelectedMailing}
           onFilterApply={setActiveMailings}
+          preset={preset}
+          customFrom={customFrom}
+          customTo={customTo}
         />
       )}
 
