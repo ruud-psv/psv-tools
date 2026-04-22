@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ import {
   Loader2,
   Sparkles,
   CheckCircle2,
+  Calendar,
+  Send,
 } from "lucide-react";
 import {
   BarChart,
@@ -129,7 +131,10 @@ function formatDateShort(iso: string): string {
   }
 }
 
-function getDateRange(preset: string): { from: string; to: string } {
+function getDateRange(preset: string, customFrom?: string, customTo?: string): { from: string; to: string } {
+  if (preset === "custom" && customFrom && customTo) {
+    return { from: customFrom, to: customTo };
+  }
   const now = new Date();
   const to = now.toISOString().slice(0, 10);
 
@@ -441,8 +446,8 @@ function MailingTable({
       const q = search.toLowerCase();
       list = list.filter(
         (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.subject.toLowerCase().includes(q)
+          (m.name ?? "").toLowerCase().includes(q) ||
+          (m.subject ?? "").toLowerCase().includes(q)
       );
     }
     return [...list].sort((a, b) => {
@@ -622,7 +627,9 @@ function DmInsightsPanel({
   mailings,
   totals,
   preset,
+  dateLabel,
   onAnalyze,
+  onAskQuestion,
   insights,
   loading,
   error,
@@ -630,17 +637,85 @@ function DmInsightsPanel({
   mailings: MailingSummary[];
   totals: Totals | undefined;
   preset: string;
+  dateLabel: string;
   onAnalyze: () => void;
+  onAskQuestion: (messages: { role: "user" | "assistant"; content: string }[]) => Promise<string>;
   insights: DmInsightsResponse | null;
   loading: boolean;
   error: string | null;
 }) {
-  const presetLabels: Record<string, string> = {
-    "7d": "laatste 7 dagen",
-    "30d": "laatste 30 dagen",
-    "90d": "laatste 90 dagen",
-    "6m": "laatste 6 maanden",
-    "1y": "laatste jaar",
+  type ChatMessage = { role: "user" | "assistant"; text: string };
+  const [questionText, setQuestionText] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [questionLoading, setQuestionLoading] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuestionText("");
+    setChatMessages([]);
+    setQuestionError(null);
+  }, [insights]);
+
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatMessages, questionLoading]);
+
+  const handleAskQuestion = async () => {
+    if (!questionText.trim() || questionLoading) return;
+    const userMsg = questionText.trim();
+    setQuestionText("");
+    const next: ChatMessage[] = [...chatMessages, { role: "user", text: userMsg }];
+    setChatMessages(next);
+    setQuestionLoading(true);
+    setQuestionError(null);
+    try {
+      const answer = await onAskQuestion(next.map((m) => ({ role: m.role, content: m.text })));
+      setChatMessages((prev) => [...prev, { role: "assistant", text: answer }]);
+    } catch (e) {
+      setQuestionError(e instanceof Error ? e.message : "Vraag mislukt");
+    } finally {
+      setQuestionLoading(false);
+    }
+  };
+
+  const renderMarkdown = (text: string) => {
+    const bold = (s: string) =>
+      s.split(/\*\*(.*?)\*\*/g).map((p, i) =>
+        i % 2 === 1 ? <strong key={i} className="font-semibold">{p}</strong> : p
+      );
+    const lines = text.split("\n");
+    const out: ReactNode[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line) { i++; continue; }
+      if (line.startsWith("### ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(4))}</p>); i++;
+      } else if (line.startsWith("## ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(3))}</p>); i++;
+      } else if (line.startsWith("# ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(2))}</p>); i++;
+      } else if (line.startsWith("- ") || line.startsWith("* ")) {
+        const items: string[] = [];
+        while (i < lines.length && (lines[i].trim().startsWith("- ") || lines[i].trim().startsWith("* "))) {
+          items.push(lines[i].trim().slice(2));
+          i++;
+        }
+        out.push(<ul key={i} className="list-disc list-inside space-y-0.5">{items.map((it, j) => <li key={j}>{bold(it)}</li>)}</ul>);
+      } else if (/^\d+\. /.test(line)) {
+        const items: string[] = [];
+        while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
+          items.push(lines[i].trim().replace(/^\d+\. /, ""));
+          i++;
+        }
+        out.push(<ol key={i} className="list-decimal list-inside space-y-0.5">{items.map((it, j) => <li key={j}>{bold(it)}</li>)}</ol>);
+      } else {
+        out.push(<p key={i}>{bold(line)}</p>); i++;
+      }
+    }
+    return out;
   };
 
   const highlightIcon = (type: DmInsightsResponse["highlights"][0]["type"]) => {
@@ -667,20 +742,70 @@ function DmInsightsPanel({
     );
   }
 
+  const qaBlock = (
+    <div className="pt-2 border-t space-y-3">
+      <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
+      {(chatMessages.length > 0 || questionLoading) && (
+        <div ref={chatContainerRef} className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                msg.role === "user"
+                  ? "bg-psv-red-primary text-white"
+                  : "bg-muted text-foreground space-y-1"
+              }`}>
+                {msg.role === "assistant" ? renderMarkdown(msg.text) : msg.text}
+              </div>
+            </div>
+          ))}
+          {questionLoading && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-lg px-3 py-2.5">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {questionError && <p className="text-xs text-destructive">{questionError}</p>}
+      <div className="flex gap-2">
+        <Input
+          value={questionText}
+          onChange={(e) => setQuestionText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !questionLoading && questionText.trim()) handleAskQuestion(); }}
+          placeholder={chatMessages.length > 0 ? "Stel een vervolgvraag..." : "Bijv. welke mailing had de beste CTOR?"}
+          className="text-sm focus-visible:ring-psv-red-primary"
+          disabled={questionLoading}
+        />
+        <Button
+          size="sm"
+          onClick={handleAskQuestion}
+          disabled={!questionText.trim() || questionLoading}
+          className="shrink-0"
+        >
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+
   if (error) {
     return (
       <Card className="border-destructive mb-2">
-        <CardContent className="flex items-center justify-between gap-3 py-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-            <div>
-              <p className="text-sm font-medium">Analyse mislukt</p>
-              <p className="text-xs text-muted-foreground">{error}</p>
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Analyse mislukt</p>
+                <p className="text-xs text-muted-foreground">{error}</p>
+              </div>
             </div>
+            <Button variant="outline" size="sm" onClick={onAnalyze}>
+              Opnieuw proberen
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onAnalyze}>
-            Opnieuw proberen
-          </Button>
+          {qaBlock}
         </CardContent>
       </Card>
     );
@@ -689,26 +814,29 @@ function DmInsightsPanel({
   if (!insights) {
     return (
       <Card className="mb-2 border-dashed">
-        <CardContent className="flex items-center justify-between gap-4 py-4">
-          <div className="flex items-center gap-3">
-            <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
-            <div>
-              <p className="text-sm font-medium">AI Inzichten</p>
-              <p className="text-xs text-muted-foreground">
-                Laat het model patronen, anomalieën en aanbevelingen analyseren voor de {presetLabels[preset] ?? preset}.
-              </p>
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
+              <div>
+                <p className="text-sm font-medium">AI Inzichten</p>
+                <p className="text-xs text-muted-foreground">
+                  Laat het model patronen, anomalieën en aanbevelingen analyseren voor {dateLabel}.
+                </p>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onAnalyze}
+              disabled={!mailings.length || !totals}
+              className="shrink-0"
+            >
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              Analyseren
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onAnalyze}
-            disabled={!mailings.length || !totals}
-            className="shrink-0"
-          >
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            Analyseren
-          </Button>
+          {qaBlock}
         </CardContent>
       </Card>
     );
@@ -722,7 +850,7 @@ function DmInsightsPanel({
             <Sparkles className="h-4 w-4 text-psv-gold" />
             AI Inzichten
             <span className="text-xs font-normal text-muted-foreground ml-1">
-              {presetLabels[preset] ?? preset}
+              {dateLabel}
             </span>
           </CardTitle>
           <Button variant="ghost" size="sm" onClick={onAnalyze} className="text-xs text-muted-foreground h-7">
@@ -790,6 +918,9 @@ function DmInsightsPanel({
             </ul>
           </div>
         )}
+
+        {/* Q&A */}
+        {qaBlock}
       </CardContent>
     </Card>
   );
@@ -798,12 +929,21 @@ function DmInsightsPanel({
 /* ---------- Main Dashboard ---------- */
 
 const PRESET_OPTIONS = [
-  { value: "7d", label: "Laatste 7 dagen" },
-  { value: "30d", label: "Laatste 30 dagen" },
-  { value: "90d", label: "Laatste 90 dagen" },
-  { value: "6m", label: "Laatste 6 maanden" },
-  { value: "1y", label: "Laatste jaar" },
+  { value: "7d", label: "Afgelopen week" },
+  { value: "30d", label: "Afgelopen maand" },
+  { value: "90d", label: "Afgelopen kwartaal" },
+  { value: "6m", label: "Afgelopen halfjaar" },
+  { value: "1y", label: "Afgelopen jaar" },
+  { value: "custom", label: "Aangepast bereik" },
 ];
+
+const PRESET_LABELS: Record<string, string> = {
+  "7d": "afgelopen week",
+  "30d": "afgelopen maand",
+  "90d": "afgelopen kwartaal",
+  "6m": "afgelopen halfjaar",
+  "1y": "afgelopen jaar",
+};
 
 export function DmPerformanceDashboard() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -813,18 +953,46 @@ export function DmPerformanceDashboard() {
   const [selectedMailing, setSelectedMailing] = useState<MailingSummary | null>(null);
   const [lastFetched, setLastFetched] = useState<string | null>(null);
 
+  const defaultCustomFrom = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  })();
+  const defaultCustomTo = new Date().toISOString().slice(0, 10);
+  const [customFrom, setCustomFrom] = useState(defaultCustomFrom);
+  const [customTo, setCustomTo] = useState(defaultCustomTo);
+
   const [insights, setInsights] = useState<DmInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const insightsCache = useRef<Map<string, DmInsightsResponse>>(new Map());
 
-  const fetchData = useCallback(async (datePreset: string) => {
+  const getActiveDateRange = useCallback(() => {
+    return getDateRange(preset, customFrom, customTo);
+  }, [preset, customFrom, customTo]);
+
+  const getInsightsCacheKey = useCallback(() => {
+    if (preset === "custom") {
+      const { from, to } = getDateRange("custom", customFrom, customTo);
+      return `custom:${from}:${to}`;
+    }
+    return preset;
+  }, [preset, customFrom, customTo]);
+
+  const getDateLabel = useCallback(() => {
+    if (preset === "custom") {
+      return `${formatDate(customFrom)} – ${formatDate(customTo)}`;
+    }
+    return PRESET_LABELS[preset] ?? preset;
+  }, [preset, customFrom, customTo]);
+
+  const fetchData = useCallback(async (datePreset: string, cfrom?: string, cto?: string) => {
+    const cacheKey = datePreset === "custom" ? `custom:${cfrom}:${cto}` : datePreset;
     setLoading(true);
     setError(null);
-    // Clear cached insights for this preset so a refresh also refreshes AI
-    insightsCache.current.delete(datePreset);
+    insightsCache.current.delete(cacheKey);
     try {
-      const { from, to } = getDateRange(datePreset);
+      const { from, to } = getDateRange(datePreset, cfrom, cto);
       const res = await fetch(`/api/maileon?from=${from}&to=${to}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -842,7 +1010,9 @@ export function DmPerformanceDashboard() {
 
   const fetchInsights = useCallback(async () => {
     if (!data?.mailings.length || !data.totals) return;
-    const cached = insightsCache.current.get(preset);
+    const { from, to } = getActiveDateRange();
+    const cacheKey = getInsightsCacheKey();
+    const cached = insightsCache.current.get(cacheKey);
     if (cached) {
       setInsights(cached);
       setInsightsError(null);
@@ -851,7 +1021,6 @@ export function DmPerformanceDashboard() {
     setInsightsLoading(true);
     setInsightsError(null);
     try {
-      const { from, to } = getDateRange(preset);
       const res = await fetch("/api/dm-insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -863,16 +1032,31 @@ export function DmPerformanceDashboard() {
       }
       const result: DmInsightsResponse = await res.json();
       setInsights(result);
-      insightsCache.current.set(preset, result);
+      insightsCache.current.set(cacheKey, result);
     } catch (err) {
       setInsightsError(err instanceof Error ? err.message : "Analyse mislukt");
     } finally {
       setInsightsLoading(false);
     }
-  }, [data, preset]);
+  }, [data, preset, getActiveDateRange, getInsightsCacheKey]);
+
+  const fetchDmAnswer = useCallback(async (messages: { role: "user" | "assistant"; content: string }[]): Promise<string> => {
+    if (!data?.mailings.length || !data.totals) throw new Error("Geen data beschikbaar.");
+    const { from, to } = getActiveDateRange();
+    const res = await fetch("/api/dm-insights/question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, mailings: data.mailings, totals: data.totals, dateRange: { preset, from, to } }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `API gaf status ${res.status}`);
+    return json.answer;
+  }, [data, preset, getActiveDateRange]);
 
   useEffect(() => {
-    fetchData(preset);
+    if (preset !== "custom") {
+      fetchData(preset);
+    }
   }, [preset, fetchData]);
 
   // Reset insights panel when switching presets
@@ -884,11 +1068,13 @@ export function DmPerformanceDashboard() {
   const totals = data?.totals;
   const mailings = data?.mailings ?? [];
 
+  const dateLabel = getDateLabel();
+
   return (
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Select value={preset} onValueChange={setPreset}>
             <SelectTrigger className="w-52">
               <SelectValue />
@@ -901,14 +1087,46 @@ export function DmPerformanceDashboard() {
               ))}
             </SelectContent>
           </Select>
-          <button
-            onClick={() => fetchData(preset)}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Vernieuwen
-          </button>
+
+          {preset === "custom" && (
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-psv-red-primary"
+              />
+              <span className="text-sm text-muted-foreground">t/m</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-psv-red-primary"
+              />
+              <button
+                onClick={() => fetchData("custom", customFrom, customTo)}
+                disabled={loading || !customFrom || !customTo}
+                className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors disabled:opacity-50"
+              >
+                Ophalen
+              </button>
+            </div>
+          )}
+
+          {preset !== "custom" && (
+            <button
+              onClick={() => fetchData(preset)}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Vernieuwen
+            </button>
+          )}
         </div>
         {lastFetched && (
           <span className="text-xs text-muted-foreground">
@@ -950,7 +1168,9 @@ export function DmPerformanceDashboard() {
           mailings={mailings}
           totals={totals}
           preset={preset}
+          dateLabel={dateLabel}
           onAnalyze={fetchInsights}
+          onAskQuestion={fetchDmAnswer}
           insights={insights}
           loading={insightsLoading}
           error={insightsError}

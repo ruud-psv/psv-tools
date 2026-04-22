@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  Send,
 } from "lucide-react";
 
 interface TicketEvent {
@@ -128,17 +129,92 @@ interface TicketInsightsResponse {
 
 function TicketInsightsPanel({
   onAnalyze,
+  onAskQuestion,
   insights,
   loading,
   error,
   hasData,
 }: {
   onAnalyze: () => void;
+  onAskQuestion: (messages: { role: "user" | "assistant"; content: string }[]) => Promise<string>;
   insights: TicketInsightsResponse | null;
   loading: boolean;
   error: string | null;
   hasData: boolean;
 }) {
+  type ChatMessage = { role: "user" | "assistant"; text: string };
+  const [questionText, setQuestionText] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [questionLoading, setQuestionLoading] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuestionText("");
+    setChatMessages([]);
+    setQuestionError(null);
+  }, [insights]);
+
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatMessages, questionLoading]);
+
+  const handleAskQuestion = async () => {
+    if (!questionText.trim() || questionLoading) return;
+    const userMsg = questionText.trim();
+    setQuestionText("");
+    const next: ChatMessage[] = [...chatMessages, { role: "user", text: userMsg }];
+    setChatMessages(next);
+    setQuestionLoading(true);
+    setQuestionError(null);
+    try {
+      const answer = await onAskQuestion(next.map((m) => ({ role: m.role, content: m.text })));
+      setChatMessages((prev) => [...prev, { role: "assistant", text: answer }]);
+    } catch (e) {
+      setQuestionError(e instanceof Error ? e.message : "Vraag mislukt");
+    } finally {
+      setQuestionLoading(false);
+    }
+  };
+
+  const renderMarkdown = (text: string) => {
+    const bold = (s: string) =>
+      s.split(/\*\*(.*?)\*\*/g).map((p, i) =>
+        i % 2 === 1 ? <strong key={i} className="font-semibold">{p}</strong> : p
+      );
+    const lines = text.split("\n");
+    const out: ReactNode[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line) { i++; continue; }
+      if (line.startsWith("### ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(4))}</p>); i++;
+      } else if (line.startsWith("## ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(3))}</p>); i++;
+      } else if (line.startsWith("# ")) {
+        out.push(<p key={i} className="font-semibold">{bold(line.slice(2))}</p>); i++;
+      } else if (line.startsWith("- ") || line.startsWith("* ")) {
+        const items: string[] = [];
+        while (i < lines.length && (lines[i].trim().startsWith("- ") || lines[i].trim().startsWith("* "))) {
+          items.push(lines[i].trim().slice(2));
+          i++;
+        }
+        out.push(<ul key={i} className="list-disc list-inside space-y-0.5">{items.map((it, j) => <li key={j}>{bold(it)}</li>)}</ul>);
+      } else if (/^\d+\. /.test(line)) {
+        const items: string[] = [];
+        while (i < lines.length && /^\d+\. /.test(lines[i].trim())) {
+          items.push(lines[i].trim().replace(/^\d+\. /, ""));
+          i++;
+        }
+        out.push(<ol key={i} className="list-decimal list-inside space-y-0.5">{items.map((it, j) => <li key={j}>{bold(it)}</li>)}</ol>);
+      } else {
+        out.push(<p key={i}>{bold(line)}</p>); i++;
+      }
+    }
+    return out;
+  };
   const highlightIcon = (type: TicketInsightsResponse["highlights"][0]["type"]) => {
     switch (type) {
       case "achievement": return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />;
@@ -160,18 +236,68 @@ function TicketInsightsPanel({
     );
   }
 
+  const qaBlock = (
+    <div className="pt-2 border-t space-y-3">
+      <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vraag</p>
+      {(chatMessages.length > 0 || questionLoading) && (
+        <div ref={chatContainerRef} className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                msg.role === "user"
+                  ? "bg-psv-red-primary text-white"
+                  : "bg-muted text-foreground space-y-1"
+              }`}>
+                {msg.role === "assistant" ? renderMarkdown(msg.text) : msg.text}
+              </div>
+            </div>
+          ))}
+          {questionLoading && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-lg px-3 py-2.5">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {questionError && <p className="text-xs text-destructive">{questionError}</p>}
+      <div className="flex gap-2">
+        <Input
+          value={questionText}
+          onChange={(e) => setQuestionText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !questionLoading && questionText.trim()) handleAskQuestion(); }}
+          placeholder={chatMessages.length > 0 ? "Stel een vervolgvraag..." : "Bijv. welk event dreigt het eerste uitverkocht te raken?"}
+          className="text-sm focus-visible:ring-psv-red-primary"
+          disabled={questionLoading}
+        />
+        <Button
+          size="sm"
+          onClick={handleAskQuestion}
+          disabled={!questionText.trim() || questionLoading}
+          className="shrink-0"
+        >
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+
   if (error) {
     return (
       <Card className="border-destructive">
-        <CardContent className="flex items-center justify-between gap-3 py-4">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-            <div>
-              <p className="text-sm font-medium">Analyse mislukt</p>
-              <p className="text-xs text-muted-foreground">{error}</p>
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Analyse mislukt</p>
+                <p className="text-xs text-muted-foreground">{error}</p>
+              </div>
             </div>
+            <Button variant="outline" size="sm" onClick={onAnalyze}>Opnieuw proberen</Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onAnalyze}>Opnieuw proberen</Button>
+          {hasData && qaBlock}
         </CardContent>
       </Card>
     );
@@ -180,20 +306,23 @@ function TicketInsightsPanel({
   if (!insights) {
     return (
       <Card className="border-dashed">
-        <CardContent className="flex items-center justify-between gap-4 py-4">
-          <div className="flex items-center gap-3">
-            <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
-            <div>
-              <p className="text-sm font-medium">AI Inzichten</p>
-              <p className="text-xs text-muted-foreground">
-                Laat het model urgentie, kansen en patronen analyseren in de huidige ticketdata.
-              </p>
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-5 w-5 text-psv-gold shrink-0" />
+              <div>
+                <p className="text-sm font-medium">AI Inzichten</p>
+                <p className="text-xs text-muted-foreground">
+                  Laat het model urgentie, kansen en patronen analyseren in de huidige ticketdata.
+                </p>
+              </div>
             </div>
+            <Button variant="outline" size="sm" onClick={onAnalyze} disabled={!hasData} className="shrink-0">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              Analyseren
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onAnalyze} disabled={!hasData} className="shrink-0">
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            Analyseren
-          </Button>
+          {hasData && qaBlock}
         </CardContent>
       </Card>
     );
@@ -259,6 +388,9 @@ function TicketInsightsPanel({
             </ul>
           </div>
         )}
+
+        {/* Q&A */}
+        {qaBlock}
       </CardContent>
     </Card>
   );
@@ -937,6 +1069,19 @@ export function TicketInzichtenDashboard() {
     }
   }, [data, insights]);
 
+  const fetchTicketAnswer = useCallback(async (messages: { role: "user" | "assistant"; content: string }[]): Promise<string> => {
+    const events = data?.events;
+    if (!events?.length) throw new Error("Geen data beschikbaar.");
+    const res = await fetch("/api/ticket-insights/question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, events }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `API gaf status ${res.status}`);
+    return json.answer;
+  }, [data]);
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, POLL_INTERVAL);
@@ -1049,6 +1194,7 @@ export function TicketInzichtenDashboard() {
       {/* AI Insights Panel */}
       <TicketInsightsPanel
         onAnalyze={fetchInsights}
+        onAskQuestion={fetchTicketAnswer}
         insights={insights}
         loading={insightsLoading}
         error={insightsError}
