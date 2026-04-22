@@ -3,18 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 
 /* ---------- Types ---------- */
 
@@ -70,12 +59,13 @@ function formatDate(iso: string) {
   } catch { return iso; }
 }
 
-/** Strip DMID-suffix én datumpatronen (dd-mm-jjjj, 15 april 2026, april 2026, etc.) */
+/** Strip DMID-suffix én datumpatronen (dd-mm-jjjj, jjjj.mm.dd, 15 april 2026, etc.) */
 function stripName(name: string): string {
   const MONTHS = "januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|okt|nov|dec";
   return name
     .replace(/\s*DMID.*/i, "")
-    .replace(new RegExp(`\\s*\\b\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}\\b`, "g"), "")
+    .replace(/\s*\b\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\b/g, "")
+    .replace(/\s*\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, "")
     .replace(new RegExp(`\\s*\\b\\d{1,2}\\s+(${MONTHS})\\.?\\s*\\d{0,4}\\b`, "gi"), "")
     .replace(new RegExp(`\\s*\\b(${MONTHS})\\.?\\s+\\d{4}\\b`, "gi"), "")
     .replace(/\s+/g, " ")
@@ -138,98 +128,52 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
   );
 }
 
-/* ---------- Horizontal bar chart ---------- */
+/* ---------- Mailing detail panel ---------- */
 
-interface ChartRow {
-  label: string;
-  reachPct: number;
-  openRate: number;
-  clickRate: number;
-  _recipients: number;
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">{label}</p>
+      <p className="text-lg font-heading uppercase">{value}</p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
 }
 
-function PerformanceChart({ mailings }: { mailings: MailingSummary[] }) {
-  const chartData = useMemo<ChartRow[]>(() => {
-    const sorted = [...mailings]
-      .filter((m) => m.scheduleTime)
-      .sort((a, b) => new Date(a.scheduleTime).getTime() - new Date(b.scheduleTime).getTime());
-    const maxRecipients = Math.max(...sorted.map((m) => m.recipients), 1);
-    return sorted.map((m) => ({
-      label: stripName(m.name),
-      reachPct: +((m.recipients / maxRecipients) * 100).toFixed(1),
-      openRate: +m.openRate.toFixed(1),
-      clickRate: +m.clickRate.toFixed(1),
-      _recipients: m.recipients,
-    }));
-  }, [mailings]);
-
-  if (!chartData.length) return null;
-
-  const rowHeight = 52;
-  const chartHeight = Math.max(180, chartData.length * rowHeight);
-  const labelWidth = Math.min(220, Math.max(120, 16 * Math.max(...chartData.map((d) => d.label.length))));
-
-  const tooltipStyle = {
-    background: "hsl(var(--popover))",
-    border: "1px solid hsl(var(--border))",
-    borderRadius: "6px",
-    fontSize: "12px",
-    color: "hsl(var(--popover-foreground))",
-  };
-
+function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose: () => void }) {
   return (
-    <div className="bg-card border border-border rounded-lg p-4">
-      <p className="text-sm font-heading uppercase tracking-wide text-muted-foreground mb-4">
-        Ontvangers · Open Rate · Click Rate per mailing
-      </p>
-      <ResponsiveContainer width="100%" height={chartHeight}>
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
-          barCategoryGap="30%"
-          barGap={3}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-          <XAxis
-            type="number"
-            domain={[0, 100]}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-            tickLine={false}
-            axisLine={false}
-            unit="%"
-          />
-          <YAxis
-            type="category"
-            dataKey="label"
-            width={labelWidth}
-            tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <Tooltip
-            contentStyle={tooltipStyle}
-            formatter={(value, name, props) => {
-              if (name === "Ontvangers") return [formatNumber(props.payload._recipients), name];
-              return [`${Number(value).toFixed(1)}%`, name as string];
-            }}
-          />
-          <Legend wrapperStyle={{ fontSize: "12px" }} />
-          <Bar dataKey="reachPct" name="Ontvangers" fill="#09101d" radius={[0, 3, 3, 0]} maxBarSize={14} />
-          <Bar dataKey="openRate" name="Open Rate" fill="#e82026" radius={[0, 3, 3, 0]} maxBarSize={14} />
-          <Bar dataKey="clickRate" name="Click Rate" fill="#bb9753" radius={[0, 3, 3, 0]} maxBarSize={14} />
-        </BarChart>
-      </ResponsiveContainer>
-      <p className="text-xs text-muted-foreground mt-2">
-        Ontvangers weergegeven als % van de grootste mailing. Hover voor exacte aantallen.
-      </p>
+    <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-heading text-base uppercase">{stripName(mailing.name)}</p>
+          {mailing.subject && (
+            <p className="text-sm text-muted-foreground mt-0.5 truncate">Onderwerp: {mailing.subject}</p>
+          )}
+          {mailing.scheduleTime && (
+            <p className="text-xs text-muted-foreground mt-1">Verzonden: {formatDate(mailing.scheduleTime)}</p>
+          )}
+        </div>
+        <button onClick={onClose} className="shrink-0 text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-border">
+        <Stat label="Ontvangers" value={formatNumber(mailing.recipients)} />
+        <Stat label="Unieke opens" value={formatNumber(mailing.uniqueOpens)} sub={formatPct(mailing.openRate)} />
+        <Stat label="Unieke clicks" value={formatNumber(mailing.uniqueClicks)} sub={formatPct(mailing.clickRate)} />
+        <Stat label="Click-to-open" value={formatPct(mailing.clickToOpenRate)} />
+        <Stat label="Totaal opens" value={formatNumber(mailing.opens)} />
+        <Stat label="Totaal clicks" value={formatNumber(mailing.clicks)} />
+        <Stat label="Bounces" value={formatNumber(mailing.bounces)} sub={formatPct(mailing.bounceRate)} />
+        <Stat label="Uitschrijvingen" value={formatNumber(mailing.unsubscriptions)} sub={formatPct(mailing.unsubscribeRate)} />
+      </div>
     </div>
   );
 }
 
 /* ---------- Mailings tabel ---------- */
 
-function MailingsTable({ mailings }: { mailings: MailingSummary[] }) {
+function MailingsTable({ mailings, onSelect, selected }: { mailings: MailingSummary[]; onSelect: (m: MailingSummary) => void; selected: MailingSummary | null }) {
   const sorted = useMemo(
     () => [...mailings].sort((a, b) => new Date(b.scheduleTime).getTime() - new Date(a.scheduleTime).getTime()),
     [mailings]
@@ -254,7 +198,11 @@ function MailingsTable({ mailings }: { mailings: MailingSummary[] }) {
           </thead>
           <tbody>
             {sorted.map((m) => (
-              <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+              <tr
+                key={m.id}
+                onClick={() => onSelect(m.id === selected?.id ? null as unknown as MailingSummary : m)}
+                className={`border-b border-border last:border-0 cursor-pointer transition-colors ${m.id === selected?.id ? "bg-primary/5 border-l-2 border-l-primary" : "hover:bg-muted/20"}`}
+              >
                 <td className="px-4 py-2.5 max-w-xs">
                   <div className="font-medium truncate">{stripName(m.name)}</div>
                   {m.subject && <div className="text-xs text-muted-foreground truncate">{m.subject}</div>}
@@ -290,6 +238,7 @@ function ShareDmContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const [selected, setSelected] = useState<MailingSummary | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -370,11 +319,11 @@ function ShareDmContent() {
         </div>
       )}
 
-      {/* Grafiek */}
-      {!error && filtered.length > 0 && <PerformanceChart mailings={filtered} />}
+      {/* Detail panel */}
+      {selected && <MailingDetail mailing={selected} onClose={() => setSelected(null)} />}
 
       {/* Tabel */}
-      {!error && filtered.length > 0 && <MailingsTable mailings={filtered} />}
+      {!error && filtered.length > 0 && <MailingsTable mailings={filtered} onSelect={setSelected} selected={selected} />}
 
       {/* Lege state */}
       {!loading && !error && filtered.length === 0 && (
