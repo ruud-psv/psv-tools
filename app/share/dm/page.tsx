@@ -70,9 +70,16 @@ function formatDate(iso: string) {
   } catch { return iso; }
 }
 
-/** Strip alles vanaf "DMID" (inclusief voorloopspatie) uit de mailingnaam */
+/** Strip DMID-suffix én datumpatronen (dd-mm-jjjj, 15 april 2026, april 2026, etc.) */
 function stripName(name: string): string {
-  return name.replace(/\s*DMID.*/i, "").trim() || name;
+  const MONTHS = "januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|okt|nov|dec";
+  return name
+    .replace(/\s*DMID.*/i, "")
+    .replace(new RegExp(`\\s*\\b\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}\\b`, "g"), "")
+    .replace(new RegExp(`\\s*\\b\\d{1,2}\\s+(${MONTHS})\\.?\\s*\\d{0,4}\\b`, "gi"), "")
+    .replace(new RegExp(`\\s*\\b(${MONTHS})\\.?\\s+\\d{4}\\b`, "gi"), "")
+    .replace(/\s+/g, " ")
+    .trim() || name;
 }
 
 function getDateRange(preset: string, customFrom?: string, customTo?: string) {
