@@ -164,6 +164,12 @@ function getDateRange(preset: string, customFrom?: string, customTo?: string): {
       d.setFullYear(d.getFullYear() - 1);
       return { from: d.toISOString().slice(0, 10), to };
     }
+    case "seizoen2425":
+      return { from: "2024-07-01", to: "2025-06-30" };
+    case "seizoen2526": {
+      const end = new Date(Math.min(new Date("2026-06-30").getTime(), now.getTime()));
+      return { from: "2025-07-01", to: end.toISOString().slice(0, 10) };
+    }
     default: {
       const d = new Date(now);
       d.setDate(d.getDate() - 30);
@@ -934,6 +940,8 @@ const PRESET_OPTIONS = [
   { value: "90d", label: "Afgelopen kwartaal" },
   { value: "6m", label: "Afgelopen halfjaar" },
   { value: "1y", label: "Afgelopen jaar" },
+  { value: "seizoen2425", label: "Seizoen 24/25" },
+  { value: "seizoen2526", label: "Seizoen 25/26" },
   { value: "custom", label: "Aangepast bereik" },
 ];
 
@@ -943,6 +951,8 @@ const PRESET_LABELS: Record<string, string> = {
   "90d": "afgelopen kwartaal",
   "6m": "afgelopen halfjaar",
   "1y": "afgelopen jaar",
+  "seizoen2425": "seizoen 24/25",
+  "seizoen2526": "seizoen 25/26",
 };
 
 export function DmPerformanceDashboard() {
