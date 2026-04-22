@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { RefreshCw, X, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus } from "lucide-react";
+import { RefreshCw, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -42,6 +42,13 @@ interface Totals {
   avgBounceRate: number;
   unsubscriptions: number;
   avgUnsubRate: number;
+}
+
+interface FilterParams {
+  q: string;
+  preset: string;
+  customFrom: string;
+  customTo: string;
 }
 
 /* ---------- Helpers ---------- */
@@ -94,12 +101,6 @@ function getDateRange(preset: string, customFrom?: string, customTo?: string) {
     default: { const d = new Date(now); d.setDate(d.getDate() - 30); return { from: d.toISOString().slice(0, 10), to }; }
   }
 }
-
-const PRESET_LABELS: Record<string, string> = {
-  "7d": "Afgelopen week", "30d": "Afgelopen maand", "90d": "Afgelopen kwartaal",
-  "6m": "Afgelopen halfjaar", "1y": "Afgelopen jaar",
-  "seizoen2425": "Seizoen 24/25", "seizoen2526": "Seizoen 25/26",
-};
 
 function computeTotals(mailings: MailingSummary[]): Totals {
   if (!mailings.length) return { mailings: 0, recipients: 0, uniqueOpens: 0, avgOpenRate: 0, uniqueClicks: 0, avgClickRate: 0, avgCtor: 0, bounces: 0, avgBounceRate: 0, unsubscriptions: 0, avgUnsubRate: 0 };
@@ -273,21 +274,38 @@ function MailingsTable({ mailings, onSelect, selected }: {
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
 function ShareDmContent() {
-  const params = useSearchParams();
-  const q = params.get("q") ?? "";
-  const preset = params.get("preset") ?? "30d";
-  const customFrom = params.get("from") ?? "";
-  const customTo = params.get("to") ?? "";
+  const urlParams = useSearchParams();
+  const token = urlParams.get("token") ?? "";
 
-  const { from, to } = getDateRange(preset, customFrom || undefined, customTo || undefined);
+  const [filter, setFilter] = useState<FilterParams | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(true);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
   const [mailings, setMailings] = useState<MailingSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [selected, setSelected] = useState<MailingSummary | null>(null);
 
+  useEffect(() => {
+    if (!token) {
+      setTokenError("Ongeldige link");
+      setTokenLoading(false);
+      return;
+    }
+    fetch(`/api/share?token=${encodeURIComponent(token)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(`Fout ${r.status}`)))
+      .then((data: FilterParams) => { setFilter(data); setTokenLoading(false); })
+      .catch((err) => { setTokenError(String(err)); setTokenLoading(false); });
+  }, [token]);
+
+  const { from, to } = useMemo(
+    () => filter ? getDateRange(filter.preset, filter.customFrom || undefined, filter.customTo || undefined) : { from: "", to: "" },
+    [filter]
+  );
+
   const fetchData = useCallback(async () => {
+    if (!filter) return;
     setLoading(true);
     setError(null);
     try {
@@ -301,27 +319,41 @@ function ShareDmContent() {
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [filter, from, to]);
 
   useEffect(() => {
+    if (!filter) return;
     fetchData();
     const id = setInterval(fetchData, REFRESH_INTERVAL);
     return () => clearInterval(id);
-  }, [fetchData]);
+  }, [fetchData, filter]);
 
   const filtered = useMemo(() => {
+    const q = filter?.q ?? "";
     if (!q.trim()) return mailings;
     const lower = q.toLowerCase();
     return mailings.filter(
       (m) => (m.name ?? "").toLowerCase().includes(lower) || (m.subject ?? "").toLowerCase().includes(lower)
     );
-  }, [mailings, q]);
+  }, [mailings, filter]);
 
   const totals = useMemo(() => computeTotals(filtered), [filtered]);
 
-  const dateLabel = preset === "custom"
-    ? `${formatDate(from)} – ${formatDate(to)}`
-    : (PRESET_LABELS[preset] ?? preset);
+  if (tokenLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-muted-foreground text-sm">
+        Laden…
+      </div>
+    );
+  }
+
+  if (tokenError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-muted-foreground text-sm">
+        Ongeldige of verlopen link.
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -334,21 +366,9 @@ function ShareDmContent() {
               alt="PSV"
               className="h-9 w-9 shrink-0"
             />
-            <div>
-              <h1 className="text-xl font-heading uppercase text-sidebar-foreground leading-tight">
-                Mailing rapportage
-              </h1>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="bg-sidebar-accent text-sidebar-foreground px-2 py-0.5 rounded text-xs font-heading uppercase">
-                  {dateLabel}
-                </span>
-                {q && (
-                  <span className="bg-psv-red-primary/20 text-psv-red-primary px-2 py-0.5 rounded text-xs font-heading uppercase">
-                    Filter: {q}
-                  </span>
-                )}
-              </div>
-            </div>
+            <h1 className="text-xl font-heading uppercase text-sidebar-foreground leading-tight">
+              Mailing rapportage
+            </h1>
           </div>
           <div className="flex items-center gap-2 text-xs text-sidebar-foreground/60 shrink-0">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />

@@ -473,19 +473,20 @@ function MailingTable({
   const [filterActive, setFilterActive] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleShare = useCallback(() => {
-    const base = window.location.origin;
-    const params = new URLSearchParams({ q: search });
-    if (preset === "custom") {
-      params.set("from", customFrom);
-      params.set("to", customTo);
-      params.set("preset", "custom");
-    } else {
-      params.set("preset", preset);
+  const handleShare = useCallback(async () => {
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: search, preset, customFrom, customTo }),
+      });
+      const { token } = await res.json();
+      navigator.clipboard.writeText(`${window.location.origin}/share/dm?token=${token}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // silently fail
     }
-    navigator.clipboard.writeText(`${base}/share/dm?${params.toString()}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }, [search, preset, customFrom, customTo]);
 
   const toggleSort = (key: SortKey) => {

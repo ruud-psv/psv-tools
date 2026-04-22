@@ -17,3 +17,13 @@ export async function ensureSchema(): Promise<void> {
     ON ticket_snapshots (event_id, ts)
   `;
 }
+
+export async function ensureShareSchema(): Promise<void> {
+  await sql`
+    CREATE TABLE IF NOT EXISTS share_links (
+      token      TEXT PRIMARY KEY,
+      params     JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
