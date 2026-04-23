@@ -8,9 +8,10 @@ export function middleware(request: NextRequest) {
   const isLoginPage = pathname === "/login";
   const isApiRoute = pathname.startsWith("/api/");
   const isShareRoute = pathname.startsWith("/share/");
+  const isSamlRoute = pathname.startsWith("/saml/");
 
-  // Always allow API routes and share routes through
-  if (isApiRoute || isShareRoute) return NextResponse.next();
+  // Always allow API routes, share routes, and SAML ACS callback through
+  if (isApiRoute || isShareRoute || isSamlRoute) return NextResponse.next();
 
   // Redirect unauthenticated users to login
   if (!session && !isLoginPage) {

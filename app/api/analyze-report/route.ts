@@ -1,37 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
+import { authorize } from "@/lib/auth";
 
-function parseBasicAuth(header: string | null) {
-  if (!header?.startsWith("Basic ")) return null;
-  const encoded = header.slice(6).trim();
-  if (!encoded) return null;
-  try {
-    const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const sep = decoded.indexOf(":");
-    if (sep === -1) return null;
-    return { user: decoded.slice(0, sep), pass: decoded.slice(sep + 1) };
-  } catch {
-    return null;
-  }
-}
-
-function authorize(sessionCookie: string | undefined): string | null {
-  const expectedUser = process.env.PSV_AUTH_USER;
-  const expectedPass = process.env.PSV_AUTH_PASS;
-
-  if (!expectedUser || !expectedPass) {
-    return "Beveiliging is niet geconfigureerd.";
-  }
-  if (!sessionCookie) return "Geen sessie gevonden. Log opnieuw in.";
-
-  const credentials = parseBasicAuth(sessionCookie);
-  if (!credentials) return "Ongeldige sessie.";
-  if (credentials.user !== expectedUser || credentials.pass !== expectedPass) {
-    return "Ongeldige inloggegevens.";
-  }
-  return null;
-}
 
 interface ColumnStats {
   name: string;

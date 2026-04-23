@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authorize } from "@/lib/auth";
 
 const REQUIRED: Record<string, string[]> = {
   mail_nl: ["doelgroep", "exploitatie", "doel_van_de_mail", "cta_omschrijving"],
@@ -6,36 +7,6 @@ const REQUIRED: Record<string, string[]> = {
   huisstijl_check: ["tekst"],
 };
 
-function parseBasicAuth(header: string | null) {
-  if (!header?.startsWith("Basic ")) return null;
-  const encoded = header.slice(6).trim();
-  if (!encoded) return null;
-  try {
-    const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const sep = decoded.indexOf(":");
-    if (sep === -1) return null;
-    return { user: decoded.slice(0, sep), pass: decoded.slice(sep + 1) };
-  } catch {
-    return null;
-  }
-}
-
-function authorize(sessionCookie: string | undefined): string | null {
-  const expectedUser = process.env.PSV_AUTH_USER;
-  const expectedPass = process.env.PSV_AUTH_PASS;
-
-  if (!expectedUser || !expectedPass) {
-    return "Beveiliging is niet geconfigureerd.";
-  }
-  if (!sessionCookie) return "Geen sessie gevonden. Log opnieuw in.";
-
-  const credentials = parseBasicAuth(sessionCookie);
-  if (!credentials) return "Ongeldige sessie.";
-  if (credentials.user !== expectedUser || credentials.pass !== expectedPass) {
-    return "Ongeldige inloggegevens.";
-  }
-  return null;
-}
 
 function validatePayload(payload: Record<string, string>): string | null {
   if (!payload || typeof payload !== "object") return "Payload ontbreekt.";

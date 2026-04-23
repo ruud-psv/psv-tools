@@ -1,0 +1,50 @@
+import { NextRequest, NextResponse } from "next/server";
+import { SAML } from "@node-saml/node-saml";
+import { getSamlOptions } from "@/lib/saml-config";
+import { createSessionToken } from "@/lib/auth";
+
+export async function POST(request: NextRequest) {
+  let body: URLSearchParams;
+  try {
+    const text = await request.text();
+    body = new URLSearchParams(text);
+  } catch {
+    return NextResponse.json({ error: "Ongeldige request body." }, { status: 400 });
+  }
+
+  const samlResponse = body.get("SAMLResponse");
+  if (!samlResponse) {
+    return NextResponse.json({ error: "Geen SAMLResponse ontvangen." }, { status: 400 });
+  }
+
+  const saml = new SAML(getSamlOptions());
+
+  let email: string;
+  try {
+    const { profile } = await saml.validatePostResponseAsync({
+      SAMLResponse: samlResponse,
+    });
+
+    const nameId = profile?.nameID;
+    const profileEmail = (profile as Record<string, unknown>)?.email as string | undefined;
+    email = profileEmail ?? nameId ?? "";
+
+    if (!email || !email.includes("@")) {
+      throw new Error(`Geen geldig e-mailadres in SAML assertion. nameID: ${nameId}`);
+    }
+  } catch (err) {
+    console.error("[SAML callback] Validatie mislukt:", err);
+    return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url));
+  }
+
+  const token = createSessionToken(email);
+  const response = NextResponse.redirect(new URL("/dashboard", request.url));
+  response.cookies.set("psv_session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 28800,
+    path: "/",
+  });
+  return response;
+}
