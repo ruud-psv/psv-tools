@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   const samlResponse = rawSamlResponse.replace(/ /g, "+");
 
-  const saml = new SAML(getSamlOptions());
+  const saml = new SAML(await getSamlOptions());
 
   let email: string;
   try {
