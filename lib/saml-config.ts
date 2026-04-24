@@ -13,11 +13,11 @@ export function getSamlOptions(): SamlConfig {
     );
   }
 
-  // Strip PEM headers and all whitespace so the cert works regardless of how it was pasted
+  // Remove all whitespace first, then strip the PEM headers (which now have no spaces)
   const normalizedCert = idpCert
-    .replace(/-----BEGIN CERTIFICATE-----/g, "")
-    .replace(/-----END CERTIFICATE-----/g, "")
-    .replace(/\s+/g, "");
+    .replace(/\s/g, "")
+    .replace(/-----BEGINCERTIFICATE-----/g, "")
+    .replace(/-----ENDCERTIFICATE-----/g, "");
 
   return {
     entryPoint,
