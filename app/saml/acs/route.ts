@@ -33,7 +33,11 @@ export async function POST(request: NextRequest) {
       throw new Error(`Geen geldig e-mailadres in SAML assertion. nameID: ${nameId}`);
     }
   } catch (err) {
+    const certPreview = (process.env.SAML_CERT ?? "").replace(/\s+/g, "").slice(0, 40);
     console.error("[SAML callback] Validatie mislukt:", err);
+    console.error("[SAML callback] SAML_CERT eerste 40 tekens:", certPreview);
+    console.error("[SAML callback] SAML_ISSUER:", process.env.SAML_ISSUER);
+    console.error("[SAML callback] SAML_CALLBACK_URL:", process.env.SAML_CALLBACK_URL);
     return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url));
   }
 
