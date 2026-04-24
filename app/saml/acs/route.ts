@@ -4,18 +4,23 @@ import { getSamlOptions } from "@/lib/saml-config";
 import { createSessionToken } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
-  let body: URLSearchParams;
+  let rawSamlResponse: string | null = null;
   try {
     const text = await request.text();
-    body = new URLSearchParams(text);
+    const body = new URLSearchParams(text);
+    rawSamlResponse = body.get("SAMLResponse");
   } catch {
     return NextResponse.json({ error: "Ongeldige request body." }, { status: 400 });
   }
 
-  const samlResponse = body.get("SAMLResponse");
-  if (!samlResponse) {
+  if (!rawSamlResponse) {
     return NextResponse.json({ error: "Geen SAMLResponse ontvangen." }, { status: 400 });
   }
+
+  // URLSearchParams converts + to space (URL form encoding spec).
+  // Base64 uses + as a valid character, so we restore them.
+  const samlResponse = rawSamlResponse.replace(/ /g, "+");
+  console.log("[SAML callback] Spaties hersteld naar +:", rawSamlResponse !== samlResponse);
 
   const saml = new SAML(getSamlOptions());
 
@@ -33,11 +38,7 @@ export async function POST(request: NextRequest) {
       throw new Error(`Geen geldig e-mailadres in SAML assertion. nameID: ${nameId}`);
     }
   } catch (err) {
-    const certPreview = (process.env.SAML_CERT ?? "").replace(/\s+/g, "").slice(0, 40);
     console.error("[SAML callback] Validatie mislukt:", err);
-    console.error("[SAML callback] SAML_CERT eerste 40 tekens:", certPreview);
-    console.error("[SAML callback] SAML_ISSUER:", process.env.SAML_ISSUER);
-    console.error("[SAML callback] SAML_CALLBACK_URL:", process.env.SAML_CALLBACK_URL);
     return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url));
   }
 
