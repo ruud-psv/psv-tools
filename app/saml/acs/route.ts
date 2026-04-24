@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SAML } from "@node-saml/node-saml";
-import { SignedXml } from "xml-crypto";
-import { DOMParser } from "@xmldom/xmldom";
 import { getSamlOptions } from "@/lib/saml-config";
 import { createSessionToken } from "@/lib/auth";
 
@@ -20,40 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   const samlResponse = rawSamlResponse.replace(/ /g, "+");
-
-  try {
-    const decoded = Buffer.from(samlResponse, "base64").toString("utf8");
-    console.log("[SAML callback] XML lengte:", decoded.length);
-
-    const sigMethodMatch = decoded.match(/<(?:[^:]+:)?SignatureMethod Algorithm="([^"]+)"/);
-    console.log("[SAML callback] Signature algorithm:", sigMethodMatch?.[1] ?? "niet gevonden");
-
-    const allIdMatches = [...decoded.matchAll(/<[^>]+\sID="([^"]+)"/g)];
-    console.log("[SAML callback] Alle ID-waarden:", allIdMatches.map((m) => m[1]));
-
-    const refMatch = decoded.match(/URI="#([^"]+)"/);
-    console.log("[SAML callback] Signature Reference URI:", refMatch?.[1] ?? "niet gevonden");
-
-    const dom = new DOMParser().parseFromString(decoded, "text/xml");
-    const signatureNodes = dom.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature");
-    console.log("[SAML callback] Signature nodes gevonden:", signatureNodes.length);
-
-    if (signatureNodes.length > 0) {
-      const opts = getSamlOptions();
-      const certPem = typeof opts.cert === "string" ? opts.cert : "";
-      const sig = new SignedXml(null, { idAttribute: "ID" });
-      sig.keyInfoProvider = {
-        getKey: () => Buffer.from(certPem),
-        getKeyInfo: () => "",
-      };
-      sig.loadSignature(signatureNodes[0]);
-      const valid = sig.checkSignature(decoded);
-      console.log("[SAML callback] Direct xml-crypto geldig:", valid);
-      console.log("[SAML callback] Direct xml-crypto fouten:", sig.validationErrors);
-    }
-  } catch (e) {
-    console.error("[SAML callback] Diagnostiek fout:", e);
-  }
 
   const saml = new SAML(getSamlOptions());
 

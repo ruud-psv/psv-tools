@@ -23,10 +23,6 @@ export function getSamlOptions(): SamlConfig {
   const pemLines = rawBase64.match(/.{1,64}/g) ?? [];
   const normalizedCert = `-----BEGIN CERTIFICATE-----\n${pemLines.join("\n")}\n-----END CERTIFICATE-----`;
 
-  console.log("[SAML config] Cert lengte (base64):", rawBase64.length);
-  console.log("[SAML config] Cert begin:", rawBase64.slice(0, 20));
-  console.log("[SAML config] Cert einde:", rawBase64.slice(-20));
-
   return {
     entryPoint,
     issuer,
