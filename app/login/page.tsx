@@ -138,7 +138,7 @@ export default function LoginPage() {
             priority
           />
         </div>
-        <Card className="shadow-lg">
+        <Card className="shadow-none">
           <CardHeader className="pt-12">
             <CardTitle>Beveiligde toegang</CardTitle>
             <CardDescription>
