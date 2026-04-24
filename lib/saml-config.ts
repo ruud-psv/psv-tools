@@ -2,12 +2,13 @@ import type { SamlConfig } from "@node-saml/node-saml";
 import { ValidateInResponseTo } from "@node-saml/node-saml";
 
 function certFromEnv(idpCert: string): string {
-  // Keep only valid base64 characters — strips PEM headers, newlines, spaces, stray chars
-  const rawBase64 = idpCert.replace(/[^A-Za-z0-9+/=]/g, "");
+  // Step 1: remove PEM headers like -----BEGIN CERTIFICATE----- before stripping
+  const withoutHeaders = idpCert.replace(/-----[^-]+-----/g, "");
+  // Step 2: keep only valid base64 characters (strips newlines, spaces, CR, etc.)
+  const rawBase64 = withoutHeaders.replace(/[^A-Za-z0-9+/=]/g, "");
   if (!rawBase64) throw new Error("SAML_CERT bevat geen geldige base64-inhoud.");
   const pemLines = rawBase64.match(/.{1,64}/g) ?? [];
   const pem = `-----BEGIN CERTIFICATE-----\n${pemLines.join("\n")}\n-----END CERTIFICATE-----`;
-  // Validate before returning so we fail early with a clear message
   try {
     new (require("crypto").X509Certificate)(pem);
   } catch (e) {
