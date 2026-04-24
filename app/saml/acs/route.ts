@@ -25,26 +25,20 @@ export async function POST(request: NextRequest) {
     const decoded = Buffer.from(samlResponse, "base64").toString("utf8");
     console.log("[SAML callback] XML lengte:", decoded.length);
 
-    // Find signature algorithm
     const sigMethodMatch = decoded.match(/<(?:[^:]+:)?SignatureMethod Algorithm="([^"]+)"/);
     console.log("[SAML callback] Signature algorithm:", sigMethodMatch?.[1] ?? "niet gevonden");
 
-    // Count and find position of Signature elements
-    const sigMatches = decoded.match(/<(?:[^:]+:)?Signature[\s>]/g) ?? [];
-    console.log("[SAML callback] Aantal Signature elementen:", sigMatches.length);
+    const allIdMatches = [...decoded.matchAll(/<[^>]+\sID="([^"]+)"/g)];
+    console.log("[SAML callback] Alle ID-waarden:", allIdMatches.map((m) => m[1]));
 
-    // Direct xml-crypto validation for detailed errors
+    const refMatch = decoded.match(/URI="#([^"]+)"/);
+    console.log("[SAML callback] Signature Reference URI:", refMatch?.[1] ?? "niet gevonden");
+
     const dom = new DOMParser().parseFromString(decoded, "text/xml");
     const signatureNodes = dom.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature");
     console.log("[SAML callback] Signature nodes gevonden:", signatureNodes.length);
 
-    // Find ALL elements with ID attributes to spot duplicates
-    const allIdMatches = [...decoded.matchAll(/<[^>]+\sID="([^"]+)"/g)];
-    console.log("[SAML callback] Alle ID-waarden:", allIdMatches.map(m => m[1]));
-
-    // Find the Reference URI in the Signature
-    const refMatch = decoded.match(/URI="#([^"]+)"/);
-    console.log("[SAML callback] Signature Reference URI:", refMatch?.[1] ?? "niet gevonden");
+    if (signatureNodes.length > 0) {
       const opts = getSamlOptions();
       const certPem = typeof opts.cert === "string" ? opts.cert : "";
       const sig = new SignedXml(null, { idAttribute: "ID" });
