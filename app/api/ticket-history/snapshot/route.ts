@@ -6,7 +6,10 @@ const RETENTION_DAYS = 30;
 
 function isAuthorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) return true;
+  if (!cronSecret) {
+    console.error("[ticket-history/snapshot] CRON_SECRET niet geconfigureerd — endpoint geweigerd.");
+    return false;
+  }
   // Vercel Cron stuurt: Authorization: Bearer <secret>
   const authHeader = request.headers.get("authorization");
   if (authHeader === `Bearer ${cronSecret}`) return true;

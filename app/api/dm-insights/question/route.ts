@@ -40,8 +40,10 @@ export async function POST(req: NextRequest) {
   if (authError) return NextResponse.json({ error: authError }, { status: 401 });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey)
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY ontbreekt in de server omgeving." }, { status: 500 });
+  if (!apiKey) {
+    console.error("[dm-insights/question] ANTHROPIC_API_KEY ontbreekt.");
+    return NextResponse.json({ error: "Server configuratie fout" }, { status: 500 });
+  }
 
   let body: RequestBody;
   try {

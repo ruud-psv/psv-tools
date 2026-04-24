@@ -17,7 +17,10 @@ async function maileonFetchXml(
   params?: Record<string, string | string[]>
 ): Promise<string> {
   const auth = getAuthHeader();
-  if (!auth) throw new Error("MAILEON_API_KEY is niet geconfigureerd");
+  if (!auth) {
+    console.error("[maileon] MAILEON_API_KEY niet geconfigureerd.");
+    throw new Error("Server configuratie fout");
+  }
 
   const url = new URL(`${BASE_URL}${path}`);
   if (params) {
@@ -40,7 +43,8 @@ async function maileonFetchXml(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Maileon API ${res.status}: ${text.slice(0, 200)}`);
+    console.error(`[maileon] Maileon API ${res.status}: ${text.slice(0, 500)}`);
+    throw new Error(`Maileon API fout (${res.status})`);
   }
 
   return res.text();
@@ -332,9 +336,7 @@ export async function GET(request: NextRequest) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Maileon data ophalen mislukt" },
-      { status: 502 }
-    );
+    console.error("[maileon] Data ophalen mislukt:", err);
+    return NextResponse.json({ error: "Maileon data ophalen mislukt" }, { status: 502 });
   }
 }

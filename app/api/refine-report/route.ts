@@ -38,8 +38,9 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
+    console.error("[refine-report] ANTHROPIC_API_KEY ontbreekt.");
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY ontbreekt in de server omgeving." },
+      { error: "Server configuratie fout" },
       { status: 500 }
     );
   }
