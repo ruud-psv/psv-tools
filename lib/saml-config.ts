@@ -13,11 +13,19 @@ export function getSamlOptions(): SamlConfig {
     );
   }
 
-  // Remove all whitespace first, then strip the PEM headers (which now have no spaces)
-  const normalizedCert = idpCert
+  // Strip whitespace and PEM headers to get raw base64
+  const rawBase64 = idpCert
     .replace(/\s/g, "")
     .replace(/-----BEGINCERTIFICATE-----/g, "")
     .replace(/-----ENDCERTIFICATE-----/g, "");
+
+  // Rebuild as proper PEM (64-char lines) so node-saml / xml-crypto gets the exact expected format
+  const pemLines = rawBase64.match(/.{1,64}/g) ?? [];
+  const normalizedCert = `-----BEGIN CERTIFICATE-----\n${pemLines.join("\n")}\n-----END CERTIFICATE-----`;
+
+  console.log("[SAML config] Cert lengte (base64):", rawBase64.length);
+  console.log("[SAML config] Cert begin:", rawBase64.slice(0, 20));
+  console.log("[SAML config] Cert einde:", rawBase64.slice(-20));
 
   return {
     entryPoint,
