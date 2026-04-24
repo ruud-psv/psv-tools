@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SAML } from "@node-saml/node-saml";
+import { SignedXml } from "xml-crypto";
+import { DOMParser } from "@xmldom/xmldom";
 import { getSamlOptions } from "@/lib/saml-config";
 import { createSessionToken } from "@/lib/auth";
 
@@ -17,28 +19,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Geen SAMLResponse ontvangen." }, { status: 400 });
   }
 
-  // URLSearchParams converts + to space (URL form encoding spec).
-  // Base64 uses + as a valid character, so we restore them.
   const samlResponse = rawSamlResponse.replace(/ /g, "+");
-  console.log("[SAML callback] Spaties hersteld naar +:", rawSamlResponse !== samlResponse);
 
   try {
     const decoded = Buffer.from(samlResponse, "base64").toString("utf8");
     console.log("[SAML callback] XML lengte:", decoded.length);
-    console.log("[SAML callback] XML begin:", decoded.slice(0, 200));
 
-    // Extract the signing cert that Azure included in the response
-    const certMatch = decoded.match(/<(?:[^:]+:)?X509Certificate[^>]*>([^<]+)<\/(?:[^:]+:)?X509Certificate>/);
-    if (certMatch) {
-      const responseCert = certMatch[1].replace(/\s/g, "");
-      console.log("[SAML callback] Cert in response (begin):", responseCert.slice(0, 30));
-      console.log("[SAML callback] Cert in response (einde):", responseCert.slice(-30));
-      console.log("[SAML callback] Cert in response (lengte):", responseCert.length);
-    } else {
-      console.log("[SAML callback] Geen X509Certificate gevonden in response");
+    // Find signature algorithm
+    const sigMethodMatch = decoded.match(/<(?:[^:]+:)?SignatureMethod Algorithm="([^"]+)"/);
+    console.log("[SAML callback] Signature algorithm:", sigMethodMatch?.[1] ?? "niet gevonden");
+
+    // Count and find position of Signature elements
+    const sigMatches = decoded.match(/<(?:[^:]+:)?Signature[\s>]/g) ?? [];
+    console.log("[SAML callback] Aantal Signature elementen:", sigMatches.length);
+
+    // Direct xml-crypto validation for detailed errors
+    const dom = new DOMParser().parseFromString(decoded, "text/xml");
+    const signatureNodes = dom.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature");
+    console.log("[SAML callback] Signature nodes gevonden:", signatureNodes.length);
+
+    if (signatureNodes.length > 0) {
+      const opts = getSamlOptions();
+      const certPem = typeof opts.cert === "string" ? opts.cert : "";
+      const sig = new SignedXml({ idAttributes: ["ID", "Id", "id"] });
+      sig.loadSignature(signatureNodes[0]);
+      const valid = sig.checkSignature(decoded, { publicCert: certPem });
+      console.log("[SAML callback] Direct xml-crypto geldig:", valid);
+      console.log("[SAML callback] Direct xml-crypto fouten:", sig.validationErrors);
     }
   } catch (e) {
-    console.error("[SAML callback] Kon SAMLResponse niet base64-decoderen:", e);
+    console.error("[SAML callback] Diagnostiek fout:", e);
   }
 
   const saml = new SAML(getSamlOptions());
