@@ -13,10 +13,16 @@ export function getSamlOptions(): SamlConfig {
     );
   }
 
+  // Strip PEM headers and all whitespace so the cert works regardless of how it was pasted
+  const normalizedCert = idpCert
+    .replace(/-----BEGIN CERTIFICATE-----/g, "")
+    .replace(/-----END CERTIFICATE-----/g, "")
+    .replace(/\s+/g, "");
+
   return {
     entryPoint,
     issuer,
-    idpCert,
+    idpCert: normalizedCert,
     callbackUrl,
     identifierFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
     disableRequestedAuthnContext: true,
