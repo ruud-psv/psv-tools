@@ -26,6 +26,17 @@ export async function POST(request: NextRequest) {
     const decoded = Buffer.from(samlResponse, "base64").toString("utf8");
     console.log("[SAML callback] XML lengte:", decoded.length);
     console.log("[SAML callback] XML begin:", decoded.slice(0, 200));
+
+    // Extract the signing cert that Azure included in the response
+    const certMatch = decoded.match(/<(?:[^:]+:)?X509Certificate[^>]*>([^<]+)<\/(?:[^:]+:)?X509Certificate>/);
+    if (certMatch) {
+      const responseCert = certMatch[1].replace(/\s/g, "");
+      console.log("[SAML callback] Cert in response (begin):", responseCert.slice(0, 30));
+      console.log("[SAML callback] Cert in response (einde):", responseCert.slice(-30));
+      console.log("[SAML callback] Cert in response (lengte):", responseCert.length);
+    } else {
+      console.log("[SAML callback] Geen X509Certificate gevonden in response");
+    }
   } catch (e) {
     console.error("[SAML callback] Kon SAMLResponse niet base64-decoderen:", e);
   }
