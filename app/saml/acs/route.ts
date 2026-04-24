@@ -38,7 +38,13 @@ export async function POST(request: NextRequest) {
     const signatureNodes = dom.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature");
     console.log("[SAML callback] Signature nodes gevonden:", signatureNodes.length);
 
-    if (signatureNodes.length > 0) {
+    // Find ALL elements with ID attributes to spot duplicates
+    const allIdMatches = [...decoded.matchAll(/<[^>]+\sID="([^"]+)"/g)];
+    console.log("[SAML callback] Alle ID-waarden:", allIdMatches.map(m => m[1]));
+
+    // Find the Reference URI in the Signature
+    const refMatch = decoded.match(/URI="#([^"]+)"/);
+    console.log("[SAML callback] Signature Reference URI:", refMatch?.[1] ?? "niet gevonden");
       const opts = getSamlOptions();
       const certPem = typeof opts.cert === "string" ? opts.cert : "";
       const sig = new SignedXml(null, { idAttribute: "ID" });
