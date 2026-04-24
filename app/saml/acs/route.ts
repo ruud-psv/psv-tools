@@ -36,11 +36,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[SAML callback] Validatie mislukt:", err);
-    return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url));
+    return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url), { status: 302 });
   }
 
   const token = createSessionToken(email);
-  const response = NextResponse.redirect(new URL("/dashboard", request.url));
+  const response = NextResponse.redirect(new URL("/dashboard", request.url), { status: 302 });
   response.cookies.set("psv_session", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
