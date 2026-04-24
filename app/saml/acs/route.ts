@@ -41,9 +41,13 @@ export async function POST(request: NextRequest) {
     if (signatureNodes.length > 0) {
       const opts = getSamlOptions();
       const certPem = typeof opts.cert === "string" ? opts.cert : "";
-      const sig = new SignedXml({ idAttributes: ["ID", "Id", "id"] });
+      const sig = new SignedXml(null, { idAttribute: "ID" });
+      sig.keyInfoProvider = {
+        getKey: () => Buffer.from(certPem),
+        getKeyInfo: () => "",
+      };
       sig.loadSignature(signatureNodes[0]);
-      const valid = sig.checkSignature(decoded, { publicCert: certPem });
+      const valid = sig.checkSignature(decoded);
       console.log("[SAML callback] Direct xml-crypto geldig:", valid);
       console.log("[SAML callback] Direct xml-crypto fouten:", sig.validationErrors);
     }
