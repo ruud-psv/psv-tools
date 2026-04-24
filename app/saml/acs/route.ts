@@ -22,6 +22,14 @@ export async function POST(request: NextRequest) {
   const samlResponse = rawSamlResponse.replace(/ /g, "+");
   console.log("[SAML callback] Spaties hersteld naar +:", rawSamlResponse !== samlResponse);
 
+  try {
+    const decoded = Buffer.from(samlResponse, "base64").toString("utf8");
+    console.log("[SAML callback] XML lengte:", decoded.length);
+    console.log("[SAML callback] XML begin:", decoded.slice(0, 200));
+  } catch (e) {
+    console.error("[SAML callback] Kon SAMLResponse niet base64-decoderen:", e);
+  }
+
   const saml = new SAML(getSamlOptions());
 
   let email: string;
