@@ -78,5 +78,6 @@ export async function getSamlOptions(): Promise<SamlConfig> {
     disableRequestedAuthnContext: true,
     acceptedClockSkewMs: 5000,
     validateInResponseTo: ValidateInResponseTo.never,
+    wantAuthnResponseSigned: false,
   };
 }
