@@ -30,7 +30,7 @@ export function getSamlOptions(): SamlConfig {
   return {
     entryPoint,
     issuer,
-    idpCert: normalizedCert,
+    cert: normalizedCert,
     callbackUrl,
     identifierFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
     disableRequestedAuthnContext: true,

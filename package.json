@@ -11,7 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.86.1",
     "@google-analytics/data": "^5.2.1",
-    "@node-saml/node-saml": "^5.1.0",
+    "@node-saml/node-saml": "^4.0.5",
     "@psv/branding": "file:./packages/psv-branding",
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-progress": "^1.1.0",
