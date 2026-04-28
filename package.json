@@ -34,7 +34,7 @@
     "xlsx": "^0.18.5"
   },
   "overrides": {
-    "xml-crypto": "2.1.5"
+    "xml-crypto": "^2.1.6"
   },
   "devDependencies": {
     "@types/node": "^20",
