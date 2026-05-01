@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Mail, Ticket, Globe, Link2, Check, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getDateRange } from "@/lib/dm-share";
+import { getDateRange, stripName } from "@/lib/dm-share";
 
 const PRESETS: { value: string; label: string }[] = [
   { value: "7d", label: "Laatste 7 dagen" },
@@ -107,6 +107,53 @@ export function RapportageGeneratorForm() {
     }
     return getDateRange(preset);
   }, [preset, customFrom, customTo]);
+
+  // Autocomplete suggestions
+  const [mailingSuggestions, setMailingSuggestions] = useState<string[]>([]);
+  const [eventSuggestions, setEventSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!sources.dm.enabled || !previewRange) { setMailingSuggestions([]); return; }
+    const ctrl = new AbortController();
+    fetch(`/api/maileon?from=${previewRange.from}&to=${previewRange.to}`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((json) => {
+        const mailings = (json.mailings ?? []) as { name?: string; subject?: string }[];
+        const names = new Set<string>();
+        for (const m of mailings) {
+          const stripped = stripName(m.name ?? "");
+          if (stripped) names.add(stripped);
+          if (m.subject) names.add(m.subject);
+        }
+        setMailingSuggestions([...names].sort((a, b) => a.localeCompare(b, "nl")));
+      })
+      .catch(() => { /* ignore aborts and errors — suggestions are best-effort */ });
+    return () => ctrl.abort();
+  }, [sources.dm.enabled, previewRange]);
+
+  useEffect(() => {
+    if (!sources.ticketing.enabled) { setEventSuggestions([]); return; }
+    const ctrl = new AbortController();
+    fetch("/api/ticket-feed", { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((json) => {
+        const events = (json.events ?? []) as { eventName?: string; category?: string }[];
+        const cat = sources.ticketing.category;
+        const names = new Set<string>();
+        for (const e of events) {
+          const n = e.eventName?.trim();
+          if (!n) continue;
+          if (n.toLowerCase().startsWith("package")) continue;
+          if (n.toLowerCase().startsWith("fietsenstalling")) continue;
+          if (n.toLowerCase().startsWith("psv direct")) continue;
+          if (cat && cat !== "all" && e.category !== cat) continue;
+          names.add(n);
+        }
+        setEventSuggestions([...names].sort((a, b) => a.localeCompare(b, "nl")));
+      })
+      .catch(() => { /* ignore */ });
+    return () => ctrl.abort();
+  }, [sources.ticketing.enabled, sources.ticketing.category]);
 
   function toggleSource<K extends keyof SourceState>(key: K) {
     setSources((s) => ({ ...s, [key]: { ...s[key], enabled: !s[key].enabled } }));
@@ -300,10 +347,18 @@ export function RapportageGeneratorForm() {
             </Label>
             <Input
               id="dm-query"
+              list="dm-suggestions"
               value={sources.dm.query}
               onChange={(e) => setSources((s) => ({ ...s, dm: { ...s.dm, query: e.target.value } }))}
-              placeholder="Bijv. seizoenkaart"
+              placeholder={mailingSuggestions.length > 0 ? "Begin te typen voor suggesties..." : "Bijv. seizoenkaart"}
+              autoComplete="off"
             />
+            <datalist id="dm-suggestions">
+              {mailingSuggestions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+            {mailingSuggestions.length > 0 && (
+              <p className="text-xs text-muted-foreground">{mailingSuggestions.length} mailings beschikbaar in deze periode</p>
+            )}
           </div>
         )}
 
@@ -322,10 +377,18 @@ export function RapportageGeneratorForm() {
               </Label>
               <Input
                 id="ticket-query"
+                list="ticket-suggestions"
                 value={sources.ticketing.query}
                 onChange={(e) => setSources((s) => ({ ...s, ticketing: { ...s.ticketing, query: e.target.value } }))}
-                placeholder="Bijv. PSV - Ajax"
+                placeholder={eventSuggestions.length > 0 ? "Begin te typen voor suggesties..." : "Bijv. PSV - Ajax"}
+                autoComplete="off"
               />
+              <datalist id="ticket-suggestions">
+                {eventSuggestions.map((s) => <option key={s} value={s} />)}
+              </datalist>
+              {eventSuggestions.length > 0 && (
+                <p className="text-xs text-muted-foreground">{eventSuggestions.length} events beschikbaar</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Categorie</Label>

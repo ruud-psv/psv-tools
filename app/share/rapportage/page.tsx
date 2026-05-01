@@ -188,9 +188,14 @@ function DmSection({
   const filtered = useMemo(() => {
     if (!query?.trim()) return mailings;
     const lower = query.toLowerCase();
-    return mailings.filter(
-      (m) => (m.name ?? "").toLowerCase().includes(lower) || (m.subject ?? "").toLowerCase().includes(lower)
-    );
+    return mailings.filter((m) => {
+      const name = (m.name ?? "").toLowerCase();
+      if (name.includes(lower)) return true;
+      if ((m.subject ?? "").toLowerCase().includes(lower)) return true;
+      // Match against stripped name so a suggestion picked from autocomplete
+      // (which is the cleaned label) still finds the underlying mailing.
+      return stripName(m.name ?? "").toLowerCase().includes(lower);
+    });
   }, [mailings, query]);
 
   const totals = useMemo(() => computeDmTotals(filtered), [filtered]);
