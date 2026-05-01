@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
+import { sql, ensureShareSchema } from "@/lib/db";
 
 export const revalidate = 300;
+
+async function isValidShareToken(token: string): Promise<boolean> {
+  try {
+    await ensureShareSchema();
+    const result = await sql`SELECT 1 FROM share_links WHERE token = ${token} LIMIT 1`;
+    return result.rows.length > 0;
+  } catch (err) {
+    console.error("[analytics] token lookup error", err);
+    return false;
+  }
+}
 
 
 /* ---------- Config ---------- */
@@ -196,9 +208,15 @@ async function fetchSiteData(
 /* ---------- GET Handler ---------- */
 
 export async function GET(req: NextRequest) {
-  const sessionCookie = req.cookies.get("psv_session")?.value;
-  const authError = authorize(sessionCookie);
-  if (authError) return NextResponse.json({ error: authError }, { status: 401 });
+  const shareToken = req.nextUrl.searchParams.get("token");
+  if (shareToken) {
+    const ok = await isValidShareToken(shareToken);
+    if (!ok) return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
+  } else {
+    const sessionCookie = req.cookies.get("psv_session")?.value;
+    const authError = authorize(sessionCookie);
+    if (authError) return NextResponse.json({ error: authError }, { status: 401 });
+  }
 
   const { client, error: clientError } = getClient();
   if (!client) {

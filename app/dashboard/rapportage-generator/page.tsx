@@ -9,9 +9,9 @@ export default function RapportageGeneratorPage() {
     <div className="p-8">
       <h1 className="text-3xl mb-2">Rapportage generator</h1>
       <p className="text-muted-foreground mb-6">
-        Upload een Excel bestand en Claude analyseert de data automatisch. Je
-        krijgt een overzicht met KPI&apos;s, grafieken en concrete inzichten —
-        ongeacht hoe het bestand is opgebouwd.
+        Maak een live rapportage van een specifieke campagne. Kies welke
+        inzichten je wilt opnemen — DM Performance, Ticketing en/of Web verkeer
+        — en deel een link die zichzelf elke 5 minuten ververst.
       </p>
       <RapportageGeneratorForm />
     </div>
