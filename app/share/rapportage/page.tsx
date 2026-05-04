@@ -34,10 +34,24 @@ interface CampaignParams {
   from: string;
   to: string;
   sources: {
-    dm?: { enabled: true; query?: string };
-    ticketing?: { enabled: true; query?: string; category?: string };
+    dm?: { enabled: true; query?: string; queries?: string[] };
+    ticketing?: { enabled: true; query?: string; queries?: string[]; category?: string };
     web?: { enabled: true; site: string; path?: string };
   };
+}
+
+/** Normalize legacy `query` (single string) and new `queries` (array) into one list. */
+function collectQueries(src: { query?: string; queries?: string[] } | undefined): string[] {
+  if (!src) return [];
+  const out: string[] = [];
+  if (Array.isArray(src.queries)) {
+    for (const q of src.queries) {
+      const t = q?.trim?.();
+      if (t) out.push(t);
+    }
+  }
+  if (typeof src.query === "string" && src.query.trim()) out.push(src.query.trim());
+  return out;
 }
 
 interface TicketEvent {
@@ -176,8 +190,8 @@ function AiBlock({
 /* ---------- DM Section ---------- */
 
 function DmSection({
-  token, params, query,
-}: { token: string; params: CampaignParams; query?: string }) {
+  token, params, queries,
+}: { token: string; params: CampaignParams; queries: string[] }) {
   const [mailings, setMailings] = useState<MailingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,17 +200,15 @@ function DmSection({
   const [insightsError, setInsightsError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    if (!query?.trim()) return mailings;
-    const lower = query.toLowerCase();
+    if (queries.length === 0) return mailings;
+    const lowered = queries.map((q) => q.toLowerCase());
     return mailings.filter((m) => {
       const name = (m.name ?? "").toLowerCase();
-      if (name.includes(lower)) return true;
-      if ((m.subject ?? "").toLowerCase().includes(lower)) return true;
-      // Match against stripped name so a suggestion picked from autocomplete
-      // (which is the cleaned label) still finds the underlying mailing.
-      return stripName(m.name ?? "").toLowerCase().includes(lower);
+      const subject = (m.subject ?? "").toLowerCase();
+      const stripped = stripName(m.name ?? "").toLowerCase();
+      return lowered.some((q) => name.includes(q) || subject.includes(q) || stripped.includes(q));
     });
-  }, [mailings, query]);
+  }, [mailings, queries]);
 
   const totals = useMemo(() => computeDmTotals(filtered), [filtered]);
 
@@ -245,7 +257,7 @@ function DmSection({
     <SectionShell
       icon={Mail}
       title="DM Performance"
-      subtitle={`${formatNumber(totals.mailings)} mailings · ${params.from} t/m ${params.to}${query ? ` · zoekterm "${query}"` : ""}`}
+      subtitle={`${formatNumber(totals.mailings)} mailings · ${params.from} t/m ${params.to}${queries.length > 0 ? ` · ${queries.length === 1 ? `zoekterm "${queries[0]}"` : `${queries.length} zoektermen`}` : ""}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -353,8 +365,8 @@ function DmTable({ mailings }: { mailings: MailingSummary[]; totals: DmTotals })
 /* ---------- Ticketing Section ---------- */
 
 function TicketingSection({
-  token, query, category,
-}: { token: string; query?: string; category?: string }) {
+  token, queries, category,
+}: { token: string; queries: string[]; category?: string }) {
   const [events, setEvents] = useState<TicketEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -372,12 +384,15 @@ function TicketingSection({
     if (category && category !== "all") {
       list = list.filter((e) => e.category === category);
     }
-    if (query?.trim()) {
-      const lower = query.toLowerCase();
-      list = list.filter((e) => e.eventName.toLowerCase().includes(lower));
+    if (queries.length > 0) {
+      const lowered = queries.map((q) => q.toLowerCase());
+      list = list.filter((e) => {
+        const n = e.eventName.toLowerCase();
+        return lowered.some((q) => n.includes(q));
+      });
     }
     return list;
-  }, [events, query, category]);
+  }, [events, queries, category]);
 
   const totals = useMemo(() => {
     const sold = filtered.reduce((s, e) => s + e.soldTickets, 0);
@@ -439,7 +454,7 @@ function TicketingSection({
     <SectionShell
       icon={Ticket}
       title="Ticketing"
-      subtitle={`${totals.events} events${category && category !== "all" ? ` in ${category}` : ""}${query ? ` · zoekterm "${query}"` : ""}`}
+      subtitle={`${totals.events} events${category && category !== "all" ? ` in ${category}` : ""}${queries.length > 0 ? ` · ${queries.length === 1 ? `zoekterm "${queries[0]}"` : `${queries.length} zoektermen`}` : ""}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -815,13 +830,18 @@ function ShareRapportageContent() {
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
         {params.sources.dm?.enabled && (
-          <DmSection key={`dm-${refreshTick}`} token={token} params={params} query={params.sources.dm.query} />
+          <DmSection
+            key={`dm-${refreshTick}`}
+            token={token}
+            params={params}
+            queries={collectQueries(params.sources.dm)}
+          />
         )}
         {params.sources.ticketing?.enabled && (
           <TicketingSection
             key={`ticket-${refreshTick}`}
             token={token}
-            query={params.sources.ticketing.query}
+            queries={collectQueries(params.sources.ticketing)}
             category={params.sources.ticketing.category}
           />
         )}

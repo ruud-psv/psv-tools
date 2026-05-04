@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Mail, Ticket, Globe, Link2, Check, ExternalLink } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Mail, Ticket, Globe, Link2, Check, ExternalLink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,16 +38,94 @@ const WEB_SITES = [
 ];
 
 interface SourceState {
-  dm: { enabled: boolean; query: string };
-  ticketing: { enabled: boolean; query: string; category: string };
+  dm: { enabled: boolean; queries: string[] };
+  ticketing: { enabled: boolean; queries: string[]; category: string };
   web: { enabled: boolean; site: string; path: string };
 }
 
 const INITIAL_SOURCES: SourceState = {
-  dm: { enabled: true, query: "" },
-  ticketing: { enabled: false, query: "", category: "all" },
+  dm: { enabled: true, queries: [] },
+  ticketing: { enabled: false, queries: [], category: "all" },
   web: { enabled: false, site: "psv", path: "" },
 };
+
+function TagMultiInput({
+  id, listId, values, onChange, suggestions, placeholder,
+}: {
+  id: string;
+  listId: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+  suggestions: string[];
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function commit(raw: string) {
+    const v = raw.trim();
+    if (!v) return;
+    if (values.some((x) => x.toLowerCase() === v.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    onChange([...values, v]);
+    setDraft("");
+  }
+
+  function remove(target: string) {
+    onChange(values.filter((x) => x !== target));
+  }
+
+  return (
+    <div
+      className="flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 text-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {values.map((v) => (
+        <span
+          key={v}
+          className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs text-primary"
+        >
+          <span className="max-w-[14rem] truncate">{v}</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); remove(v); }}
+            className="rounded hover:bg-primary/20"
+            aria-label={`Verwijder ${v}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        id={id}
+        list={listId}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(draft);
+          } else if (e.key === "Backspace" && draft === "" && values.length > 0) {
+            e.preventDefault();
+            onChange(values.slice(0, -1));
+          }
+        }}
+        onBlur={() => { if (draft.trim()) commit(draft); }}
+        placeholder={values.length === 0 ? placeholder : ""}
+        autoComplete="off"
+        className="flex-1 min-w-[12rem] bg-transparent outline-none placeholder:text-muted-foreground"
+      />
+      <datalist id={listId}>
+        {suggestions
+          .filter((s) => !values.some((v) => v.toLowerCase() === s.toLowerCase()))
+          .map((s) => <option key={s} value={s} />)}
+      </datalist>
+    </div>
+  );
+}
 
 function SourceToggle({
   active, label, description, icon: Icon, onClick,
@@ -176,12 +254,12 @@ export function RapportageGeneratorForm() {
       to: range.to,
       sources: {
         ...(sources.dm.enabled && {
-          dm: { enabled: true as const, ...(sources.dm.query.trim() && { query: sources.dm.query.trim() }) },
+          dm: { enabled: true as const, ...(sources.dm.queries.length > 0 && { queries: sources.dm.queries }) },
         }),
         ...(sources.ticketing.enabled && {
           ticketing: {
             enabled: true as const,
-            ...(sources.ticketing.query.trim() && { query: sources.ticketing.query.trim() }),
+            ...(sources.ticketing.queries.length > 0 && { queries: sources.ticketing.queries }),
             ...(sources.ticketing.category !== "all" && { category: sources.ticketing.category }),
           },
         }),
@@ -343,19 +421,16 @@ export function RapportageGeneratorForm() {
         {sources.dm.enabled && (
           <div className="ml-8 space-y-1.5">
             <Label htmlFor="dm-query" className="text-xs text-muted-foreground">
-              Filter mailingnaam/onderwerp <span className="font-normal">(optioneel)</span>
+              Filter mailingnaam/onderwerp <span className="font-normal">(optioneel, meerdere mogelijk)</span>
             </Label>
-            <Input
+            <TagMultiInput
               id="dm-query"
-              list="dm-suggestions"
-              value={sources.dm.query}
-              onChange={(e) => setSources((s) => ({ ...s, dm: { ...s.dm, query: e.target.value } }))}
-              placeholder={mailingSuggestions.length > 0 ? "Begin te typen voor suggesties..." : "Bijv. seizoenkaart"}
-              autoComplete="off"
+              listId="dm-suggestions"
+              values={sources.dm.queries}
+              onChange={(next) => setSources((s) => ({ ...s, dm: { ...s.dm, queries: next } }))}
+              suggestions={mailingSuggestions}
+              placeholder={mailingSuggestions.length > 0 ? "Typ en kies, of druk Enter" : "Bijv. seizoenkaart"}
             />
-            <datalist id="dm-suggestions">
-              {mailingSuggestions.map((s) => <option key={s} value={s} />)}
-            </datalist>
             {mailingSuggestions.length > 0 && (
               <p className="text-xs text-muted-foreground">{mailingSuggestions.length} mailings beschikbaar in deze periode</p>
             )}
@@ -373,19 +448,16 @@ export function RapportageGeneratorForm() {
           <div className="ml-8 grid gap-2 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="ticket-query" className="text-xs text-muted-foreground">
-                Filter eventnaam <span className="font-normal">(optioneel)</span>
+                Filter eventnaam <span className="font-normal">(optioneel, meerdere mogelijk)</span>
               </Label>
-              <Input
+              <TagMultiInput
                 id="ticket-query"
-                list="ticket-suggestions"
-                value={sources.ticketing.query}
-                onChange={(e) => setSources((s) => ({ ...s, ticketing: { ...s.ticketing, query: e.target.value } }))}
-                placeholder={eventSuggestions.length > 0 ? "Begin te typen voor suggesties..." : "Bijv. PSV - Ajax"}
-                autoComplete="off"
+                listId="ticket-suggestions"
+                values={sources.ticketing.queries}
+                onChange={(next) => setSources((s) => ({ ...s, ticketing: { ...s.ticketing, queries: next } }))}
+                suggestions={eventSuggestions}
+                placeholder={eventSuggestions.length > 0 ? "Typ en kies, of druk Enter" : "Bijv. PSV - Ajax"}
               />
-              <datalist id="ticket-suggestions">
-                {eventSuggestions.map((s) => <option key={s} value={s} />)}
-              </datalist>
               {eventSuggestions.length > 0 && (
                 <p className="text-xs text-muted-foreground">{eventSuggestions.length} events beschikbaar</p>
               )}
