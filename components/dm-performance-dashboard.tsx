@@ -546,7 +546,7 @@ function MailingTable({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <CardTitle className="text-base">Mailings</CardTitle>
           {filterActive && (
@@ -556,8 +556,8 @@ function MailingTable({
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative w-64">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Zoek op naam of onderwerp..."
@@ -599,7 +599,7 @@ function MailingTable({
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">

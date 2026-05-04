@@ -13,7 +13,7 @@ export const metadata = {
 
 export default function HuisstijlCheckerPage() {
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl">
       <div className="mb-6">
         <h1 className="text-3xl tracking-tight">Huisstijl Checker</h1>
         <p className="mt-1 text-muted-foreground">

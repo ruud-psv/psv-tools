@@ -78,7 +78,7 @@ const insights = [
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ onMobileClose }: { onMobileClose?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -96,6 +96,7 @@ export function AppSidebar() {
   }
 
   async function handleLogout() {
+    onMobileClose?.();
     await fetch("/api/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
@@ -163,6 +164,7 @@ export function AppSidebar() {
                   <Link
                     href={item.href}
                     title={collapsed ? item.name : undefined}
+                    onClick={onMobileClose}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
                       collapsed && "justify-center",
@@ -198,6 +200,7 @@ export function AppSidebar() {
                   <Link
                     href={tool.href}
                     title={collapsed ? tool.name : undefined}
+                    onClick={onMobileClose}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
                       collapsed && "justify-center",
@@ -242,6 +245,7 @@ export function AppSidebar() {
                   <Link
                     href={item.href}
                     title={collapsed ? item.name : undefined}
+                    onClick={onMobileClose}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
                       collapsed && "justify-center",

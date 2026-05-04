@@ -807,7 +807,8 @@ function MatchEventsTable({
           Geen wedstrijden gevonden{search ? ` voor "${search}"` : ""}.
         </div>
       ) : (
-        <div className="border border-border rounded-md overflow-hidden">
+        <div className="border border-border rounded-md overflow-hidden overflow-x-auto">
+          <div className="min-w-[640px]">
           <div className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
             <span>Wedstrijd</span>
             <SortBtn k="eventDate" label="Datum" />
@@ -898,6 +899,7 @@ function MatchEventsTable({
               );
             })}
           </div>
+          </div>
         </div>
       )}
 
@@ -980,7 +982,8 @@ function EventsTable({
           Geen events gevonden{search ? ` voor "${search}"` : ""}.
         </div>
       ) : (
-        <div className="border border-border rounded-md overflow-hidden">
+        <div className="border border-border rounded-md overflow-hidden overflow-x-auto">
+          <div className="min-w-[640px]">
           <div className="grid grid-cols-[1fr_6.5rem_5.5rem_6.5rem_8.5rem_7.5rem] gap-x-4 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground">
             <span>Evenement</span>
             <SortBtn k="eventDate" label="Datum" />
@@ -1056,6 +1059,7 @@ function EventsTable({
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       )}

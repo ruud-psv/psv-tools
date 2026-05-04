@@ -6,7 +6,7 @@ export const metadata = {
 
 export default function WebVerkeerPage() {
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <h1 className="text-3xl mb-2">Web Verkeer</h1>
       <p className="text-muted-foreground mb-6">
         Verkeer en engagement van PSV websites via Google Analytics. Kies een
