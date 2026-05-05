@@ -27,9 +27,9 @@ BELANGRIJK — VOEG WAARDE TOE:
 - Gebruik campagnenamen om context af te leiden (prijsvraag vs poll vs sweepstake vs kwis)
 
 BENCHMARK REFERENTIES (interactieve marketing/gamification sector):
-- Conversie (sessies → registraties): <10% = laag, 10-25% = normaal, >25% = sterk, >40% = uitzonderlijk
-- Sessies per campagne: Sterk varieert per distributiekanaal; vergelijk types onderling
-- Actieve campagnes: Check of er genoeg actieve campagnes zijn voor continuïteit fanengagement
+- Actieve campagnes: check of er genoeg actieve campagnes zijn voor continue fanengagement
+- Campagneplanning: actieve periodes, overlap, seizoenspatronen (wedstrijden, merchandise, seizoenskaarten)
+- Type-mix: variatie in campagnetypes zorgt voor frisheid bij fans
 
 RESPONSE FORMAT (retourneer ALLEEN geldige JSON, geen markdown):
 {

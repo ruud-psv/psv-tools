@@ -78,18 +78,12 @@ export interface Campaign {
   demo_url: string | null;
   created_on: string;
   timezone: string;
-  sessions: number;
-  registrations: number;
-  conversionRate: number;
 }
 
 export interface PlayableTotals {
   total: number;
   active: number;
   inactive: number;
-  totalSessions: number;
-  totalRegistrations: number;
-  avgConversionRate: number;
 }
 
 /* ---------- Fetch all pages ---------- */
@@ -100,7 +94,6 @@ async function fetchAllCampaigns(): Promise<Campaign[]> {
 
   while (true) {
     const res = await playableFetch("/v1/campaigns", {
-      "with[]": ["registrations", "sessions"],
       page: String(page),
     });
 
@@ -110,25 +103,18 @@ async function fetchAllCampaigns(): Promise<Campaign[]> {
     }
 
     const data = await res.json();
-    const items: Campaign[] = (data.data ?? []).map((c: Record<string, unknown>) => {
-      const sessions = Number(c.sessions ?? 0);
-      const registrations = Number(c.registrations ?? 0);
-      return {
-        id: Number(c.id),
-        name: String(c.name ?? ""),
-        type: String(c.type ?? ""),
-        active: Boolean(c.active),
-        active_from: c.active_from ? String(c.active_from) : null,
-        active_to: c.active_to ? String(c.active_to) : null,
-        live_url: c.live_url ? String(c.live_url) : null,
-        demo_url: c.demo_url ? String(c.demo_url) : null,
-        created_on: String(c.created_on ?? ""),
-        timezone: String(c.timezone ?? ""),
-        sessions,
-        registrations,
-        conversionRate: sessions > 0 ? (registrations / sessions) * 100 : 0,
-      };
-    });
+    const items: Campaign[] = (data.data ?? []).map((c: Record<string, unknown>) => ({
+      id: Number(c.id),
+      name: String(c.name ?? ""),
+      type: String(c.type ?? ""),
+      active: Boolean(c.active),
+      active_from: c.active_from ? String(c.active_from) : null,
+      active_to: c.active_to ? String(c.active_to) : null,
+      live_url: c.live_url ? String(c.live_url) : null,
+      demo_url: c.demo_url ? String(c.demo_url) : null,
+      created_on: String(c.created_on ?? ""),
+      timezone: String(c.timezone ?? ""),
+    }));
 
     campaigns.push(...items);
 
@@ -150,21 +136,17 @@ export async function GET(request: NextRequest) {
   try {
     const campaigns = await fetchAllCampaigns();
 
-    // Sort by sessions descending
-    campaigns.sort((a, b) => b.sessions - a.sessions);
+    // Sort: active first, then by created_on descending
+    campaigns.sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return b.created_on.localeCompare(a.created_on);
+    });
 
     const active = campaigns.filter((c) => c.active);
-    const totalSessions = campaigns.reduce((sum, c) => sum + c.sessions, 0);
-    const totalRegistrations = campaigns.reduce((sum, c) => sum + c.registrations, 0);
-    const avgConversionRate = totalSessions > 0 ? (totalRegistrations / totalSessions) * 100 : 0;
-
     const totals: PlayableTotals = {
       total: campaigns.length,
       active: active.length,
       inactive: campaigns.length - active.length,
-      totalSessions,
-      totalRegistrations,
-      avgConversionRate,
     };
 
     return NextResponse.json({ campaigns, totals, fetchedAt: new Date().toISOString() });

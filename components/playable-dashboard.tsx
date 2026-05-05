@@ -13,9 +13,7 @@ import {
 } from "@/components/ui/select";
 import {
   LayoutTemplate,
-  Users,
-  MousePointerClick,
-  TrendingUp,
+  Activity,
   RefreshCw,
   Search,
   ArrowUpDown,
@@ -29,18 +27,12 @@ import {
   Tablet,
   Smartphone,
   ExternalLink,
-  Activity,
   X,
+  MousePointerClick,
+  Users,
+  TrendingUp,
+  Calendar,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 import type { Campaign, PlayableTotals } from "@/lib/playable-analysis";
 import type { CampaignStatistics } from "@/app/api/playable/[id]/route";
 import type { PlayableInsightResult } from "@/lib/insights/playable";
@@ -53,7 +45,7 @@ interface ApiResponse {
   fetchedAt: string;
 }
 
-type SortKey = "name" | "sessions" | "registrations" | "conversionRate" | "active_from";
+type SortKey = "name" | "type" | "active_from" | "created_on";
 type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
 
@@ -106,9 +98,7 @@ function KpiCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-heading uppercase tracking-wide">
-          {title}
-        </CardTitle>
+        <CardTitle className="text-sm font-heading uppercase tracking-wide">{title}</CardTitle>
         <Icon className={`h-5 w-5 ${color}`} />
       </CardHeader>
       <CardContent>
@@ -119,7 +109,7 @@ function KpiCard({
   );
 }
 
-/* ---------- Stats Detail ---------- */
+/* ---------- Stat block ---------- */
 
 function StatBlock({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -211,7 +201,6 @@ function CampaignDetailPanel({
         {error && <p className="text-xs text-destructive">{error}</p>}
         {stats && (
           <div className="space-y-6">
-            {/* Core metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatBlock label="Sessies" value={formatNumber(stats.sessions)} />
               <StatBlock
@@ -226,7 +215,6 @@ function CampaignDetailPanel({
               />
             </div>
 
-            {/* Devices */}
             {devicesTotal > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide mb-3">
@@ -244,7 +232,9 @@ function CampaignDetailPanel({
                         <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <div>
                           <p className="text-sm font-heading uppercase">{formatNumber(count)}</p>
-                          <p className="text-xs text-muted-foreground">{label} · {formatPct(pct)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {label} · {formatPct(pct)}
+                          </p>
                         </div>
                       </div>
                     );
@@ -253,7 +243,6 @@ function CampaignDetailPanel({
               </div>
             )}
 
-            {/* Social + extra */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {stats.facebook.shares > 0 && (
                 <StatBlock
@@ -277,71 +266,6 @@ function CampaignDetailPanel({
   );
 }
 
-/* ---------- Sessions Chart ---------- */
-
-interface ChartTooltipProps {
-  active?: boolean;
-  payload?: { payload: { name: string; sessions: number; registrations: number; conversionRate: number } }[];
-}
-
-function ChartTooltip({ active, payload }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md max-w-xs">
-      <p className="font-heading uppercase tracking-wide text-foreground mb-1 truncate">{d.name}</p>
-      <p className="text-psv-red-primary font-semibold">{formatNumber(d.sessions)} sessies</p>
-      <p className="text-muted-foreground">{formatNumber(d.registrations)} registraties</p>
-      <p className="text-muted-foreground">{formatPct(d.conversionRate)} conversie</p>
-    </div>
-  );
-}
-
-function SessionsChart({ campaigns }: { campaigns: Campaign[] }) {
-  const chartData = useMemo(() => {
-    return [...campaigns]
-      .filter((c) => c.sessions > 0)
-      .sort((a, b) => b.sessions - a.sessions)
-      .slice(0, 10)
-      .map((c) => ({
-        name: c.name.length > 30 ? c.name.slice(0, 30) + "…" : c.name,
-        sessions: c.sessions,
-        registrations: c.registrations,
-        conversionRate: c.conversionRate,
-      }))
-      .reverse(); // Highest on top in horizontal chart
-  }, [campaigns]);
-
-  if (chartData.length === 0) return null;
-
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="text-base">Top 10 campagnes op sessies</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div style={{ height: Math.max(200, chartData.length * 36) }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" barGap={2} barCategoryGap="25%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.2} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11 }} stroke="#999" />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                stroke="#999"
-                width={160}
-              />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-              <Bar dataKey="sessions" fill="#e82026" radius={[0, 3, 3, 0]} maxBarSize={28} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 /* ---------- Campaign Table ---------- */
 
 function CampaignTable({
@@ -352,7 +276,7 @@ function CampaignTable({
   onSelect: (c: Campaign) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("sessions");
+  const [sortKey, setSortKey] = useState<SortKey>("created_on");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
@@ -373,26 +297,13 @@ function CampaignTable({
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q));
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q));
     }
 
     return [...list].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
-
-      if (sortKey === "name") {
-        return sortDir === "asc"
-          ? String(aVal).localeCompare(String(bVal))
-          : String(bVal).localeCompare(String(aVal));
-      }
-      if (sortKey === "active_from") {
-        const aTime = a.active_from ? new Date(a.active_from).getTime() : 0;
-        const bTime = b.active_from ? new Date(b.active_from).getTime() : 0;
-        return sortDir === "asc" ? aTime - bTime : bTime - aTime;
-      }
-      return sortDir === "asc"
-        ? (Number(aVal) || 0) - (Number(bVal) || 0)
-        : (Number(bVal) || 0) - (Number(aVal) || 0);
+      const aVal = String(a[sortKey] ?? "");
+      const bVal = String(b[sortKey] ?? "");
+      return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     });
   }, [campaigns, search, sortKey, sortDir, statusFilter]);
 
@@ -401,15 +312,7 @@ function CampaignTable({
     return sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />;
   };
 
-  const Th = ({
-    label,
-    column,
-    className = "",
-  }: {
-    label: string;
-    column: SortKey;
-    className?: string;
-  }) => (
+  const Th = ({ label, column, className = "" }: { label: string; column: SortKey; className?: string }) => (
     <th
       className={`px-4 py-3 text-left text-xs font-heading uppercase tracking-wide text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors ${className}`}
       onClick={() => toggleSort(column)}
@@ -439,7 +342,7 @@ function CampaignTable({
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Zoek op naam..."
+              placeholder="Zoek op naam of type..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -448,7 +351,7 @@ function CampaignTable({
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-2 text-sm border hover:bg-muted transition-colors"
+              className="inline-flex items-center rounded-md px-2 py-2 text-sm border hover:bg-muted transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -461,22 +364,21 @@ function CampaignTable({
             <thead className="border-b border-border">
               <tr>
                 <Th label="Naam" column="name" className="min-w-[200px]" />
-                <th className="px-4 py-3 text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
-                  Type
-                </th>
+                <Th label="Type" column="type" />
                 <th className="px-4 py-3 text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
                   Status
                 </th>
                 <Th label="Actief vanaf" column="active_from" />
-                <Th label="Sessies" column="sessions" />
-                <Th label="Registraties" column="registrations" />
-                <Th label="Conversie" column="conversionRate" />
+                <Th label="Aangemaakt" column="created_on" />
+                <th className="px-4 py-3 text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                  Actief t/m
+                </th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Geen campagnes gevonden
                   </td>
                 </tr>
@@ -487,7 +389,9 @@ function CampaignTable({
                   className="border-b border-border hover:bg-muted/40 cursor-pointer transition-colors"
                   onClick={() => onSelect(c)}
                 >
-                  <td className="px-4 py-3 font-medium truncate max-w-[260px]">{c.name}</td>
+                  <td className="px-4 py-3 font-medium max-w-[280px]">
+                    <span className="truncate block">{c.name}</span>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{c.type || "—"}</td>
                   <td className="px-4 py-3">
                     <Badge variant={c.active ? "success" : "secondary"} className="text-xs">
@@ -497,22 +401,11 @@ function CampaignTable({
                   <td className="px-4 py-3 text-muted-foreground text-xs">
                     {formatDate(c.active_from)}
                   </td>
-                  <td className="px-4 py-3 font-heading">{formatNumber(c.sessions)}</td>
-                  <td className="px-4 py-3 font-heading">{formatNumber(c.registrations)}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={
-                        c.conversionRate >= 25
-                          ? "text-success font-semibold"
-                          : c.conversionRate >= 10
-                          ? "text-foreground"
-                          : c.sessions > 0
-                          ? "text-warning"
-                          : "text-muted-foreground"
-                      }
-                    >
-                      {c.sessions > 0 ? formatPct(c.conversionRate) : "—"}
-                    </span>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {formatDate(c.created_on)}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {formatDate(c.active_to)}
                   </td>
                 </tr>
               ))}
@@ -588,7 +481,10 @@ function InsightsPanel({
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Er is een fout opgetreden: ${err instanceof Error ? err.message : "onbekend"}` },
+        {
+          role: "assistant",
+          content: `Er is een fout opgetreden: ${err instanceof Error ? err.message : "onbekend"}`,
+        },
       ]);
     } finally {
       setChatLoading(false);
@@ -596,9 +492,7 @@ function InsightsPanel({
   }, [question, chatLoading, messages, campaigns, totals]);
 
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
 
   const highlightColors: Record<string, string> = {
@@ -649,18 +543,19 @@ function InsightsPanel({
         )}
         {!insights && !loading && !error && (
           <p className="text-sm text-muted-foreground">
-            Klik op &ldquo;Analyseer campagnes&rdquo; om AI-inzichten te genereren over je Playable landingspagina&apos;s.
+            Klik op &ldquo;Analyseer campagnes&rdquo; om AI-inzichten te genereren over je Playable
+            landingspagina&apos;s.
           </p>
         )}
         {insights && (
           <div className="space-y-6">
-            {/* Summary */}
             <p className="text-sm leading-relaxed">{insights.summary}</p>
 
-            {/* Highlights */}
             {insights.highlights?.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Highlights</p>
+                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                  Highlights
+                </p>
                 {insights.highlights.map((h, i) => (
                   <div
                     key={i}
@@ -672,12 +567,13 @@ function InsightsPanel({
               </div>
             )}
 
-            {/* Top / Bottom performers */}
             {(insights.topPerformer || insights.bottomPerformer) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {insights.topPerformer && (
                   <div className="rounded-md border border-success/30 bg-success/5 px-4 py-3 space-y-1">
-                    <p className="text-xs font-heading uppercase tracking-wide text-success">Beste campagne</p>
+                    <p className="text-xs font-heading uppercase tracking-wide text-success">
+                      Beste campagne
+                    </p>
                     <p className="text-sm font-semibold">{insights.topPerformer.name}</p>
                     <p className="text-xs text-muted-foreground">{insights.topPerformer.metric}</p>
                     <p className="text-xs">{insights.topPerformer.why}</p>
@@ -685,7 +581,9 @@ function InsightsPanel({
                 )}
                 {insights.bottomPerformer && (
                   <div className="rounded-md border border-warning/30 bg-warning/5 px-4 py-3 space-y-1">
-                    <p className="text-xs font-heading uppercase tracking-wide text-warning">Aandachtspunt</p>
+                    <p className="text-xs font-heading uppercase tracking-wide text-warning">
+                      Aandachtspunt
+                    </p>
                     <p className="text-sm font-semibold">{insights.bottomPerformer.name}</p>
                     <p className="text-xs text-muted-foreground">{insights.bottomPerformer.metric}</p>
                     <p className="text-xs">{insights.bottomPerformer.suggestion}</p>
@@ -694,10 +592,11 @@ function InsightsPanel({
               </div>
             )}
 
-            {/* Recommendations */}
             {insights.recommendations?.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Aanbevelingen</p>
+                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                  Aanbevelingen
+                </p>
                 <ul className="space-y-2">
                   {insights.recommendations.map((r, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm">
@@ -709,13 +608,17 @@ function InsightsPanel({
               </div>
             )}
 
-            {/* Chat */}
             <div className="border-t border-border pt-4 space-y-3">
-              <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">Stel een vervolgvraag</p>
+              <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                Stel een vervolgvraag
+              </p>
               {messages.length > 0 && (
                 <div ref={chatRef} className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {messages.map((m, i) => (
-                    <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                    <div
+                      key={i}
+                      className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
+                    >
                       <div
                         className={`rounded-lg px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap ${
                           m.role === "user"
@@ -739,10 +642,15 @@ function InsightsPanel({
               )}
               <div className="flex gap-2">
                 <Input
-                  placeholder="Bijv: welke campagne heeft de hoogste conversie?"
+                  placeholder="Bijv: welke campagnes lopen er nog actief?"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleQuestion(); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleQuestion();
+                    }
+                  }}
                   disabled={chatLoading}
                   className="flex-1"
                 />
@@ -818,6 +726,10 @@ export function PlayableDashboard() {
   if (!data) return null;
 
   const { campaigns, totals } = data;
+  const activeCampaigns = campaigns.filter((c) => c.active);
+  const recentCampaigns = [...campaigns]
+    .sort((a, b) => b.created_on.localeCompare(a.created_on))
+    .slice(0, 1)[0];
 
   return (
     <div>
@@ -839,11 +751,11 @@ export function PlayableDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         <KpiCard
           title="Campagnes"
           value={String(totals.total)}
-          subtitle={`${totals.active} actief`}
+          subtitle="Totaal in Playable"
           icon={LayoutTemplate}
         />
         <KpiCard
@@ -854,31 +766,47 @@ export function PlayableDashboard() {
           color="text-success"
         />
         <KpiCard
-          title="Sessies"
-          value={formatNumber(totals.totalSessions)}
-          subtitle="Totaal alle campagnes"
-          icon={Users}
-        />
-        <KpiCard
-          title="Registraties"
-          value={formatNumber(totals.totalRegistrations)}
-          subtitle="Totaal alle campagnes"
-          icon={MousePointerClick}
-        />
-        <KpiCard
-          title="Gem. conversie"
-          value={formatPct(totals.avgConversionRate)}
-          subtitle="Registraties / sessies"
-          icon={TrendingUp}
-          color={
-            totals.avgConversionRate >= 25
-              ? "text-success"
-              : totals.avgConversionRate >= 10
-              ? "text-psv-red-primary"
-              : "text-warning"
-          }
+          title="Meest recent"
+          value={recentCampaigns ? formatDate(recentCampaigns.created_on) : "—"}
+          subtitle={recentCampaigns?.name ?? ""}
+          icon={Calendar}
+          color="text-muted-foreground"
         />
       </div>
+
+      {/* Active campaigns quick-list */}
+      {activeCampaigns.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-success" />
+              Actieve campagnes ({activeCampaigns.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {activeCampaigns.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCampaign(c)}
+                  className="text-left rounded-md border border-border p-3 hover:bg-muted/40 transition-colors"
+                >
+                  <p className="text-sm font-medium truncate">{c.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground">{c.type || "—"}</span>
+                    {c.active_to && (
+                      <span className="text-xs text-muted-foreground">· t/m {formatDate(c.active_to)}</span>
+                    )}
+                  </div>
+                  {c.live_url && (
+                    <p className="text-xs text-psv-red-primary mt-1 truncate">{c.live_url}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Selected campaign detail */}
       {selectedCampaign && (
@@ -888,10 +816,7 @@ export function PlayableDashboard() {
         />
       )}
 
-      {/* Chart */}
-      <SessionsChart campaigns={campaigns} />
-
-      {/* Table */}
+      {/* Full table */}
       <CampaignTable campaigns={campaigns} onSelect={setSelectedCampaign} />
 
       {/* AI Insights */}
