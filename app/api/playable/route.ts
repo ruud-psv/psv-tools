@@ -169,11 +169,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ campaigns, totals, fetchedAt: new Date().toISOString() });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     if (err instanceof ConfigError) {
-      console.error("[playable]", (err as Error).message);
-      return NextResponse.json({ error: "Server configuratie fout: ontbrekende Playable credentials" }, { status: 500 });
+      console.error("[playable]", message);
+      return NextResponse.json({ error: `Configuratie fout: ${message}` }, { status: 500 });
     }
-    console.error("[playable] Data ophalen mislukt:", err);
-    return NextResponse.json({ error: "Playable data ophalen mislukt" }, { status: 502 });
+    console.error("[playable] Data ophalen mislukt:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }
