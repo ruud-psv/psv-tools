@@ -90,8 +90,7 @@ async function fetchCampaigns(fromDate: Date | null): Promise<{ campaigns: Campa
 
   while (page <= MAX_PAGES) {
     const res = await playableFetch("/v1/campaigns", {
-      "sort": "-created_on",
-      "per_page": "100",
+      per_page: "100",
       page: String(page),
     });
 
