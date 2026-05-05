@@ -82,10 +82,11 @@ export interface PlayableTotals {
 
 /* ---------- Fetch campaigns with early-stop on date ---------- */
 
-async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
+async function fetchCampaigns(fromDate: Date | null): Promise<{ campaigns: Campaign[]; rawSample: Record<string, unknown> | null }> {
   const campaigns: Campaign[] = [];
   let page = 1;
   const MAX_PAGES = 10;
+  let rawSample: Record<string, unknown> | null = null;
 
   while (page <= MAX_PAGES) {
     const res = await playableFetch("/v1/campaigns", {
@@ -98,9 +99,14 @@ async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
     }
 
     const data = await res.json();
-    const items: Campaign[] = (data.data ?? []).map((c: Record<string, unknown>) => {
-      // Playable may return created_on or created_at depending on API version
-      const rawCreated = String(c.created_on ?? c.created_at ?? "");
+    const rawItems: Record<string, unknown>[] = data.data ?? [];
+
+    if (!rawSample && rawItems.length > 0) {
+      rawSample = rawItems[0];
+    }
+
+    const items: Campaign[] = rawItems.map((c) => {
+      const rawCreated = String(c.created_on ?? c.created_at ?? c.date_created ?? c.createdAt ?? "");
       return {
         id: Number(c.id),
         name: String(c.name ?? ""),
@@ -122,11 +128,14 @@ async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
   }
 
   if (fromDate) {
-    const fromStr = fromDate.toISOString().slice(0, 10); // "YYYY-MM-DD"
-    return campaigns.filter((c) => c.created_on && c.created_on.slice(0, 10) >= fromStr);
+    const fromStr = fromDate.toISOString().slice(0, 10);
+    return {
+      campaigns: campaigns.filter((c) => c.created_on && c.created_on.slice(0, 10) >= fromStr),
+      rawSample,
+    };
   }
 
-  return campaigns;
+  return { campaigns, rawSample };
 }
 
 /* ---------- Route Handler ---------- */
@@ -141,7 +150,7 @@ export async function GET(request: NextRequest) {
   const fromDate = from ? new Date(from) : null;
 
   try {
-    const campaigns = await fetchCampaigns(fromDate);
+    const { campaigns, rawSample } = await fetchCampaigns(fromDate);
 
     // Sort: active first, then by created_on descending
     campaigns.sort((a, b) => {
@@ -156,7 +165,7 @@ export async function GET(request: NextRequest) {
       inactive: campaigns.length - active.length,
     };
 
-    return NextResponse.json({ campaigns, totals, fetchedAt: new Date().toISOString() });
+    return NextResponse.json({ campaigns, totals, fetchedAt: new Date().toISOString(), _debugRawSample: rawSample });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof ConfigError) {
