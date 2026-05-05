@@ -85,11 +85,13 @@ export interface PlayableTotals {
 async function fetchCampaigns(fromDate: Date | null): Promise<{ campaigns: Campaign[]; rawSample: Record<string, unknown> | null }> {
   const campaigns: Campaign[] = [];
   let page = 1;
-  const MAX_PAGES = 10;
+  const MAX_PAGES = 20;
   let rawSample: Record<string, unknown> | null = null;
 
   while (page <= MAX_PAGES) {
     const res = await playableFetch("/v1/campaigns", {
+      "sort": "-created_on",
+      "per_page": "100",
       page: String(page),
     });
 
