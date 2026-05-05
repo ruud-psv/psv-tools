@@ -28,9 +28,6 @@ import {
   Smartphone,
   ExternalLink,
   X,
-  MousePointerClick,
-  Users,
-  TrendingUp,
   Calendar,
 } from "lucide-react";
 import type { Campaign, PlayableTotals } from "@/lib/playable-analysis";
@@ -48,6 +45,33 @@ interface ApiResponse {
 type SortKey = "name" | "type" | "active_from" | "created_on";
 type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
+type Preset = "30d" | "90d" | "6m" | "1y" | "seizoen2425" | "seizoen2526" | "all";
+
+/* ---------- Date helpers ---------- */
+
+function getFromDate(preset: Preset): string | null {
+  if (preset === "all") return null;
+  const now = new Date();
+  switch (preset) {
+    case "30d": { const d = new Date(now); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
+    case "90d": { const d = new Date(now); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); }
+    case "6m":  { const d = new Date(now); d.setMonth(d.getMonth() - 6); return d.toISOString().slice(0, 10); }
+    case "1y":  { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d.toISOString().slice(0, 10); }
+    case "seizoen2425": return "2024-07-01";
+    case "seizoen2526": return "2025-07-01";
+    default: return null;
+  }
+}
+
+const PRESET_LABELS: Record<Preset, string> = {
+  "30d": "Laatste 30 dagen",
+  "90d": "Laatste 90 dagen",
+  "6m": "Laatste 6 maanden",
+  "1y": "Laatste jaar",
+  "seizoen2425": "Seizoen 24/25",
+  "seizoen2526": "Seizoen 25/26",
+  "all": "Alle campagnes",
+};
 
 /* ---------- Helpers ---------- */
 
@@ -130,9 +154,15 @@ function CampaignDetailPanel({
   campaign: Campaign;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState<CampaignStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Scroll into view when panel opens
+  useEffect(() => {
+    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -154,115 +184,117 @@ function CampaignDetailPanel({
     : 0;
 
   return (
-    <Card className="mb-6">
-      <CardHeader className="flex flex-row items-start justify-between">
-        <div className="min-w-0 flex-1">
-          <CardTitle className="text-lg">{campaign.name}</CardTitle>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <Badge variant="secondary">{campaign.type || "—"}</Badge>
-            <Badge variant={campaign.active ? "success" : "secondary"}>
-              {campaign.active ? "Actief" : "Inactief"}
-            </Badge>
-            {campaign.active_from && (
-              <span className="text-xs text-muted-foreground">
-                {formatDate(campaign.active_from)}
-                {campaign.active_to ? ` – ${formatDate(campaign.active_to)}` : ""}
-              </span>
-            )}
+    <div ref={panelRef}>
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-lg">{campaign.name}</CardTitle>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <Badge variant="secondary">{campaign.type || "—"}</Badge>
+              <Badge variant={campaign.active ? "success" : "secondary"}>
+                {campaign.active ? "Actief" : "Inactief"}
+              </Badge>
+              {campaign.active_from && (
+                <span className="text-xs text-muted-foreground">
+                  {formatDate(campaign.active_from)}
+                  {campaign.active_to ? ` – ${formatDate(campaign.active_to)}` : ""}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {campaign.live_url && (
-            <a
-              href={campaign.live_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors font-heading uppercase tracking-wide"
+          <div className="flex items-center gap-3 shrink-0">
+            {campaign.live_url && (
+              <a
+                href={campaign.live_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors font-heading uppercase tracking-wide"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Bekijk pagina
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground text-sm font-heading uppercase tracking-wide"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Bekijk pagina
-            </a>
+              Sluiten
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading && (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Statistieken laden...
+            </div>
           )}
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground text-sm font-heading uppercase tracking-wide"
-          >
-            Sluiten
-          </button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {loading && (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Statistieken laden...
-          </div>
-        )}
-        {error && <p className="text-xs text-destructive">{error}</p>}
-        {stats && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatBlock label="Sessies" value={formatNumber(stats.sessions)} />
-              <StatBlock
-                label="Registraties"
-                value={formatNumber(stats.registrations)}
-                sub={`${stats.unique_registration} uniek`}
-              />
-              <StatBlock label="Conversie" value={formatPct(stats.conversion)} />
-              <StatBlock
-                label="Gem. tijd op pagina"
-                value={formatDuration(stats.engagement.time_spent_average)}
-              />
-            </div>
-
-            {devicesTotal > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide mb-3">
-                  Apparaten
-                </p>
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { label: "Desktop", icon: Monitor, count: stats.devices.desktop },
-                    { label: "Tablet", icon: Tablet, count: stats.devices.tablet },
-                    { label: "Mobiel", icon: Smartphone, count: stats.devices.mobile },
-                  ].map(({ label, icon: Icon, count }) => {
-                    const pct = devicesTotal > 0 ? (count / devicesTotal) * 100 : 0;
-                    return (
-                      <div key={label} className="flex items-center gap-3">
-                        <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-heading uppercase">{formatNumber(count)}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {label} · {formatPct(pct)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {stats.facebook.shares > 0 && (
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {stats && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatBlock label="Sessies" value={formatNumber(stats.sessions)} />
                 <StatBlock
-                  label="Facebook shares"
-                  value={formatNumber(stats.facebook.shares)}
-                  sub={`${formatNumber(stats.facebook.sessions_from_shares)} sessies via shares`}
+                  label="Registraties"
+                  value={formatNumber(stats.registrations)}
+                  sub={`${stats.unique_registration} uniek`}
                 />
+                <StatBlock label="Conversie" value={formatPct(stats.conversion)} />
+                <StatBlock
+                  label="Gem. tijd op pagina"
+                  value={formatDuration(stats.engagement.time_spent_average)}
+                />
+              </div>
+
+              {devicesTotal > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide mb-3">
+                    Apparaten
+                  </p>
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { label: "Desktop", icon: Monitor, count: stats.devices.desktop },
+                      { label: "Tablet", icon: Tablet, count: stats.devices.tablet },
+                      { label: "Mobiel", icon: Smartphone, count: stats.devices.mobile },
+                    ].map(({ label, icon: Icon, count }) => {
+                      const pct = devicesTotal > 0 ? (count / devicesTotal) * 100 : 0;
+                      return (
+                        <div key={label} className="flex items-center gap-3">
+                          <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-heading uppercase">{formatNumber(count)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {label} · {formatPct(pct)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
-              {stats.tip_a_friend > 0 && (
-                <StatBlock label="Tip a Friend" value={formatNumber(stats.tip_a_friend)} />
-              )}
-              <StatBlock
-                label="Totale tijd"
-                value={formatDuration(stats.engagement.total_time_spent)}
-              />
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {stats.facebook.shares > 0 && (
+                  <StatBlock
+                    label="Facebook shares"
+                    value={formatNumber(stats.facebook.shares)}
+                    sub={`${formatNumber(stats.facebook.sessions_from_shares)} sessies via shares`}
+                  />
+                )}
+                {stats.tip_a_friend > 0 && (
+                  <StatBlock label="Tip a Friend" value={formatNumber(stats.tip_a_friend)} />
+                )}
+                <StatBlock
+                  label="Totale tijd"
+                  value={formatDuration(stats.engagement.total_time_spent)}
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -271,9 +303,11 @@ function CampaignDetailPanel({
 function CampaignTable({
   campaigns,
   onSelect,
+  selectedId,
 }: {
   campaigns: Campaign[];
   onSelect: (c: Campaign) => void;
+  selectedId: number | null;
 }) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("created_on");
@@ -291,15 +325,14 @@ function CampaignTable({
 
   const filtered = useMemo(() => {
     let list = campaigns;
-
     if (statusFilter === "active") list = list.filter((c) => c.active);
     if (statusFilter === "inactive") list = list.filter((c) => !c.active);
-
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q));
+      list = list.filter(
+        (c) => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q)
+      );
     }
-
     return [...list].sort((a, b) => {
       const aVal = String(a[sortKey] ?? "");
       const bVal = String(b[sortKey] ?? "");
@@ -312,7 +345,15 @@ function CampaignTable({
     return sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />;
   };
 
-  const Th = ({ label, column, className = "" }: { label: string; column: SortKey; className?: string }) => (
+  const Th = ({
+    label,
+    column,
+    className = "",
+  }: {
+    label: string;
+    column: SortKey;
+    className?: string;
+  }) => (
     <th
       className={`px-4 py-3 text-left text-xs font-heading uppercase tracking-wide text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors ${className}`}
       onClick={() => toggleSort(column)}
@@ -327,7 +368,7 @@ function CampaignTable({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-        <CardTitle className="text-base">Campagnes ({filtered.length})</CardTitle>
+        <CardTitle className="text-base">Alle campagnes ({filtered.length})</CardTitle>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
             <SelectTrigger className="w-36">
@@ -369,10 +410,10 @@ function CampaignTable({
                   Status
                 </th>
                 <Th label="Actief vanaf" column="active_from" />
-                <Th label="Aangemaakt" column="created_on" />
                 <th className="px-4 py-3 text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
                   Actief t/m
                 </th>
+                <Th label="Aangemaakt" column="created_on" />
               </tr>
             </thead>
             <tbody>
@@ -386,7 +427,11 @@ function CampaignTable({
               {filtered.map((c) => (
                 <tr
                   key={c.id}
-                  className="border-b border-border hover:bg-muted/40 cursor-pointer transition-colors"
+                  className={`border-b border-border cursor-pointer transition-colors ${
+                    selectedId === c.id
+                      ? "bg-psv-red-primary/5 border-l-2 border-l-psv-red-primary"
+                      : "hover:bg-muted/40"
+                  }`}
                   onClick={() => onSelect(c)}
                 >
                   <td className="px-4 py-3 font-medium max-w-[280px]">
@@ -402,10 +447,10 @@ function CampaignTable({
                     {formatDate(c.active_from)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {formatDate(c.created_on)}
+                    {formatDate(c.active_to)}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {formatDate(c.active_to)}
+                    {formatDate(c.created_on)}
                   </td>
                 </tr>
               ))}
@@ -444,7 +489,6 @@ function InsightsPanel({
     setError(null);
     setInsights(null);
     setMessages([]);
-
     try {
       const res = await fetch("/api/playable-insights", {
         method: "POST",
@@ -468,7 +512,6 @@ function InsightsPanel({
     setMessages(newMessages);
     setQuestion("");
     setChatLoading(true);
-
     try {
       const res = await fetch("/api/playable-insights/question", {
         method: "POST",
@@ -550,7 +593,6 @@ function InsightsPanel({
         {insights && (
           <div className="space-y-6">
             <p className="text-sm leading-relaxed">{insights.summary}</p>
-
             {insights.highlights?.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
@@ -566,14 +608,11 @@ function InsightsPanel({
                 ))}
               </div>
             )}
-
             {(insights.topPerformer || insights.bottomPerformer) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {insights.topPerformer && (
                   <div className="rounded-md border border-success/30 bg-success/5 px-4 py-3 space-y-1">
-                    <p className="text-xs font-heading uppercase tracking-wide text-success">
-                      Beste campagne
-                    </p>
+                    <p className="text-xs font-heading uppercase tracking-wide text-success">Beste campagne</p>
                     <p className="text-sm font-semibold">{insights.topPerformer.name}</p>
                     <p className="text-xs text-muted-foreground">{insights.topPerformer.metric}</p>
                     <p className="text-xs">{insights.topPerformer.why}</p>
@@ -581,9 +620,7 @@ function InsightsPanel({
                 )}
                 {insights.bottomPerformer && (
                   <div className="rounded-md border border-warning/30 bg-warning/5 px-4 py-3 space-y-1">
-                    <p className="text-xs font-heading uppercase tracking-wide text-warning">
-                      Aandachtspunt
-                    </p>
+                    <p className="text-xs font-heading uppercase tracking-wide text-warning">Aandachtspunt</p>
                     <p className="text-sm font-semibold">{insights.bottomPerformer.name}</p>
                     <p className="text-xs text-muted-foreground">{insights.bottomPerformer.metric}</p>
                     <p className="text-xs">{insights.bottomPerformer.suggestion}</p>
@@ -591,7 +628,6 @@ function InsightsPanel({
                 )}
               </div>
             )}
-
             {insights.recommendations?.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
@@ -607,7 +643,6 @@ function InsightsPanel({
                 </ul>
               </div>
             )}
-
             <div className="border-t border-border pt-4 space-y-3">
               <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
                 Stel een vervolgvraag
@@ -615,15 +650,10 @@ function InsightsPanel({
               {messages.length > 0 && (
                 <div ref={chatRef} className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {messages.map((m, i) => (
-                    <div
-                      key={i}
-                      className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
-                    >
+                    <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                       <div
                         className={`rounded-lg px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap ${
-                          m.role === "user"
-                            ? "bg-psv-red-primary text-white"
-                            : "bg-muted text-foreground"
+                          m.role === "user" ? "bg-psv-red-primary text-white" : "bg-muted text-foreground"
                         }`}
                       >
                         {m.content}
@@ -673,17 +703,22 @@ function InsightsPanel({
 /* ---------- Main Dashboard ---------- */
 
 export function PlayableDashboard() {
+  const [preset, setPreset] = useState<Preset>("1y");
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (p: Preset) => {
     setLoading(true);
     setError(null);
+    setSelectedCampaign(null);
+
+    const from = getFromDate(p);
+    const url = from ? `/api/playable?from=${from}` : "/api/playable";
 
     try {
-      const res = await fetch("/api/playable");
+      const res = await fetch(url);
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Ophalen mislukt");
       setData(json);
@@ -695,132 +730,160 @@ export function PlayableDashboard() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchData(preset);
+  }, [fetchData, preset]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-3 py-12 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-psv-red-primary" />
-        <span>Campagnes ophalen uit Playable...</span>
-      </div>
-    );
-  }
+  const handlePresetChange = (p: Preset) => {
+    setPreset(p);
+    fetchData(p);
+  };
 
-  if (error) {
-    return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-6">
-        <p className="text-sm text-destructive font-medium mb-1">Fout bij ophalen</p>
-        <p className="text-xs text-destructive/80 mb-4">{error}</p>
-        <button
-          onClick={fetchData}
-          className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors font-heading uppercase tracking-wide"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Opnieuw proberen
-        </button>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const { campaigns, totals } = data;
-  const activeCampaigns = campaigns.filter((c) => c.active);
-  const recentCampaigns = [...campaigns]
-    .sort((a, b) => b.created_on.localeCompare(a.created_on))
-    .slice(0, 1)[0];
+  const activeCampaigns = data?.campaigns.filter((c) => c.active) ?? [];
 
   return (
     <div>
-      {/* Refresh */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Activity className="h-3.5 w-3.5" />
-          {data.fetchedAt && (
-            <span>Bijgewerkt: {new Date(data.fetchedAt).toLocaleTimeString("nl-NL")}</span>
+      {/* Controls */}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <Select value={preset} onValueChange={(v) => handlePresetChange(v as Preset)}>
+          <SelectTrigger className="w-52">
+            <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="30d">Laatste 30 dagen</SelectItem>
+            <SelectItem value="90d">Laatste 90 dagen</SelectItem>
+            <SelectItem value="6m">Laatste 6 maanden</SelectItem>
+            <SelectItem value="1y">Laatste jaar</SelectItem>
+            <SelectItem value="seizoen2425">Seizoen 24/25</SelectItem>
+            <SelectItem value="seizoen2526">Seizoen 25/26</SelectItem>
+            <SelectItem value="all">Alle campagnes</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-3">
+          {data?.fetchedAt && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5" />
+              {new Date(data.fetchedAt).toLocaleTimeString("nl-NL")}
+            </span>
           )}
+          <button
+            onClick={() => fetchData(preset)}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs border hover:bg-muted transition-colors font-heading uppercase tracking-wide disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+            Vernieuwen
+          </button>
         </div>
-        <button
-          onClick={fetchData}
-          className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs border hover:bg-muted transition-colors font-heading uppercase tracking-wide"
-        >
-          <RefreshCw className="h-3 w-3" />
-          Vernieuwen
-        </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard
-          title="Campagnes"
-          value={String(totals.total)}
-          subtitle="Totaal in Playable"
-          icon={LayoutTemplate}
-        />
-        <KpiCard
-          title="Actief"
-          value={String(totals.active)}
-          subtitle={`${totals.inactive} inactief`}
-          icon={Activity}
-          color="text-success"
-        />
-        <KpiCard
-          title="Meest recent"
-          value={recentCampaigns ? formatDate(recentCampaigns.created_on) : "—"}
-          subtitle={recentCampaigns?.name ?? ""}
-          icon={Calendar}
-          color="text-muted-foreground"
-        />
-      </div>
-
-      {/* Active campaigns quick-list */}
-      {activeCampaigns.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-full bg-success" />
-              Actieve campagnes ({activeCampaigns.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {activeCampaigns.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCampaign(c)}
-                  className="text-left rounded-md border border-border p-3 hover:bg-muted/40 transition-colors"
-                >
-                  <p className="text-sm font-medium truncate">{c.name}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">{c.type || "—"}</span>
-                    {c.active_to && (
-                      <span className="text-xs text-muted-foreground">· t/m {formatDate(c.active_to)}</span>
-                    )}
-                  </div>
-                  {c.live_url && (
-                    <p className="text-xs text-psv-red-primary mt-1 truncate">{c.live_url}</p>
-                  )}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {loading && (
+        <div className="flex items-center gap-3 py-12 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin text-psv-red-primary" />
+          <span>Campagnes ophalen uit Playable ({PRESET_LABELS[preset].toLowerCase()})...</span>
+        </div>
       )}
 
-      {/* Selected campaign detail */}
-      {selectedCampaign && (
-        <CampaignDetailPanel
-          campaign={selectedCampaign}
-          onClose={() => setSelectedCampaign(null)}
-        />
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-6">
+          <p className="text-sm text-destructive font-medium mb-1">Fout bij ophalen</p>
+          <p className="text-xs text-destructive/80 mb-4">{error}</p>
+          <button
+            onClick={() => fetchData(preset)}
+            className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors font-heading uppercase tracking-wide"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Opnieuw proberen
+          </button>
+        </div>
       )}
 
-      {/* Full table */}
-      <CampaignTable campaigns={campaigns} onSelect={setSelectedCampaign} />
+      {!loading && !error && data && (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+            <KpiCard
+              title="Campagnes"
+              value={String(data.totals.total)}
+              subtitle={PRESET_LABELS[preset].toLowerCase()}
+              icon={LayoutTemplate}
+            />
+            <KpiCard
+              title="Actief"
+              value={String(data.totals.active)}
+              subtitle={`${data.totals.inactive} inactief`}
+              icon={Activity}
+              color="text-success"
+            />
+            <KpiCard
+              title="Meest recent"
+              value={
+                data.campaigns[0]
+                  ? formatDate(data.campaigns.find((c) => c.active)?.created_on ?? data.campaigns[0].created_on)
+                  : "—"
+              }
+              subtitle={data.campaigns.find((c) => c.active)?.name ?? data.campaigns[0]?.name ?? ""}
+              icon={Calendar}
+              color="text-muted-foreground"
+            />
+          </div>
 
-      {/* AI Insights */}
-      <InsightsPanel campaigns={campaigns} totals={totals} />
+          {/* Active campaigns quick-list */}
+          {activeCampaigns.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                  Nu actief ({activeCampaigns.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {activeCampaigns.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedCampaign(c)}
+                      className={`text-left rounded-md border p-3 transition-colors ${
+                        selectedCampaign?.id === c.id
+                          ? "border-psv-red-primary bg-psv-red-primary/5"
+                          : "border-border hover:bg-muted/40"
+                      }`}
+                    >
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-xs text-muted-foreground">{c.type || "—"}</span>
+                        {c.active_to && (
+                          <span className="text-xs text-muted-foreground">
+                            · t/m {formatDate(c.active_to)}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Campaign detail panel — scrolled to on open */}
+          {selectedCampaign && (
+            <CampaignDetailPanel
+              campaign={selectedCampaign}
+              onClose={() => setSelectedCampaign(null)}
+            />
+          )}
+
+          {/* Full table */}
+          <CampaignTable
+            campaigns={data.campaigns}
+            onSelect={setSelectedCampaign}
+            selectedId={selectedCampaign?.id ?? null}
+          />
+
+          {/* AI Insights */}
+          <InsightsPanel campaigns={data.campaigns} totals={data.totals} />
+        </>
+      )}
     </div>
   );
 }

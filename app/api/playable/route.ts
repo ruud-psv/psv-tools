@@ -3,7 +3,6 @@ import { authorize } from "@/lib/auth";
 
 const BASE_URL = "https://api.playable.com";
 
-// Module-level token cache (persists per serverless instance)
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
 async function getAccessToken(): Promise<string> {
@@ -35,7 +34,6 @@ async function getAccessToken(): Promise<string> {
   }
 
   const data = await res.json();
-  // Cache with 60-second buffer before expiry
   tokenCache = {
     token: data.access_token,
     expiresAt: Date.now() + ((data.expires_in ?? 3600) - 60) * 1000,
@@ -46,17 +44,13 @@ async function getAccessToken(): Promise<string> {
 
 class ConfigError extends Error {}
 
-async function playableFetch(path: string, params?: Record<string, string | string[]>): Promise<Response> {
+async function playableFetch(path: string, params?: Record<string, string>): Promise<Response> {
   const token = await getAccessToken();
   const url = new URL(`${BASE_URL}${path}`);
 
   if (params) {
     for (const [k, v] of Object.entries(params)) {
-      if (Array.isArray(v)) {
-        for (const item of v) url.searchParams.append(k, item);
-      } else {
-        url.searchParams.set(k, v);
-      }
+      url.searchParams.set(k, v);
     }
   }
 
@@ -86,14 +80,15 @@ export interface PlayableTotals {
   inactive: number;
 }
 
-/* ---------- Fetch all pages ---------- */
+/* ---------- Fetch campaigns with early-stop on date ---------- */
 
-async function fetchAllCampaigns(): Promise<Campaign[]> {
+async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
   const campaigns: Campaign[] = [];
   let page = 1;
 
   while (true) {
     const res = await playableFetch("/v1/campaigns", {
+      sort: "created_on,desc",
       page: String(page),
     });
 
@@ -116,9 +111,16 @@ async function fetchAllCampaigns(): Promise<Campaign[]> {
       timezone: String(c.timezone ?? ""),
     }));
 
-    campaigns.push(...items);
+    if (fromDate) {
+      const inRange = items.filter((c) => c.created_on && new Date(c.created_on) >= fromDate);
+      campaigns.push(...inRange);
+      // If all items on this page are older than fromDate, stop paginating
+      const allOlder = items.every((c) => !c.created_on || new Date(c.created_on) < fromDate);
+      if (allOlder) break;
+    } else {
+      campaigns.push(...items);
+    }
 
-    // Stop when there's no next page
     if (!data.links?.next) break;
     page++;
   }
@@ -133,8 +135,12 @@ export async function GET(request: NextRequest) {
   const authError = authorize(sessionCookie);
   if (authError) return NextResponse.json({ error: authError }, { status: 401 });
 
+  const { searchParams } = new URL(request.url);
+  const from = searchParams.get("from");
+  const fromDate = from ? new Date(from) : null;
+
   try {
-    const campaigns = await fetchAllCampaigns();
+    const campaigns = await fetchCampaigns(fromDate);
 
     // Sort: active first, then by created_on descending
     campaigns.sort((a, b) => {
