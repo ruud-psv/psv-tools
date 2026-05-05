@@ -80,15 +80,13 @@ export interface PlayableTotals {
   inactive: number;
 }
 
-/* ---------- Fetch campaigns with early-stop on date ---------- */
+/* ---------- Fetch all campaigns ---------- */
 
-async function fetchCampaigns(fromDate: Date | null): Promise<{ campaigns: Campaign[]; rawSample: Record<string, unknown> | null }> {
+async function fetchAllCampaigns(): Promise<Campaign[]> {
   const campaigns: Campaign[] = [];
   let page = 1;
-  const MAX_PAGES = 20;
-  let rawSample: Record<string, unknown> | null = null;
 
-  while (page <= MAX_PAGES) {
+  while (true) {
     const res = await playableFetch("/v1/campaigns", {
       per_page: "100",
       page: String(page),
@@ -102,25 +100,18 @@ async function fetchCampaigns(fromDate: Date | null): Promise<{ campaigns: Campa
     const data = await res.json();
     const rawItems: Record<string, unknown>[] = data.data ?? [];
 
-    if (!rawSample && rawItems.length > 0) {
-      rawSample = rawItems[0];
-    }
-
-    const items: Campaign[] = rawItems.map((c) => {
-      const rawCreated = String(c.created_on ?? c.created_at ?? c.date_created ?? c.createdAt ?? "");
-      return {
-        id: Number(c.id),
-        name: String(c.name ?? ""),
-        type: String(c.type ?? ""),
-        active: Boolean(c.active),
-        active_from: c.active_from ? String(c.active_from) : null,
-        active_to: c.active_to ? String(c.active_to) : null,
-        live_url: c.live_url ? String(c.live_url) : null,
-        demo_url: c.demo_url ? String(c.demo_url) : null,
-        created_on: rawCreated,
-        timezone: String(c.timezone ?? ""),
-      };
-    });
+    const items: Campaign[] = rawItems.map((c) => ({
+      id: Number(c.id),
+      name: String(c.name ?? ""),
+      type: String(c.type ?? ""),
+      active: Boolean(c.active),
+      active_from: c.active_from ? String(c.active_from) : null,
+      active_to: c.active_to ? String(c.active_to) : null,
+      live_url: c.live_url ? String(c.live_url) : null,
+      demo_url: c.demo_url ? String(c.demo_url) : null,
+      created_on: String(c.created_on ?? ""),
+      timezone: String(c.timezone ?? ""),
+    }));
 
     campaigns.push(...items);
 
@@ -128,15 +119,7 @@ async function fetchCampaigns(fromDate: Date | null): Promise<{ campaigns: Campa
     page++;
   }
 
-  if (fromDate) {
-    const fromStr = fromDate.toISOString().slice(0, 10);
-    return {
-      campaigns: campaigns.filter((c) => c.created_on && c.created_on.slice(0, 10) >= fromStr),
-      rawSample,
-    };
-  }
-
-  return { campaigns, rawSample };
+  return campaigns;
 }
 
 /* ---------- Route Handler ---------- */
@@ -146,12 +129,8 @@ export async function GET(request: NextRequest) {
   const authError = authorize(sessionCookie);
   if (authError) return NextResponse.json({ error: authError }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const fromDate = from ? new Date(from) : null;
-
   try {
-    const { campaigns, rawSample } = await fetchCampaigns(fromDate);
+    const campaigns = await fetchAllCampaigns();
 
     // Sort: active first, then by created_on descending
     campaigns.sort((a, b) => {
@@ -166,7 +145,7 @@ export async function GET(request: NextRequest) {
       inactive: campaigns.length - active.length,
     };
 
-    return NextResponse.json({ campaigns, totals, fetchedAt: new Date().toISOString(), _debugRawSample: rawSample });
+    return NextResponse.json({ campaigns, totals, fetchedAt: new Date().toISOString() });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof ConfigError) {

@@ -36,12 +36,6 @@ import type { PlayableInsightResult } from "@/lib/insights/playable";
 
 /* ---------- Types ---------- */
 
-interface ApiResponse {
-  campaigns: Campaign[];
-  totals: PlayableTotals;
-  fetchedAt: string;
-}
-
 type SortKey = "name" | "type" | "active_from" | "created_on";
 type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
@@ -703,25 +697,24 @@ function InsightsPanel({
 /* ---------- Main Dashboard ---------- */
 
 export function PlayableDashboard() {
-  const [preset, setPreset] = useState<Preset>("all");
-  const [data, setData] = useState<ApiResponse | null>(null);
+  const [preset, setPreset] = useState<Preset>("90d");
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
-  const fetchData = useCallback(async (p: Preset) => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     setSelectedCampaign(null);
 
-    const from = getFromDate(p);
-    const url = from ? `/api/playable?from=${from}` : "/api/playable";
-
     try {
-      const res = await fetch(url);
+      const res = await fetch("/api/playable");
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "Ophalen mislukt");
-      setData(json);
+      setAllCampaigns(json.campaigns);
+      setFetchedAt(json.fetchedAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ophalen mislukt");
     } finally {
@@ -730,21 +723,28 @@ export function PlayableDashboard() {
   }, []);
 
   useEffect(() => {
-    fetchData(preset);
-  }, [fetchData, preset]);
+    fetchData();
+  }, [fetchData]);
 
-  const handlePresetChange = (p: Preset) => {
-    setPreset(p);
-    fetchData(p);
-  };
+  // Filter campaigns client-side based on preset
+  const campaigns = useMemo(() => {
+    const from = getFromDate(preset);
+    if (!from) return allCampaigns;
+    return allCampaigns.filter((c) => c.created_on && c.created_on.slice(0, 10) >= from);
+  }, [allCampaigns, preset]);
 
-  const activeCampaigns = data?.campaigns.filter((c) => c.active) ?? [];
+  const totals: PlayableTotals = useMemo(() => {
+    const active = campaigns.filter((c) => c.active);
+    return { total: campaigns.length, active: active.length, inactive: campaigns.length - active.length };
+  }, [campaigns]);
+
+  const activeCampaigns = useMemo(() => campaigns.filter((c) => c.active), [campaigns]);
 
   return (
     <div>
       {/* Controls */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <Select value={preset} onValueChange={(v) => handlePresetChange(v as Preset)}>
+        <Select value={preset} onValueChange={(v) => { setPreset(v as Preset); setSelectedCampaign(null); }}>
           <SelectTrigger className="w-52">
             <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
             <SelectValue />
@@ -760,14 +760,14 @@ export function PlayableDashboard() {
           </SelectContent>
         </Select>
         <div className="flex items-center gap-3">
-          {data?.fetchedAt && (
+          {fetchedAt && (
             <span className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Activity className="h-3.5 w-3.5" />
-              {new Date(data.fetchedAt).toLocaleTimeString("nl-NL")}
+              {new Date(fetchedAt).toLocaleTimeString("nl-NL")}
             </span>
           )}
           <button
-            onClick={() => fetchData(preset)}
+            onClick={fetchData}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs border hover:bg-muted transition-colors font-heading uppercase tracking-wide disabled:opacity-50"
           >
@@ -780,7 +780,7 @@ export function PlayableDashboard() {
       {loading && (
         <div className="flex items-center gap-3 py-12 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-psv-red-primary" />
-          <span>Campagnes ophalen uit Playable ({PRESET_LABELS[preset].toLowerCase()})...</span>
+          <span>Campagnes ophalen uit Playable...</span>
         </div>
       )}
 
@@ -789,7 +789,7 @@ export function PlayableDashboard() {
           <p className="text-sm text-destructive font-medium mb-1">Fout bij ophalen</p>
           <p className="text-xs text-destructive/80 mb-4">{error}</p>
           <button
-            onClick={() => fetchData(preset)}
+            onClick={fetchData}
             className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-psv-red-primary text-white hover:bg-psv-red-secondary transition-colors font-heading uppercase tracking-wide"
           >
             <RefreshCw className="h-4 w-4" />
@@ -798,31 +798,31 @@ export function PlayableDashboard() {
         </div>
       )}
 
-      {!loading && !error && data && (
+      {!loading && !error && allCampaigns.length > 0 && (
         <>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <KpiCard
               title="Campagnes"
-              value={String(data.totals.total)}
+              value={String(totals.total)}
               subtitle={PRESET_LABELS[preset].toLowerCase()}
               icon={LayoutTemplate}
             />
             <KpiCard
               title="Actief"
-              value={String(data.totals.active)}
-              subtitle={`${data.totals.inactive} inactief`}
+              value={String(totals.active)}
+              subtitle={`${totals.inactive} inactief`}
               icon={Activity}
               color="text-success"
             />
             <KpiCard
               title="Meest recent"
               value={
-                data.campaigns[0]
-                  ? formatDate(data.campaigns.find((c) => c.active)?.created_on ?? data.campaigns[0].created_on)
+                campaigns[0]
+                  ? formatDate(campaigns.find((c) => c.active)?.created_on ?? campaigns[0].created_on)
                   : "—"
               }
-              subtitle={data.campaigns.find((c) => c.active)?.name ?? data.campaigns[0]?.name ?? ""}
+              subtitle={campaigns.find((c) => c.active)?.name ?? campaigns[0]?.name ?? ""}
               icon={Calendar}
               color="text-muted-foreground"
             />
@@ -875,13 +875,13 @@ export function PlayableDashboard() {
 
           {/* Full table */}
           <CampaignTable
-            campaigns={data.campaigns}
+            campaigns={campaigns}
             onSelect={setSelectedCampaign}
             selectedId={selectedCampaign?.id ?? null}
           />
 
           {/* AI Insights */}
-          <InsightsPanel campaigns={data.campaigns} totals={data.totals} />
+          <InsightsPanel campaigns={campaigns} totals={totals} />
         </>
       )}
     </div>
