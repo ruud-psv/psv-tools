@@ -10,6 +10,7 @@ import {
   FileText,
   Globe,
   LayoutDashboard,
+  LayoutTemplate,
   Link2,
   LogOut,
   Mail,
@@ -74,6 +75,12 @@ const insights = [
     name: "Web Verkeer",
     href: "/dashboard/web-verkeer",
     icon: Globe,
+    badge: null as string | null,
+  },
+  {
+    name: "Landingspagina's",
+    href: "/dashboard/landingspaginas",
+    icon: LayoutTemplate,
     badge: null as string | null,
   },
 ];
