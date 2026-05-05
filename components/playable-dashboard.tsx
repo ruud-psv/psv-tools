@@ -703,7 +703,7 @@ function InsightsPanel({
 /* ---------- Main Dashboard ---------- */
 
 export function PlayableDashboard() {
-  const [preset, setPreset] = useState<Preset>("1y");
+  const [preset, setPreset] = useState<Preset>("all");
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

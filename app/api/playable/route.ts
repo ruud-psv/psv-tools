@@ -85,7 +85,7 @@ export interface PlayableTotals {
 async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
   const campaigns: Campaign[] = [];
   let page = 1;
-  const MAX_PAGES = 50;
+  const MAX_PAGES = 10;
 
   while (page <= MAX_PAGES) {
     const res = await playableFetch("/v1/campaigns", {
