@@ -98,18 +98,22 @@ async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
     }
 
     const data = await res.json();
-    const items: Campaign[] = (data.data ?? []).map((c: Record<string, unknown>) => ({
-      id: Number(c.id),
-      name: String(c.name ?? ""),
-      type: String(c.type ?? ""),
-      active: Boolean(c.active),
-      active_from: c.active_from ? String(c.active_from) : null,
-      active_to: c.active_to ? String(c.active_to) : null,
-      live_url: c.live_url ? String(c.live_url) : null,
-      demo_url: c.demo_url ? String(c.demo_url) : null,
-      created_on: String(c.created_on ?? ""),
-      timezone: String(c.timezone ?? ""),
-    }));
+    const items: Campaign[] = (data.data ?? []).map((c: Record<string, unknown>) => {
+      // Playable may return created_on or created_at depending on API version
+      const rawCreated = String(c.created_on ?? c.created_at ?? "");
+      return {
+        id: Number(c.id),
+        name: String(c.name ?? ""),
+        type: String(c.type ?? ""),
+        active: Boolean(c.active),
+        active_from: c.active_from ? String(c.active_from) : null,
+        active_to: c.active_to ? String(c.active_to) : null,
+        live_url: c.live_url ? String(c.live_url) : null,
+        demo_url: c.demo_url ? String(c.demo_url) : null,
+        created_on: rawCreated,
+        timezone: String(c.timezone ?? ""),
+      };
+    });
 
     campaigns.push(...items);
 
@@ -118,7 +122,8 @@ async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
   }
 
   if (fromDate) {
-    return campaigns.filter((c) => c.created_on && new Date(c.created_on) >= fromDate);
+    const fromStr = fromDate.toISOString().slice(0, 10); // "YYYY-MM-DD"
+    return campaigns.filter((c) => c.created_on && c.created_on.slice(0, 10) >= fromStr);
   }
 
   return campaigns;
