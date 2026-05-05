@@ -85,10 +85,10 @@ export interface PlayableTotals {
 async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
   const campaigns: Campaign[] = [];
   let page = 1;
+  const MAX_PAGES = 50;
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const res = await playableFetch("/v1/campaigns", {
-      sort: "created_on,desc",
       page: String(page),
     });
 
@@ -111,18 +111,14 @@ async function fetchCampaigns(fromDate: Date | null): Promise<Campaign[]> {
       timezone: String(c.timezone ?? ""),
     }));
 
-    if (fromDate) {
-      const inRange = items.filter((c) => c.created_on && new Date(c.created_on) >= fromDate);
-      campaigns.push(...inRange);
-      // If all items on this page are older than fromDate, stop paginating
-      const allOlder = items.every((c) => !c.created_on || new Date(c.created_on) < fromDate);
-      if (allOlder) break;
-    } else {
-      campaigns.push(...items);
-    }
+    campaigns.push(...items);
 
     if (!data.links?.next) break;
     page++;
+  }
+
+  if (fromDate) {
+    return campaigns.filter((c) => c.created_on && new Date(c.created_on) >= fromDate);
   }
 
   return campaigns;
