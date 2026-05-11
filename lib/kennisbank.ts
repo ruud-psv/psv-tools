@@ -33,6 +33,8 @@ export interface KennisbankTool {
   logo?: string;
   accessUrl?: string;
   accessNote?: string;
+  accessLinks?: { label: string; url: string }[];
+  docsUrl?: string;
   features: KennisbankFeature[];
   steps?: KennisbankStep[];
   tips?: KennisbankTip[];
@@ -48,13 +50,86 @@ export const kennisbankCategories: KennisbankCategory[] = [
 ];
 
 export const kennisbankTools: KennisbankTool[] = [
-  // Adverteren
+  {
+    slug: "asana",
+    name: "Asana",
+    category: "Automatisering & Projectmanagement",
+    logo: "/images/kennisbank/asana.svg",
+    description: "Plan campagnes, wijs taken toe en houd de voortgang bij — alles op één plek.",
+    docsUrl: "https://help.asana.com",
+    comingSoon: true,
+    features: [],
+  },
   {
     slug: "azerion",
     name: "Azerion",
     category: "Adverteren & Display",
-    logo: "/images/kennisbank/azerion.svg",
+    logo: "/images/kennisbank/azerion.png",
     description: "Bereik PSV-fans met branded games en display-advertenties via het Azerion-netwerk.",
+    accessUrl: "https://psv.azerionsports.com/",
+    features: [],
+    tables: [
+      {
+        caption: "Afbeeldingsspecificaties",
+        headers: ["Onderdeel", "Afmetingen"],
+        rows: [
+          ["Afbeelding", "980 x 1080 px"],
+        ],
+      },
+      {
+        caption: "Tekstspecificaties push notificatie",
+        headers: ["Onderdeel", "Specificatie"],
+        rows: [
+          ["Titel", "40-60 tekens"],
+          ["Message", "100-150 tekens zichtbaar"],
+        ],
+      },
+      {
+        caption: "Taxonomie pop-ups",
+        headers: ["Onderdeel", "Formaat / Voorbeeld"],
+        rows: [
+          ["Formaat", "[DATUM] [EXPLOITATIE] - [ONDERWERP] - [DMID]"],
+          ["Voorbeeld", "2026.05.06 PSV Kaartverkoop - Wachtlijst SCC - DMID26-11224"],
+        ],
+      },
+    ],
+    tips: [
+      {
+        type: "note",
+        text: "Pop-ups kunnen gekoppeld worden aan een externe URL of aan een tab binnen de app. Push notificaties linken aan een tab binnen de app.",
+      },
+      {
+        type: "note",
+        text: "De doelgroepen voor push notificaties zijn dezelfde als in Maileon en worden vanuit TwoCircles doorgezet.",
+      },
+    ],
+  },
+  {
+    slug: "blueconic",
+    name: "BlueConic",
+    category: "E-mail & Data",
+    logo: "/images/kennisbank/blueconic.jpeg",
+    description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
+    docsUrl: "https://support.blueconic.com",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "custom-landingspaginas",
+    name: "Custom landingspagina's",
+    category: "Design & Content",
+    logo: "/images/kennisbank/custom-landingspaginas.svg",
+    description: "Bouw gerichte landingspagina's voor campagnes, acties en evenementen van PSV.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "figma",
+    name: "Figma",
+    category: "Design & Content",
+    logo: "/images/kennisbank/figma.svg",
+    description: "Ontwerp campagnevisuals, UI-mockups en prototypes in de PSV-huisstijl.",
+    docsUrl: "https://help.figma.com/hc/en-us",
     comingSoon: true,
     features: [],
   },
@@ -64,6 +139,17 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "Adverteren & Display",
     logo: "/images/kennisbank/google.svg",
     description: "Adverteer in zoekresultaten, op YouTube en via het Google Display Netwerk.",
+    docsUrl: "https://support.google.com/google-ads",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "jw-player",
+    name: "JW Player",
+    category: "Design & Content",
+    logo: "/images/kennisbank/jwplayer.png",
+    description: "Host en publiceer PSV-videocontent en genereer embedcodes voor gebruik op de website.",
+    docsUrl: "https://docs.jwplayer.com/platform/docs",
     comingSoon: true,
     features: [],
   },
@@ -73,43 +159,7 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "Adverteren & Display",
     logo: "/images/kennisbank/linkedin.svg",
     description: "Bereik zakelijke doelgroepen op LinkedIn met gesponsorde content en lead gen forms.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "meta-ads",
-    name: "Meta Ads",
-    category: "Adverteren & Display",
-    logo: "/images/kennisbank/meta.svg",
-    description: "Adverteer op Facebook en Instagram en bereik PSV-fans met gerichte campagnes.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "playable",
-    name: "Playable",
-    category: "Design & Content",
-    logo: "/images/kennisbank/playable.svg",
-    description: "Maak interactieve landingspagina's en mini-games voor PSV-campagnes.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "tiktok-ads",
-    name: "TikTok Ads",
-    category: "Adverteren & Display",
-    logo: "/images/kennisbank/tiktok.svg",
-    description: "Bereik een jong publiek op TikTok met video-advertenties en Spark Ads.",
-    comingSoon: true,
-    features: [],
-  },
-  // E-mail & Data
-  {
-    slug: "blueconic",
-    name: "BlueConic",
-    category: "E-mail & Data",
-    logo: "/images/kennisbank/blueconic.svg",
-    description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
+    docsUrl: "https://www.linkedin.com/help/lms",
     comingSoon: true,
     features: [],
   },
@@ -117,9 +167,15 @@ export const kennisbankTools: KennisbankTool[] = [
     slug: "maileon",
     name: "Maileon",
     category: "E-mail & Data",
-    logo: "/images/kennisbank/maileon.svg",
+    logo: "/images/kennisbank/maileon.png",
     description: "Verstuur nieuwsbrieven, campagnemails en geautomatiseerde e-mails naar PSV-doelgroepen.",
-    accessUrl: "https://app.maileon.com",
+    docsUrl: "https://support.maileon.com",
+    accessLinks: [
+      { label: "PSV", url: "https://psv-news-mailer.maileon.com/eagle_kp_webapp/start/dashboards/dashboard.msa" },
+      { label: "PSV Business", url: "https://psvbusiness-sendserver.maileon.com/eagle_kp_webapp/start/dashboards/dashboard.msa?fromlogin=true" },
+      { label: "PSV Campaigns", url: "https://campains-psv.maileon.com/eagle_kp_webapp/start/dashboards/dashboard.msa?fromlogin=true" },
+      { label: "PSV Operational", url: "https://psv-sso-news-mailer.maileon.com/eagle_kp_webapp/start/dashboards/dashboard.msa?fromlogin=true" },
+    ],
     features: [],
     tables: [
       {
@@ -187,57 +243,12 @@ export const kennisbankTools: KennisbankTool[] = [
     ],
   },
   {
-    slug: "twocircles",
-    name: "TwoCircles",
-    category: "E-mail & Data",
-    logo: "/images/kennisbank/twocircles.svg",
-    description: "Data- en ticketingplatform voor het beheren van fan- en klantdata van PSV.",
-    comingSoon: true,
-    features: [],
-  },
-  // Design & Content
-  {
-    slug: "custom-landingspaginas",
-    name: "Custom landingspagina's",
-    category: "Design & Content",
-    description: "Bouw gerichte landingspagina's voor campagnes, acties en evenementen van PSV.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "figma",
-    name: "Figma",
-    category: "Design & Content",
-    logo: "/images/kennisbank/figma.svg",
-    description: "Ontwerp campagnevisuals, UI-mockups en prototypes in de PSV-huisstijl.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "jw-player",
-    name: "JW Player",
-    category: "Design & Content",
-    logo: "/images/kennisbank/jwplayer.png",
-    description: "Host en publiceer PSV-videocontent en genereer embedcodes voor gebruik op de website.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "typeform",
-    name: "Typeform",
-    category: "Design & Content",
-    logo: "/images/kennisbank/typeform.svg",
-    description: "Maak formulieren, enquêtes en quizzen voor fan-onderzoek en registraties.",
-    comingSoon: true,
-    features: [],
-  },
-  // Automatisering & Beheer
-  {
-    slug: "asana",
-    name: "Asana",
-    category: "Automatisering & Projectmanagement",
-    logo: "/images/kennisbank/asana.svg",
-    description: "Plan campagnes, wijs taken toe en houd de voortgang bij — alles op één plek.",
+    slug: "meta-ads",
+    name: "Meta Ads",
+    category: "Adverteren & Display",
+    logo: "/images/kennisbank/meta.svg",
+    description: "Adverteer op Facebook en Instagram en bereik PSV-fans met gerichte campagnes.",
+    docsUrl: "https://www.facebook.com/business/help",
     comingSoon: true,
     features: [],
   },
@@ -247,8 +258,129 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "Automatisering & Projectmanagement",
     logo: "/images/kennisbank/n8n.svg",
     description: "Koppel tools aan elkaar en automatiseer terugkerende processen zonder code.",
+    docsUrl: "https://docs.n8n.io",
     comingSoon: true,
     features: [],
+  },
+  {
+    slug: "playable",
+    name: "Playable",
+    category: "Design & Content",
+    logo: "/images/kennisbank/playable.jpeg",
+    description: "Maak interactieve landingspagina's en mini-games voor PSV-campagnes.",
+    accessUrl: "https://app.playable.com/campaigns",
+    docsUrl: "https://help.playable.com/en/",
+    features: [],
+    tables: [
+      {
+        caption: "Templates",
+        headers: ["Template", "ID"],
+        rows: [
+          ["TEMPLATE PSV 1", "#189777"],
+          ["TEMPLATE PHOXY CLUB | 2025 - 2026", "191848"],
+          ["TEMPLATE FC PSV O12 | 2025-2026", "191851"],
+          ["TEMPLATE FC PSV O16 | 2025-2026", "191853"],
+          ["TEMPLATE PSV PARTNERSHIPS | 2025-2026", "192598"],
+          ["TEMPLATE UEFA CHAMPIONS LEAGUE | 2025-2026", "192971"],
+          ["TEMPLATE PSV FANCLUB | 2025 - 2026", "192974"],
+          ["TEMPLATE JONG PSV - PSV VROUWEN | 2025 - 2026", "211939"],
+          ["TEMPLATE - Video detail", "225293"],
+        ],
+      },
+      {
+        caption: "Afbeeldingsspecificaties",
+        headers: ["Onderdeel", "Afmetingen"],
+        rows: [
+          ["Header mobile", "700 x 290 px"],
+          ["Header desktop", "335 x 300 px"],
+        ],
+      },
+      {
+        caption: "Taxonomie van landingspagina's",
+        headers: ["Onderdeel", "Formaat"],
+        rows: [
+          ["Naamgeving", "[EXPLOITATIE] - [CAMPAGNE] - [SEIZOEN] - [DMID]"],
+        ],
+      },
+    ],
+  },
+  {
+    slug: "tiktok-ads",
+    name: "TikTok Ads",
+    category: "Adverteren & Display",
+    logo: "/images/kennisbank/tiktok.svg",
+    description: "Bereik een jong publiek op TikTok met video-advertenties en Spark Ads.",
+    docsUrl: "https://ads.tiktok.com/help/",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "twocircles",
+    name: "TwoCircles",
+    category: "E-mail & Data",
+    logo: "/images/kennisbank/twocircles.svg",
+    description: "Data- en ticketingplatform voor het beheren van fan- en klantdata van PSV.",
+    docsUrl: "https://help.koresoftware.com/hc/en-us",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "typeform",
+    name: "Typeform",
+    category: "Design & Content",
+    logo: "/images/kennisbank/typeform.png",
+    description: "Maak formulieren, enquêtes en quizzen voor fan-onderzoek en registraties.",
+    accessUrl: "https://admin.typeform.com/",
+    docsUrl: "https://help.typeform.com/hc/en-us",
+    features: [],
+    tables: [
+      {
+        caption: "Accountstructuur",
+        headers: ["Werkruimte"],
+        rows: [
+          ["Archief nieuwe account"],
+          ["Archief oude account"],
+          ["Dataverrijking PSV (Webhook)"],
+          ["PSV 1"],
+          ["PSV Academy"],
+          ["PSV Brand & Design"],
+          ["PSV Business"],
+          ["PSV Business - Diners"],
+          ["PSV Business - Evenementen"],
+          ["PSV Business - Vitality"],
+          ["PSV Digital Marketing"],
+          ["PSV Digital Marketing - CES"],
+          ["PSV Enquete"],
+          ["PSV Esports"],
+          ["PSV FANclub"],
+          ["PSV FANclub - FC PSV"],
+          ["PSV FANclub - Phoxy Club"],
+          ["PSV FANdesk"],
+          ["PSV FANentertainment"],
+          ["PSV FANstore"],
+          ["PSV Foundation"],
+          ["PSV Kaartverkoop"],
+          ["PSV Marketing & Media"],
+          ["PSV Media"],
+          ["PSV Museum & Tours"],
+          ["PSV New Business"],
+          ["PSV Organisatie"],
+          ["PSV Partnerships"],
+          ["PSV Perszaken"],
+          ["PSV Philips Stadion"],
+          ["PSV Soccer Schools"],
+          ["PSV Together"],
+          ["PSV Vrouwen"],
+        ],
+      },
+      {
+        caption: "Taxonomie van formulieren",
+        headers: ["Onderdeel", "Formaat"],
+        rows: [
+          ["Naamgeving", "[EXPLOITATIE] - [ONDERWERP] - [OPTIONEEL SEIZOEN] - [DMID]"],
+        ],
+      },
+    ],
   },
   {
     slug: "xperience-central",
@@ -256,6 +388,7 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "Design & Content",
     logo: "/images/kennisbank/xperience-central.png",
     description: "Beheer en publiceer content op PSV-kanalen via dit CMS-platform.",
+    docsUrl: "https://wiki.gxsoftware.com",
     comingSoon: true,
     features: [],
   },
@@ -279,7 +412,7 @@ export interface KennisbankSection {
 
 export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
   const sections: KennisbankSection[] = [];
-  if (tool.accessUrl || tool.accessNote)
+  if (tool.accessUrl || tool.accessNote || tool.accessLinks?.length || tool.docsUrl)
     sections.push({ label: "Toegang", id: "toegang" });
   if (tool.features.length > 0)
     sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });

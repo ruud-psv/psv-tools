@@ -56,7 +56,7 @@ export default async function KennisbankToolPage({
               De documentatie voor {tool.name} wordt binnenkort aangevuld.
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Neem voor vragen contact op met het content- of IT-team.
+              Neem voor vragen contact op met het Digital Marketing-team.
             </p>
           </CardContent>
         </Card>
@@ -65,7 +65,7 @@ export default async function KennisbankToolPage({
       {!tool.comingSoon && (
         <div className="space-y-8">
           {/* Access */}
-          {(tool.accessUrl || tool.accessNote) && (
+          {(tool.accessUrl || tool.accessNote || tool.accessLinks?.length || tool.docsUrl) && (
             <section id="toegang">
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 Toegang
@@ -78,15 +78,46 @@ export default async function KennisbankToolPage({
                     </p>
                   )}
                   {tool.accessUrl && (
-                    <a
-                      href={tool.accessUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-psv-red-primary hover:underline"
-                    >
-                      {tool.accessUrl}
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground w-32 flex-shrink-0">Inloggen</span>
+                      <a
+                        href={tool.accessUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-psv-red-primary hover:underline"
+                      >
+                        {tool.accessUrl}
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  )}
+                  {tool.accessLinks?.map((link) => (
+                    <div key={link.url} className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground w-32 flex-shrink-0">{link.label}</span>
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-psv-red-primary hover:underline"
+                      >
+                        Inloggen
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  ))}
+                  {tool.docsUrl && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground w-32 flex-shrink-0">Documentatie</span>
+                      <a
+                        href={tool.docsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-psv-red-primary hover:underline"
+                      >
+                        {tool.docsUrl}
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
                   )}
                 </CardContent>
               </Card>
