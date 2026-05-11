@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { kennisbankTools, getToolBySlug } from "@/lib/kennisbank";
+import { ExternalLink } from "lucide-react";
+import { kennisbankTools, getToolBySlug, slugify, KennisbankTip } from "@/lib/kennisbank";
+
+const TIP_CONFIG: Record<KennisbankTip["type"], { label: string; className: string }> = {
+  warning: { label: "Let op:", className: "border-l-warning bg-warning-bg" },
+  note: { label: "Opmerking:", className: "border-l-info bg-info-bg" },
+  tip: { label: "Tip:", className: "border-l-success bg-success-bg" },
+};
 import {
   Card,
   CardContent,
@@ -34,16 +39,7 @@ export default async function KennisbankToolPage({
   if (!tool) notFound();
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl">
-      {/* Back */}
-      <Link
-        href="/dashboard/kennisbank"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Kennisbank
-      </Link>
-
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-heading uppercase tracking-tight mb-1">
@@ -70,7 +66,7 @@ export default async function KennisbankToolPage({
         <div className="space-y-8">
           {/* Access */}
           {(tool.accessUrl || tool.accessNote) && (
-            <section>
+            <section id="toegang">
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 Toegang
               </h2>
@@ -99,7 +95,7 @@ export default async function KennisbankToolPage({
 
           {/* Features */}
           {tool.features.length > 0 && (
-            <section>
+            <section id="mogelijkheden">
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 Mogelijkheden
               </h2>
@@ -122,7 +118,7 @@ export default async function KennisbankToolPage({
 
           {/* Steps */}
           {tool.steps && tool.steps.length > 0 && (
-            <section>
+            <section id="aan-de-slag">
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 Aan de slag
               </h2>
@@ -145,10 +141,9 @@ export default async function KennisbankToolPage({
           )}
 
           {/* Tables */}
-          {tool.tables && tool.tables.length > 0 && (
-            <>
-              {tool.tables.map((table, ti) => (
-                <section key={ti}>
+          {tool.tables && tool.tables.length > 0 &&
+            tool.tables.map((table, ti) => (
+                <section key={ti} id={table.caption ? slugify(table.caption) : undefined}>
                   {table.caption && (
                     <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                       {table.caption}
@@ -191,37 +186,26 @@ export default async function KennisbankToolPage({
                   </Card>
                 </section>
               ))}
-            </>
-          )}
 
           {/* Tips & Warnings */}
           {tool.tips && tool.tips.length > 0 && (
-            <section>
+            <section id="tips">
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 Tips
               </h2>
               <div className="space-y-3">
-                {tool.tips.map((tip, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-md border-l-4 p-4 text-sm ${
-                      tip.type === "warning"
-                        ? "border-l-warning bg-warning-bg text-foreground"
-                        : tip.type === "note"
-                          ? "border-l-info bg-info-bg text-foreground"
-                          : "border-l-success bg-success-bg text-foreground"
-                    }`}
-                  >
-                    <span className="font-medium mr-1">
-                      {tip.type === "warning"
-                        ? "Let op:"
-                        : tip.type === "note"
-                          ? "Opmerking:"
-                          : "Tip:"}
-                    </span>
-                    {tip.text}
-                  </div>
-                ))}
+                {tool.tips.map((tip, i) => {
+                  const { label, className } = TIP_CONFIG[tip.type];
+                  return (
+                    <div
+                      key={i}
+                      className={`rounded-md border-l-4 p-4 text-sm text-foreground ${className}`}
+                    >
+                      <span className="font-medium mr-1">{label}</span>
+                      {tip.text}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}

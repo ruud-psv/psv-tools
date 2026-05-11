@@ -19,10 +19,18 @@ export interface KennisbankTable {
   rows: string[][];
 }
 
+export type KennisbankCategory =
+  | "Adverteren"
+  | "E-mail & Data"
+  | "Design & Content"
+  | "Automatisering & Beheer";
+
 export interface KennisbankTool {
   slug: string;
   name: string;
+  category: KennisbankCategory;
   description: string;
+  logo?: string;
   accessUrl?: string;
   accessNote?: string;
   features: KennisbankFeature[];
@@ -32,66 +40,80 @@ export interface KennisbankTool {
   comingSoon?: boolean;
 }
 
+export const kennisbankCategories: KennisbankCategory[] = [
+  "Adverteren",
+  "E-mail & Data",
+  "Design & Content",
+  "Automatisering & Beheer",
+];
+
 export const kennisbankTools: KennisbankTool[] = [
-  {
-    slug: "asana",
-    name: "Asana",
-    description: "Plan campagnes, wijs taken toe en houd de voortgang bij — alles op één plek.",
-    comingSoon: true,
-    features: [],
-  },
+  // Adverteren
   {
     slug: "azerion",
     name: "Azerion",
+    category: "Adverteren",
     description: "Bereik PSV-fans met branded games en display-advertenties via het Azerion-netwerk.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "blueconic",
-    name: "BlueConic",
-    description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "custom-landingspaginas",
-    name: "Custom landingspagina's",
-    description: "Bouw gerichte landingspagina's voor campagnes, acties en evenementen van PSV.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "figma",
-    name: "Figma",
-    description: "Ontwerp campagnevisuals, UI-mockups en prototypes in de PSV-huisstijl.",
     comingSoon: true,
     features: [],
   },
   {
     slug: "google-ads",
     name: "Google Ads",
+    category: "Adverteren",
+    logo: "/images/kennisbank/google.svg",
     description: "Adverteer in zoekresultaten, op YouTube en via het Google Display Netwerk.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "jw-player",
-    name: "JW Player",
-    description: "Host en publiceer PSV-videocontent en genereer embedcodes voor gebruik op de website.",
     comingSoon: true,
     features: [],
   },
   {
     slug: "linkedin-ads",
     name: "LinkedIn Ads",
+    category: "Adverteren",
+    logo: "/images/kennisbank/linkedin.svg",
     description: "Bereik zakelijke doelgroepen op LinkedIn met gesponsorde content en lead gen forms.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "meta-ads",
+    name: "Meta Ads",
+    category: "Adverteren",
+    logo: "/images/kennisbank/meta.svg",
+    description: "Adverteer op Facebook en Instagram en bereik PSV-fans met gerichte campagnes.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "playable",
+    name: "Playable",
+    category: "Adverteren",
+    description: "Maak interactieve mini-games en speelbare advertenties voor PSV-campagnes.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "tiktok-ads",
+    name: "TikTok Ads",
+    category: "Adverteren",
+    logo: "/images/kennisbank/tiktok.svg",
+    description: "Bereik een jong publiek op TikTok met video-advertenties en Spark Ads.",
+    comingSoon: true,
+    features: [],
+  },
+  // E-mail & Data
+  {
+    slug: "blueconic",
+    name: "BlueConic",
+    category: "E-mail & Data",
+    description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
     comingSoon: true,
     features: [],
   },
   {
     slug: "maileon",
     name: "Maileon",
+    category: "E-mail & Data",
     description: "Verstuur nieuwsbrieven, campagnemails en geautomatiseerde e-mails naar PSV-doelgroepen.",
     accessUrl: "https://app.maileon.com",
     features: [],
@@ -161,50 +183,71 @@ export const kennisbankTools: KennisbankTool[] = [
     ],
   },
   {
-    slug: "meta-ads",
-    name: "Meta Ads",
-    description: "Adverteer op Facebook en Instagram en bereik PSV-fans met gerichte campagnes.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "n8n",
-    name: "n8n",
-    description: "Koppel tools aan elkaar en automatiseer terugkerende processen zonder code.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "playable",
-    name: "Playable",
-    description: "Maak interactieve mini-games en speelbare advertenties voor PSV-campagnes.",
-    comingSoon: true,
-    features: [],
-  },
-  {
-    slug: "tiktok-ads",
-    name: "TikTok Ads",
-    description: "Bereik een jong publiek op TikTok met video-advertenties en Spark Ads.",
-    comingSoon: true,
-    features: [],
-  },
-  {
     slug: "twocircles",
     name: "TwoCircles",
+    category: "E-mail & Data",
     description: "Data- en ticketingplatform voor het beheren van fan- en klantdata van PSV.",
+    comingSoon: true,
+    features: [],
+  },
+  // Design & Content
+  {
+    slug: "custom-landingspaginas",
+    name: "Custom landingspagina's",
+    category: "Design & Content",
+    description: "Bouw gerichte landingspagina's voor campagnes, acties en evenementen van PSV.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "figma",
+    name: "Figma",
+    category: "Design & Content",
+    logo: "/images/kennisbank/figma.svg",
+    description: "Ontwerp campagnevisuals, UI-mockups en prototypes in de PSV-huisstijl.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "jw-player",
+    name: "JW Player",
+    category: "Design & Content",
+    description: "Host en publiceer PSV-videocontent en genereer embedcodes voor gebruik op de website.",
     comingSoon: true,
     features: [],
   },
   {
     slug: "typeform",
     name: "Typeform",
+    category: "Design & Content",
+    logo: "/images/kennisbank/typeform.svg",
     description: "Maak formulieren, enquêtes en quizzen voor fan-onderzoek en registraties.",
+    comingSoon: true,
+    features: [],
+  },
+  // Automatisering & Beheer
+  {
+    slug: "asana",
+    name: "Asana",
+    category: "Automatisering & Beheer",
+    logo: "/images/kennisbank/asana.svg",
+    description: "Plan campagnes, wijs taken toe en houd de voortgang bij — alles op één plek.",
+    comingSoon: true,
+    features: [],
+  },
+  {
+    slug: "n8n",
+    name: "n8n",
+    category: "Automatisering & Beheer",
+    logo: "/images/kennisbank/n8n.svg",
+    description: "Koppel tools aan elkaar en automatiseer terugkerende processen zonder code.",
     comingSoon: true,
     features: [],
   },
   {
     slug: "xperience-central",
     name: "Xperience Central",
+    category: "Automatisering & Beheer",
     description: "Beheer en publiceer content op PSV-kanalen via dit CMS-platform.",
     comingSoon: true,
     features: [],
@@ -214,3 +257,39 @@ export const kennisbankTools: KennisbankTool[] = [
 export function getToolBySlug(slug: string): KennisbankTool | undefined {
   return kennisbankTools.find((t) => t.slug === slug);
 }
+
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+export interface KennisbankSection {
+  label: string;
+  id: string;
+}
+
+export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
+  const sections: KennisbankSection[] = [];
+  if (tool.accessUrl || tool.accessNote)
+    sections.push({ label: "Toegang", id: "toegang" });
+  if (tool.features.length > 0)
+    sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
+  if (tool.steps && tool.steps.length > 0)
+    sections.push({ label: "Aan de slag", id: "aan-de-slag" });
+  tool.tables?.forEach((t) => {
+    if (t.caption) sections.push({ label: t.caption, id: slugify(t.caption) });
+  });
+  if (tool.tips && tool.tips.length > 0)
+    sections.push({ label: "Tips", id: "tips" });
+  return sections;
+}
+
+export const toolsByCategory: Record<KennisbankCategory, KennisbankTool[]> =
+  Object.fromEntries(
+    kennisbankCategories.map((cat) => [
+      cat,
+      kennisbankTools.filter((t) => t.category === cat),
+    ])
+  ) as Record<KennisbankCategory, KennisbankTool[]>;
