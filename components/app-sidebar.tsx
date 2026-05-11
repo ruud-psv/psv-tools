@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   BarChart2,
+  BookOpen,
   ClipboardCheck,
   FileText,
   Globe,
@@ -54,6 +55,15 @@ const tools = [
     name: "Rapportage generator",
     href: "/dashboard/rapportage-generator",
     icon: BarChart2,
+    badge: null as string | null,
+  },
+];
+
+const kennisbank = [
+  {
+    name: "Kennisbank",
+    href: "/dashboard/kennisbank",
+    icon: BookOpen,
     badge: null as string | null,
   },
 ];
@@ -223,6 +233,51 @@ export function AppSidebar({ onMobileClose }: { onMobileClose?: () => void } = {
                         {tool.badge && (
                           <Badge variant="secondary" className="text-xs">
                             {tool.badge}
+                          </Badge>
+                        )}
+                      </>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <Separator className="bg-sidebar-border" />
+
+        {/* Kennisbank */}
+        <div>
+          {!collapsed && (
+            <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
+              Kennisbank
+            </p>
+          )}
+          <ul className="space-y-0.5">
+            {kennisbank.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    title={collapsed ? item.name : undefined}
+                    onClick={onMobileClose}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
+                      collapsed && "justify-center",
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    {!collapsed && (
+                      <>
+                        <span className="truncate flex-1">{item.name}</span>
+                        {item.badge && (
+                          <Badge variant="secondary" className="text-xs">
+                            {item.badge}
                           </Badge>
                         )}
                       </>
