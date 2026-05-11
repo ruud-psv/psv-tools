@@ -20,10 +20,10 @@ export interface KennisbankTable {
 }
 
 export type KennisbankCategory =
-  | "Adverteren"
+  | "Adverteren & Display"
   | "E-mail & Data"
   | "Design & Content"
-  | "Automatisering & Beheer";
+  | "Automatisering & Projectmanagement";
 
 export interface KennisbankTool {
   slug: string;
@@ -41,10 +41,10 @@ export interface KennisbankTool {
 }
 
 export const kennisbankCategories: KennisbankCategory[] = [
-  "Adverteren",
+  "Adverteren & Display",
   "E-mail & Data",
   "Design & Content",
-  "Automatisering & Beheer",
+  "Automatisering & Projectmanagement",
 ];
 
 export const kennisbankTools: KennisbankTool[] = [
@@ -52,7 +52,8 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "azerion",
     name: "Azerion",
-    category: "Adverteren",
+    category: "Adverteren & Display",
+    logo: "/images/kennisbank/azerion.svg",
     description: "Bereik PSV-fans met branded games en display-advertenties via het Azerion-netwerk.",
     comingSoon: true,
     features: [],
@@ -60,7 +61,7 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "google-ads",
     name: "Google Ads",
-    category: "Adverteren",
+    category: "Adverteren & Display",
     logo: "/images/kennisbank/google.svg",
     description: "Adverteer in zoekresultaten, op YouTube en via het Google Display Netwerk.",
     comingSoon: true,
@@ -69,7 +70,7 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "linkedin-ads",
     name: "LinkedIn Ads",
-    category: "Adverteren",
+    category: "Adverteren & Display",
     logo: "/images/kennisbank/linkedin.svg",
     description: "Bereik zakelijke doelgroepen op LinkedIn met gesponsorde content en lead gen forms.",
     comingSoon: true,
@@ -78,7 +79,7 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "meta-ads",
     name: "Meta Ads",
-    category: "Adverteren",
+    category: "Adverteren & Display",
     logo: "/images/kennisbank/meta.svg",
     description: "Adverteer op Facebook en Instagram en bereik PSV-fans met gerichte campagnes.",
     comingSoon: true,
@@ -87,15 +88,16 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "playable",
     name: "Playable",
-    category: "Adverteren",
-    description: "Maak interactieve mini-games en speelbare advertenties voor PSV-campagnes.",
+    category: "Design & Content",
+    logo: "/images/kennisbank/playable.svg",
+    description: "Maak interactieve landingspagina's en mini-games voor PSV-campagnes.",
     comingSoon: true,
     features: [],
   },
   {
     slug: "tiktok-ads",
     name: "TikTok Ads",
-    category: "Adverteren",
+    category: "Adverteren & Display",
     logo: "/images/kennisbank/tiktok.svg",
     description: "Bereik een jong publiek op TikTok met video-advertenties en Spark Ads.",
     comingSoon: true,
@@ -106,6 +108,7 @@ export const kennisbankTools: KennisbankTool[] = [
     slug: "blueconic",
     name: "BlueConic",
     category: "E-mail & Data",
+    logo: "/images/kennisbank/blueconic.svg",
     description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
     comingSoon: true,
     features: [],
@@ -114,6 +117,7 @@ export const kennisbankTools: KennisbankTool[] = [
     slug: "maileon",
     name: "Maileon",
     category: "E-mail & Data",
+    logo: "/images/kennisbank/maileon.svg",
     description: "Verstuur nieuwsbrieven, campagnemails en geautomatiseerde e-mails naar PSV-doelgroepen.",
     accessUrl: "https://app.maileon.com",
     features: [],
@@ -186,6 +190,7 @@ export const kennisbankTools: KennisbankTool[] = [
     slug: "twocircles",
     name: "TwoCircles",
     category: "E-mail & Data",
+    logo: "/images/kennisbank/twocircles.svg",
     description: "Data- en ticketingplatform voor het beheren van fan- en klantdata van PSV.",
     comingSoon: true,
     features: [],
@@ -212,6 +217,7 @@ export const kennisbankTools: KennisbankTool[] = [
     slug: "jw-player",
     name: "JW Player",
     category: "Design & Content",
+    logo: "/images/kennisbank/jwplayer.png",
     description: "Host en publiceer PSV-videocontent en genereer embedcodes voor gebruik op de website.",
     comingSoon: true,
     features: [],
@@ -229,7 +235,7 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "asana",
     name: "Asana",
-    category: "Automatisering & Beheer",
+    category: "Automatisering & Projectmanagement",
     logo: "/images/kennisbank/asana.svg",
     description: "Plan campagnes, wijs taken toe en houd de voortgang bij — alles op één plek.",
     comingSoon: true,
@@ -238,7 +244,7 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "n8n",
     name: "n8n",
-    category: "Automatisering & Beheer",
+    category: "Automatisering & Projectmanagement",
     logo: "/images/kennisbank/n8n.svg",
     description: "Koppel tools aan elkaar en automatiseer terugkerende processen zonder code.",
     comingSoon: true,
@@ -247,7 +253,8 @@ export const kennisbankTools: KennisbankTool[] = [
   {
     slug: "xperience-central",
     name: "Xperience Central",
-    category: "Automatisering & Beheer",
+    category: "Design & Content",
+    logo: "/images/kennisbank/xperience-central.png",
     description: "Beheer en publiceer content op PSV-kanalen via dit CMS-platform.",
     comingSoon: true,
     features: [],
