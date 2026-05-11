@@ -58,6 +58,17 @@ export default async function KennisbankToolPage({
             <p className="text-sm text-muted-foreground mt-1">
               Neem voor vragen contact op met het Digital Marketing-team.
             </p>
+            {tool.docsUrl && (
+              <a
+                href={tool.docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-psv-red-primary hover:underline mt-3"
+              >
+                Officiële documentatie {tool.name}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
           </CardContent>
         </Card>
       )}
