@@ -257,3 +257,39 @@ export const kennisbankTools: KennisbankTool[] = [
 export function getToolBySlug(slug: string): KennisbankTool | undefined {
   return kennisbankTools.find((t) => t.slug === slug);
 }
+
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+export interface KennisbankSection {
+  label: string;
+  id: string;
+}
+
+export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
+  const sections: KennisbankSection[] = [];
+  if (tool.accessUrl || tool.accessNote)
+    sections.push({ label: "Toegang", id: "toegang" });
+  if (tool.features.length > 0)
+    sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
+  if (tool.steps && tool.steps.length > 0)
+    sections.push({ label: "Aan de slag", id: "aan-de-slag" });
+  tool.tables?.forEach((t) => {
+    if (t.caption) sections.push({ label: t.caption, id: slugify(t.caption) });
+  });
+  if (tool.tips && tool.tips.length > 0)
+    sections.push({ label: "Tips", id: "tips" });
+  return sections;
+}
+
+export const toolsByCategory: Record<KennisbankCategory, KennisbankTool[]> =
+  Object.fromEntries(
+    kennisbankCategories.map((cat) => [
+      cat,
+      kennisbankTools.filter((t) => t.category === cat),
+    ])
+  ) as Record<KennisbankCategory, KennisbankTool[]>;
