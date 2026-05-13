@@ -9,6 +9,8 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Upload,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,19 +33,21 @@ type Exploitatie = "kaartverkoop" | "fanstore";
 
 interface MailBuilderState {
   exploitatie: Exploitatie;
-  onderwerp: string;
-  previewTekst: string;
+  // heroUrl kept for backward-compat with old localStorage drafts; not shown in form
   heroUrl: string;
   heroAlt: string;
-  heroLink: string;
+  // heroPreviewUrl is the primary image field (images.maileon-static.com URL)
+  // Export URL is auto-derived by swapping the domain
   heroPreviewUrl: string;
-  aanhef: string;
+  heroLink: string;      // plain URL — [[LINK|"..."]] is added on export
+  aanhefPrefix: string;  // e.g. "Hi", "Dag", "Beste"
+  aanhef: string;        // fallback name only, e.g. "PSV-supporter"
   body: string;
   ctaLabel: string;
-  ctaUrl: string;
+  ctaUrl: string;        // plain URL — [[LINK|"..."]] is added on export
   heeftSecondaireLink: boolean;
   secondaireLinkLabel: string;
-  secondaireLinkUrl: string;
+  secondaireLinkUrl: string; // plain URL — [[LINK|"..."]] is added on export
   heeftAfsluitRegel: boolean;
   afsluitRegel: string;
   disclaimerTekst: string;
@@ -56,22 +60,20 @@ interface MailBuilderState {
 
 const DEFAULTS: Record<Exploitatie, Omit<MailBuilderState, "exploitatie">> = {
   kaartverkoop: {
-    onderwerp: "",
-    previewTekst: "",
     heroUrl:
       "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg",
     heroAlt: "Scoor nu je tickets",
-    heroLink: '[[LINK|"https://ticketshop.psv.nl/nl-NL/categories/PSV-1"]]',
+    heroLink: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
     heroPreviewUrl:
       "https://images.maileon-static.com/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg",
-    aanhef: "[[% contact 'FIRSTNAME' 'PSV-supporter']]",
+    aanhefPrefix: "Hi",
+    aanhef: "PSV-supporter",
     body: "",
     ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS",
-    ctaUrl: '[[LINK|"https://ticketshop.psv.nl/nl-NL/categories/PSV-1"]]',
+    ctaUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
     heeftSecondaireLink: true,
     secondaireLinkLabel: "Bekijk alle wedstrijden >",
-    secondaireLinkUrl:
-      '[[LINK|"https://ticketshop.psv.nl/nl-NL/categories/PSV-1"]]',
+    secondaireLinkUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
     heeftAfsluitRegel: true,
     afsluitRegel: "Tot ziens in het Philips Stadion!",
     disclaimerTekst:
@@ -79,18 +81,17 @@ const DEFAULTS: Record<Exploitatie, Omit<MailBuilderState, "exploitatie">> = {
     misNiksEmail: "email@newsletter.psv.nl",
   },
   fanstore: {
-    onderwerp: "",
-    previewTekst: "",
     heroUrl:
       "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]/c/3zu9kpkvY_MQ1abjXEIUGQ/media/4676%20Gifting%202025%20MAILING%20-%20algemeen%20-%2001.jpg",
     heroAlt: "PSV FANstore",
-    heroLink: '[[LINK|"https://www.psv.nl/fanstore"]]',
+    heroLink: "https://www.psv.nl/fanstore",
     heroPreviewUrl:
       "https://images.maileon-static.com/c/3zu9kpkvY_MQ1abjXEIUGQ/media/4676%20Gifting%202025%20MAILING%20-%20algemeen%20-%2001.jpg",
-    aanhef: "[[% contact 'FIRSTNAME' 'PSV-supporter']]",
+    aanhefPrefix: "Hi",
+    aanhef: "PSV-supporter",
     body: "",
     ctaLabel: "SHOP NU",
-    ctaUrl: '[[LINK|"https://www.psv.nl/fanstore"]]',
+    ctaUrl: "https://www.psv.nl/fanstore",
     heeftSecondaireLink: false,
     secondaireLinkLabel: "",
     secondaireLinkUrl: "",
@@ -106,63 +107,88 @@ function makeInitialState(exp: Exploitatie): MailBuilderState {
   return { exploitatie: exp, ...DEFAULTS[exp] };
 }
 
+// Migrate old localStorage drafts that stored [[LINK|"..."]] and full Maileon vars
+function migrateState(raw: Record<string, unknown>): MailBuilderState {
+  const stripLink = (v: unknown): string => {
+    const s = typeof v === "string" ? v : "";
+    return s.replace(/^\[\[LINK\|"(.+)"\]\]$/, "$1");
+  };
+  const extractFallback = (v: unknown): string => {
+    const s = typeof v === "string" ? v : "";
+    if (!s) return "PSV-supporter";
+    const m = s.match(/\[\[% contact '[A-Z]+' '([^']+)'\]\]/);
+    return m ? m[1] : s;
+  };
+
+  const base = raw as MailBuilderState;
+  return {
+    ...base,
+    aanhefPrefix: (base.aanhefPrefix as string | undefined) ?? "Hi",
+    aanhef: extractFallback(base.aanhef),
+    heroLink: stripLink(base.heroLink),
+    ctaUrl: stripLink(base.ctaUrl),
+    secondaireLinkUrl: stripLink(base.secondaireLinkUrl),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Email HTML generator
 // ---------------------------------------------------------------------------
+
+const MAILEON_CDN_HOST = "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]";
+const PREVIEW_CDN_HOST = "https://images.maileon-static.com";
+
+function wrapLink(url: string): string {
+  return url ? `[[LINK|"${url}"]]` : "";
+}
 
 function generateEmailHTML(
   state: MailBuilderState,
   forExport = false
 ): string {
   const isKV = state.exploitatie === "kaartverkoop";
-  const cdn = forExport
-    ? "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]"
-    : "https://images.maileon-static.com";
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
 
   const mv = (variable: string, preview: string) =>
     forExport ? variable : preview;
 
-  // Hero image
+  // Hero image: derive export URL from preview URL by swapping CDN host
+  const previewUrl =
+    state.heroPreviewUrl ||
+    state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
   const heroSrc = forExport
-    ? state.heroUrl
-    : state.heroPreviewUrl ||
-      state.heroUrl.replace(
-        "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]",
-        "https://images.maileon-static.com"
-      );
+    ? previewUrl.startsWith(PREVIEW_CDN_HOST)
+      ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST)
+      : state.heroUrl
+    : previewUrl;
 
   const heroWrap = state.heroLink
     ? {
-        open: `<a href="${forExport ? state.heroLink : state.heroLink.replace(/\[\[LINK\|"([^"]+)"\]\]/g, "$1")}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">`,
+        open: `<a href="${forExport ? wrapLink(state.heroLink) : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">`,
         close: `</a>`,
       }
     : { open: "", close: "" };
 
   // Substituted values
-  const firstName = mv("[[% contact 'FIRSTNAME' 'PSV-supporter']]", "John");
   const fullName = mv("[[% contact 'FULLNAME' 'onbekend']]", "John Doe");
   const emailAddr = mv("[[% email]]", "john@example.com");
   const memberNr = mv("[[% contact 'MEMBERNUMBERPRIOR' 'onbekend']]", "123456");
   const contactId = mv("[[CONTACT|ID]]", "000001");
   const checksum = mv("[[CONTACT|CHECKSUM]]", "abc123");
 
+  // Aanhef: store only the fallback name; generate Maileon variable on export
+  const fallback = state.aanhef || "PSV-supporter";
   const aanhefResolved = forExport
-    ? state.aanhef
-    : state.aanhef
-        .replace(
-          /\[\[% contact 'FIRSTNAME' '[^']*'\]\]/g,
-          "John"
-        )
-        .replace(/\[\[FIRSTNAME\]\]/g, "John")
-        .replace(/\[\[FULLNAME\]\]/g, "John Doe");
+    ? `[[% contact 'FIRSTNAME' '${fallback}']]`
+    : "John";
 
   const ctaHref = forExport
-    ? state.ctaUrl
-    : state.ctaUrl.replace(/\[\[LINK\|"([^"]+)"\]\]/g, "$1") || "#";
+    ? wrapLink(state.ctaUrl)
+    : state.ctaUrl || "#";
 
   const secHref = forExport
-    ? state.secondaireLinkUrl
-    : state.secondaireLinkUrl.replace(/\[\[LINK\|"([^"]+)"\]\]/g, "$1") || "#";
+    ? wrapLink(state.secondaireLinkUrl)
+    : state.secondaireLinkUrl || "#";
 
   // Feedback
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
@@ -177,9 +203,7 @@ function generateEmailHTML(
     : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
   // Social
-  const sl = (url: string) =>
-    forExport ? `[[LINK|"${url}"]]` : url;
-
+  const sl = (url: string) => (forExport ? `[[LINK|"${url}"]]` : url);
   const fbUrl = sl("https://www.facebook.com/PSV/");
   const igUrl = sl("https://www.instagram.com/psv/");
   const ytUrl = sl("https://www.youtube.com/user/psveindhoven");
@@ -203,13 +227,11 @@ function generateEmailHTML(
     ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]`
     : "https://login.psv.nl/Dashboard/Profile";
 
-  const titleText = forExport
-    ? "[[MAILING|SUBJECT|]]"
-    : state.onderwerp || "E-mail preview";
-
+  // Subject + preheader are managed in Maileon; use placeholders in export
+  const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
   const preheader = forExport
     ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]`
-    : state.previewTekst || "";
+    : "";
 
   const openPixelHtml = forExport
     ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">`
@@ -348,7 +370,7 @@ function generateEmailHTML(
           <!-- Aanhef -->
           <tr>
             <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 10px;text-align:center;">
-              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:600;color:#ED1B24;letter-spacing:0.65px;line-height:20px;"><b>Hi ${aanhefResolved},</b></p>
+              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:600;color:#ED1B24;letter-spacing:0.65px;line-height:20px;"><b>${state.aanhefPrefix || "Hi"} ${aanhefResolved},</b></p>
             </td>
           </tr>
 
@@ -574,12 +596,17 @@ function FooterCard({
 // Main component
 // ---------------------------------------------------------------------------
 
+// Scale factor: email is 600px wide, mobile preview frame is 390px
+const MOBILE_SCALE = 390 / 600;
+const PREVIEW_HEIGHT = 820;
+const MOBILE_PREVIEW_HEIGHT = Math.round(PREVIEW_HEIGHT * MOBILE_SCALE);
+
 export function MailBuilderForm() {
   const [state, setState] = useState<MailBuilderState>(() => {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("mail-builder-draft-kaartverkoop");
-        if (saved) return JSON.parse(saved) as MailBuilderState;
+        if (saved) return migrateState(JSON.parse(saved));
       } catch {}
     }
     return makeInitialState("kaartverkoop");
@@ -591,6 +618,9 @@ export function MailBuilderForm() {
   );
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist draft
@@ -626,7 +656,7 @@ export function MailBuilderForm() {
       try {
         const saved = localStorage.getItem(`mail-builder-draft-${exp}`);
         if (saved) {
-          setState(JSON.parse(saved) as MailBuilderState);
+          setState(migrateState(JSON.parse(saved)));
           return;
         }
       } catch {}
@@ -653,6 +683,27 @@ export function MailBuilderForm() {
     await navigator.clipboard.writeText(html);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleImageUpload(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/maileon-upload", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.error ?? "Onbekende fout bij uploaden.");
+        return;
+      }
+      set("heroPreviewUrl", data.previewUrl);
+    } catch {
+      setUploadError("Verbindingsfout — is de server bereikbaar?");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   return (
@@ -694,36 +745,6 @@ export function MailBuilderForm() {
           </CardContent>
         </Card>
 
-        {/* E-MAIL KOP */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>E-mail kop</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="onderwerp">Onderwerp</Label>
-              <Input
-                id="onderwerp"
-                placeholder="Mis de laatste thuiswedstrijden niet!"
-                value={state.onderwerp}
-                onChange={(e) => set("onderwerp", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="previewTekst">Preview tekst</Label>
-              <Input
-                id="previewTekst"
-                placeholder="Wordt getoond in inbox preview…"
-                value={state.previewTekst}
-                onChange={(e) => set("previewTekst", e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Preheader — zichtbaar in inbox vóór openen.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* HERO AFBEELDING */}
         <Card>
           <CardHeader className="pb-3">
@@ -731,13 +752,46 @@ export function MailBuilderForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="heroUrl">URL (Maileon CDN)</Label>
-              <Input
-                id="heroUrl"
-                placeholder="[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]/c/…"
-                value={state.heroUrl}
-                onChange={(e) => set("heroUrl", e.target.value)}
-              />
+              <Label htmlFor="heroPreviewUrl">Afbeelding</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="heroPreviewUrl"
+                  placeholder="https://images.maileon-static.com/c/…"
+                  value={state.heroPreviewUrl}
+                  onChange={(e) => set("heroPreviewUrl", e.target.value)}
+                  className="flex-1 min-w-0"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  {uploading ? "Uploaden…" : "Upload"}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file);
+                  }}
+                />
+              </div>
+              {uploadError && (
+                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  {uploadError}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Upload direct naar Maileon, of plak een bestaande URL. Export-URL wordt automatisch afgeleid.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="heroAlt">Alt-tekst</Label>
@@ -752,22 +806,10 @@ export function MailBuilderForm() {
               <Label htmlFor="heroLink">Klik-link (optioneel)</Label>
               <Input
                 id="heroLink"
-                placeholder='[[LINK|"https://…"]]'
+                placeholder="https://ticketshop.psv.nl/…"
                 value={state.heroLink}
                 onChange={(e) => set("heroLink", e.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="heroPreviewUrl">Preview-vervanger URL</Label>
-              <Input
-                id="heroPreviewUrl"
-                placeholder="https://… (alleen voor preview)"
-                value={state.heroPreviewUrl}
-                onChange={(e) => set("heroPreviewUrl", e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Vervangt de CDN-URL in de live preview. Geen effect op export.
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -779,34 +821,26 @@ export function MailBuilderForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="aanhef">Aanhef</Label>
-              <Input
-                id="aanhef"
-                placeholder="[[% contact 'FIRSTNAME' 'PSV-supporter']]"
-                value={state.aanhef}
-                onChange={(e) => set("aanhef", e.target.value)}
-              />
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  {
-                    label: "[[FIRSTNAME]]",
-                    value: "[[% contact 'FIRSTNAME' 'PSV-supporter']]",
-                  },
-                  {
-                    label: "[[FULLNAME]]",
-                    value: "[[% contact 'FULLNAME' 'supporter']]",
-                  },
-                ].map((chip) => (
-                  <button
-                    key={chip.label}
-                    type="button"
-                    onClick={() => set("aanhef", state.aanhef + chip.value)}
-                    className="inline-flex items-center px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80 font-mono transition-colors border border-border"
-                  >
-                    {chip.label}
-                  </button>
-                ))}
+              <Label>Aanhef</Label>
+              <div className="flex gap-2">
+                <div className="w-24 flex-shrink-0">
+                  <Input
+                    id="aanhefPrefix"
+                    placeholder="Hi"
+                    value={state.aanhefPrefix}
+                    onChange={(e) => set("aanhefPrefix", e.target.value)}
+                  />
+                </div>
+                <Input
+                  id="aanhef"
+                  placeholder="PSV-supporter"
+                  value={state.aanhef}
+                  onChange={(e) => set("aanhef", e.target.value)}
+                />
               </div>
+              <p className="text-xs text-muted-foreground">
+                Prefix + fallback naam. Voornaam komt uit het contactprofiel.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="body">Body</Label>
@@ -831,7 +865,7 @@ export function MailBuilderForm() {
               <Label htmlFor="ctaUrl">CTA-knop URL</Label>
               <Input
                 id="ctaUrl"
-                placeholder='[[LINK|"https://…"]]'
+                placeholder="https://ticketshop.psv.nl/…"
                 value={state.ctaUrl}
                 onChange={(e) => set("ctaUrl", e.target.value)}
               />
@@ -855,7 +889,7 @@ export function MailBuilderForm() {
                     }
                   />
                   <Input
-                    placeholder='[[LINK|"https://…"]]'
+                    placeholder="https://ticketshop.psv.nl/…"
                     value={state.secondaireLinkUrl}
                     onChange={(e) => set("secondaireLinkUrl", e.target.value)}
                   />
@@ -912,7 +946,7 @@ export function MailBuilderForm() {
                   <button
                     type="button"
                     onClick={() => setPreviewMode("mobile")}
-                    title="Mobile (380px)"
+                    title="Mobile (390px)"
                     className={cn(
                       "p-2 transition-colors",
                       previewMode === "mobile"
@@ -962,25 +996,46 @@ export function MailBuilderForm() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div
-              className={cn(
-                "border-t border-border",
-                previewMode === "mobile"
-                  ? "flex justify-center bg-muted/20 py-4"
-                  : ""
+            <div className="border-t border-border">
+              {previewMode === "desktop" ? (
+                <iframe
+                  srcDoc={previewHtml}
+                  title="E-mail preview"
+                  sandbox="allow-same-origin"
+                  style={{
+                    width: "100%",
+                    height: `${PREVIEW_HEIGHT}px`,
+                    border: "none",
+                    display: "block",
+                  }}
+                />
+              ) : (
+                <div className="flex justify-center bg-muted/20 py-4">
+                  {/* Fixed-size clipping wrapper so scaled iframe doesn't take up full space */}
+                  <div
+                    style={{
+                      width: `${Math.round(600 * MOBILE_SCALE)}px`,
+                      height: `${MOBILE_PREVIEW_HEIGHT}px`,
+                      overflow: "hidden",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <iframe
+                      srcDoc={previewHtml}
+                      title="E-mail preview mobiel"
+                      sandbox="allow-same-origin"
+                      style={{
+                        width: "600px",
+                        height: `${PREVIEW_HEIGHT}px`,
+                        border: "none",
+                        display: "block",
+                        transform: `scale(${MOBILE_SCALE})`,
+                        transformOrigin: "top left",
+                      }}
+                    />
+                  </div>
+                </div>
               )}
-            >
-              <iframe
-                srcDoc={previewHtml}
-                title="E-mail preview"
-                sandbox="allow-same-origin"
-                style={{
-                  width: previewMode === "desktop" ? "100%" : "380px",
-                  height: "820px",
-                  border: "none",
-                  display: "block",
-                }}
-              />
             </div>
           </CardContent>
         </Card>
