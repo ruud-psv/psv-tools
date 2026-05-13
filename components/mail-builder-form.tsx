@@ -120,7 +120,7 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     return m ? m[1] : s;
   };
 
-  const base = raw as MailBuilderState;
+  const base = raw as unknown as MailBuilderState;
   return {
     ...base,
     aanhefPrefix: (base.aanhefPrefix as string | undefined) ?? "Hi",
