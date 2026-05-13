@@ -15,6 +15,7 @@ import {
   Link2,
   LogOut,
   Mail,
+  MailPlus,
   Ticket,
   PanelLeftClose,
   PanelLeftOpen,
@@ -43,6 +44,12 @@ const tools = [
     name: "UTM Builder",
     href: "/dashboard/utm-builder",
     icon: Link2,
+    badge: null as string | null,
+  },
+  {
+    name: "Mail Builder",
+    href: "/dashboard/mail-builder",
+    icon: MailPlus,
     badge: null as string | null,
   },
   {
