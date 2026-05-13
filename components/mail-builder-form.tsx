@@ -591,7 +591,7 @@ export function MailBuilderForm() {
   );
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist draft
   useEffect(() => {
