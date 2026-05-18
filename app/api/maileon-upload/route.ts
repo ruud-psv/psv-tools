@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BASE = process.env.MAILEON_BASE_URL;
-const SESSION = process.env.MAILEON_SESSION;
-const RFSC = process.env.MAILEON_RFSC;
+const API_KEY = process.env.MAILEON_API_KEY;
 const FOLDER_ID = process.env.MAILEON_FOLDER_ID ?? "n9267_2";
 
 const MAILEON_CDN_PREFIX =
@@ -13,16 +12,16 @@ function missingEnvResponse() {
   return NextResponse.json(
     {
       error:
-        "Maileon configuratie ontbreekt. Controleer MAILEON_BASE_URL, MAILEON_SESSION en MAILEON_RFSC in .env.local.",
+        "Maileon configuratie ontbreekt. Controleer MAILEON_BASE_URL en MAILEON_API_KEY in .env.local.",
     },
     { status: 500 }
   );
 }
 
 export async function POST(req: NextRequest) {
-  if (!BASE || !SESSION || !RFSC) return missingEnvResponse();
+  if (!BASE || !API_KEY) return missingEnvResponse();
 
-  const cookie = `__Host-MJSID=${SESSION}`;
+  const authHeader = `Basic ${Buffer.from(`${API_KEY}:`).toString("base64")}`;
 
   let file: File;
   try {
@@ -48,13 +47,13 @@ export async function POST(req: NextRequest) {
   let fileId: string;
   try {
     const uploadRes = await fetch(
-      `${BASE}/cms_multi_file_upload.msa?struts.enableJSONValidation=true&rfsc=${RFSC}`,
-      { method: "POST", headers: { Cookie: cookie }, body: uploadForm }
+      `${BASE}/cms_multi_file_upload.msa?struts.enableJSONValidation=true`,
+      { method: "POST", headers: { Authorization: authHeader }, body: uploadForm }
     );
 
     if (uploadRes.status === 403) {
       return NextResponse.json(
-        { error: "Sessie verlopen. Vernieuw MAILEON_SESSION in .env.local." },
+        { error: "API-key ongeldig of onvoldoende rechten. Controleer MAILEON_API_KEY in .env.local." },
         { status: 403 }
       );
     }
@@ -87,8 +86,8 @@ export async function POST(req: NextRequest) {
     urlForm.append("fileId", fileId);
 
     const urlRes = await fetch(
-      `${BASE}/get_cms_file_url.msa?rfsc=${RFSC}`,
-      { method: "POST", headers: { Cookie: cookie }, body: urlForm }
+      `${BASE}/get_cms_file_url.msa`,
+      { method: "POST", headers: { Authorization: authHeader }, body: urlForm }
     );
 
     if (!urlRes.ok) {
