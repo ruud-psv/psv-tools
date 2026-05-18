@@ -1,6 +1,7 @@
-import { sql } from "@vercel/postgres";
+import { sql as _sql } from "@vercel/postgres";
 
-export { sql };
+// Re-export sql; routes will catch errors when POSTGRES_URL is not provisioned.
+export const sql = _sql;
 
 export async function ensureSchema(): Promise<void> {
   await sql`

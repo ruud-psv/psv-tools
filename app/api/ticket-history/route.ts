@@ -27,9 +27,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ history, eventId });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Query mislukt" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    // When Postgres is not provisioned the feature degrades gracefully.
+    if (msg.includes("POSTGRES_URL") || msg.includes("connect") || msg.includes("database")) {
+      return NextResponse.json({ history: [], eventId });
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

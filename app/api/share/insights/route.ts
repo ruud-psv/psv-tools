@@ -32,6 +32,10 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[share/insights] token lookup error", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("POSTGRES_URL") || msg.includes("connect") || msg.includes("database")) {
+      return NextResponse.json({ error: "Inzichten zijn tijdelijk niet beschikbaar (geen database)." }, { status: 503 });
+    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 

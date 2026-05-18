@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ token });
   } catch (err) {
     console.error("share POST error", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("POSTGRES_URL") || msg.includes("connect") || msg.includes("database")) {
+      return NextResponse.json({ error: "Deellinks zijn tijdelijk niet beschikbaar (geen database)." }, { status: 503 });
+    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
@@ -72,6 +76,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result.rows[0].params);
   } catch (err) {
     console.error("share GET error", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("POSTGRES_URL") || msg.includes("connect") || msg.includes("database")) {
+      return NextResponse.json({ error: "Deellinks zijn tijdelijk niet beschikbaar (geen database)." }, { status: 503 });
+    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
