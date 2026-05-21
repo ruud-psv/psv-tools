@@ -14,6 +14,9 @@ import {
   Moon,
   EyeOff,
   Mail,
+  GripVertical,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +29,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -34,23 +44,41 @@ import { cn } from "@/lib/utils";
 
 type Template = "kaartverkoop" | "fanstore" | "soccerschool" | "tours" | "prematch";
 
+interface BodyBlock {
+  id: string;
+  content: string;
+  isGrijs: boolean;
+  heeftCta: boolean;
+  ctaLabel: string;
+  ctaUrl: string;
+  heeftSecLink: boolean;
+  secLinkLabel: string;
+  secLinkUrl: string;
+}
+
+function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
+  return {
+    id: Math.random().toString(36).slice(2),
+    content: "",
+    isGrijs: false,
+    heeftCta: false,
+    ctaLabel: "",
+    ctaUrl: "",
+    heeftSecLink: false,
+    secLinkLabel: "",
+    secLinkUrl: "",
+    ...partial,
+  };
+}
+
 interface MailBuilderState {
   template: Template;
   heroUrl: string; // legacy field – kept for migration
   heroAlt: string;
   heroPreviewUrl: string;
   heroLink: string;
-  aanhefField: "FIRSTNAME" | "FULLNAME";
-  aanhefPrefix: string;
-  aanhef: string; // fallback name
-  body: string;
-  heeftExtraBody: boolean;
-  extraBody: string;
-  ctaLabel: string;
-  ctaUrl: string;
-  heeftSecondaireLink: boolean;
-  secondaireLinkLabel: string;
-  secondaireLinkUrl: string;
+  aanhefText: string;
+  blocks: BodyBlock[];
   heeftAfsluitRegel: boolean;
   afsluitRegel: string;
   disclaimerTekst: string;
@@ -161,17 +189,8 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroAlt: "Scoor nu je tickets",
     heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg`,
     heroLink: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
-    aanhefField: "FIRSTNAME",
-    aanhefPrefix: "Hi",
-    aanhef: "PSV-supporter",
-    body: "",
-    heeftExtraBody: false,
-    extraBody: "",
-    ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS",
-    ctaUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
-    heeftSecondaireLink: true,
-    secondaireLinkLabel: "Bekijk alle wedstrijden >",
-    secondaireLinkUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
+    aanhefText: "Hi {VOORNAAM}",
+    blocks: [newBlock({ heeftCta: true, ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS", ctaUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1", heeftSecLink: true, secLinkLabel: "Bekijk alle wedstrijden >", secLinkUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1" })],
     heeftAfsluitRegel: true,
     afsluitRegel: "Tot ziens in het Philips Stadion!",
     disclaimerTekst:
@@ -186,17 +205,8 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroAlt: "PSV FANstore",
     heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3zu9kpkvY_MQ1abjXEIUGQ/media/4676%20Gifting%202025%20MAILING%20-%20algemeen%20-%2001.jpg`,
     heroLink: "https://www.psv.nl/fanstore",
-    aanhefField: "FIRSTNAME",
-    aanhefPrefix: "Hi",
-    aanhef: "PSV-supporter",
-    body: "",
-    heeftExtraBody: false,
-    extraBody: "",
-    ctaLabel: "SHOP NU",
-    ctaUrl: "https://www.psv.nl/fanstore",
-    heeftSecondaireLink: false,
-    secondaireLinkLabel: "",
-    secondaireLinkUrl: "",
+    aanhefText: "Hi {VOORNAAM}",
+    blocks: [newBlock({ heeftCta: true, ctaLabel: "SHOP NU", ctaUrl: "https://www.psv.nl/fanstore" })],
     heeftAfsluitRegel: true,
     afsluitRegel: "Tot ziens!",
     disclaimerTekst:
@@ -211,17 +221,12 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroAlt: "Soccer School",
     heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3zu9kpkvY_OjJKhxaO6BCA/media/4663%20Mailheaders%20Soccerschool3_1.jpg`,
     heroLink: "",
-    aanhefField: "FIRSTNAME",
-    aanhefPrefix: "Hoi",
-    aanhef: "PSV-fan",
-    body: "Wil jij trainen zoals jouw favoriete PSV'er? Ontdek de PSV Starclinics op PSV Campus De Herdgang! Tijdens deze unieke voetbaldag werk je aan skills zoals snelheid, wendbaarheid, passing en reactievermogen – precies zoals de profs dat doen.",
-    heeftExtraBody: true,
-    extraBody: `<div style="background-color:#F1F1F1;padding:20px 20px 5px;"><p style="margin:0 0 10px;font-weight:bold;">Wat maakt deze trainingen bijzonder?&nbsp;</p><p style="margin:0;">✅ Trainingen met thema's van PSV–spelers<br>✅ Compleet dagprogramma van 09.15 tot 16.00 uur<br>✅ 25% korting op jouw volgende Starclinic</p></div><p style="margin:20px 0 0;">Wil jij erbij zijn? Schrijf je dan snel in, want de plekken zijn beperkt!</p>`,
-    ctaLabel: "INSCHRIJVEN",
-    ctaUrl: "",
-    heeftSecondaireLink: true,
-    secondaireLinkLabel: "Meer informatie >",
-    secondaireLinkUrl: "",
+    aanhefText: "Hoi {VOORNAAM}",
+    blocks: [
+      newBlock({ content: "Wil jij trainen zoals jouw favoriete PSV'er? Ontdek de PSV Starclinics op PSV Campus De Herdgang! Tijdens deze unieke voetbaldag werk je aan skills zoals snelheid, wendbaarheid, passing en reactievermogen – precies zoals de profs dat doen." }),
+      newBlock({ content: "<p style=\"margin:0 0 10px;font-weight:bold;\">Wat maakt deze trainingen bijzonder?&nbsp;</p><p style=\"margin:0;\">✅ Trainingen met thema's van PSV–spelers<br>✅ Compleet dagprogramma van 09.15 tot 16.00 uur<br>✅ 25% korting op jouw volgende Starclinic</p>", isGrijs: true }),
+      newBlock({ content: "Wil jij erbij zijn? Schrijf je dan snel in, want de plekken zijn beperkt!", heeftCta: true, ctaLabel: "INSCHRIJVEN", heeftSecLink: true, secLinkLabel: "Meer informatie >" }),
+    ],
     heeftAfsluitRegel: false,
     afsluitRegel: "",
     disclaimerTekst:
@@ -236,17 +241,12 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroAlt: "PSV Kidstour",
     heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/01cTNhJhAbMT2cYd5HJzRg/media/template-psv-tours-header.png`,
     heroLink: "",
-    aanhefField: "FIRSTNAME",
-    aanhefPrefix: "Hoi",
-    aanhef: "PSV-fan",
-    body: "Heb jij thuis een jonge PSV'er die niet genoeg kan krijgen van onze club? Kom dan langs tijdens de carnavalsvakantie. Dan organiseren we opnieuw de PSV KIDStour. Samen met je kind ontdek je plekken waar je normaal nooit komt. En natuurlijk gaan jullie naar huis met een echt PSV-aandenken!",
-    heeftExtraBody: true,
-    extraBody: `<div style="background-color:#F1F1F1;padding:20px 20px 5px;"><p style="margin:0 0 10px;font-weight:bold;">Wat kun je verwachten?</p><p style="margin:0;">✅ Speur naar items op je bingokaart<br>✅ Ontmoet Phoxy<br>✅ Een uniek PSV-moment om nooit te vergeten</p></div><p style="margin:20px 0 0;"><b>Let op:</b> het aantal plekken is beperkt. Reserveer snel en maak deze carnavalsvakantie extra speciaal!</p>`,
-    ctaLabel: "RESERVEER JOUW PLEK",
-    ctaUrl: "",
-    heeftSecondaireLink: true,
-    secondaireLinkLabel: "Meer informatie >",
-    secondaireLinkUrl: "",
+    aanhefText: "Hoi {VOORNAAM}",
+    blocks: [
+      newBlock({ content: "Heb jij thuis een jonge PSV'er die niet genoeg kan krijgen van onze club? Kom dan langs tijdens de carnavalsvakantie. Dan organiseren we opnieuw de PSV KIDStour. Samen met je kind ontdek je plekken waar je normaal nooit komt. En natuurlijk gaan jullie naar huis met een echt PSV-aandenken!" }),
+      newBlock({ content: "<p style=\"margin:0 0 10px;font-weight:bold;\">Wat kun je verwachten?</p><p style=\"margin:0;\">✅ Speur naar items op je bingokaart<br>✅ Ontmoet Phoxy<br>✅ Een uniek PSV-moment om nooit te vergeten</p>", isGrijs: true }),
+      newBlock({ content: "<b>Let op:</b> het aantal plekken is beperkt. Reserveer snel en maak deze carnavalsvakantie extra speciaal!", heeftCta: true, ctaLabel: "RESERVEER JOUW PLEK", heeftSecLink: true, secLinkLabel: "Meer informatie >" }),
+    ],
     heeftAfsluitRegel: false,
     afsluitRegel: "",
     disclaimerTekst:
@@ -261,17 +261,8 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroAlt: "",
     heroPreviewUrl: "",
     heroLink: "",
-    aanhefField: "FIRSTNAME",
-    aanhefPrefix: "Hi",
-    aanhef: "PSV-supporter",
-    body: "",
-    heeftExtraBody: false,
-    extraBody: "",
-    ctaLabel: "",
-    ctaUrl: "",
-    heeftSecondaireLink: false,
-    secondaireLinkLabel: "",
-    secondaireLinkUrl: "",
+    aanhefText: "Hi {VOORNAAM}",
+    blocks: [],
     heeftAfsluitRegel: false,
     afsluitRegel: "",
     disclaimerTekst: "",
@@ -291,35 +282,65 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     const s = typeof v === "string" ? v : "";
     return s.replace(/^\[\[LINK\|"(.+)"\]\]$/, "$1");
   };
-  const extractFallback = (v: unknown): string => {
-    const s = typeof v === "string" ? v : "";
-    if (!s) return "PSV-supporter";
-    const m = s.match(/\[\[% contact '[A-Z]+' '([^']+)'\]\]/);
-    return m ? m[1] : s;
-  };
-
   const base = raw as unknown as MailBuilderState;
   // Map old "exploitatie" key to "template"
   const template: Template =
     (base.template as Template) ||
     ((raw.exploitatie as Template) ?? "kaartverkoop");
 
+  const blocks: BodyBlock[] = (() => {
+    if (Array.isArray(raw.blocks) && raw.blocks.length > 0) return raw.blocks as BodyBlock[];
+    // Migrate from old flat fields
+    const result: BodyBlock[] = [];
+    const oldBody = (raw.body as string | undefined) ?? "";
+    const oldCtaLabel = (raw.ctaLabel as string | undefined) ?? "";
+    const oldCtaUrl = stripLink(raw.ctaUrl);
+    const oldSecLink = !!(raw.heeftSecondaireLink);
+    const oldSecLabel = (raw.secondaireLinkLabel as string | undefined) ?? "";
+    const oldSecUrl = stripLink(raw.secondaireLinkUrl);
+    if (oldBody || oldCtaLabel) {
+      result.push(newBlock({ content: oldBody, heeftCta: !!oldCtaLabel, ctaLabel: oldCtaLabel, ctaUrl: oldCtaUrl, heeftSecLink: oldSecLink, secLinkLabel: oldSecLabel, secLinkUrl: oldSecUrl }));
+    }
+    const oldExtraBody = (raw.extraBody as string | undefined) ?? "";
+    if (raw.heeftExtraBody && oldExtraBody) {
+      result.push(newBlock({ content: oldExtraBody }));
+    }
+    return result.length > 0 ? result : DEFAULTS[template].blocks;
+  })();
+
   return {
     ...DEFAULTS[template],
     ...base,
     template,
-    aanhefField: (base.aanhefField as "FIRSTNAME" | "FULLNAME") ?? "FIRSTNAME",
-    aanhefPrefix: (base.aanhefPrefix as string | undefined) ?? "Hi",
-    aanhef: extractFallback(base.aanhef),
+    blocks,
+    aanhefText: (() => {
+      if (typeof base.aanhefText === "string" && base.aanhefText) return base.aanhefText;
+      const prefix = (base.aanhefPrefix as string | undefined) ?? "Hi";
+      const token = (base.aanhefField as string) === "FULLNAME" ? "{VOLLEDIGE NAAM}" : "{VOORNAAM}";
+      return `${prefix} ${token}`;
+    })(),
     heroLink: stripLink(base.heroLink),
-    ctaUrl: stripLink(base.ctaUrl),
-    secondaireLinkUrl: stripLink(base.secondaireLinkUrl),
     utmCampaign: (base.utmCampaign as string | undefined) ?? "",
     fanstoreNavWedstrijdUrl: (base.fanstoreNavWedstrijdUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavWedstrijdUrl,
     fanstoreNavTrainingUrl: (base.fanstoreNavTrainingUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavTrainingUrl,
     fanstoreNavNieuwUrl: (base.fanstoreNavNieuwUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavNieuwUrl,
     fanstoreNavSaleUrl: (base.fanstoreNavSaleUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavSaleUrl,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Aanhef token resolver
+// ---------------------------------------------------------------------------
+
+function resolveAanhef(text: string, forExport: boolean): string {
+  if (forExport) {
+    return text
+      .replace(/\{VOORNAAM\}/g, "[[% contact 'FIRSTNAME' 'PSV-fan']]")
+      .replace(/\{VOLLEDIGE NAAM\}/g, "[[% contact 'FULLNAME' 'PSV-fan']]");
+  }
+  return text
+    .replace(/\{VOORNAAM\}/g, "John")
+    .replace(/\{VOLLEDIGE NAAM\}/g, "John Doe");
 }
 
 // ---------------------------------------------------------------------------
@@ -549,14 +570,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const contactId = mv("[[CONTACT|ID]]", "000001");
   const checksum = mv("[[CONTACT|CHECKSUM]]", "abc123");
 
-  const fallback = state.aanhef || "PSV-supporter";
-  const aanhefVarName = state.aanhefField === "FULLNAME" ? "FULLNAME" : "FIRSTNAME";
-  const aanhefResolved = forExport
-    ? `[[% contact '${aanhefVarName}' '${fallback}']]`
-    : "John";
-
-  const ctaHref = forExport ? wrapLink(utm(state.ctaUrl)) : state.ctaUrl || "#";
-  const secHref = forExport ? wrapLink(utm(state.secondaireLinkUrl)) : state.secondaireLinkUrl || "#";
+  const aanhefResolved = resolveAanhef(state.aanhefText || "Hi {VOORNAAM}", forExport);
 
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
@@ -621,52 +635,55 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
       </tr>`
     : ""; // kaartverkoop/soccerschool/tours: no logo block
 
-  const ctaBlock = state.ctaLabel
-    ? `<tr>
-        <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 20px;text-align:center;">
-          <!--[if mso]>
-          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
-            href="${ctaHref}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="0%" stroke="f" fillcolor="#E30613">
-            <w:anchorlock/>
-            <center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${state.ctaLabel}</center>
-          </v:roundrect>
-          <![endif]-->
-          <!--[if !mso]><!-->
-          <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
-            <tr>
-              <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
-                <a href="${ctaHref}" target="_blank" rel="noopener noreferrer"
-                   style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
-                >${state.ctaLabel}</a>
-              </td>
-            </tr>
-          </table>
-          <!--<![endif]-->
-        </td>
-      </tr>`
-    : "";
+  const makeCtaRow = (label: string, href: string) => `<tr>
+      <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 0;text-align:center;">
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+          href="${href}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="0%" stroke="f" fillcolor="#E30613">
+          <w:anchorlock/>
+          <center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${label}</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-->
+        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+          <tr>
+            <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
+              <a href="${href}" target="_blank" rel="noopener noreferrer"
+                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+              >${label}</a>
+            </td>
+          </tr>
+        </table>
+        <!--<![endif]-->
+      </td>
+    </tr>`;
 
-  const secLinkBlock =
-    state.heeftSecondaireLink && state.secondaireLinkLabel
-      ? `<tr>
-          <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 20px;text-align:center;">
-            <a href="${secHref}" target="_blank" rel="noopener noreferrer"
-               style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#EE1C24;text-decoration:none;line-height:20px;"
-            >${state.secondaireLinkLabel}</a>
-          </td>
-        </tr>`
-      : state.ctaLabel
+  const makeSecLinkRow = (label: string, href: string) => `<tr>
+      <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px;text-align:center;">
+        <a href="${href}" target="_blank" rel="noopener noreferrer"
+           style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#EE1C24;text-decoration:none;line-height:20px;"
+        >${label}</a>
+      </td>
+    </tr>`;
+
+  const blocksHtml = state.blocks.map(block => {
+    const bg = block.isGrijs ? "#F1F1F1" : "#ffffff";
+    const contentRow = block.content
+      ? `<tr><td bgcolor="${bg}" style="background-color:${bg};padding:20px;text-align:center;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;text-align:center;">${block.content}</div></td></tr>`
+      : "";
+    const bCtaHref = block.heeftCta && block.ctaUrl
+      ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl)
+      : "#";
+    const bSecHref = block.heeftSecLink && block.secLinkUrl
+      ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl)
+      : "#";
+    const ctaRow = block.heeftCta && block.ctaLabel ? makeCtaRow(block.ctaLabel, bCtaHref) : "";
+    const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink
       ? `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>`
       : "";
-
-  const extraBodyBlock =
-    state.heeftExtraBody && state.extraBody
-      ? `<tr>
-          <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 20px 20px;">
-            <div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;">${state.extraBody}</div>
-          </td>
-        </tr>`
-      : "";
+    const secRow = block.heeftSecLink && block.secLinkLabel ? makeSecLinkRow(block.secLinkLabel, bSecHref) : "";
+    return contentRow + ctaRow + secRow + spacerRow;
+  }).join("");
 
   const afsluitBlock =
     state.heeftAfsluitRegel && state.afsluitRegel
@@ -732,29 +749,12 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
           <!-- Aanhef -->
           <tr>
             <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 10px;text-align:center;">
-              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:600;color:#ED1B24;letter-spacing:0.65px;line-height:20px;"><b>${state.aanhefPrefix || "Hi"} ${aanhefResolved},</b></p>
+              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:600;color:#ED1B24;letter-spacing:0.65px;line-height:20px;"><b>${aanhefResolved},</b></p>
             </td>
           </tr>
 
-          <!-- Body -->
-          ${
-            state.body
-              ? `<tr>
-              <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 20px 20px;text-align:center;">
-                <div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;text-align:center;">${state.body}</div>
-              </td>
-            </tr>`
-              : `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:10px;"></td></tr>`
-          }
-
-          <!-- CTA -->
-          ${ctaBlock}
-
-          <!-- Secondary link -->
-          ${secLinkBlock}
-
-          <!-- Extra body (e.g. feature block) -->
-          ${extraBodyBlock}
+          <!-- Content blocks -->
+          ${blocksHtml || `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:10px;"></td></tr>`}
 
           <!-- Closing line -->
           ${afsluitBlock}
@@ -1004,6 +1004,46 @@ export function MailBuilderForm() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aanhefInputRef = useRef<HTMLInputElement>(null);
+  const dragIndex = useRef<number | null>(null);
+
+  function updateBlock<K extends keyof BodyBlock>(i: number, key: K, value: BodyBlock[K]) {
+    setState((prev) => {
+      const next = [...prev.blocks];
+      next[i] = { ...next[i], [key]: value };
+      return { ...prev, blocks: next };
+    });
+  }
+
+  function addBlock() {
+    setState((prev) => ({ ...prev, blocks: [...prev.blocks, newBlock()] }));
+  }
+
+  function removeBlock(i: number) {
+    setState((prev) => ({ ...prev, blocks: prev.blocks.filter((_, idx) => idx !== i) }));
+  }
+
+  function moveBlock(from: number, to: number) {
+    if (from === to) return;
+    setState((prev) => {
+      const next = [...prev.blocks];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      return { ...prev, blocks: next };
+    });
+  }
+
+  function insertAanhefToken(token: string) {
+    const el = aanhefInputRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const next = el.value.slice(0, start) + token + el.value.slice(end);
+    set("aanhefText", next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + token.length, start + token.length);
+    });
+  }
 
   // Persist draft
   useEffect(() => {
@@ -1112,23 +1152,18 @@ export function MailBuilderForm() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Template</Label>
-              <div className="grid grid-cols-3 rounded-md border border-input overflow-hidden">
-                {(["kaartverkoop", "fanstore", "soccerschool", "tours", "prematch"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => handleTemplateChange(t)}
-                    className={cn(
-                      "py-2 text-xs font-heading uppercase tracking-wide transition-colors border-r border-input last:border-r-0",
-                      state.template === t
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background text-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    {t === "kaartverkoop" ? "Kaart" : t === "fanstore" ? "FANstore" : t === "soccerschool" ? "Soccer" : t === "tours" ? "Tours" : "Pre-match"}
-                  </button>
-                ))}
-              </div>
+              <Select value={state.template} onValueChange={(v) => handleTemplateChange(v as Template)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kaartverkoop">Kaartverkoop</SelectItem>
+                  <SelectItem value="fanstore">FANstore</SelectItem>
+                  <SelectItem value="soccerschool">Soccer School</SelectItem>
+                  <SelectItem value="tours">Tours</SelectItem>
+                  <SelectItem value="prematch">Pre-match</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {!isPrematch && (
@@ -1285,107 +1320,129 @@ export function MailBuilderForm() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Aanhef</Label>
-                <div className="flex gap-2">
-                  <div className="w-24 flex-shrink-0">
-                    <Input
-                      id="aanhefPrefix"
-                      placeholder="Hi"
-                      value={state.aanhefPrefix}
-                      onChange={(e) => set("aanhefPrefix", e.target.value)}
-                    />
-                  </div>
-                  <Input
-                    id="aanhef"
-                    placeholder="PSV-supporter"
-                    value={state.aanhef}
-                    onChange={(e) => set("aanhef", e.target.value)}
-                  />
-                  <select
-                    value={state.aanhefField}
-                    onChange={(e) => set("aanhefField", e.target.value as "FIRSTNAME" | "FULLNAME")}
-                    className="h-10 rounded-md border border-input bg-background px-2 text-sm"
-                    aria-label="Naamveld"
+                <Label htmlFor="aanhefText">Aanhef</Label>
+                <Input
+                  ref={aanhefInputRef}
+                  id="aanhefText"
+                  placeholder="Hi {VOORNAAM}"
+                  value={state.aanhefText}
+                  onChange={(e) => set("aanhefText", e.target.value)}
+                />
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => insertAanhefToken("{VOORNAAM}")}
+                    className="rounded border border-input bg-background px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
                   >
-                    <option value="FIRSTNAME">Voornaam</option>
-                    <option value="FULLNAME">Volledige naam</option>
-                  </select>
+                    + Voornaam
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertAanhefToken("{VOLLEDIGE NAAM}")}
+                    className="rounded border border-input bg-background px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+                  >
+                    + Volledige naam
+                  </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Prefix + veld uit contactprofiel (fallback als het veld leeg is).
+                  Klik op een knop om personalisatie in te voegen. Fallback is altijd <em>PSV-fan</em>.
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="body">Body</Label>
-                <Textarea
-                  id="body"
-                  placeholder={`HTML toegestaan: <b>vet</b>, <br>, <a href="…">link</a>`}
-                  value={state.body}
-                  onChange={(e) => set("body", e.target.value)}
-                  className="min-h-[120px] font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ctaLabel">CTA-knop tekst</Label>
-                <Input
-                  id="ctaLabel"
-                  placeholder="SCOOR DE ALLERLAATSTE TICKETS"
-                  value={state.ctaLabel}
-                  onChange={(e) => set("ctaLabel", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ctaUrl">CTA-knop URL</Label>
-                <Input
-                  id="ctaUrl"
-                  placeholder="https://ticketshop.psv.nl/…"
-                  value={state.ctaUrl}
-                  onChange={(e) => set("ctaUrl", e.target.value)}
-                />
-              </div>
-              <Separator />
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Extra body (na CTA)</Label>
-                  <Toggle
-                    checked={state.heeftExtraBody}
-                    onChange={(v) => set("heeftExtraBody", v)}
-                  />
+                <Label>Blokken</Label>
+                <div className="space-y-3">
+                  {state.blocks.map((block, i) => (
+                    <div
+                      key={block.id}
+                      draggable
+                      onDragStart={() => { dragIndex.current = i; }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => { if (dragIndex.current !== null) moveBlock(dragIndex.current, i); dragIndex.current = null; }}
+                      className="rounded-md border border-input bg-card p-3 space-y-2"
+                    >
+                      {/* Block header */}
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
+                        <span className="text-xs font-medium text-muted-foreground">Blok {i + 1}</span>
+                        <div className="ml-auto flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">Grijs</span>
+                            <Toggle checked={block.isGrijs} onChange={(v) => updateBlock(i, "isGrijs", v)} />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeBlock(i)}
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                            aria-label="Verwijder blok"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Content */}
+                      <Textarea
+                        placeholder={`Tekst of HTML: <b>vet</b>, <br>, <a href="…">link</a>`}
+                        value={block.content}
+                        onChange={(e) => updateBlock(i, "content", e.target.value)}
+                        className="min-h-[80px] font-mono text-xs"
+                      />
+                      {/* CTA toggle */}
+                      <div className="space-y-2 border-t border-input pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium">CTA-knop</span>
+                          <Toggle checked={block.heeftCta} onChange={(v) => updateBlock(i, "heeftCta", v)} />
+                        </div>
+                        {block.heeftCta && (
+                          <div className="space-y-1.5 pl-3 border-l-2 border-primary/20">
+                            <Input
+                              placeholder="SCOOR DE ALLERLAATSTE TICKETS"
+                              value={block.ctaLabel}
+                              onChange={(e) => updateBlock(i, "ctaLabel", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                            <Input
+                              placeholder="https://ticketshop.psv.nl/…"
+                              value={block.ctaUrl}
+                              onChange={(e) => updateBlock(i, "ctaUrl", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {/* Secondary link toggle */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium">Secundaire link</span>
+                          <Toggle checked={block.heeftSecLink} onChange={(v) => updateBlock(i, "heeftSecLink", v)} />
+                        </div>
+                        {block.heeftSecLink && (
+                          <div className="space-y-1.5 pl-3 border-l-2 border-primary/20">
+                            <Input
+                              placeholder="Bekijk alle wedstrijden >"
+                              value={block.secLinkLabel}
+                              onChange={(e) => updateBlock(i, "secLinkLabel", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                            <Input
+                              placeholder="https://ticketshop.psv.nl/…"
+                              value={block.secLinkUrl}
+                              onChange={(e) => updateBlock(i, "secLinkUrl", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addBlock}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Blok toevoegen
+                  </button>
                 </div>
-                {state.heeftExtraBody && (
-                  <div className="pl-3 border-l-2 border-primary/20">
-                    <Textarea
-                      placeholder="HTML voor extra blok na de CTA-knop"
-                      value={state.extraBody}
-                      onChange={(e) => set("extraBody", e.target.value)}
-                      className="min-h-[100px] font-mono text-xs"
-                    />
-                  </div>
-                )}
-              </div>
-              <Separator />
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Secundaire tekstlink</Label>
-                  <Toggle
-                    checked={state.heeftSecondaireLink}
-                    onChange={(v) => set("heeftSecondaireLink", v)}
-                  />
-                </div>
-                {state.heeftSecondaireLink && (
-                  <div className="space-y-2 pl-3 border-l-2 border-primary/20">
-                    <Input
-                      placeholder="Bekijk alle wedstrijden >"
-                      value={state.secondaireLinkLabel}
-                      onChange={(e) => set("secondaireLinkLabel", e.target.value)}
-                    />
-                    <Input
-                      placeholder="https://ticketshop.psv.nl/…"
-                      value={state.secondaireLinkUrl}
-                      onChange={(e) => set("secondaireLinkUrl", e.target.value)}
-                    />
-                  </div>
-                )}
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
