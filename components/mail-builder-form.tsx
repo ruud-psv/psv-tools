@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils";
 // Types
 // ---------------------------------------------------------------------------
 
-type Template = "kaartverkoop" | "fanstore" | "soccerschool" | "tours" | "prematch";
+type Template = "business" | "fanstore" | "kaartverkoop" | "partnerships" | "prematch" | "psvplay" | "soccerschool" | "tours";
 
 type BlockBg = "wit" | "grijs" | "rood" | "zwart";
 
@@ -63,6 +63,29 @@ interface BodyBlock {
   heeftSecLink: boolean;
   secLinkLabel: string;
   secLinkUrl: string;
+}
+
+interface PsvPlayItem {
+  id: string;
+  imagePreviewUrl: string;
+  imageAlt: string;
+  imageLink: string;
+  quote: string;
+  ctaLabel: string;
+  ctaUrl: string;
+}
+
+function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem {
+  return {
+    id: Math.random().toString(36).slice(2),
+    imagePreviewUrl: "",
+    imageAlt: "",
+    imageLink: "",
+    quote: "",
+    ctaLabel: "BEKIJK NU",
+    ctaUrl: "https://www.psv.nl/psv-play",
+    ...partial,
+  };
 }
 
 function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
@@ -107,6 +130,15 @@ interface MailBuilderState {
   prematchImg6PreviewUrl: string; prematchImg6Alt: string;
   prematchImg7PreviewUrl: string; prematchImg7Alt: string;
   prematchFooterPreviewUrl: string; prematchFooterAlt: string;
+  // PSV Play
+  psvplayIntroText: string;
+  psvplayCta1Label: string;
+  psvplayCta1Url: string;
+  psvplayCta2Label: string;
+  psvplayCta2Url: string;
+  psvplayItems: PsvPlayItem[];
+  // PSV Business
+  businessSponsorPreviewUrl: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,26 +179,50 @@ function wrapLink(url: string): string {
   return url ? `[[LINK|"${url}"]]` : "";
 }
 
-function applyFormatting(
-  e: React.KeyboardEvent<HTMLTextAreaElement>,
-  value: string,
-  setValue: (v: string) => void
-) {
-  if (!e.metaKey && !e.ctrlKey) return;
-  const tagMap: Record<string, string> = { b: "b", i: "i", u: "u" };
-  const tag = tagMap[e.key.toLowerCase()];
-  if (!tag) return;
-  e.preventDefault();
-  const el = e.currentTarget;
-  const s = el.selectionStart;
-  const end = el.selectionEnd;
-  const open = `<${tag}>`;
-  const close = `</${tag}>`;
-  setValue(value.slice(0, s) + open + value.slice(s, end) + close + value.slice(end));
-  requestAnimationFrame(() => {
-    el.selectionStart = s + open.length;
-    el.selectionEnd = end + open.length;
-  });
+function RichTextEditor({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (html: string) => void;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== value) {
+      ref.current.innerHTML = value;
+    }
+  }, [value]);
+
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={() => onChange(ref.current?.innerHTML ?? "")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          document.execCommand("insertHTML", false, "<br>");
+          onChange(ref.current?.innerHTML ?? "");
+        } else if (e.metaKey || e.ctrlKey) {
+          const cmdMap: Record<string, string> = { b: "bold", i: "italic", u: "underline" };
+          const cmd = cmdMap[e.key.toLowerCase()];
+          if (cmd) {
+            e.preventDefault();
+            document.execCommand(cmd, false);
+            onChange(ref.current?.innerHTML ?? "");
+          }
+        }
+      }}
+      className={cn(
+        "min-h-[80px] text-xs rounded-md border border-input bg-background px-3 py-2 overflow-auto focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        className
+      )}
+    />
+  );
 }
 
 function applyUtm(url: string, campaign: string): string {
@@ -212,9 +268,45 @@ const PREMATCH_DEFAULTS = {
   prematchFooterAlt: "Every moment counts",
 };
 
+const PSVPLAY_DEFAULTS = {
+  psvplayIntroText: "",
+  psvplayCta1Label: "BEKIJK OP PSV PLAY",
+  psvplayCta1Url: "https://www.psv.nl/psv-play",
+  psvplayCta2Label: "Meer over PSV Play >",
+  psvplayCta2Url: "https://www.psv.nl/psv-play",
+  psvplayItems: [
+    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh8n265rTmn00A/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%202%20blok.jpg`, imageAlt: "PSV Play video 1", quote: "" }),
+    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh-mtsFmywk9tg/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%203%20blok.jpg`, imageAlt: "PSV Play video 2", quote: "" }),
+    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh_EXPIDNS4M0w/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%204%20blok.jpg`, imageAlt: "PSV Play video 3", quote: "" }),
+  ],
+  businessSponsorPreviewUrl: "",
+};
+
 type TemplateDefaults = Omit<MailBuilderState, "template">;
 
+const PSVBUSINESS_SPONSOR_PREVIEW = `${PREVIEW_CDN_HOST}/c/wdQXu0A-uVaAKKGtgDHkNw/media/4238%20SPONSORBALK_PSV_25-26_PSV%20BUSINESS%20APP.jpg`;
+const PSVBUSINESS_SPONSOR_EXPORT  = `${MAILEON_CDN_HOST}/c/wdQXu0A-uVaAKKGtgDHkNw/media/4238%20SPONSORBALK_PSV_25-26_PSV%20BUSINESS%20APP.jpg`;
+const PSVBUSINESS_PATTERN_PREVIEW = `${PREVIEW_CDN_HOST}/c/NBfAAJE6Xj7kME5C3wxeLA/media/0000%20Pre-Match%20VR%20-%2013%20ADOPSV%2008.jpg`;
+const PSVBUSINESS_PATTERN_EXPORT  = `${MAILEON_CDN_HOST}/c/NBfAAJE6Xj7kME5C3wxeLA/media/0000%20Pre-Match%20VR%20-%2013%20ADOPSV%2008.jpg`;
+
 const DEFAULTS: Record<Template, TemplateDefaults> = {
+  business: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/WTP1JZY_QhF9whFgbPrljQ/media/0000%20Zilver%2027%20-%20MAILHEADER%20ALGEMEEN%20(1).jpg`,
+    heroAlt: "PSV Business",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/WTP1JZY_QhF9whFgbPrljQ/media/0000%20Zilver%2027%20-%20MAILHEADER%20ALGEMEEN%20(1).jpg`,
+    heroLink: "",
+    aanhefText: "Hi {VOORNAAM}",
+    blocks: [newBlock({ heeftCta: true, ctaLabel: "AANMELDEN", ctaUrl: "" })],
+    heeftAfsluitRegel: true,
+    afsluitRegel: "Met sportieve groet,",
+    disclaimerTekst: "Je ontvangt deze mail omdat je uitgenodigd bent.",
+    misNiksEmail: "email@services.psv.nl",
+    utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+    businessSponsorPreviewUrl: PSVBUSINESS_SPONSOR_PREVIEW,
+  },
   kaartverkoop: {
     heroUrl: `${MAILEON_CDN_HOST}/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg`,
     heroAlt: "Scoor nu je tickets",
@@ -230,6 +322,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
   },
   fanstore: {
     heroUrl: `${MAILEON_CDN_HOST}/c/3zu9kpkvY_MQ1abjXEIUGQ/media/4676%20Gifting%202025%20MAILING%20-%20algemeen%20-%2001.jpg`,
@@ -246,6 +339,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
   },
   soccerschool: {
     heroUrl: `${MAILEON_CDN_HOST}/c/3zu9kpkvY_OjJKhxaO6BCA/media/4663%20Mailheaders%20Soccerschool3_1.jpg`,
@@ -266,6 +360,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
   },
   tours: {
     heroUrl: `${MAILEON_CDN_HOST}/c/01cTNhJhAbMT2cYd5HJzRg/media/template-psv-tours-header.png`,
@@ -286,6 +381,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
   },
   prematch: {
     heroUrl: "",
@@ -301,6 +397,50 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+  },
+  psvplay: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/grDHLc4GmamqZDD9ZI__Pw/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%201%20header.jpg`,
+    heroAlt: "PSV Play",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/grDHLc4GmamqZDD9ZI__Pw/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%201%20header.jpg`,
+    heroLink: "https://www.psv.nl/psv-play",
+    aanhefText: "",
+    blocks: [],
+    heeftAfsluitRegel: false,
+    afsluitRegel: "",
+    disclaimerTekst: "Je ontvangt deze mail omdat je hebt aangegeven interesse te hebben in PSV Play. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    psvplayIntroText: "",
+    psvplayCta1Label: "BEKIJK OP PSV PLAY",
+    psvplayCta1Url: "https://www.psv.nl/psv-play",
+    psvplayCta2Label: "Meer over PSV Play >",
+    psvplayCta2Url: "https://www.psv.nl/psv-play",
+    psvplayItems: [
+      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh8n265rTmn00A/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%202%20blok.jpg`, imageAlt: "PSV Play video 1", quote: "" }),
+      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh-mtsFmywk9tg/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%203%20blok.jpg`, imageAlt: "PSV Play video 2", quote: "" }),
+      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh_EXPIDNS4M0w/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%204%20blok.jpg`, imageAlt: "PSV Play video 3", quote: "" }),
+    ],
+    businessSponsorPreviewUrl: "",
+  },
+  partnerships: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/R7sloben33Nl8ME6CC4qlA/media/4862%20Kracht%20van%20VDL%20-%20MAILING_Banenmarkt.jpg`,
+    heroAlt: "PSV Partnerships",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/R7sloben33Nl8ME6CC4qlA/media/4862%20Kracht%20van%20VDL%20-%20MAILING_Banenmarkt.jpg`,
+    heroLink: "",
+    aanhefText: "Hi {VOORNAAM}",
+    blocks: [newBlock({ heeftCta: true, ctaLabel: "MEER INFORMATIE", ctaUrl: "" })],
+    heeftAfsluitRegel: true,
+    afsluitRegel: "Groet, PSV",
+    disclaimerTekst:
+      "Je ontvangt deze mail omdat je hebt aangegeven interesse te hebben in PSV Partnerships. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
   },
 };
 
@@ -362,6 +502,8 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     fanstoreNavTrainingUrl: (base.fanstoreNavTrainingUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavTrainingUrl,
     fanstoreNavNieuwUrl: (base.fanstoreNavNieuwUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavNieuwUrl,
     fanstoreNavSaleUrl: (base.fanstoreNavSaleUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavSaleUrl,
+    psvplayItems: Array.isArray(raw.psvplayItems) ? raw.psvplayItems as PsvPlayItem[] : PSVPLAY_DEFAULTS.psvplayItems,
+    businessSponsorPreviewUrl: (base.businessSponsorPreviewUrl as string | undefined) ?? DEFAULTS[template].businessSponsorPreviewUrl,
   };
 }
 
@@ -576,8 +718,483 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
 </html>`;
 }
 
+const PSVPLAY_LOGO_SRC_PREVIEW = `${PREVIEW_CDN_HOST}/c/eSRD9kR1b2ozxJx0vkpBgQ/media/4627%20PSV%20Play%20-%20oktober%20recap%20-%20header.jpg`;
+const PSVPLAY_LOGO_SRC_EXPORT = `${MAILEON_CDN_HOST}/c/eSRD9kR1b2ozxJx0vkpBgQ/media/4627%20PSV%20Play%20-%20oktober%20recap%20-%20header.jpg`;
+const PSVPLAY_PATTERN_SRC_PREVIEW = `${PREVIEW_CDN_HOST}/c/oNgEaVc-AGBG66Sf2Grt1g/media/0000%20Pre-Match%20-%2014%20FEYPSV8.jpg`;
+const PSVPLAY_PATTERN_SRC_EXPORT = `${MAILEON_CDN_HOST}/c/oNgEaVc-AGBG66Sf2Grt1g/media/0000%20Pre-Match%20-%2014%20FEYPSV8.jpg`;
+
+function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string {
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
+  const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
+  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+
+  const toExportSrc = (previewUrl: string) =>
+    previewUrl.startsWith(PREVIEW_CDN_HOST)
+      ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST)
+      : previewUrl;
+  const imgSrc = (previewUrl: string) => forExport ? toExportSrc(previewUrl) : previewUrl;
+
+  const heroSrc = imgSrc(state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST));
+  const logoSrc = forExport ? PSVPLAY_LOGO_SRC_EXPORT : PSVPLAY_LOGO_SRC_PREVIEW;
+  const patternSrc = forExport ? PSVPLAY_PATTERN_SRC_EXPORT : PSVPLAY_PATTERN_SRC_PREVIEW;
+
+  const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "PSV Play preview";
+  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
+  const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
+  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const contactId = forExport ? "[[CONTACT|ID]]" : "000001";
+  const checksum = forExport ? "[[CONTACT|CHECKSUM]]" : "abc123";
+  const fullName = forExport ? "[[% contact 'FULLNAME' 'onbekend']]" : "John Doe";
+  const emailAddr = forExport ? "[[% email]]" : "john@example.com";
+  const memberNr = forExport ? "[[% contact 'MEMBERNUMBERPRIOR' 'onbekend']]" : "123456";
+  const mv = (variable: string, preview: string) => forExport ? variable : preview;
+
+  const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+
+  const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
+  const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
+  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+
+  const cta1Href = forExport ? `[[LINK|"${utm(state.psvplayCta1Url)}"]]` : state.psvplayCta1Url || "#";
+  const cta2Href = forExport ? `[[LINK|"${utm(state.psvplayCta2Url)}"]]` : state.psvplayCta2Url || "#";
+
+  const introBlock = `
+          <!-- Intro -->
+          <tr>
+            <td bgcolor="#ED1B24" style="background-color:#ED1B24;padding:20px 30px;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;line-height:20px;">${state.psvplayIntroText}</p>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#ED1B24" style="background-color:#ED1B24;padding:10px 20px 0;text-align:center;">
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                href="${cta1Href}" style="height:36px;v-text-anchor:middle;width:220px;" arcsize="0%" stroke="t" strokecolor="#ED1B24" fillcolor="#ffffff">
+                <w:anchorlock/>
+                <center style="color:#ED1B24;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;">${state.psvplayCta1Label}</center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-->
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td bgcolor="#ffffff" style="background-color:#ffffff;border:2px solid #ED1B24;border-radius:0;">
+                    <a href="${cta1Href}" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-block;padding:8px 20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ED1B24;text-decoration:none;letter-spacing:0.5px;"
+                    >${state.psvplayCta1Label}</a>
+                  </td>
+                </tr>
+              </table>
+              <!--<![endif]-->
+            </td>
+          </tr>
+          ${state.psvplayCta2Label ? `<tr>
+            <td bgcolor="#ED1B24" style="background-color:#ED1B24;padding:10px 20px 20px;text-align:center;">
+              <a href="${cta2Href}" target="_blank" rel="noopener noreferrer"
+                 style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;text-decoration:none;line-height:20px;"
+              >${state.psvplayCta2Label}</a>
+            </td>
+          </tr>` : `<tr><td bgcolor="#ED1B24" style="background-color:#ED1B24;height:20px;"></td></tr>`}`;
+
+  const itemsHtml = state.psvplayItems.map((item, i) => {
+    const imageLeft = i % 2 === 0;
+    const itemImgSrc = imgSrc(item.imagePreviewUrl);
+    const itemImgHref = item.imageLink ? (forExport ? `[[LINK|"${utm(item.imageLink)}"]]` : item.imageLink) : null;
+    const itemCtaHref = forExport ? `[[LINK|"${utm(item.ctaUrl)}"]]` : item.ctaUrl || "#";
+    const imgCell = `<td width="300" valign="middle" style="width:300px;padding:0;">
+              ${itemImgHref ? `<a href="${itemImgHref}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">` : ""}
+              <img src="${itemImgSrc}" width="300" alt="${item.imageAlt}" style="display:block;width:100%;max-width:300px;height:auto;border:0;">
+              ${itemImgHref ? "</a>" : ""}
+            </td>`;
+    const textCell = `<td width="300" valign="middle" style="width:300px;padding:20px;text-align:center;background-color:#000000;">
+              <p style="margin:0 0 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-style:italic;color:#ffffff;line-height:22px;">${item.quote}</p>
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                href="${itemCtaHref}" style="height:36px;v-text-anchor:middle;width:160px;" arcsize="0%" stroke="f" fillcolor="#E30613">
+                <w:anchorlock/>
+                <center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;">${item.ctaLabel}</center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-->
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td bgcolor="#E30613" style="background-color:#E30613;">
+                    <a href="${itemCtaHref}" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-block;padding:8px 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;"
+                    >${item.ctaLabel}</a>
+                  </td>
+                </tr>
+              </table>
+              <!--<![endif]-->
+            </td>`;
+    return `<tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="600" role="presentation">
+                <tr>
+                  ${imageLeft ? imgCell + textCell : textCell + imgCell}
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+  }).join("\n          ");
+
+  const fbUrl = sl("https://www.facebook.com/PSV/");
+  const igUrl = sl("https://www.instagram.com/psv/");
+  const ytUrl = sl("https://www.youtube.com/user/psveindhoven");
+  const xUrl = sl("https://twitter.com/PSV");
+  const liUrl = sl("https://www.linkedin.com/company/psv/");
+  const ttUrl = sl("https://www.tiktok.com/@psv");
+
+  return `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="nl">
+<head>
+  <!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="format-detection" content="date=no">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${titleText}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <style type="text/css">
+    html,body{width:100%;height:100%;margin:0;padding:0;border:0;-webkit-text-size-adjust:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    img,a img{-ms-interpolation-mode:bicubic;outline:none;}
+    table,tbody,thead,tfoot,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;box-sizing:border-box;}
+    td,p,a{mso-line-height-rule:exactly;}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;}
+    u + #maileon-body a{color:inherit!important;text-decoration:none!important;}
+    #MessageViewBody a{color:inherit!important;text-decoration:none!important;}
+  </style>
+</head>
+<body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
+  ${openPixelHtml}
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
+    <tr>
+      <td align="center" valign="top">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:600px;" role="presentation">
+
+          <!-- Header strip -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:8px 10px 5px;text-align:right;">
+              <span style="font-family:'Titillium Web',Verdana,sans-serif;font-size:10px;color:#ffffff;">
+                <a href="${onlineVersion}" style="color:#ffffff;text-decoration:none;" target="_blank" rel="noopener noreferrer">Bekijk online</a>&nbsp;|&nbsp;<a href="${changeLanguageHref}" style="color:#ffffff;text-decoration:none;" target="_blank" rel="noopener noreferrer">Change language &#127468;&#127463;</a>
+              </span>
+            </td>
+          </tr>
+
+          <!-- PSV Play logo -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <img src="${logoSrc}" width="600" alt="PSV Play" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td bgcolor="#ED1B24" style="background-color:#ED1B24;padding:20px 40px;">
+              <div style="height:2px;background-color:#ffffff;font-size:2px;line-height:2px;">&nbsp;</div>
+            </td>
+          </tr>
+
+          <!-- Hero image -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              ${state.heroLink ? `<a href="${forExport ? `[[LINK|"${utm(state.heroLink)}"]]` : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">` : ""}
+              <img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+              ${state.heroLink ? "</a>" : ""}
+            </td>
+          </tr>
+
+          ${introBlock}
+
+          <!-- Spacer -->
+          <tr><td bgcolor="#000000" style="background-color:#000000;height:20px;"></td></tr>
+
+          <!-- Video items -->
+          ${itemsHtml || ""}
+
+          <!-- Pattern strip -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <img src="${patternSrc}" width="600" alt="PSV Eindhoven" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <!-- Feedback -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Social -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:30px 10px 20px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" role="presentation">
+                <tr><td style="height:1px;background-color:#ffffff;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Contact info -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;">
+                Relatienummer: ${memberNr}<br>
+                Naam: ${fullName}<br>
+                E-mail: <a href="mailto:${emailAddr}" style="color:#ffffff;text-decoration:none;">${emailAddr}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Disclaimer -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 20px 20px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:18px;">${state.disclaimerTekst}</p>
+            </td>
+          </tr>
+
+          <!-- Unsubscribe -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 0 20px;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:20px;">
+                <a href="${prefsHref}" style="color:#ffffff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a>&nbsp;&nbsp;
+                <a href="${unsubHref}" style="color:#ffffff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a>&nbsp;&nbsp;
+                <a href="${changeEmailHref}" style="color:#ffffff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+              </p>
+              <p style="margin:8px 0 0;font-family:'Titillium Web',Verdana,sans-serif;font-size:11px;color:#777777;line-height:18px;">
+                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres <a href="${misNiksHref}" style="color:#777777;text-decoration:underline;" target="_blank" rel="noopener noreferrer">email@newsletter.psv.nl</a> toe aan je adresboek en aan de lijst met veilige afzenders.
+              </p>
+            </td>
+          </tr>
+
+          <tr><td bgcolor="#000000" style="background-color:#000000;height:40px;"></td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): string {
+  const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
+
+  const toExportSrc = (previewUrl: string) =>
+    previewUrl.startsWith(PREVIEW_CDN_HOST)
+      ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST)
+      : previewUrl;
+  const imgSrc = (previewUrl: string) => forExport ? toExportSrc(previewUrl) : previewUrl;
+
+  const heroSrc = imgSrc(state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST));
+  const sponsorSrc = imgSrc(state.businessSponsorPreviewUrl || PSVBUSINESS_SPONSOR_PREVIEW);
+  const patternSrc = forExport ? PSVBUSINESS_PATTERN_EXPORT : PSVBUSINESS_PATTERN_PREVIEW;
+
+  const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "PSV Business preview";
+  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
+  const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
+  const unsubHref = forExport ? "[[UNSUBSCRIBE]]" : "#";
+  const changeEmailHref = `mailto:business@psv.nl?subject=E-mailadres%20wijzigen&body=Beste%20PSV%20Business%20Support%2C%0A%0AMijn%20e-mailadres%20is%20gewijzigd.%20Mijn%20nieuwe%20e-mailadres%20is%3A`;
+  const sponsorLinkHref = forExport ? `[[LINK|"https://www.psv.nl/business/home"]]` : "https://www.psv.nl/business/home";
+
+  const aanhefResolved = resolveAanhef(state.aanhefText || "Hi {VOORNAAM}", forExport);
+
+  const makeCtaRowBusiness = (label: string, href: string, bg: string) => `<tr>
+      <td bgcolor="${bg}" style="background-color:${bg};padding:10px 20px 0;text-align:left;">
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+          href="${href}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="0%" stroke="f" fillcolor="#E30613">
+          <w:anchorlock/>
+          <center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${label}</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-->
+        <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+          <tr>
+            <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
+              <a href="${href}" target="_blank" rel="noopener noreferrer"
+                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+              >${label}</a>
+            </td>
+          </tr>
+        </table>
+        <!--<![endif]-->
+      </td>
+    </tr>`;
+
+  const makeSecLinkRowBusiness = (label: string, href: string, bg: string, linkColor: string) => `<tr>
+      <td bgcolor="${bg}" style="background-color:${bg};padding:10px 20px;text-align:left;">
+        <a href="${href}" target="_blank" rel="noopener noreferrer"
+           style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${linkColor};text-decoration:none;line-height:20px;"
+        >${label}</a>
+      </td>
+    </tr>`;
+
+  const blocksHtml = state.blocks.map(block => {
+    const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
+    const contentRow = block.content
+      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:20px;text-align:left;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>`
+      : "";
+    const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
+    const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
+    const ctaRow = block.heeftCta && block.ctaLabel ? makeCtaRowBusiness(block.ctaLabel, bCtaHref, cfg.bg) : "";
+    const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink
+      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>`
+      : "";
+    const secRow = block.heeftSecLink && block.secLinkLabel ? makeSecLinkRowBusiness(block.secLinkLabel, bSecHref, cfg.bg, cfg.link) : "";
+    return contentRow + ctaRow + secRow + spacerRow;
+  }).join("");
+
+  const afsluitBlock = state.heeftAfsluitRegel && state.afsluitRegel
+    ? `<tr>
+        <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 20px;text-align:left;">
+          <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;">${state.afsluitRegel}</p>
+        </td>
+      </tr>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="nl">
+<head>
+  <!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="format-detection" content="date=no">
+  <meta name="format-detection" content="address=no">
+  <meta name="format-detection" content="email=no">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${titleText}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <style type="text/css">
+    html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
+    img,a img{-ms-interpolation-mode:bicubic;outline:none;}
+    table,tbody,thead,tfoot,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;box-sizing:border-box;}
+    td,p,a,li,blockquote{mso-line-height-rule:exactly;}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    u + #maileon-body a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    #MessageViewBody a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+  </style>
+</head>
+<body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
+  ${openPixelHtml}
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
+    <tr>
+      <td align="center" valign="top">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:600px;" role="presentation">
+
+          <!-- Header strip -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:8px 10px 5px;text-align:right;">
+              <span style="font-family:'Titillium Web',Verdana,sans-serif;font-size:10px;color:#ffffff;">
+                <a href="${onlineVersion}" style="color:#ffffff;text-decoration:none;" target="_blank" rel="noopener noreferrer">Bekijk online</a>
+              </span>
+            </td>
+          </tr>
+
+          <!-- Hero image -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <!-- Aanhef -->
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 10px;text-align:left;">
+              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:600;color:#000000;letter-spacing:0.65px;line-height:20px;">${aanhefResolved},</p>
+            </td>
+          </tr>
+
+          <!-- Content blocks -->
+          ${blocksHtml || `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:10px;"></td></tr>`}
+
+          <!-- Closing line -->
+          ${afsluitBlock}
+
+          <!-- Sponsor logos -->
+          ${state.businessSponsorPreviewUrl || !forExport ? `<tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <a href="${sponsorLinkHref}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">
+                <img src="${sponsorSrc}" width="600" alt="PSV Business partners" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+              </a>
+            </td>
+          </tr>` : ""}
+
+          <!-- Pattern strip -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <img src="${patternSrc}" width="600" alt="PSV Eindhoven" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <!-- Footer text -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px;text-align:left;">
+              <p style="margin:0 0 12px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;font-style:italic;">
+                ${state.disclaimerTekst}
+              </p>
+              <p style="margin:0 0 12px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;font-style:italic;">
+                Wil je er zeker van zijn dat je geen e-mails van PSV Business mist? Voeg dan ons e-mailadres (<a href="${forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm"}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met veilige afzenders.
+              </p>
+              <p style="margin:0 0 12px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;font-style:italic;">
+                PSV Business&nbsp; | &nbsp;Philips Stadion Ingang 8&nbsp; | &nbsp;+31 (0)40 2505 531&nbsp; | &nbsp;<a href="mailto:business@psv.nl" style="color:#ffffff;text-decoration:none;">business@psv.nl</a>
+              </p>
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;font-style:italic;">
+                <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Meld je af</a>&nbsp; - &nbsp;<a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   if (state.template === "prematch") return generatePrematchHTML(state, forExport);
+  if (state.template === "psvplay") return generatePsvPlayHTML(state, forExport);
+  if (state.template === "business") return generatePsvBusinessHTML(state, forExport);
 
   const isFS = state.template === "fanstore";
   const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
@@ -725,7 +1342,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const afsluitBlock =
     state.heeftAfsluitRegel && state.afsluitRegel
       ? `<tr>
-          <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 20px 20px;text-align:center;">
+          <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 20px;text-align:center;">
             <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;">${state.afsluitRegel}</p>
           </td>
         </tr>`
@@ -965,10 +1582,11 @@ function FooterCard({
             />
             <p className="text-xs text-muted-foreground">
               De zin &ldquo;Wil je er zeker van zijn…&rdquo; wordt altijd automatisch toegevoegd.
+              {state.template === "business" && " De Business-contactregel en uitschrijflinks staan vast in het template."}
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="misNiksEmail">&ldquo;Mis niks van PSV&rdquo; e-mailadres</Label>
+            <Label htmlFor="misNiksEmail">{state.template === "business" ? `"Mis niks" e-mailadres (PSV Business)` : `"Mis niks van PSV" e-mailadres`}</Label>
             <Input
               id="misNiksEmail"
               value={state.misNiksEmail}
@@ -1170,6 +1788,8 @@ export function MailBuilderForm() {
   }
 
   const isPrematch = state.template === "prematch";
+  const isPsvPlay = state.template === "psvplay";
+  const isBusiness = state.template === "business";
   const isFS = state.template === "fanstore";
 
   const preset = DEVICE_PRESETS[device];
@@ -1194,16 +1814,19 @@ export function MailBuilderForm() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kaartverkoop">Kaartverkoop</SelectItem>
-                  <SelectItem value="fanstore">FANstore</SelectItem>
-                  <SelectItem value="soccerschool">Soccer School</SelectItem>
-                  <SelectItem value="tours">Tours</SelectItem>
-                  <SelectItem value="prematch">Pre-match</SelectItem>
+                  <SelectItem value="business">PSV Business</SelectItem>
+                  <SelectItem value="fanstore">PSV FANstore</SelectItem>
+                  <SelectItem value="kaartverkoop">PSV Kaartverkoop</SelectItem>
+                  <SelectItem value="prematch">PSV 1 Pre-match</SelectItem>
+                  <SelectItem value="partnerships">PSV Partnerships</SelectItem>
+                  <SelectItem value="psvplay">PSV Play</SelectItem>
+                  <SelectItem value="soccerschool">PSV Soccer School</SelectItem>
+                  <SelectItem value="tours">PSV Tours</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {!isPrematch && (
+            {!isPrematch && !isPsvPlay && (
               <div className="space-y-2">
                 <Label>UTM-campagne</Label>
                 <Input
@@ -1252,7 +1875,7 @@ export function MailBuilderForm() {
         )}
 
         {/* HERO AFBEELDING */}
-        {!isPrematch && (
+        {!isPrematch && !isPsvPlay && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Hero afbeelding</CardTitle>
@@ -1322,6 +1945,29 @@ export function MailBuilderForm() {
           </Card>
         )}
 
+        {/* PSV BUSINESS: Sponsor-balk */}
+        {isBusiness && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Sponsor-balk</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="businessSponsorUrl">Afbeelding</Label>
+                <Input
+                  id="businessSponsorUrl"
+                  placeholder="https://images.maileon-static.com/c/…"
+                  value={state.businessSponsorPreviewUrl}
+                  onChange={(e) => set("businessSponsorPreviewUrl", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Seizoensgebonden sponsorbalk. Export-URL wordt automatisch afgeleid.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* FANSTORE NAVBAR URLS */}
         {isFS && (
           <Card>
@@ -1349,8 +1995,142 @@ export function MailBuilderForm() {
           </Card>
         )}
 
+        {/* PSV PLAY */}
+        {isPsvPlay && (
+          <>
+            {/* Hero afbeelding (PSV Play) */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Hero afbeelding</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ppHeroUrl">Afbeelding</Label>
+                  <Input
+                    id="ppHeroUrl"
+                    placeholder="https://images.maileon-static.com/c/…"
+                    value={state.heroPreviewUrl}
+                    onChange={(e) => set("heroPreviewUrl", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ppHeroAlt">Alt-tekst</Label>
+                  <Input id="ppHeroAlt" value={state.heroAlt} onChange={(e) => set("heroAlt", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ppHeroLink">Klik-link (optioneel)</Label>
+                  <Input id="ppHeroLink" value={state.heroLink} onChange={(e) => set("heroLink", e.target.value)} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Intro + CTAs */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Intro</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ppIntro">Tekst (rood blok)</Label>
+                  <Textarea
+                    id="ppIntro"
+                    placeholder="Beschrijving van de video of het thema…"
+                    value={state.psvplayIntroText}
+                    onChange={(e) => set("psvplayIntroText", e.target.value)}
+                    className="min-h-[80px] text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CTA-knop</Label>
+                  <Input placeholder="BEKIJK OP PSV PLAY" value={state.psvplayCta1Label} onChange={(e) => set("psvplayCta1Label", e.target.value)} />
+                  <Input placeholder="https://www.psv.nl/psv-play" value={state.psvplayCta1Url} onChange={(e) => set("psvplayCta1Url", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Secundaire link (optioneel)</Label>
+                  <Input placeholder="Meer over PSV Play >" value={state.psvplayCta2Label} onChange={(e) => set("psvplayCta2Label", e.target.value)} />
+                  <Input placeholder="https://www.psv.nl/psv-play" value={state.psvplayCta2Url} onChange={(e) => set("psvplayCta2Url", e.target.value)} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Video items */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Video items</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {state.psvplayItems.map((item, i) => (
+                  <div key={item.id} className="rounded-md border border-input bg-card p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">Item {i + 1} — foto {i % 2 === 0 ? "links" : "rechts"}</span>
+                      <button
+                        type="button"
+                        onClick={() => set("psvplayItems", state.psvplayItems.filter((_, j) => j !== i))}
+                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                        aria-label="Verwijder item"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Input
+                        placeholder="https://images.maileon-static.com/c/…"
+                        value={item.imagePreviewUrl}
+                        onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imagePreviewUrl: e.target.value } : it))}
+                        className="h-8 text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Alt-tekst"
+                          value={item.imageAlt}
+                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imageAlt: e.target.value } : it))}
+                          className="h-8 text-xs flex-1"
+                        />
+                        <Input
+                          placeholder="Klik-link (opt.)"
+                          value={item.imageLink}
+                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imageLink: e.target.value } : it))}
+                          className="h-8 text-xs flex-1"
+                        />
+                      </div>
+                      <Textarea
+                        placeholder="Quote of beschrijving…"
+                        value={item.quote}
+                        onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, quote: e.target.value } : it))}
+                        className="min-h-[60px] text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="BEKIJK NU"
+                          value={item.ctaLabel}
+                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, ctaLabel: e.target.value } : it))}
+                          className="h-8 text-xs w-36 flex-shrink-0"
+                        />
+                        <Input
+                          placeholder="https://www.psv.nl/psv-play"
+                          value={item.ctaUrl}
+                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, ctaUrl: e.target.value } : it))}
+                          className="h-8 text-xs flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => set("psvplayItems", [...state.psvplayItems, newPsvPlayItem()])}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Item toevoegen
+                </button>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
         {/* INHOUD */}
-        {!isPrematch && (
+        {!isPrematch && !isPsvPlay && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Inhoud</CardTitle>
@@ -1431,12 +2211,10 @@ export function MailBuilderForm() {
                         </div>
                       </div>
                       {/* Content */}
-                      <Textarea
-                        placeholder={`Tekst of HTML: <b>vet</b>, <br>, <a href="…">link</a>`}
+                      <RichTextEditor
                         value={block.content}
-                        onChange={(e) => updateBlock(i, "content", e.target.value)}
-                        onKeyDown={(e) => applyFormatting(e, block.content, (v) => updateBlock(i, "content", v))}
-                        className="min-h-[80px] font-mono text-xs"
+                        onChange={(v) => updateBlock(i, "content", v)}
+                        className="min-h-[80px]"
                       />
                       <p className="text-xs text-muted-foreground">⌘B vet · ⌘I cursief · ⌘U onderstreept</p>
                       {/* CTA toggle */}
