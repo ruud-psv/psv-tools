@@ -315,8 +315,8 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     blocks,
     aanhefText: (() => {
       if (typeof base.aanhefText === "string" && base.aanhefText) return base.aanhefText;
-      const prefix = (base.aanhefPrefix as string | undefined) ?? "Hi";
-      const token = (base.aanhefField as string) === "FULLNAME" ? "{VOLLEDIGE NAAM}" : "{VOORNAAM}";
+      const prefix = (raw.aanhefPrefix as string | undefined) ?? "Hi";
+      const token = (raw.aanhefField as string) === "FULLNAME" ? "{VOLLEDIGE NAAM}" : "{VOORNAAM}";
       return `${prefix} ${token}`;
     })(),
     heroLink: stripLink(base.heroLink),
