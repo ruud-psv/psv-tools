@@ -623,7 +623,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
-        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:600px;" role="presentation">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
 
           <!-- Header strip -->
           <tr>
@@ -833,7 +833,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
             </td>`;
     return `<tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              <table cellpadding="0" cellspacing="0" border="0" width="600" role="presentation">
+              <table cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;" role="presentation">
                 <tr>
                   ${imageLeft ? imgCell + textCell : textCell + imgCell}
                 </tr>
@@ -877,7 +877,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
-        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:600px;" role="presentation">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
 
           <!-- Header strip -->
           <tr>
@@ -1114,7 +1114,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
-        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:600px;" role="presentation">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
 
           <!-- Header strip -->
           <tr>
@@ -1379,7 +1379,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
-        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:600px;" role="presentation">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
 
           <!-- Header strip -->
           <tr>
