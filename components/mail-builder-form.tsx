@@ -44,10 +44,19 @@ import { cn } from "@/lib/utils";
 
 type Template = "kaartverkoop" | "fanstore" | "soccerschool" | "tours" | "prematch";
 
+type BlockBg = "wit" | "grijs" | "rood" | "zwart";
+
+const BLOCK_BG_CONFIG: Record<BlockBg, { bg: string; text: string; link: string }> = {
+  wit:   { bg: "#ffffff", text: "#000000", link: "#EE1C24" },
+  grijs: { bg: "#F1F1F1", text: "#000000", link: "#EE1C24" },
+  rood:  { bg: "#E30613", text: "#ffffff", link: "#ffffff" },
+  zwart: { bg: "#000000", text: "#ffffff", link: "#ffffff" },
+};
+
 interface BodyBlock {
   id: string;
   content: string;
-  isGrijs: boolean;
+  blockBg: BlockBg;
   heeftCta: boolean;
   ctaLabel: string;
   ctaUrl: string;
@@ -60,7 +69,7 @@ function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
   return {
     id: Math.random().toString(36).slice(2),
     content: "",
-    isGrijs: false,
+    blockBg: "wit",
     heeftCta: false,
     ctaLabel: "",
     ctaUrl: "",
@@ -136,6 +145,28 @@ const PREVIEW_CDN_HOST = "https://images.maileon-static.com";
 
 function wrapLink(url: string): string {
   return url ? `[[LINK|"${url}"]]` : "";
+}
+
+function applyFormatting(
+  e: React.KeyboardEvent<HTMLTextAreaElement>,
+  value: string,
+  setValue: (v: string) => void
+) {
+  if (!e.metaKey && !e.ctrlKey) return;
+  const tagMap: Record<string, string> = { b: "b", i: "i", u: "u" };
+  const tag = tagMap[e.key.toLowerCase()];
+  if (!tag) return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const s = el.selectionStart;
+  const end = el.selectionEnd;
+  const open = `<${tag}>`;
+  const close = `</${tag}>`;
+  setValue(value.slice(0, s) + open + value.slice(s, end) + close + value.slice(end));
+  requestAnimationFrame(() => {
+    el.selectionStart = s + open.length;
+    el.selectionEnd = end + open.length;
+  });
 }
 
 function applyUtm(url: string, campaign: string): string {
@@ -224,7 +255,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     aanhefText: "Hoi {VOORNAAM}",
     blocks: [
       newBlock({ content: "Wil jij trainen zoals jouw favoriete PSV'er? Ontdek de PSV Starclinics op PSV Campus De Herdgang! Tijdens deze unieke voetbaldag werk je aan skills zoals snelheid, wendbaarheid, passing en reactievermogen – precies zoals de profs dat doen." }),
-      newBlock({ content: "<p style=\"margin:0 0 10px;font-weight:bold;\">Wat maakt deze trainingen bijzonder?&nbsp;</p><p style=\"margin:0;\">✅ Trainingen met thema's van PSV–spelers<br>✅ Compleet dagprogramma van 09.15 tot 16.00 uur<br>✅ 25% korting op jouw volgende Starclinic</p>", isGrijs: true }),
+      newBlock({ content: "<p style=\"margin:0 0 10px;font-weight:bold;\">Wat maakt deze trainingen bijzonder?&nbsp;</p><p style=\"margin:0;\">✅ Trainingen met thema's van PSV–spelers<br>✅ Compleet dagprogramma van 09.15 tot 16.00 uur<br>✅ 25% korting op jouw volgende Starclinic</p>", blockBg: "grijs" }),
       newBlock({ content: "Wil jij erbij zijn? Schrijf je dan snel in, want de plekken zijn beperkt!", heeftCta: true, ctaLabel: "INSCHRIJVEN", heeftSecLink: true, secLinkLabel: "Meer informatie >" }),
     ],
     heeftAfsluitRegel: false,
@@ -244,7 +275,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     aanhefText: "Hoi {VOORNAAM}",
     blocks: [
       newBlock({ content: "Heb jij thuis een jonge PSV'er die niet genoeg kan krijgen van onze club? Kom dan langs tijdens de carnavalsvakantie. Dan organiseren we opnieuw de PSV KIDStour. Samen met je kind ontdek je plekken waar je normaal nooit komt. En natuurlijk gaan jullie naar huis met een echt PSV-aandenken!" }),
-      newBlock({ content: "<p style=\"margin:0 0 10px;font-weight:bold;\">Wat kun je verwachten?</p><p style=\"margin:0;\">✅ Speur naar items op je bingokaart<br>✅ Ontmoet Phoxy<br>✅ Een uniek PSV-moment om nooit te vergeten</p>", isGrijs: true }),
+      newBlock({ content: "<p style=\"margin:0 0 10px;font-weight:bold;\">Wat kun je verwachten?</p><p style=\"margin:0;\">✅ Speur naar items op je bingokaart<br>✅ Ontmoet Phoxy<br>✅ Een uniek PSV-moment om nooit te vergeten</p>", blockBg: "grijs" }),
       newBlock({ content: "<b>Let op:</b> het aantal plekken is beperkt. Reserveer snel en maak deze carnavalsvakantie extra speciaal!", heeftCta: true, ctaLabel: "RESERVEER JOUW PLEK", heeftSecLink: true, secLinkLabel: "Meer informatie >" }),
     ],
     heeftAfsluitRegel: false,
@@ -289,7 +320,13 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     ((raw.exploitatie as Template) ?? "kaartverkoop");
 
   const blocks: BodyBlock[] = (() => {
-    if (Array.isArray(raw.blocks) && raw.blocks.length > 0) return raw.blocks as BodyBlock[];
+    if (Array.isArray(raw.blocks) && raw.blocks.length > 0) {
+      const validBg: BlockBg[] = ["wit", "grijs", "rood", "zwart"];
+      return (raw.blocks as BodyBlock[]).map(b => ({
+        ...b,
+        blockBg: validBg.includes(b.blockBg) ? b.blockBg : ((b as unknown as { isGrijs?: boolean }).isGrijs ? "grijs" : "wit"),
+      }));
+    }
     // Migrate from old flat fields
     const result: BodyBlock[] = [];
     const oldBody = (raw.body as string | undefined) ?? "";
@@ -635,8 +672,8 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
       </tr>`
     : ""; // kaartverkoop/soccerschool/tours: no logo block
 
-  const makeCtaRow = (label: string, href: string) => `<tr>
-      <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 0;text-align:center;">
+  const makeCtaRow = (label: string, href: string, bg: string) => `<tr>
+      <td bgcolor="${bg}" style="background-color:${bg};padding:10px 20px 0;text-align:center;">
         <!--[if mso]>
         <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
           href="${href}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="0%" stroke="f" fillcolor="#E30613">
@@ -658,18 +695,18 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
       </td>
     </tr>`;
 
-  const makeSecLinkRow = (label: string, href: string) => `<tr>
-      <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px;text-align:center;">
+  const makeSecLinkRow = (label: string, href: string, bg: string, linkColor: string) => `<tr>
+      <td bgcolor="${bg}" style="background-color:${bg};padding:10px 20px;text-align:center;">
         <a href="${href}" target="_blank" rel="noopener noreferrer"
-           style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#EE1C24;text-decoration:none;line-height:20px;"
+           style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${linkColor};text-decoration:none;line-height:20px;"
         >${label}</a>
       </td>
     </tr>`;
 
   const blocksHtml = state.blocks.map(block => {
-    const bg = block.isGrijs ? "#F1F1F1" : "#ffffff";
+    const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
     const contentRow = block.content
-      ? `<tr><td bgcolor="${bg}" style="background-color:${bg};padding:20px;text-align:center;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;text-align:center;">${block.content}</div></td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:20px;text-align:center;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>`
       : "";
     const bCtaHref = block.heeftCta && block.ctaUrl
       ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl)
@@ -677,11 +714,11 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
     const bSecHref = block.heeftSecLink && block.secLinkUrl
       ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl)
       : "#";
-    const ctaRow = block.heeftCta && block.ctaLabel ? makeCtaRow(block.ctaLabel, bCtaHref) : "";
+    const ctaRow = block.heeftCta && block.ctaLabel ? makeCtaRow(block.ctaLabel, bCtaHref, cfg.bg) : "";
     const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink
-      ? `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>`
       : "";
-    const secRow = block.heeftSecLink && block.secLinkLabel ? makeSecLinkRow(block.secLinkLabel, bSecHref) : "";
+    const secRow = block.heeftSecLink && block.secLinkLabel ? makeSecLinkRow(block.secLinkLabel, bSecHref, cfg.bg, cfg.link) : "";
     return contentRow + ctaRow + secRow + spacerRow;
   }).join("");
 
@@ -1364,15 +1401,29 @@ export function MailBuilderForm() {
                       <div className="flex items-center gap-2">
                         <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
                         <span className="text-xs font-medium text-muted-foreground">Blok {i + 1}</span>
-                        <div className="ml-auto flex items-center gap-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground">Grijs</span>
-                            <Toggle checked={block.isGrijs} onChange={(v) => updateBlock(i, "isGrijs", v)} />
-                          </div>
+                        <div className="ml-auto flex items-center gap-2">
+                          {(["wit", "grijs", "rood", "zwart"] as const).map((bg) => {
+                            const cfg = BLOCK_BG_CONFIG[bg];
+                            return (
+                              <button
+                                key={bg}
+                                type="button"
+                                title={bg.charAt(0).toUpperCase() + bg.slice(1)}
+                                onClick={() => updateBlock(i, "blockBg", bg)}
+                                className={cn(
+                                  "h-5 w-5 rounded-sm border transition-all",
+                                  block.blockBg === bg
+                                    ? "border-primary ring-2 ring-primary ring-offset-1 scale-110"
+                                    : "border-input hover:border-primary/50"
+                                )}
+                                style={{ backgroundColor: cfg.bg }}
+                              />
+                            );
+                          })}
                           <button
                             type="button"
                             onClick={() => removeBlock(i)}
-                            className="text-muted-foreground hover:text-destructive transition-colors"
+                            className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
                             aria-label="Verwijder blok"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1384,8 +1435,10 @@ export function MailBuilderForm() {
                         placeholder={`Tekst of HTML: <b>vet</b>, <br>, <a href="…">link</a>`}
                         value={block.content}
                         onChange={(e) => updateBlock(i, "content", e.target.value)}
+                        onKeyDown={(e) => applyFormatting(e, block.content, (v) => updateBlock(i, "content", v))}
                         className="min-h-[80px] font-mono text-xs"
                       />
+                      <p className="text-xs text-muted-foreground">⌘B vet · ⌘I cursief · ⌘U onderstreept</p>
                       {/* CTA toggle */}
                       <div className="space-y-2 border-t border-input pt-2">
                         <div className="flex items-center justify-between">
