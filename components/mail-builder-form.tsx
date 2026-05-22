@@ -2041,6 +2041,9 @@ export function MailBuilderForm() {
                     onChange={(e) => set("psvplayIntroText", e.target.value)}
                     className="min-h-[80px] text-sm"
                   />
+                  {!state.psvplayIntroText && (
+                    <p className="text-xs text-muted-foreground">Tip: gebruik de <a href="https://tools.psv.nl/dashboard/copy-generator" target="_blank" className="underline hover:text-foreground transition-colors">Mail tekst generator</a> om tekst op te bouwen.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>CTA-knop</Label>
@@ -2100,6 +2103,9 @@ export function MailBuilderForm() {
                         onChange={(html) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, quote: html } : it))}
                         className="min-h-[60px] text-xs"
                       />
+                      {!item.quote && (
+                        <p className="text-xs text-muted-foreground">Tip: gebruik de <a href="https://tools.psv.nl/dashboard/copy-generator" target="_blank" className="underline hover:text-foreground transition-colors">Mail tekst generator</a> om tekst op te bouwen.</p>
+                      )}
                       <div className="flex gap-2">
                         <Input
                           placeholder="BEKIJK NU"
@@ -2217,7 +2223,12 @@ export function MailBuilderForm() {
                         onChange={(v) => updateBlock(i, "content", v)}
                         className="min-h-[80px]"
                       />
-                      <p className="text-xs text-muted-foreground">⌘B vet · ⌘I cursief · ⌘U onderstreept</p>
+                      <p className="text-xs text-muted-foreground">
+                        ⌘B vet · ⌘I cursief · ⌘U onderstreept
+                        {!block.content && (
+                          <span className="block mt-1">Tip: gebruik de <a href="https://tools.psv.nl/dashboard/copy-generator" target="_blank" className="underline hover:text-foreground transition-colors">Mail tekst generator</a> om body-tekst op te bouwen.</span>
+                        )}
+                      </p>
                       {/* CTA toggle */}
                       <div className="space-y-2 border-t border-input pt-2">
                         <div className="flex items-center justify-between">
