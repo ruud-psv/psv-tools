@@ -88,6 +88,16 @@ function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem {
   };
 }
 
+interface PrematchImage {
+  id: string;
+  previewUrl: string;
+  alt: string;
+}
+
+function newPrematchImage(partial: Partial<PrematchImage> = {}): PrematchImage {
+  return { id: Math.random().toString(36).slice(2), previewUrl: "", alt: "", ...partial };
+}
+
 function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
   return {
     id: Math.random().toString(36).slice(2),
@@ -122,13 +132,7 @@ interface MailBuilderState {
   fanstoreNavNieuwUrl: string;
   fanstoreNavSaleUrl: string;
   // Prematch images (1–7 + footer)
-  prematchImg1PreviewUrl: string; prematchImg1Alt: string;
-  prematchImg2PreviewUrl: string; prematchImg2Alt: string;
-  prematchImg3PreviewUrl: string; prematchImg3Alt: string;
-  prematchImg4PreviewUrl: string; prematchImg4Alt: string;
-  prematchImg5PreviewUrl: string; prematchImg5Alt: string;
-  prematchImg6PreviewUrl: string; prematchImg6Alt: string;
-  prematchImg7PreviewUrl: string; prematchImg7Alt: string;
+  prematchImages: PrematchImage[];
   prematchFooterPreviewUrl: string; prematchFooterAlt: string;
   // PSV Play
   psvplayIntroText: string;
@@ -250,20 +254,15 @@ const FANSTORE_NAV_DEFAULTS = {
 };
 
 const PREMATCH_DEFAULTS = {
-  prematchImg1PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvyzHFKlbtg4dg/media/1.png`,
-  prematchImg1Alt: "Volendam - PSV",
-  prematchImg2PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvPxd_VPjsG0A/media/2.png`,
-  prematchImg2Alt: "PSV reist af naar het hoge noorden",
-  prematchImg3PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvxRWGlR6utS8w/media/3.png`,
-  prematchImg3Alt: "De huidige stand in de Vriendenlóterij Eredivisie",
-  prematchImg4PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvx0tCT39eCPwg/media/4.png`,
-  prematchImg4Alt: "Nieuw Record - PSV Wint 16 uitduels op rij",
-  prematchImg5PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvxjK0h13rCkEA/media/5.png`,
-  prematchImg5Alt: "Laatste 3 edities Groningen - PSV",
-  prematchImg6PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvzZGj_3pHotQw/media/6.png`,
-  prematchImg6Alt: "Team stats",
-  prematchImg7PreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvy-X8qFW1DCUw/media/7.png`,
-  prematchImg7Alt: "Breng een bezoek aan het Philips Stadion",
+  prematchImages: [
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvyzHFKlbtg4dg/media/1.png`, alt: "Volendam - PSV" }),
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvPxd_VPjsG0A/media/2.png`, alt: "PSV reist af naar het hoge noorden" }),
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvxRWGlR6utS8w/media/3.png`, alt: "De huidige stand in de Vriendenlóterij Eredivisie" }),
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvx0tCT39eCPwg/media/4.png`, alt: "Nieuw Record - PSV Wint 16 uitduels op rij" }),
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvxjK0h13rCkEA/media/5.png`, alt: "Laatste 3 edities Groningen - PSV" }),
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvzZGj_3pHotQw/media/6.png`, alt: "Team stats" }),
+    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvy-X8qFW1DCUw/media/7.png`, alt: "Breng een bezoek aan het Philips Stadion" }),
+  ],
   prematchFooterPreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvwInQHJ4sAwpQ/media/footer_2.png`,
   prematchFooterAlt: "Every moment counts",
 };
@@ -325,9 +324,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
   },
   fanstore: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/3zu9kpkvY_MQ1abjXEIUGQ/media/4676%20Gifting%202025%20MAILING%20-%20algemeen%20-%2001.jpg`,
+    heroUrl: `${MAILEON_CDN_HOST}/c/jxMwnzDx3RfEytiZNZjOPg/media/5009%20End%20of%20season%20sale%20-%20MAILING.png`,
     heroAlt: "PSV FANstore",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3zu9kpkvY_MQ1abjXEIUGQ/media/4676%20Gifting%202025%20MAILING%20-%20algemeen%20-%2001.jpg`,
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/jxMwnzDx3RfEytiZNZjOPg/media/5009%20End%20of%20season%20sale%20-%20MAILING.png`,
     heroLink: "https://www.psv.nl/fanstore",
     aanhefText: "Hi {VOORNAAM}",
     blocks: [newBlock({ heeftCta: true, ctaLabel: "SHOP NU", ctaUrl: "https://www.psv.nl/fanstore" })],
@@ -502,6 +501,7 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     fanstoreNavTrainingUrl: (base.fanstoreNavTrainingUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavTrainingUrl,
     fanstoreNavNieuwUrl: (base.fanstoreNavNieuwUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavNieuwUrl,
     fanstoreNavSaleUrl: (base.fanstoreNavSaleUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavSaleUrl,
+    prematchImages: Array.isArray(raw.prematchImages) ? raw.prematchImages as PrematchImage[] : PREMATCH_DEFAULTS.prematchImages,
     psvplayItems: Array.isArray(raw.psvplayItems) ? raw.psvplayItems as PsvPlayItem[] : PSVPLAY_DEFAULTS.psvplayItems,
     businessSponsorPreviewUrl: (base.businessSponsorPreviewUrl as string | undefined) ?? DEFAULTS[template].businessSponsorPreviewUrl,
   };
@@ -538,15 +538,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   const imgSrc = (previewUrl: string) =>
     forExport ? toExportSrc(previewUrl) : previewUrl;
 
-  const imgs = [
-    { src: imgSrc(state.prematchImg1PreviewUrl), alt: state.prematchImg1Alt },
-    { src: imgSrc(state.prematchImg2PreviewUrl), alt: state.prematchImg2Alt },
-    { src: imgSrc(state.prematchImg3PreviewUrl), alt: state.prematchImg3Alt },
-    { src: imgSrc(state.prematchImg4PreviewUrl), alt: state.prematchImg4Alt },
-    { src: imgSrc(state.prematchImg5PreviewUrl), alt: state.prematchImg5Alt },
-    { src: imgSrc(state.prematchImg6PreviewUrl), alt: state.prematchImg6Alt },
-    { src: imgSrc(state.prematchImg7PreviewUrl), alt: state.prematchImg7Alt },
-  ];
+  const imgs = state.prematchImages.map(img => ({ src: imgSrc(img.previewUrl), alt: img.alt }));
 
   const contentRows = imgs
     .map(
@@ -693,14 +685,24 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
             </td>
           </tr>
 
+          <!-- Disclaimer -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 20px 20px;text-align:center;">
+              <p style="margin:0 auto;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;max-width:560px;">
+                ${state.disclaimerTekst}&nbsp;&nbsp;<br><br>
+                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres (<a href="${misNiksHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met veilige afzenders.
+              </p>
+            </td>
+          </tr>
+
           <!-- Unsubscribe -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0 0 20px;text-align:center;">
               <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;">
                 <i>
-                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank">Voorkeuren aanpassen</a>&nbsp; &nbsp;
-                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank">Volledig uitschrijven</a>&nbsp; &nbsp;
-                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank">Wijzig je e-mailadres</a>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a>&nbsp; &nbsp;
+                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a>&nbsp; &nbsp;
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
                 </i>
               </p>
             </td>
@@ -811,7 +813,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
               ${itemImgHref ? "</a>" : ""}
             </td>`;
     const textCell = `<td width="300" valign="middle" style="width:300px;padding:20px;text-align:center;background-color:#000000;">
-              <p style="margin:0 0 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-style:italic;color:#ffffff;line-height:22px;">${item.quote}</p>
+              <div style="margin:0 0 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;line-height:22px;">${item.quote}</div>
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
                 href="${itemCtaHref}" style="height:36px;v-text-anchor:middle;width:160px;" arcsize="0%" stroke="f" fillcolor="#E30613">
@@ -946,9 +948,9 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
                   <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
                   <td style="padding:0 5px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
                   <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
                   <td style="padding:0 5px;"><a href="${liUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
                   <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
@@ -969,9 +971,9 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:20px 0;text-align:center;">
               <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;">
-                Relatienummer: ${memberNr}<br>
-                Naam: ${fullName}<br>
-                E-mail: <a href="mailto:${emailAddr}" style="color:#ffffff;text-decoration:none;">${emailAddr}</a>
+                Fullname: ${fullName}<br>
+                E-mail: <a href="mailto:${emailAddr}" style="color:#ffffff;text-decoration:none;font-style:normal;">${emailAddr}</a><br>
+                Membernummer: ${memberNr}
               </p>
             </td>
           </tr>
@@ -979,20 +981,22 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
           <!-- Disclaimer -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0 20px 20px;text-align:center;">
-              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:18px;">${state.disclaimerTekst}</p>
+              <p style="margin:0 auto;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;max-width:560px;">
+                ${state.disclaimerTekst}&nbsp;&nbsp;<br><br>
+                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres (<a href="${misNiksHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met veilige afzenders.
+              </p>
             </td>
           </tr>
 
           <!-- Unsubscribe -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0 0 20px;text-align:center;">
-              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:20px;">
-                <a href="${prefsHref}" style="color:#ffffff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a>&nbsp;&nbsp;
-                <a href="${unsubHref}" style="color:#ffffff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a>&nbsp;&nbsp;
-                <a href="${changeEmailHref}" style="color:#ffffff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
-              </p>
-              <p style="margin:8px 0 0;font-family:'Titillium Web',Verdana,sans-serif;font-size:11px;color:#777777;line-height:18px;">
-                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres <a href="${misNiksHref}" style="color:#777777;text-decoration:underline;" target="_blank" rel="noopener noreferrer">email@newsletter.psv.nl</a> toe aan je adresboek en aan de lijst met veilige afzenders.
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;">
+                <i>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a>&nbsp; &nbsp;
+                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a>&nbsp; &nbsp;
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i>
               </p>
             </td>
           </tr>
@@ -1323,7 +1327,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
     const contentRow = block.content
-      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:20px;text-align:center;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:20px;text-align:center;width:100%;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>`
       : "";
     const bCtaHref = block.heeftCta && block.ctaUrl
       ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl)
@@ -1793,7 +1797,7 @@ export function MailBuilderForm() {
   const isFS = state.template === "fanstore";
 
   const preset = DEVICE_PRESETS[device];
-  const scaledWidth = Math.round(preset.width * preset.scale);
+  const scaledWidth = Math.round(600 * preset.scale);
   const scaledHeight = Math.round(PREVIEW_HEIGHT * preset.scale);
 
   return (
@@ -1848,28 +1852,51 @@ export function MailBuilderForm() {
             <CardHeader className="pb-3">
               <CardTitle>Afbeeldingen</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {(
-                [
-                  { label: "Afbeelding 1", previewKey: "prematchImg1PreviewUrl", altKey: "prematchImg1Alt" },
-                  { label: "Afbeelding 2", previewKey: "prematchImg2PreviewUrl", altKey: "prematchImg2Alt" },
-                  { label: "Afbeelding 3", previewKey: "prematchImg3PreviewUrl", altKey: "prematchImg3Alt" },
-                  { label: "Afbeelding 4", previewKey: "prematchImg4PreviewUrl", altKey: "prematchImg4Alt" },
-                  { label: "Afbeelding 5", previewKey: "prematchImg5PreviewUrl", altKey: "prematchImg5Alt" },
-                  { label: "Afbeelding 6", previewKey: "prematchImg6PreviewUrl", altKey: "prematchImg6Alt" },
-                  { label: "Afbeelding 7", previewKey: "prematchImg7PreviewUrl", altKey: "prematchImg7Alt" },
-                  { label: "Footer", previewKey: "prematchFooterPreviewUrl", altKey: "prematchFooterAlt" },
-                ] as const
-              ).map((item) => (
+            <CardContent className="space-y-3">
+              {state.prematchImages.map((img, i) => (
+                <div key={img.id} className="rounded-md border border-input bg-card p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">Afbeelding {i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => set("prematchImages", state.prematchImages.filter((_, j) => j !== i))}
+                      className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                      aria-label="Verwijder afbeelding"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <Input
+                    placeholder="https://images.maileon-static.com/c/…"
+                    value={img.previewUrl}
+                    onChange={(e) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, previewUrl: e.target.value } : it))}
+                    className="h-8 text-xs"
+                  />
+                  <Input
+                    placeholder="Alt-tekst"
+                    value={img.alt}
+                    onChange={(e) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, alt: e.target.value } : it))}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => set("prematchImages", [...state.prematchImages, newPrematchImage()])}
+                className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Afbeelding toevoegen
+              </button>
+              <div className="pt-1 border-t border-border">
                 <PrematchImageRow
-                  key={item.previewKey}
-                  label={item.label}
-                  previewKey={item.previewKey}
-                  altKey={item.altKey}
+                  label="Footer"
+                  previewKey="prematchFooterPreviewUrl"
+                  altKey="prematchFooterAlt"
                   state={state}
                   set={set}
                 />
-              ))}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1968,32 +1995,7 @@ export function MailBuilderForm() {
           </Card>
         )}
 
-        {/* FANSTORE NAVBAR URLS */}
-        {isFS && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Navbar-links</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(
-                [
-                  { label: "Wedstrijd", key: "fanstoreNavWedstrijdUrl" },
-                  { label: "Training", key: "fanstoreNavTrainingUrl" },
-                  { label: "Nieuw", key: "fanstoreNavNieuwUrl" },
-                  { label: "Sale", key: "fanstoreNavSaleUrl" },
-                ] as const
-              ).map(({ label, key }) => (
-                <div key={key} className="space-y-1">
-                  <Label>{label}</Label>
-                  <Input
-                    value={state[key]}
-                    onChange={(e) => set(key, e.target.value)}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+
 
         {/* PSV PLAY */}
         {isPsvPlay && (
@@ -2093,10 +2095,9 @@ export function MailBuilderForm() {
                           className="h-8 text-xs flex-1"
                         />
                       </div>
-                      <Textarea
-                        placeholder="Quote of beschrijving…"
+                      <RichTextEditor
                         value={item.quote}
-                        onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, quote: e.target.value } : it))}
+                        onChange={(html) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, quote: html } : it))}
                         className="min-h-[60px] text-xs"
                       />
                       <div className="flex gap-2">
@@ -2393,7 +2394,7 @@ export function MailBuilderForm() {
                 <iframe
                   srcDoc={previewHtml}
                   title="E-mail preview"
-                  sandbox="allow-same-origin"
+                  sandbox="allow-same-origin allow-popups"
                   style={{
                     width: "100%",
                     height: `${PREVIEW_HEIGHT}px`,
@@ -2414,7 +2415,7 @@ export function MailBuilderForm() {
                     <iframe
                       srcDoc={previewHtml}
                       title="E-mail preview mobiel"
-                      sandbox="allow-same-origin"
+                      sandbox="allow-same-origin allow-popups"
                       style={{
                         width: "600px",
                         height: `${PREVIEW_HEIGHT}px`,
