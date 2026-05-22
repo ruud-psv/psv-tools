@@ -1715,7 +1715,7 @@ export function MailBuilderForm() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const raw = generateEmailHTML(state, false);
+      const raw = generateEmailHTML(state, false).replace("<head>", "<head><base target=\"_blank\">");
       setPreviewHtml(applySimulations(raw, simulations));
     }, 150);
     return () => {
