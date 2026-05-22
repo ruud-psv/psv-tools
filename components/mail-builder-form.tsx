@@ -1613,21 +1613,33 @@ function PrematchImageRow({
   altKey,
   state,
   set,
+  onUpload,
+  uploading,
 }: {
   label: string;
   previewKey: keyof MailBuilderState;
   altKey: keyof MailBuilderState;
   state: MailBuilderState;
   set: <K extends keyof MailBuilderState>(key: K, value: MailBuilderState[K]) => void;
+  onUpload?: () => void;
+  uploading?: boolean;
 }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Input
-        placeholder="https://images.maileon-static.com/…"
-        value={state[previewKey] as string}
-        onChange={(e) => set(previewKey, e.target.value)}
-      />
+      <div className="flex gap-2">
+        <Input
+          placeholder="https://…"
+          value={state[previewKey] as string}
+          onChange={(e) => set(previewKey, e.target.value)}
+          className="flex-1 min-w-0"
+        />
+        {onUpload && (
+          <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploading} onClick={onUpload}>
+            {uploading ? <span className="text-xs">…</span> : <Upload className="h-3.5 w-3.5" />}
+          </Button>
+        )}
+      </div>
       <Input
         placeholder="Alt-tekst"
         value={state[altKey] as string}
@@ -1659,9 +1671,10 @@ export function MailBuilderForm() {
   const [simulations, setSimulations] = useState<Set<Simulation>>(new Set());
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadCallbackRef = useRef<((url: string) => void) | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aanhefInputRef = useRef<HTMLInputElement>(null);
   const dragIndex = useRef<number | null>(null);
@@ -1770,23 +1783,30 @@ export function MailBuilderForm() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function triggerUpload(fieldKey: string, onSuccess: (url: string) => void) {
+    setUploadError(null);
+    uploadCallbackRef.current = onSuccess;
+    setUploadingField(fieldKey);
+    fileInputRef.current?.click();
+  }
+
   async function handleImageUpload(file: File) {
-    setUploading(true);
     setUploadError(null);
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/maileon-upload", { method: "POST", body });
+      const res = await fetch("/api/bunny-upload", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) {
         setUploadError(data.error ?? "Onbekende fout bij uploaden.");
         return;
       }
-      set("heroPreviewUrl", data.previewUrl);
+      uploadCallbackRef.current?.(data.url);
     } catch {
       setUploadError("Verbindingsfout — is de server bereikbaar?");
     } finally {
-      setUploading(false);
+      setUploadingField(null);
+      uploadCallbackRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -1866,12 +1886,18 @@ export function MailBuilderForm() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <Input
-                    placeholder="https://images.maileon-static.com/c/…"
-                    value={img.previewUrl}
-                    onChange={(e) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, previewUrl: e.target.value } : it))}
-                    className="h-8 text-xs"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://…"
+                      value={img.previewUrl}
+                      onChange={(e) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, previewUrl: e.target.value } : it))}
+                      className="h-8 text-xs flex-1 min-w-0"
+                    />
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 h-8 px-2" disabled={uploadingField !== null}
+                      onClick={() => triggerUpload(`pm-${i}`, (url) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, previewUrl: url } : it)))}>
+                      {uploadingField === `pm-${i}` ? <span className="text-xs">…</span> : <Upload className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
                   <Input
                     placeholder="Alt-tekst"
                     value={img.alt}
@@ -1895,6 +1921,8 @@ export function MailBuilderForm() {
                   altKey="prematchFooterAlt"
                   state={state}
                   set={set}
+                  onUpload={() => triggerUpload("pm-footer", (url) => set("prematchFooterPreviewUrl", url))}
+                  uploading={uploadingField === "pm-footer"}
                 />
               </div>
             </CardContent>
@@ -1923,11 +1951,11 @@ export function MailBuilderForm() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 gap-1.5"
-                    disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingField !== null}
+                    onClick={() => triggerUpload("hero", (url) => set("heroPreviewUrl", url))}
                   >
                     <Upload className="h-4 w-4" />
-                    {uploading ? "Uploaden…" : "Upload"}
+                    {uploadingField === "hero" ? "Uploaden…" : "Upload"}
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -1947,7 +1975,7 @@ export function MailBuilderForm() {
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Upload direct naar Maileon, of plak een bestaande URL. Export-URL wordt automatisch afgeleid.
+                  Upload naar Bunny CDN, of plak een bestaande URL. Export-URL wordt automatisch afgeleid.
                 </p>
               </div>
               <div className="space-y-2">
@@ -1981,12 +2009,19 @@ export function MailBuilderForm() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="businessSponsorUrl">Afbeelding</Label>
-                <Input
-                  id="businessSponsorUrl"
-                  placeholder="https://images.maileon-static.com/c/…"
-                  value={state.businessSponsorPreviewUrl}
-                  onChange={(e) => set("businessSponsorPreviewUrl", e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="businessSponsorUrl"
+                    placeholder="https://…"
+                    value={state.businessSponsorPreviewUrl}
+                    onChange={(e) => set("businessSponsorPreviewUrl", e.target.value)}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
+                    onClick={() => triggerUpload("biz-sponsor", (url) => set("businessSponsorPreviewUrl", url))}>
+                    {uploadingField === "biz-sponsor" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Seizoensgebonden sponsorbalk. Export-URL wordt automatisch afgeleid.
                 </p>
@@ -2008,12 +2043,19 @@ export function MailBuilderForm() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="ppHeroUrl">Afbeelding</Label>
-                  <Input
-                    id="ppHeroUrl"
-                    placeholder="https://images.maileon-static.com/c/…"
-                    value={state.heroPreviewUrl}
-                    onChange={(e) => set("heroPreviewUrl", e.target.value)}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="ppHeroUrl"
+                      placeholder="https://…"
+                      value={state.heroPreviewUrl}
+                      onChange={(e) => set("heroPreviewUrl", e.target.value)}
+                      className="flex-1 min-w-0"
+                    />
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
+                      onClick={() => triggerUpload("pp-hero", (url) => set("heroPreviewUrl", url))}>
+                      {uploadingField === "pp-hero" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ppHeroAlt">Alt-tekst</Label>
@@ -2078,12 +2120,18 @@ export function MailBuilderForm() {
                       </button>
                     </div>
                     <div className="space-y-1.5">
-                      <Input
-                        placeholder="https://images.maileon-static.com/c/…"
-                        value={item.imagePreviewUrl}
-                        onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imagePreviewUrl: e.target.value } : it))}
-                        className="h-8 text-xs"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="https://…"
+                          value={item.imagePreviewUrl}
+                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imagePreviewUrl: e.target.value } : it))}
+                          className="h-8 text-xs flex-1 min-w-0"
+                        />
+                        <Button type="button" variant="outline" size="sm" className="shrink-0 h-8 px-2" disabled={uploadingField !== null}
+                          onClick={() => triggerUpload(`pp-item-${i}`, (url) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imagePreviewUrl: url } : it)))}>
+                          {uploadingField === `pp-item-${i}` ? <span className="text-xs">…</span> : <Upload className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
                       <div className="flex gap-2">
                         <Input
                           placeholder="Alt-tekst"
