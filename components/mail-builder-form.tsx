@@ -17,6 +17,7 @@ import {
   GripVertical,
   Plus,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1762,6 +1763,12 @@ export function MailBuilderForm() {
     setState(makeInitialState(t));
   }
 
+  function handleReset() {
+    if (!window.confirm(`Weet je zeker dat je alle wijzigingen voor "${state.template}" wilt wissen en terugzetten naar standaard?`)) return;
+    setState(makeInitialState(state.template));
+    try { localStorage.removeItem(`mail-builder-draft-${state.template}`); } catch {}
+  }
+
   function handleDownload() {
     const html = generateEmailHTML(state, true);
     const blob = new Blob([html], { type: "text/html" });
@@ -2430,6 +2437,9 @@ export function MailBuilderForm() {
                 </div>
 
                 {/* Actions */}
+                <Button size="sm" variant="outline" onClick={handleReset} className="gap-1.5" title="Zet terug naar standaard">
+                  <RotateCcw className="h-4 w-4" />Standaard
+                </Button>
                 <Button size="sm" variant="outline" onClick={handleCopy} className="gap-1.5">
                   {copied ? (
                     <><Check className="h-4 w-4" />Gekopieerd!</>
