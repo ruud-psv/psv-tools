@@ -43,7 +43,7 @@ import { cn } from "@/lib/utils";
 // Types
 // ---------------------------------------------------------------------------
 
-type Template = "business" | "fanstore" | "kaartverkoop" | "partnerships" | "prematch" | "psvplay" | "soccerschool" | "tours";
+type Template = "business" | "enquete" | "fanstore" | "fcpsvo12" | "fcpsvo16" | "kaartverkoop" | "partnerships" | "phoxy" | "prematch" | "psvplay" | "soccerschool" | "tours";
 
 type BlockBg = "wit" | "grijs" | "rood" | "zwart";
 
@@ -144,6 +144,16 @@ interface MailBuilderState {
   psvplayItems: PsvPlayItem[];
   // PSV Business
   businessSponsorPreviewUrl: string;
+  // PSV Enquête
+  enqueteCtaLabel?: string;
+  enqueteCtaUrl?: string;
+  enqueteCtaSubtext?: string;
+  enqueteHeeftSecImage?: boolean;
+  enqueteSecImagePreviewUrl?: string;
+  enqueteSecImageAlt?: string;
+  // Phoxy Club
+  phoxyCtaImagePreviewUrl?: string;
+  phoxyCtaUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -438,6 +448,82 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
       "Je ontvangt deze mail omdat je hebt aangegeven interesse te hebben in PSV Partnerships. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
     misNiksEmail: "email@newsletter.psv.nl",
     utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+  },
+  enquete: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/JEupL7_mvVPIB3DkfavV5g/media/Header%20onderzoek%20Marktpotentie%20stadionuitbreiding%20(1).jpg`,
+    heroAlt: "Deel je mening",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/JEupL7_mvVPIB3DkfavV5g/media/Header%20onderzoek%20Marktpotentie%20stadionuitbreiding%20(1).jpg`,
+    heroLink: "",
+    aanhefText: "Hoi {VOORNAAM}",
+    blocks: [newBlock({ content: "" })],
+    heeftAfsluitRegel: false,
+    afsluitRegel: "",
+    disclaimerTekst: "Je ontvangt deze e-mail omdat je hebt aangegeven deel te willen nemen aan marktonderzoeken en enquêtes van PSV. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    enqueteCtaLabel: "NAAR HET ONDERZOEK",
+    enqueteCtaUrl: "",
+    enqueteCtaSubtext: "Het invullen kost een paar minuten en helpt ons om keuzes te maken die aansluiten bij de wensen van onze supporters.",
+    enqueteHeeftSecImage: false,
+    enqueteSecImagePreviewUrl: "",
+    enqueteSecImageAlt: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+  },
+  fcpsvo12: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroAlt: "FC PSV",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroLink: "",
+    aanhefText: "Hoi {VOORNAAM}",
+    blocks: [
+      newBlock({ content: "", heeftCta: true, ctaLabel: "IK WIL KANS MAKEN!", ctaUrl: "" }),
+    ],
+    heeftAfsluitRegel: false,
+    afsluitRegel: "",
+    disclaimerTekst: "Je ontvangt deze mail omdat [[KINDNAAM]] lid is van FC PSV. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+  },
+  fcpsvo16: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroAlt: "FC PSV",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroLink: "",
+    aanhefText: "Hoi vader of moeder van {VOORNAAM}",
+    blocks: [
+      newBlock({ content: "", heeftCta: true, ctaLabel: "IK WIL KANS MAKEN!", ctaUrl: "" }),
+    ],
+    heeftAfsluitRegel: false,
+    afsluitRegel: "",
+    disclaimerTekst: "Je ontvangt deze mail omdat je lid bent van FC PSV. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+  },
+  phoxy: {
+    heroUrl: `${MAILEON_CDN_HOST}/c/36vWUubQLZnZNSBHKzi3OQ/media/4770%20Phoxy%20Stadionrondleiding%20-%20MAILING%20-%20leuk%20dat%20je%20er%20was.jpg`,
+    heroAlt: "Phoxy Stadionrondleiding",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/36vWUubQLZnZNSBHKzi3OQ/media/4770%20Phoxy%20Stadionrondleiding%20-%20MAILING%20-%20leuk%20dat%20je%20er%20was.jpg`,
+    heroLink: "",
+    aanhefText: "Hoi {VOORNAAM}",
+    blocks: [newBlock({ content: "" })],
+    heeftAfsluitRegel: false,
+    afsluitRegel: "",
+    disclaimerTekst: "Je ontvangt deze mail omdat je lid bent van De Phoxy Club en aanwezig was bij de Phoxy Stadionrondleiding. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    phoxyCtaImagePreviewUrl: `${PREVIEW_CDN_HOST}/c/JNsHfjSEPx4mHCa-078k_A/media/4373%20Drukwerk%20%2B%20online%20middelen%2025_26_BUTTONS_vragenlijst.png`,
+    phoxyCtaUrl: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
     ...PSVPLAY_DEFAULTS,
@@ -1068,7 +1154,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
     const contentRow = block.content
-      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:20px;text-align:left;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:0;text-align:left;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>`
       : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
@@ -1196,10 +1282,701 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
 </html>`;
 }
 
+function generateEnqueteHTML(state: MailBuilderState, forExport = false): string {
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
+  const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
+  const mv = (variable: string, preview: string) => forExport ? variable : preview;
+
+  const previewUrl = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
+  const heroSrc = forExport
+    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : state.heroUrl)
+    : previewUrl;
+  const heroWrap = state.heroLink
+    ? { open: `<a href="${forExport ? wrapLink(utm(state.heroLink)) : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">`, close: `</a>` }
+    : { open: "", close: "" };
+
+  const aanhefResolved = forExport
+    ? state.aanhefText.replace(/\{VOORNAAM\}/g, "[[% contact 'FIRSTNAME' 'PSV-supporter']]").replace(/\{VOLLEDIGE NAAM\}/g, "[[% contact 'FULLNAME' 'PSV-supporter']]")
+    : state.aanhefText.replace(/\{VOORNAAM\}/g, "John").replace(/\{VOLLEDIGE NAAM\}/g, "John Doe");
+
+  const fullName = mv("[[% contact 'FULLNAME' 'onbekend']]", "John Doe");
+  const emailAddr = mv("[[% email]]", "john@example.com");
+  const memberNr = mv("[[% contact 'MEMBERNUMBERPRIOR' 'onbekend']]", "123456");
+  const contactId = mv("[[CONTACT|ID]]", "000001");
+  const checksum = mv("[[CONTACT|CHECKSUM]]", "abc123");
+
+  const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
+  const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
+  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+
+  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const unsubSccHref = `https://newsletter.psv.nl/hp/46jT6Ad_EzIk2W6yQ2MYxQ/psv-uitschrijven-algemeen-scc?contactId=${contactId}&checksum=${checksum}`;
+  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
+  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
+  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
+
+  const blocksHtml = state.blocks.map(block => {
+    const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
+    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>` : "";
+    const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
+    const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
+    const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px 0;text-align:center;"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${bCtaHref}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="5%" stroke="f" fillcolor="#E30613"><w:anchorlock/><center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${block.ctaLabel}</center></v:roundrect><![endif]--><!--[if !mso]><!--><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:5px;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;">${block.ctaLabel}</a></td></tr></table><!--<![endif]--></td></tr>` : "";
+    const secRow = block.heeftSecLink && block.secLinkLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;text-align:center;"><a href="${bSecHref}" target="_blank" rel="noopener noreferrer" style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.link};text-decoration:none;line-height:20px;">${block.secLinkLabel}</a></td></tr>` : "";
+    const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>` : "";
+    return contentRow + ctaRow + secRow + spacerRow;
+  }).join("");
+
+  const ctaLabel = state.enqueteCtaLabel ?? "NAAR HET ONDERZOEK";
+  const ctaUrl = state.enqueteCtaUrl ?? "";
+  const ctaHref = ctaUrl ? (forExport ? wrapLink(utm(ctaUrl)) : ctaUrl) : "#";
+  const ctaSubtext = state.enqueteCtaSubtext ?? "";
+  const enqueteSecImgSrc = (() => {
+    const u = state.enqueteSecImagePreviewUrl ?? "";
+    if (!u) return "";
+    return forExport ? u.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : u;
+  })();
+
+  const ctaRow = ctaLabel ? `
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 0;text-align:center;">
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                href="${ctaHref}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="5%" stroke="f" fillcolor="#E30613">
+                <w:anchorlock/>
+                <center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${ctaLabel}</center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-->
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td bgcolor="#E30613" style="background-color:#E30613;border-radius:5px;">
+                    <a href="${ctaHref}" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+                    >${ctaLabel}</a>
+                  </td>
+                </tr>
+              </table>
+              <!--<![endif]-->
+            </td>
+          </tr>` : "";
+
+  const ctaSubtextRow = ctaSubtext ? `
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 20px;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;font-style:italic;">${ctaSubtext}</p>
+            </td>
+          </tr>` : `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>`;
+
+  const secImageRow = (state.enqueteHeeftSecImage && enqueteSecImgSrc) ? `
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0;">
+              <img src="${enqueteSecImgSrc}" width="600" alt="${state.enqueteSecImageAlt ?? ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>` : "";
+
+  return `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="nl">
+<head>
+  <!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${titleText}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <style type="text/css">
+    html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
+    img,a img{-ms-interpolation-mode:bicubic;outline:none;}
+    table,tbody,thead,tfoot,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;box-sizing:border-box;}
+    td,p,a,li,blockquote{mso-line-height-rule:exactly;}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    u + #maileon-body a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    #MessageViewBody a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+  </style>
+</head>
+<body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
+  ${openPixelHtml}
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
+    <tr>
+      <td align="center" valign="top">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:8px 10px 5px;text-align:right;">
+              <span style="font-family:'Titillium Web',Verdana,sans-serif;font-size:10px;color:#ffffff;">
+                <a href="${onlineVersion}" style="color:#ffffff;text-decoration:none;font-size:10px;" target="_blank" rel="noopener noreferrer">Bekijk online</a>&nbsp;|&nbsp;<a href="${changeLanguageHref}" style="color:#ffffff;text-decoration:none;font-size:10px;" target="_blank" rel="noopener noreferrer">Change language &#127468;&#127463;</a>
+              </span>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              ${heroWrap.open}<img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">${heroWrap.close}
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 10px;text-align:center;">
+              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:600;color:#ED1B24;letter-spacing:0.65px;line-height:20px;"><b>${aanhefResolved},</b></p>
+            </td>
+          </tr>
+
+          ${blocksHtml || `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:10px;"></td></tr>`}
+
+          ${ctaRow}
+          ${ctaSubtextRow}
+          ${secImageRow}
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.facebook.com/PSV/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/user/psveindhoven")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://twitter.com/PSV")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.linkedin.com/company/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@psv")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:30px 10px 20px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" role="presentation">
+                <tr><td style="height:1px;background-color:#ffffff;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;">
+                Naam: ${fullName}<br>
+                E-mail: <a href="mailto:${emailAddr}" style="color:#ffffff;text-decoration:none;font-style:normal;">${emailAddr}</a><br>
+                Relatienummer: ${memberNr}
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 20px 20px;text-align:center;">
+              <p style="margin:0 auto;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;max-width:560px;">
+                ${state.disclaimerTekst}&nbsp;&nbsp;<br><br>
+                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres (<a href="${misNiksHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met <a href="${misNiksHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">veilige afzenders</a>.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 0 20px;text-align:center;">
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiU1NPICIsInR5cGUiOiJjb250YWN0LWZpbHRlci1tYXRjaCIsImNvbnRhY3RGaWx0ZXJJZCI6MTR9XX0=">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a>&nbsp; &nbsp;
+                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a>&nbsp; &nbsp;
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiR2VlbiBTU08iLCJ0eXBlIjoiY29udGFjdC1maWx0ZXItbWF0Y2giLCJjb250YWN0RmlsdGVySWQiOjE1fV19">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a>&nbsp; &nbsp;
+                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a>&nbsp; &nbsp;
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiU0NDIiwidHlwZSI6ImNvbnRhY3QtZmlsdGVyLW1hdGNoIiwiY29udGFjdEZpbHRlcklkIjoxOTM0fV19">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a> -
+                  <a href="${unsubSccHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a> -
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
+  const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
+  const mv = (variable: string, preview: string) => forExport ? variable : preview;
+
+  const previewUrl = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
+  const heroSrc = forExport
+    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : state.heroUrl)
+    : previewUrl;
+  const heroWrap = state.heroLink
+    ? { open: `<a href="${forExport ? wrapLink(utm(state.heroLink)) : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">`, close: `</a>` }
+    : { open: "", close: "" };
+
+  const aanhefResolved = resolveAanhef(state.aanhefText || "Hoi {VOORNAAM}", forExport);
+
+  const fullName = mv("[[% contact 'FULLNAME' 'onbekend']]", "John Doe");
+  const emailAddr = mv("[[% email]]", "john@example.com");
+  const memberNr = mv("[[% contact 'MEMBERNUMBERPRIOR' 'onbekend']]", "123456");
+  const contactId = mv("[[CONTACT|ID]]", "000001");
+  const checksum = mv("[[CONTACT|CHECKSUM]]", "abc123");
+
+  const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
+  const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
+  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+
+  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
+  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
+  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
+
+  const makeLeftCtaRow = (label: string, href: string, bg: string) => `<tr>
+      <td bgcolor="${bg}" style="background-color:${bg};padding:5px 20px;">
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+          href="${href}" style="height:36px;v-text-anchor:middle;width:200px;" arcsize="0%" stroke="f" fillcolor="#E30613">
+          <w:anchorlock/>
+          <center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${label}</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-->
+        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0;">
+          <tr>
+            <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
+              <a href="${href}" target="_blank" rel="noopener noreferrer"
+                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+              >${label}</a>
+            </td>
+          </tr>
+        </table>
+        <!--<![endif]-->
+      </td>
+    </tr>`;
+
+  const blocksHtml = state.blocks.map(block => {
+    const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
+    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>` : "";
+    const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
+    const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
+    const ctaRow = block.heeftCta && block.ctaLabel ? makeLeftCtaRow(block.ctaLabel, bCtaHref, cfg.bg) : "";
+    const secRow = block.heeftSecLink && block.secLinkLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;"><a href="${bSecHref}" target="_blank" rel="noopener noreferrer" style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.link};text-decoration:none;line-height:20px;">${block.secLinkLabel}</a></td></tr>` : "";
+    const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>` : "";
+    return contentRow + ctaRow + secRow + spacerRow;
+  }).join("");
+
+  const signatureSrc = `${cdn}/c/-VTQnOql8-rIBFw2T9adUg/media/HANDTEKENING%20PHOXY%20GRIJS_2.png`;
+  const fcpsvFooterSrc = `${cdn}/c/_DCVNZPu71ujBsKYN2fQzA/media/4919%20FC%20PSV%20Voetbalgames%202026_MAILING%20-%20footer%20(1).png`;
+
+  const afsluitBlock = state.heeftAfsluitRegel && state.afsluitRegel
+    ? `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 20px;"><p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;">${state.afsluitRegel}</p></td></tr>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="nl">
+<head>
+  <!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${titleText}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <style type="text/css">
+    html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
+    img,a img{-ms-interpolation-mode:bicubic;outline:none;}
+    table,tbody,thead,tfoot,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;box-sizing:border-box;}
+    td,p,a,li,blockquote{mso-line-height-rule:exactly;}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    u + #maileon-body a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    #MessageViewBody a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+  </style>
+</head>
+<body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
+  ${openPixelHtml}
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
+    <tr>
+      <td align="center" valign="top">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:8px 10px 5px;text-align:right;">
+              <span style="font-family:'Titillium Web',Verdana,sans-serif;font-size:10px;color:#ffffff;">
+                <a href="${onlineVersion}" style="color:#ffffff;text-decoration:none;font-size:10px;" target="_blank" rel="noopener noreferrer">Bekijk online</a>&nbsp;|&nbsp;<a href="${changeLanguageHref}" style="color:#ffffff;text-decoration:none;font-size:10px;" target="_blank" rel="noopener noreferrer">Change language &#127468;&#127463;</a>
+              </span>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              ${heroWrap.open}<img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">${heroWrap.close}
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 10px;">
+              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:600;color:#ED1B24;letter-spacing:0.65px;line-height:24px;"><b>${aanhefResolved},</b></p>
+            </td>
+          </tr>
+
+          ${blocksHtml || `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:10px;"></td></tr>`}
+          ${afsluitBlock}
+
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 5px;">
+              <img src="${signatureSrc}" width="116" alt="Phoxy" style="display:block;width:20%;max-width:120px;height:auto;border:0;">
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 0 20px;">
+              <img src="${fcpsvFooterSrc}" width="600" alt="FC PSV" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.facebook.com/PSV/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/user/psveindhoven")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://twitter.com/PSV")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.linkedin.com/company/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@psv")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:30px 10px 20px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" role="presentation">
+                <tr><td style="height:1px;background-color:#ffffff;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:20px 0;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;">
+                Naam: ${fullName}<br>
+                E-mail: <a href="mailto:${emailAddr}" style="color:#ffffff;text-decoration:none;font-style:normal;">${emailAddr}</a><br>
+                Relatienummer: ${memberNr}
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 20px 20px;text-align:center;">
+              <p style="margin:0 auto;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;max-width:560px;">
+                ${state.disclaimerTekst}&nbsp;&nbsp;<br><br>
+                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres (<a href="${misNiksHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met <a href="${misNiksHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">veilige afzenders</a>.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0 0 20px;text-align:center;">
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiU1NPIiwidHlwZSI6ImNvbnRhY3QtZmllbGQiLCJjb250YWN0RmllbGQiOiJTU09JRCIsImZ1bmMiOiJleGlzdHMifV19">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a> -
+                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a> -
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiR2VlbiBTU08iLCJ0eXBlIjoiY29udGFjdC1maWVsZCIsImNvbnRhY3RGaWVsZCI6IlNTT0lEIiwiZnVuYyI6ImRvZXNfbm90X2V4aXN0In1dfQ==">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a> -
+                  <a href="${unsubHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a> -
+                  <a href="${changeEmailHref}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
+  const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
+  const mv = (variable: string, preview: string) => forExport ? variable : preview;
+
+  const previewUrl = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
+  const heroSrc = forExport
+    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : state.heroUrl)
+    : previewUrl;
+
+  const aanhefResolved = resolveAanhef(state.aanhefText || "Hoi {VOORNAAM}", forExport);
+
+  const fullName = mv("[[% contact 'FULLNAME' 'onbekend']]", "John Doe");
+  const emailAddr = mv("[[% email]]", "john@example.com");
+  const memberNr = mv("[[% contact 'MEMBERNUMBERPRIOR' 'onbekend']]", "123456");
+  const contactId = mv("[[CONTACT|ID]]", "000001");
+  const checksum = mv("[[CONTACT|CHECKSUM]]", "abc123");
+
+  const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
+  const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
+  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+
+  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
+  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
+  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
+  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
+
+  const blocksHtml = state.blocks.map(block => {
+    const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
+    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>` : "";
+    const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
+    const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
+    const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">${block.ctaLabel}</a></td></tr></table></td></tr>` : "";
+    const secRow = block.heeftSecLink && block.secLinkLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:5px 20px 10px;"><a href="${bSecHref}" target="_blank" rel="noopener noreferrer" style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.link};text-decoration:none;">${block.secLinkLabel}</a></td></tr>` : "";
+    const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:10px;font-size:10px;line-height:10px;">&nbsp;</td></tr>` : "";
+    return contentRow + ctaRow + secRow + spacerRow;
+  }).join("");
+
+  const rawCtaImgUrl = state.phoxyCtaImagePreviewUrl ?? "";
+  const ctaImgSrc = rawCtaImgUrl
+    ? (forExport ? rawCtaImgUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : rawCtaImgUrl)
+    : "";
+  const ctaLink = state.phoxyCtaUrl ?? "";
+  const ctaLinkHref = ctaLink ? (forExport ? wrapLink(utm(ctaLink)) : ctaLink) : "#";
+
+  const ctaImageRow = ctaImgSrc ? `
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:10px 20px 20px;">
+              <a href="${ctaLinkHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;">
+                <img src="${ctaImgSrc}" width="360" alt="Vragenlijst" style="display:block;width:60%;max-width:360px;height:auto;border:0;">
+              </a>
+            </td>
+          </tr>` : "";
+
+  const signatureSrc = `${cdn}/c/-VTQnOql8-rIBFw2T9adUg/media/HANDTEKENING%20PHOXY%20GRIJS_2.png`;
+  const phoxyFooterSrc = `${cdn}/c/jd6QIVarVMahKrtu0TIqEA/media/4770%20Phoxy%20Stadionrondleiding%20-%20MAILING%20-%20footer.png`;
+
+  return `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="nl">
+<head>
+  <!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${titleText}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <style type="text/css">
+    html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
+    img,a img{-ms-interpolation-mode:bicubic;outline:none;}
+    table,tbody,thead,tfoot,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;box-sizing:border-box;}
+    td,p,a,li,blockquote{mso-line-height-rule:exactly;}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    u + #maileon-body a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    #MessageViewBody a{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+  </style>
+</head>
+<body id="maileon-body" style="margin:0;padding:0;background-color:#F1F1F1;">
+  ${openPixelHtml}
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#F1F1F1" style="width:100%;background-color:#F1F1F1;" role="presentation">
+    <tr>
+      <td align="center" valign="top">
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;" role="presentation">
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:8px 10px 5px;text-align:right;">
+              <span style="font-family:'Titillium Web',Verdana,sans-serif;font-size:10px;color:#6E6E6E;">
+                <a href="${onlineVersion}" style="color:#6E6E6E;text-decoration:none;font-size:10px;" target="_blank" rel="noopener noreferrer">Bekijk online</a>&nbsp;|&nbsp;<a href="${changeLanguageHref}" style="color:#6E6E6E;text-decoration:none;font-size:10px;" target="_blank" rel="noopener noreferrer">Change language &#127468;&#127463;</a>
+              </span>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:0;">
+              <img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 20px 0;">
+              <p style="margin:0;padding:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#000000;line-height:20px;">${aanhefResolved},</p>
+            </td>
+          </tr>
+
+          ${blocksHtml || `<tr><td bgcolor="#ffffff" style="background-color:#ffffff;height:10px;"></td></tr>`}
+
+          ${ctaImageRow}
+
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:5px 20px 5px;">
+              <img src="${signatureSrc}" width="116" alt="Phoxy" style="display:block;width:20%;max-width:120px;height:auto;border:0;">
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 0 0;">
+              <img src="${phoxyFooterSrc}" width="600" alt="Phoxy Stadionrondleiding" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#7F7F7F;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/ICONEN%20-%20WAT%20VIND%20JE%20VAN%20DEZE%20E-MAIL_feedback%20positief_20-21.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/ICONEN%20-%20WAT%20VIND%20JE%20VAN%20DEZE%20E-MAIL_feedback%20negatief_20-21.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:20px 0 10px;text-align:center;">
+              <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#7F7F7F;line-height:140%;">Volg Phoxy op social media</p>
+              <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/phoxy99/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/IIiOqLXb0ScB-jNRMB5dKw/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/@Phoxy99")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/qAoSkyxRW4BFESwboqnjtA/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@phoxy99")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/RjcYOYw8KVosjRuDU2QAg/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_tiktok.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:20px 10px;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" role="presentation">
+                <tr><td style="height:1px;background-color:#7F7F7F;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:20px 0;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#6E6E6E;line-height:140%;">
+                Naam: ${fullName}<br>
+                E-mail: <a href="mailto:${emailAddr}" style="color:#6E6E6E;text-decoration:none;font-style:normal;">${emailAddr}</a><br>
+                Relatienummer: ${memberNr}
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:0 20px 20px;text-align:center;">
+              <p style="margin:0 auto;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#6E6E6E;line-height:140%;max-width:560px;">
+                ${state.disclaimerTekst}&nbsp;&nbsp;<br><br>
+                Wil je er zeker van zijn dat je geen e-mails van PSV mist? Voeg dan ons e-mailadres (<a href="${misNiksHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met <a href="${misNiksHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">veilige afzenders</a>.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;padding:0 0 20px;text-align:center;">
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiU1NPIiwidHlwZSI6ImNvbnRhY3QtZmllbGQiLCJjb250YWN0RmllbGQiOiJTU09JRCIsImZ1bmMiOiJleGlzdHMifV19">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#6E6E6E;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a> -
+                  <a href="${unsubHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a> -
+                  <a href="${changeEmailHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+              <div maileon:visibility-conditions="eyJjb25kaXRpb25zIjpbeyJuYW1lIjoiR2VlbiBTU08iLCJ0eXBlIjoiY29udGFjdC1maWVsZCIsImNvbnRhY3RGaWVsZCI6IlNTT0lEIiwiZnVuYyI6ImRvZXNfbm90X2V4aXN0In1dfQ==">
+                <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#6E6E6E;line-height:140%;"><i>
+                  <a href="${prefsHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">Voorkeuren aanpassen</a> -
+                  <a href="${unsubHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">Volledig uitschrijven</a> -
+                  <a href="${changeEmailHref}" style="color:#6E6E6E;" target="_blank" rel="noopener noreferrer">Wijzig je e-mailadres</a>
+                </i></p>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   if (state.template === "prematch") return generatePrematchHTML(state, forExport);
   if (state.template === "psvplay") return generatePsvPlayHTML(state, forExport);
   if (state.template === "business") return generatePsvBusinessHTML(state, forExport);
+  if (state.template === "enquete") return generateEnqueteHTML(state, forExport);
+  if (state.template === "fcpsvo12" || state.template === "fcpsvo16") return generateFcPsvHTML(state, forExport);
+  if (state.template === "phoxy") return generatePhoxyHTML(state, forExport);
 
   const isFS = state.template === "fanstore";
   const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
@@ -1328,7 +2105,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
     const contentRow = block.content
-      ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:20px;text-align:center;width:100%;"><div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>`
       : "";
     const bCtaHref = block.heeftCta && block.ctaUrl
       ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl)
@@ -1822,6 +2599,8 @@ export function MailBuilderForm() {
   const isPsvPlay = state.template === "psvplay";
   const isBusiness = state.template === "business";
   const isFS = state.template === "fanstore";
+  const isEnquete = state.template === "enquete";
+  const isPhoxy = state.template === "phoxy";
 
   const preset = DEVICE_PRESETS[device];
   const scaledWidth = Math.round(600 * preset.scale);
@@ -1846,10 +2625,14 @@ export function MailBuilderForm() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="business">PSV Business</SelectItem>
+                  <SelectItem value="enquete">PSV Enquête</SelectItem>
                   <SelectItem value="fanstore">PSV FANstore</SelectItem>
+                  <SelectItem value="fcpsvo12">FC PSV O12</SelectItem>
+                  <SelectItem value="fcpsvo16">FC PSV O16</SelectItem>
                   <SelectItem value="kaartverkoop">PSV Kaartverkoop</SelectItem>
                   <SelectItem value="prematch">PSV 1 Pre-match</SelectItem>
                   <SelectItem value="partnerships">PSV Partnerships</SelectItem>
+                  <SelectItem value="phoxy">Phoxy Club</SelectItem>
                   <SelectItem value="psvplay">PSV Play</SelectItem>
                   <SelectItem value="soccerschool">PSV Soccer School</SelectItem>
                   <SelectItem value="tours">PSV Tours</SelectItem>
@@ -2037,7 +2820,121 @@ export function MailBuilderForm() {
           </Card>
         )}
 
+        {/* PSV ENQUÊTE */}
+        {isEnquete && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Enquête CTA</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="enqueteCtaLabel">Knoptekst</Label>
+                <Input
+                  id="enqueteCtaLabel"
+                  placeholder="NAAR HET ONDERZOEK"
+                  value={state.enqueteCtaLabel ?? ""}
+                  onChange={(e) => set("enqueteCtaLabel", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="enqueteCtaUrl">Knop-link</Label>
+                <Input
+                  id="enqueteCtaUrl"
+                  placeholder="https://…"
+                  value={state.enqueteCtaUrl ?? ""}
+                  onChange={(e) => set("enqueteCtaUrl", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="enqueteCtaSubtext">Subtekst onder knop</Label>
+                <Input
+                  id="enqueteCtaSubtext"
+                  placeholder="Het invullen kost een paar minuten…"
+                  value={state.enqueteCtaSubtext ?? ""}
+                  onChange={(e) => set("enqueteCtaSubtext", e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="enqueteHeeftSecImage"
+                  type="checkbox"
+                  checked={state.enqueteHeeftSecImage ?? false}
+                  onChange={(e) => set("enqueteHeeftSecImage", e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="enqueteHeeftSecImage">Extra afbeelding tonen</Label>
+              </div>
+              {state.enqueteHeeftSecImage && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="enqueteSecImageUrl">Afbeelding URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="enqueteSecImageUrl"
+                        placeholder="https://images.maileon-static.com/c/…"
+                        value={state.enqueteSecImagePreviewUrl ?? ""}
+                        onChange={(e) => set("enqueteSecImagePreviewUrl", e.target.value)}
+                        className="flex-1 min-w-0"
+                      />
+                      <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
+                        onClick={() => triggerUpload("enquete-sec", (url) => set("enqueteSecImagePreviewUrl", url))}>
+                        {uploadingField === "enquete-sec" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="enqueteSecImageAlt">Alt-tekst</Label>
+                    <Input
+                      id="enqueteSecImageAlt"
+                      placeholder="Alt-tekst afbeelding"
+                      value={state.enqueteSecImageAlt ?? ""}
+                      onChange={(e) => set("enqueteSecImageAlt", e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
+        {/* PHOXY CLUB */}
+        {isPhoxy && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Phoxy CTA</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="phoxyCtaImageUrl">CTA afbeelding</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="phoxyCtaImageUrl"
+                    placeholder="https://images.maileon-static.com/c/…"
+                    value={state.phoxyCtaImagePreviewUrl ?? ""}
+                    onChange={(e) => set("phoxyCtaImagePreviewUrl", e.target.value)}
+                    className="flex-1 min-w-0"
+                  />
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
+                    onClick={() => triggerUpload("phoxy-cta-img", (url) => set("phoxyCtaImagePreviewUrl", url))}>
+                    {uploadingField === "phoxy-cta-img" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Afbeelding-knop (60% breedte, links uitgelijnd).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phoxyCtaUrl">CTA link</Label>
+                <Input
+                  id="phoxyCtaUrl"
+                  placeholder="https://…"
+                  value={state.phoxyCtaUrl ?? ""}
+                  onChange={(e) => set("phoxyCtaUrl", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* PSV PLAY */}
         {isPsvPlay && (
