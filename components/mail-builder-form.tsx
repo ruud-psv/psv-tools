@@ -102,11 +102,11 @@ function newPrematchImage(partial: Partial<PrematchImage> = {}): PrematchImage {
 function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
   return {
     id: Math.random().toString(36).slice(2),
-    content: "",
+    content: "Schrijf hier jouw berichttekst.",
     blockBg: "wit",
     heeftCta: false,
-    ctaLabel: "",
-    ctaUrl: "",
+    ctaLabel: "MEER INFORMATIE",
+    ctaUrl: "https://www.psv.nl",
     heeftSecLink: false,
     secLinkLabel: "",
     secLinkUrl: "",
