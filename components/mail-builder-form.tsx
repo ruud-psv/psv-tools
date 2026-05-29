@@ -109,7 +109,7 @@ function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
     ctaUrl: "https://www.psv.nl",
     heeftSecLink: false,
     secLinkLabel: "",
-    secLinkUrl: "",
+    secLinkUrl: "https://www.psv.nl",
     ...partial,
   };
 }
@@ -323,7 +323,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg`,
     heroLink: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
     aanhefText: "Hi {VOORNAAM}",
-    blocks: [newBlock({ heeftCta: true, ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS", ctaUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1", heeftSecLink: true, secLinkLabel: "Bekijk alle wedstrijden >", secLinkUrl: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1" })],
+    blocks: [newBlock({ heeftCta: true, ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS", heeftSecLink: true, secLinkLabel: "Bekijk alle wedstrijden >" })],
     heeftAfsluitRegel: true,
     afsluitRegel: "Tot ziens in het Philips Stadion!",
     disclaimerTekst:
@@ -340,7 +340,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/jxMwnzDx3RfEytiZNZjOPg/media/5009%20End%20of%20season%20sale%20-%20MAILING.png`,
     heroLink: "https://www.psv.nl/fanstore",
     aanhefText: "Hi {VOORNAAM}",
-    blocks: [newBlock({ heeftCta: true, ctaLabel: "SHOP NU", ctaUrl: "https://www.psv.nl/fanstore" })],
+    blocks: [newBlock({ heeftCta: true, ctaLabel: "SHOP NU" })],
     heeftAfsluitRegel: true,
     afsluitRegel: "Tot ziens!",
     disclaimerTekst:
