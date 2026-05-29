@@ -82,7 +82,7 @@ function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem {
     imagePreviewUrl: "",
     imageAlt: "",
     imageLink: "",
-    quote: "",
+    quote: "Schrijf hier jouw tekst bij dit video-item.",
     ctaLabel: "BEKIJK NU",
     ctaUrl: "https://www.psv.nl/psv-play",
     ...partial,
@@ -279,15 +279,15 @@ const PREMATCH_DEFAULTS = {
 };
 
 const PSVPLAY_DEFAULTS = {
-  psvplayIntroText: "",
+  psvplayIntroText: "Schrijf hier jouw introductietekst.",
   psvplayCta1Label: "BEKIJK OP PSV PLAY",
   psvplayCta1Url: "https://www.psv.nl/psv-play",
   psvplayCta2Label: "Meer over PSV Play >",
   psvplayCta2Url: "https://www.psv.nl/psv-play",
   psvplayItems: [
-    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh8n265rTmn00A/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%202%20blok.jpg`, imageAlt: "PSV Play video 1", quote: "" }),
-    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh-mtsFmywk9tg/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%203%20blok.jpg`, imageAlt: "PSV Play video 2", quote: "" }),
-    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh_EXPIDNS4M0w/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%204%20blok.jpg`, imageAlt: "PSV Play video 3", quote: "" }),
+    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh8n265rTmn00A/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%202%20blok.jpg`, imageAlt: "PSV Play video 1" }),
+    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh-mtsFmywk9tg/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%203%20blok.jpg`, imageAlt: "PSV Play video 2" }),
+    newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh_EXPIDNS4M0w/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%204%20blok.jpg`, imageAlt: "PSV Play video 3" }),
   ],
   businessSponsorPreviewUrl: "",
 };
@@ -423,15 +423,15 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
-    psvplayIntroText: "",
+    psvplayIntroText: "Schrijf hier jouw introductietekst.",
     psvplayCta1Label: "BEKIJK OP PSV PLAY",
     psvplayCta1Url: "https://www.psv.nl/psv-play",
     psvplayCta2Label: "Meer over PSV Play >",
     psvplayCta2Url: "https://www.psv.nl/psv-play",
     psvplayItems: [
-      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh8n265rTmn00A/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%202%20blok.jpg`, imageAlt: "PSV Play video 1", quote: "" }),
-      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh-mtsFmywk9tg/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%203%20blok.jpg`, imageAlt: "PSV Play video 2", quote: "" }),
-      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh_EXPIDNS4M0w/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%204%20blok.jpg`, imageAlt: "PSV Play video 3", quote: "" }),
+      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh8n265rTmn00A/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%202%20blok.jpg`, imageAlt: "PSV Play video 1" }),
+      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh-mtsFmywk9tg/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%203%20blok.jpg`, imageAlt: "PSV Play video 2" }),
+      newPsvPlayItem({ imagePreviewUrl: `${PREVIEW_CDN_HOST}/c/YUMRX2qyvh_EXPIDNS4M0w/media/5026%2010%20jaar%20na%208%20mei_MAILING%20-%204%20blok.jpg`, imageAlt: "PSV Play video 3" }),
     ],
     businessSponsorPreviewUrl: "",
   },
