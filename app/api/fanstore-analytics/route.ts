@@ -31,7 +31,12 @@ function getClient(): { client: BetaAnalyticsDataClient | null; error: string | 
   }
 }
 
-function getDateRange(period: string): { startDate: string; endDate: string } {
+function getDateRange(
+  period: string,
+  customStart?: string,
+  customEnd?: string
+): { startDate: string; endDate: string } {
+  if (customStart && customEnd) return { startDate: customStart, endDate: customEnd };
   switch (period) {
     case "7d": return { startDate: "7daysAgo", endDate: "today" };
     case "90d": return { startDate: "90daysAgo", endDate: "today" };
@@ -50,6 +55,11 @@ export interface FANstoreData {
   topProducts: { name: string; revenue: number; itemsPurchased: number }[];
   topCategories: { category: string; revenue: number; transactions: number }[];
   fetchedAt: string;
+}
+
+export interface ProductTrendData {
+  productName: string;
+  dailyTrend: { date: string; revenue: number; itemsPurchased: number }[];
 }
 
 export async function GET(req: NextRequest) {
@@ -73,8 +83,53 @@ export async function GET(req: NextRequest) {
   }
 
   const period = req.nextUrl.searchParams.get("period") ?? "30d";
-  const dateRange = getDateRange(period);
+  const customStart = req.nextUrl.searchParams.get("startDate") ?? undefined;
+  const customEnd = req.nextUrl.searchParams.get("endDate") ?? undefined;
+  const productFilter = req.nextUrl.searchParams.get("product");
+  const dateRange = getDateRange(period, customStart, customEnd);
   const property = `properties/${FANSTORE_PROPERTY_ID}`;
+
+  // Product detail trend query
+  if (productFilter) {
+    try {
+      const res = await client.runReport({
+        property,
+        dateRanges: [dateRange],
+        dimensions: [{ name: "date" }, { name: "itemName" }],
+        metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
+        dimensionFilter: {
+          filter: {
+            fieldName: "itemName",
+            stringFilter: { value: productFilter, matchType: "EXACT" },
+          },
+        },
+        orderBys: [{ dimension: { dimensionName: "date", orderType: "ALPHANUMERIC" } }],
+      });
+
+      const trend: ProductTrendData = {
+        productName: productFilter,
+        dailyTrend: (res[0]?.rows ?? []).map((r) => {
+          const raw = r.dimensionValues?.[0]?.value ?? "";
+          const date =
+            raw.length === 8
+              ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+              : raw;
+          return {
+            date,
+            revenue: parseFloat(parseFloat(r.metricValues?.[0]?.value ?? "0").toFixed(2)),
+            itemsPurchased: parseInt(r.metricValues?.[1]?.value ?? "0", 10),
+          };
+        }),
+      };
+
+      return NextResponse.json(trend);
+    } catch (e) {
+      return NextResponse.json(
+        { error: `Fout bij ophalen productdetail: ${e instanceof Error ? e.message : String(e)}` },
+        { status: 502 }
+      );
+    }
+  }
 
   try {
     const [totalsRes, trendRes, productsRes, categoriesRes] = await Promise.all([
@@ -146,7 +201,7 @@ export async function GET(req: NextRequest) {
       topCategories: (categoriesRes[0]?.rows ?? []).map((r) => ({
         category: r.dimensionValues?.[0]?.value ?? "(onbekend)",
         revenue: parseFloat(parseFloat(r.metricValues?.[0]?.value ?? "0").toFixed(2)),
-        transactions: parseInt(r.metricValues?.[1]?.value ?? "0", 10), // itemsPurchased
+        transactions: parseInt(r.metricValues?.[1]?.value ?? "0", 10),
       })),
       fetchedAt: new Date().toISOString(),
     };
