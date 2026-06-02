@@ -140,12 +140,12 @@ export function FANstoreDashboard() {
   }, [period, fetchData]);
 
   const fetchProductTrend = useCallback(
-    async (productName: string) => {
+    async (productName: string, p = period, cs = customStart, ce = customEnd) => {
       setProductLoading(true);
       setProductError(null);
       setProductTrend(null);
       try {
-        const base = buildUrl(period, customStart, customEnd);
+        const base = buildUrl(p, cs, ce);
         const url = `${base}&product=${encodeURIComponent(productName)}`;
         const res = await fetch(url);
         const json = await res.json();
@@ -208,6 +208,69 @@ export function FANstoreDashboard() {
           <p className="text-xs text-muted-foreground mt-1">
             Productprestaties over de geselecteerde periode
           </p>
+        </div>
+
+        {/* Periode-selector in detail view */}
+        <div className="flex flex-wrap items-end gap-2">
+          {(["7d", "30d", "90d"] as Exclude<Period, "custom">[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => {
+                setPeriod(p);
+                setCustomStart("");
+                setCustomEnd("");
+                fetchProductTrend(selectedProduct, p, "", "");
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded text-sm font-heading uppercase tracking-wide transition-colors",
+                period === p && customStart === ""
+                  ? "bg-[#e82026] text-white"
+                  : "bg-card border border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className={cn(
+                "bg-card border border-border rounded px-2 py-1.5 text-sm text-foreground transition-colors",
+                period === "custom" && "border-[#e82026]"
+              )}
+            />
+            <span className="text-muted-foreground text-sm">–</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className={cn(
+                "bg-card border border-border rounded px-2 py-1.5 text-sm text-foreground transition-colors",
+                period === "custom" && "border-[#e82026]"
+              )}
+            />
+            <button
+              onClick={() => {
+                if (customStart && customEnd) {
+                  setPeriod("custom");
+                  fetchProductTrend(selectedProduct, "custom", customStart, customEnd);
+                }
+              }}
+              disabled={!customStart || !customEnd}
+              className="px-3 py-1.5 rounded text-sm font-heading uppercase tracking-wide bg-card border border-border text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Toepassen
+            </button>
+          </div>
+          <button
+            onClick={() => fetchProductTrend(selectedProduct)}
+            className="ml-auto p-1.5 rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
+            title="Vernieuwen"
+          >
+            <RefreshCw className={cn("w-4 h-4", productLoading && "animate-spin")} />
+          </button>
         </div>
 
         {productError && (
