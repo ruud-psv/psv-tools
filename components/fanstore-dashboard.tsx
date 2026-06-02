@@ -485,8 +485,9 @@ export function FANstoreDashboard() {
                     data={topProducts.map((p) => ({ ...p, displayName: formatProductName(p.name) }))}
                     layout="vertical"
                     margin={{ top: 0, right: 60, left: 0, bottom: 0 }}
-                    onClick={(state) => {
-                      const name = state?.activePayload?.[0]?.payload?.name;
+                    onClick={(state: unknown) => {
+                      const s = state as { activePayload?: { payload?: { name?: string } }[] } | null;
+                      const name = s?.activePayload?.[0]?.payload?.name;
                       if (name) handleProductClick(name);
                     }}
                     style={{ cursor: "pointer" }}
