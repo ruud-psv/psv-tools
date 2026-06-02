@@ -84,8 +84,6 @@ export async function GET(req: NextRequest) {
         metrics: [
           { name: "purchaseRevenue" },
           { name: "transactions" },
-          { name: "averagePurchaseRevenuePerTransaction" },
-          { name: "itemsPurchased" },
         ],
       }),
       client.runReport({
@@ -116,12 +114,17 @@ export async function GET(req: NextRequest) {
     const totalsRow = totalsRes[0]?.rows?.[0];
     const mv = (idx: number) => parseFloat(totalsRow?.metricValues?.[idx]?.value ?? "0");
 
+    const totalRevenue = mv(0);
+    const totalTransactions = Math.round(mv(1));
+
     const data: FANstoreData = {
       totals: {
-        revenue: parseFloat(mv(0).toFixed(2)),
-        transactions: Math.round(mv(1)),
-        avgOrderValue: parseFloat(mv(2).toFixed(2)),
-        itemsPurchased: Math.round(mv(3)),
+        revenue: parseFloat(totalRevenue.toFixed(2)),
+        transactions: totalTransactions,
+        avgOrderValue: totalTransactions > 0 ? parseFloat((totalRevenue / totalTransactions).toFixed(2)) : 0,
+        itemsPurchased: (productsRes[0]?.rows ?? []).reduce(
+          (sum, r) => sum + parseInt(r.metricValues?.[1]?.value ?? "0", 10), 0
+        ),
       },
       dailyTrend: (trendRes[0]?.rows ?? []).map((r) => {
         const raw = r.dimensionValues?.[0]?.value ?? "";
