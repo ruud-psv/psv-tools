@@ -99,16 +99,16 @@ export async function GET(req: NextRequest) {
         property,
         dateRanges: [dateRange],
         dimensions: [{ name: "itemName" }],
-        metrics: [{ name: "purchaseRevenue" }, { name: "itemsPurchased" }],
-        orderBys: [{ metric: { metricName: "purchaseRevenue" }, desc: true }],
+        metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
+        orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
         limit: 20,
       }),
       client.runReport({
         property,
         dateRanges: [dateRange],
         dimensions: [{ name: "itemCategory" }],
-        metrics: [{ name: "purchaseRevenue" }, { name: "transactions" }],
-        orderBys: [{ metric: { metricName: "purchaseRevenue" }, desc: true }],
+        metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
+        orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
         limit: 10,
       }),
     ]);
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
       topCategories: (categoriesRes[0]?.rows ?? []).map((r) => ({
         category: r.dimensionValues?.[0]?.value ?? "(onbekend)",
         revenue: parseFloat(parseFloat(r.metricValues?.[0]?.value ?? "0").toFixed(2)),
-        transactions: parseInt(r.metricValues?.[1]?.value ?? "0", 10),
+        transactions: parseInt(r.metricValues?.[1]?.value ?? "0", 10), // itemsPurchased
       })),
       fetchedAt: new Date().toISOString(),
     };
