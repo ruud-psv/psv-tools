@@ -274,9 +274,9 @@ export function FANstoreDashboard() {
                         return (
                           <div className={TOOLTIP_STYLE}>
                             <p className="text-gray-500 mb-1">{lbl}</p>
-                            {payload.map((e: { name: string; value: number; color: string }, i: number) => (
-                              <p key={i} style={{ color: e.color }}>
-                                {e.name}: {e.name === "Omzet" ? formatEuroFull(e.value) : formatNumber(e.value)}
+                            {payload.map((e, i) => (
+                              <p key={i} style={{ color: e.color as string }}>
+                                {e.name}: {e.name === "Omzet" ? formatEuroFull(e.value as number) : formatNumber(e.value as number)}
                               </p>
                             ))}
                           </div>
@@ -451,9 +451,9 @@ export function FANstoreDashboard() {
                     return (
                       <div className={TOOLTIP_STYLE}>
                         <p className="text-gray-500 mb-1">{lbl}</p>
-                        {payload.map((e: { name: string; value: number; color: string }, i: number) => (
-                          <p key={i} style={{ color: e.color }}>
-                            {e.name}: {e.name === "Omzet" ? formatEuroFull(e.value) : formatNumber(e.value)}
+                        {payload.map((e, i) => (
+                          <p key={i} style={{ color: e.color as string }}>
+                            {e.name}: {e.name === "Omzet" ? formatEuroFull(e.value as number) : formatNumber(e.value as number)}
                           </p>
                         ))}
                       </div>
