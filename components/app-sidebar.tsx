@@ -16,6 +16,7 @@ import {
   LogOut,
   Mail,
   MailPlus,
+  ShoppingBag,
   Ticket,
   PanelLeftClose,
   PanelLeftOpen,
@@ -98,6 +99,12 @@ const insights = [
     name: "Landingspagina's",
     href: "/dashboard/landingspaginas",
     icon: LayoutTemplate,
+    badge: null as string | null,
+  },
+  {
+    name: "FANstore",
+    href: "/dashboard/fanstore",
+    icon: ShoppingBag,
     badge: null as string | null,
   },
 ];
