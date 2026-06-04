@@ -2608,6 +2608,16 @@ export function MailBuilderForm() {
 
   return (
     <div className="flex flex-col xl:flex-row gap-6 items-start">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImageUpload(file);
+        }}
+      />
       {/* ---- Left column: form cards ---- */}
       <div className="w-full xl:w-[440px] xl:flex-shrink-0 space-y-4">
 
@@ -2747,16 +2757,6 @@ export function MailBuilderForm() {
                     <Upload className="h-4 w-4" />
                     {uploadingField === "hero" ? "Uploaden…" : "Upload"}
                   </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleImageUpload(file);
-                    }}
-                  />
                 </div>
                 {uploadError && (
                   <p className="flex items-center gap-1.5 text-xs text-destructive">
@@ -2980,11 +2980,9 @@ export function MailBuilderForm() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="ppIntro">Tekst (rood blok)</Label>
-                  <Textarea
-                    id="ppIntro"
-                    placeholder="Beschrijving van de video of het thema…"
+                  <RichTextEditor
                     value={state.psvplayIntroText}
-                    onChange={(e) => set("psvplayIntroText", e.target.value)}
+                    onChange={(html) => set("psvplayIntroText", html)}
                     className="min-h-[80px] text-sm"
                   />
                   {!state.psvplayIntroText && (
