@@ -7,23 +7,16 @@ import {
   Download,
   Copy,
   Check,
-  ChevronDown,
-  ChevronUp,
   Upload,
   AlertCircle,
   Moon,
   EyeOff,
   Mail,
-  GripVertical,
-  Plus,
-  Trash2,
   RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -38,23 +31,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { TEMPLATE_BLOCKS } from "@/lib/mail-builder/blocks";
+import { HeroBlock } from "@/components/mail-builder/blocks/HeroBlock";
+import { TextBlocksEditor } from "@/components/mail-builder/blocks/TextBlocksEditor";
+import { FooterBlock } from "@/components/mail-builder/blocks/FooterBlock";
+import { FanstoreNavBlock } from "@/components/mail-builder/blocks/FanstoreNavBlock";
+import { PsvPlayBlock } from "@/components/mail-builder/blocks/PsvPlayBlock";
+import { BusinessSponsorBlock } from "@/components/mail-builder/blocks/BusinessSponsorBlock";
+import { EnqueteCtaBlock } from "@/components/mail-builder/blocks/EnqueteCtaBlock";
+import { PhoxyCtaBlock } from "@/components/mail-builder/blocks/PhoxyCtaBlock";
+import { PrematchImagesBlock } from "@/components/mail-builder/blocks/PrematchImagesBlock";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Template = "business" | "enquete" | "fanstore" | "fcpsvo12" | "fcpsvo16" | "kaartverkoop" | "partnerships" | "phoxy" | "prematch" | "psvplay" | "soccerschool" | "tours";
+export type Template = "business" | "enquete" | "fanstore" | "fcpsvo12" | "fcpsvo16" | "kaartverkoop" | "partnerships" | "phoxy" | "prematch" | "psvplay" | "soccerschool" | "tours";
 
-type BlockBg = "wit" | "grijs" | "rood" | "zwart";
+export type BlockBg = "wit" | "grijs" | "rood" | "zwart";
 
-const BLOCK_BG_CONFIG: Record<BlockBg, { bg: string; text: string; link: string }> = {
+export const BLOCK_BG_CONFIG: Record<BlockBg, { bg: string; text: string; link: string }> = {
   wit:   { bg: "#ffffff", text: "#000000", link: "#EE1C24" },
   grijs: { bg: "#F1F1F1", text: "#000000", link: "#EE1C24" },
   rood:  { bg: "#E30613", text: "#ffffff", link: "#ffffff" },
   zwart: { bg: "#000000", text: "#ffffff", link: "#ffffff" },
 };
 
-interface BodyBlock {
+export interface BodyBlock {
   id: string;
   content: string;
   blockBg: BlockBg;
@@ -66,7 +69,7 @@ interface BodyBlock {
   secLinkUrl: string;
 }
 
-interface PsvPlayItem {
+export interface PsvPlayItem {
   id: string;
   imagePreviewUrl: string;
   imageAlt: string;
@@ -76,7 +79,7 @@ interface PsvPlayItem {
   ctaUrl: string;
 }
 
-function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem {
+export function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem {
   return {
     id: Math.random().toString(36).slice(2),
     imagePreviewUrl: "",
@@ -89,17 +92,17 @@ function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem {
   };
 }
 
-interface PrematchImage {
+export interface PrematchImage {
   id: string;
   previewUrl: string;
   alt: string;
 }
 
-function newPrematchImage(partial: Partial<PrematchImage> = {}): PrematchImage {
+export function newPrematchImage(partial: Partial<PrematchImage> = {}): PrematchImage {
   return { id: Math.random().toString(36).slice(2), previewUrl: "", alt: "", ...partial };
 }
 
-function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
+export function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
   return {
     id: Math.random().toString(36).slice(2),
     content: "Schrijf hier jouw berichttekst.",
@@ -114,7 +117,7 @@ function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
   };
 }
 
-interface MailBuilderState {
+export interface MailBuilderState {
   template: Template;
   heroUrl: string; // legacy field – kept for migration
   heroAlt: string;
@@ -194,7 +197,7 @@ function wrapLink(url: string): string {
   return url ? `[[LINK|"${url}"]]` : "";
 }
 
-function RichTextEditor({
+export function RichTextEditor({
   value,
   onChange,
   className,
@@ -2292,7 +2295,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
 // Toggle
 // ---------------------------------------------------------------------------
 
-function Toggle({
+export function Toggle({
   checked,
   onChange,
 }: {
@@ -2320,112 +2323,6 @@ function Toggle({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Footer card (collapsible)
-// ---------------------------------------------------------------------------
-
-function FooterCard({
-  state,
-  set,
-}: {
-  state: MailBuilderState;
-  set: <K extends keyof MailBuilderState>(key: K, value: MailBuilderState[K]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  if (state.template === "prematch") return null;
-
-  return (
-    <Card>
-      <button
-        type="button"
-        className="w-full text-left"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle>Footer</CardTitle>
-            {open ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-        </CardHeader>
-      </button>
-      {open && (
-        <CardContent className="space-y-4 pt-0">
-          <div className="space-y-2">
-            <Label htmlFor="disclaimerTekst">Disclaimer-tekst</Label>
-            <Textarea
-              id="disclaimerTekst"
-              value={state.disclaimerTekst}
-              onChange={(e) => set("disclaimerTekst", e.target.value)}
-              className="min-h-[80px] text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              De zin &ldquo;Wil je er zeker van zijn…&rdquo; wordt altijd automatisch toegevoegd.
-              {state.template === "business" && " De Business-contactregel en uitschrijflinks staan vast in het template."}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="misNiksEmail">{state.template === "business" ? `"Mis niks" e-mailadres (PSV Business)` : `"Mis niks van PSV" e-mailadres`}</Label>
-            <Input
-              id="misNiksEmail"
-              value={state.misNiksEmail}
-              onChange={(e) => set("misNiksEmail", e.target.value)}
-            />
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Prematch form
-// ---------------------------------------------------------------------------
-
-function PrematchImageRow({
-  label,
-  previewKey,
-  altKey,
-  state,
-  set,
-  onUpload,
-  uploading,
-}: {
-  label: string;
-  previewKey: keyof MailBuilderState;
-  altKey: keyof MailBuilderState;
-  state: MailBuilderState;
-  set: <K extends keyof MailBuilderState>(key: K, value: MailBuilderState[K]) => void;
-  onUpload?: () => void;
-  uploading?: boolean;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      <div className="flex gap-2">
-        <Input
-          placeholder="https://…"
-          value={state[previewKey] as string}
-          onChange={(e) => set(previewKey, e.target.value)}
-          className="flex-1 min-w-0"
-        />
-        {onUpload && (
-          <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploading} onClick={onUpload}>
-            {uploading ? <span className="text-xs">…</span> : <Upload className="h-3.5 w-3.5" />}
-          </Button>
-        )}
-      </div>
-      <Input
-        placeholder="Alt-tekst"
-        value={state[altKey] as string}
-        onChange={(e) => set(altKey, e.target.value)}
-      />
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -2451,50 +2348,11 @@ export function MailBuilderForm() {
   const [downloaded, setDownloaded] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
   const uploadCallbackRef = useRef<((url: string) => void) | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const aanhefInputRef = useRef<HTMLInputElement>(null);
-  const dragIndex = useRef<number | null>(null);
-
-  function updateBlock<K extends keyof BodyBlock>(i: number, key: K, value: BodyBlock[K]) {
-    setState((prev) => {
-      const next = [...prev.blocks];
-      next[i] = { ...next[i], [key]: value };
-      return { ...prev, blocks: next };
-    });
-  }
-
-  function addBlock() {
-    setState((prev) => ({ ...prev, blocks: [...prev.blocks, newBlock()] }));
-  }
-
-  function removeBlock(i: number) {
-    setState((prev) => ({ ...prev, blocks: prev.blocks.filter((_, idx) => idx !== i) }));
-  }
-
-  function moveBlock(from: number, to: number) {
-    if (from === to) return;
-    setState((prev) => {
-      const next = [...prev.blocks];
-      next.splice(to, 0, next.splice(from, 1)[0]);
-      return { ...prev, blocks: next };
-    });
-  }
-
-  function insertAanhefToken(token: string) {
-    const el = aanhefInputRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? el.value.length;
-    const next = el.value.slice(0, start) + token + el.value.slice(end);
-    set("aanhefText", next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(start + token.length, start + token.length);
-    });
-  }
-
   // Persist draft
   useEffect(() => {
     try {
@@ -2548,7 +2406,9 @@ export function MailBuilderForm() {
 
   function handleDownload() {
     const html = generateEmailHTML(state, true);
-    const blob = new Blob([html], { type: "text/html" });
+    const stateJson = JSON.stringify(state).replace(/-->/g, "--\\u003E");
+    const htmlWithState = html + `\n<!-- mailbuilder-state:${stateJson} -->`;
+    const blob = new Blob([htmlWithState], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -2558,6 +2418,43 @@ export function MailBuilderForm() {
     URL.revokeObjectURL(url);
     setDownloaded(true);
     setTimeout(() => setDownloaded(false), 2000);
+  }
+
+  function handleImportClick() {
+    setImportError(null);
+    importFileInputRef.current?.click();
+  }
+
+  function handleImportFile(file: File) {
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result;
+      if (typeof text !== "string") {
+        setImportError("Kon het bestand niet lezen.");
+        return;
+      }
+      const match = text.match(/<!--\s*mailbuilder-state:([\s\S]*?)\s*-->/);
+      if (!match) {
+        setImportError("Dit HTML-bestand bevat geen opgeslagen staat. Gebruik alleen bestanden geëxporteerd vanuit de Mail Builder.");
+        return;
+      }
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(match[1]);
+      } catch {
+        setImportError("De opgeslagen staat kon niet worden gelezen (ongeldige JSON).");
+        return;
+      }
+      if (!window.confirm("Weet je zeker dat je het huidige ontwerp wilt overschrijven met de inhoud van dit bestand?")) return;
+      try {
+        setState(migrateState(parsed));
+      } catch {
+        setImportError("De staat in dit bestand is niet compatibel met de huidige versie.");
+      }
+    };
+    reader.onerror = () => setImportError("Fout bij het lezen van het bestand.");
+    reader.readAsText(file, "utf-8");
   }
 
   async function handleCopy() {
@@ -2595,12 +2492,13 @@ export function MailBuilderForm() {
     }
   }
 
-  const isPrematch = state.template === "prematch";
-  const isPsvPlay = state.template === "psvplay";
-  const isBusiness = state.template === "business";
-  const isFS = state.template === "fanstore";
-  const isEnquete = state.template === "enquete";
-  const isPhoxy = state.template === "phoxy";
+  const blockProps = {
+    state,
+    onChange: (partial: Partial<MailBuilderState>) => setState((prev) => ({ ...prev, ...partial })),
+    triggerUpload,
+    uploadingField,
+    uploadError,
+  };
 
   const preset = DEVICE_PRESETS[device];
   const scaledWidth = Math.round(600 * preset.scale);
@@ -2616,6 +2514,17 @@ export function MailBuilderForm() {
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleImageUpload(file);
+        }}
+      />
+      <input
+        ref={importFileInputRef}
+        type="file"
+        accept=".html,text/html"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImportFile(file);
+          if (importFileInputRef.current) importFileInputRef.current.value = "";
         }}
       />
       {/* ---- Left column: form cards ---- */}
@@ -2650,7 +2559,7 @@ export function MailBuilderForm() {
               </Select>
             </div>
 
-            {!isPrematch && !isPsvPlay && (
+            {state.template !== "prematch" && state.template !== "psvplay" && (
               <div className="space-y-2">
                 <Label>UTM-campagne</Label>
                 <Input
@@ -2666,601 +2575,22 @@ export function MailBuilderForm() {
           </CardContent>
         </Card>
 
-        {/* PREMATCH: image fields */}
-        {isPrematch && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Afbeeldingen</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {state.prematchImages.map((img, i) => (
-                <div key={img.id} className="rounded-md border border-input bg-card p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">Afbeelding {i + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => set("prematchImages", state.prematchImages.filter((_, j) => j !== i))}
-                      className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
-                      aria-label="Verwijder afbeelding"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="https://…"
-                      value={img.previewUrl}
-                      onChange={(e) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, previewUrl: e.target.value } : it))}
-                      className="h-8 text-xs flex-1 min-w-0"
-                    />
-                    <Button type="button" variant="outline" size="sm" className="shrink-0 h-8 px-2" disabled={uploadingField !== null}
-                      onClick={() => triggerUpload(`pm-${i}`, (url) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, previewUrl: url } : it)))}>
-                      {uploadingField === `pm-${i}` ? <span className="text-xs">…</span> : <Upload className="h-3.5 w-3.5" />}
-                    </Button>
-                  </div>
-                  <Input
-                    placeholder="Alt-tekst"
-                    value={img.alt}
-                    onChange={(e) => set("prematchImages", state.prematchImages.map((it, j) => j === i ? { ...it, alt: e.target.value } : it))}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => set("prematchImages", [...state.prematchImages, newPrematchImage()])}
-                className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Afbeelding toevoegen
-              </button>
-              <div className="pt-1 border-t border-border">
-                <PrematchImageRow
-                  label="Footer"
-                  previewKey="prematchFooterPreviewUrl"
-                  altKey="prematchFooterAlt"
-                  state={state}
-                  set={set}
-                  onUpload={() => triggerUpload("pm-footer", (url) => set("prematchFooterPreviewUrl", url))}
-                  uploading={uploadingField === "pm-footer"}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* HERO AFBEELDING */}
-        {!isPrematch && !isPsvPlay && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Hero afbeelding</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="heroPreviewUrl">Afbeelding</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="heroPreviewUrl"
-                    placeholder="https://images.maileon-static.com/c/…"
-                    value={state.heroPreviewUrl}
-                    onChange={(e) => set("heroPreviewUrl", e.target.value)}
-                    className="flex-1 min-w-0"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1.5"
-                    disabled={uploadingField !== null}
-                    onClick={() => triggerUpload("hero", (url) => set("heroPreviewUrl", url))}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {uploadingField === "hero" ? "Uploaden…" : "Upload"}
-                  </Button>
-                </div>
-                {uploadError && (
-                  <p className="flex items-center gap-1.5 text-xs text-destructive">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                    {uploadError}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Upload naar Bunny CDN, of plak een bestaande URL. Export-URL wordt automatisch afgeleid.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="heroAlt">Alt-tekst</Label>
-                <Input
-                  id="heroAlt"
-                  placeholder="Scoor nu je tickets"
-                  value={state.heroAlt}
-                  onChange={(e) => set("heroAlt", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="heroLink">Klik-link (optioneel)</Label>
-                <Input
-                  id="heroLink"
-                  placeholder="https://ticketshop.psv.nl/…"
-                  value={state.heroLink}
-                  onChange={(e) => set("heroLink", e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* PSV BUSINESS: Sponsor-balk */}
-        {isBusiness && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Sponsor-balk</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="businessSponsorUrl">Afbeelding</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="businessSponsorUrl"
-                    placeholder="https://…"
-                    value={state.businessSponsorPreviewUrl}
-                    onChange={(e) => set("businessSponsorPreviewUrl", e.target.value)}
-                    className="flex-1 min-w-0"
-                  />
-                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
-                    onClick={() => triggerUpload("biz-sponsor", (url) => set("businessSponsorPreviewUrl", url))}>
-                    {uploadingField === "biz-sponsor" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Seizoensgebonden sponsorbalk. Export-URL wordt automatisch afgeleid.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* PSV ENQUÊTE */}
-        {isEnquete && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Enquête CTA</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="enqueteCtaLabel">Knoptekst</Label>
-                <Input
-                  id="enqueteCtaLabel"
-                  placeholder="NAAR HET ONDERZOEK"
-                  value={state.enqueteCtaLabel ?? ""}
-                  onChange={(e) => set("enqueteCtaLabel", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="enqueteCtaUrl">Knop-link</Label>
-                <Input
-                  id="enqueteCtaUrl"
-                  placeholder="https://…"
-                  value={state.enqueteCtaUrl ?? ""}
-                  onChange={(e) => set("enqueteCtaUrl", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="enqueteCtaSubtext">Subtekst onder knop</Label>
-                <Input
-                  id="enqueteCtaSubtext"
-                  placeholder="Het invullen kost een paar minuten…"
-                  value={state.enqueteCtaSubtext ?? ""}
-                  onChange={(e) => set("enqueteCtaSubtext", e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  id="enqueteHeeftSecImage"
-                  type="checkbox"
-                  checked={state.enqueteHeeftSecImage ?? false}
-                  onChange={(e) => set("enqueteHeeftSecImage", e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="enqueteHeeftSecImage">Extra afbeelding tonen</Label>
-              </div>
-              {state.enqueteHeeftSecImage && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="enqueteSecImageUrl">Afbeelding URL</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="enqueteSecImageUrl"
-                        placeholder="https://images.maileon-static.com/c/…"
-                        value={state.enqueteSecImagePreviewUrl ?? ""}
-                        onChange={(e) => set("enqueteSecImagePreviewUrl", e.target.value)}
-                        className="flex-1 min-w-0"
-                      />
-                      <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
-                        onClick={() => triggerUpload("enquete-sec", (url) => set("enqueteSecImagePreviewUrl", url))}>
-                        {uploadingField === "enquete-sec" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="enqueteSecImageAlt">Alt-tekst</Label>
-                    <Input
-                      id="enqueteSecImageAlt"
-                      placeholder="Alt-tekst afbeelding"
-                      value={state.enqueteSecImageAlt ?? ""}
-                      onChange={(e) => set("enqueteSecImageAlt", e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* PHOXY CLUB */}
-        {isPhoxy && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Phoxy CTA</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="phoxyCtaImageUrl">CTA afbeelding</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="phoxyCtaImageUrl"
-                    placeholder="https://images.maileon-static.com/c/…"
-                    value={state.phoxyCtaImagePreviewUrl ?? ""}
-                    onChange={(e) => set("phoxyCtaImagePreviewUrl", e.target.value)}
-                    className="flex-1 min-w-0"
-                  />
-                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
-                    onClick={() => triggerUpload("phoxy-cta-img", (url) => set("phoxyCtaImagePreviewUrl", url))}>
-                    {uploadingField === "phoxy-cta-img" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Afbeelding-knop (60% breedte, links uitgelijnd).
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phoxyCtaUrl">CTA link</Label>
-                <Input
-                  id="phoxyCtaUrl"
-                  placeholder="https://…"
-                  value={state.phoxyCtaUrl ?? ""}
-                  onChange={(e) => set("phoxyCtaUrl", e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* PSV PLAY */}
-        {isPsvPlay && (
-          <>
-            {/* Hero afbeelding (PSV Play) */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Hero afbeelding</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ppHeroUrl">Afbeelding</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="ppHeroUrl"
-                      placeholder="https://…"
-                      value={state.heroPreviewUrl}
-                      onChange={(e) => set("heroPreviewUrl", e.target.value)}
-                      className="flex-1 min-w-0"
-                    />
-                    <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={uploadingField !== null}
-                      onClick={() => triggerUpload("pp-hero", (url) => set("heroPreviewUrl", url))}>
-                      {uploadingField === "pp-hero" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ppHeroAlt">Alt-tekst</Label>
-                  <Input id="ppHeroAlt" value={state.heroAlt} onChange={(e) => set("heroAlt", e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ppHeroLink">Klik-link (optioneel)</Label>
-                  <Input id="ppHeroLink" value={state.heroLink} onChange={(e) => set("heroLink", e.target.value)} />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Intro + CTAs */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Intro</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ppIntro">Tekst (rood blok)</Label>
-                  <RichTextEditor
-                    value={state.psvplayIntroText}
-                    onChange={(html) => set("psvplayIntroText", html)}
-                    className="min-h-[80px] text-sm"
-                  />
-                  {!state.psvplayIntroText && (
-                    <p className="text-xs text-muted-foreground">Tip: gebruik de <a href="https://tools.psv.nl/dashboard/copy-generator" target="_blank" className="underline hover:text-foreground transition-colors">Mail tekst generator</a> om tekst op te bouwen.</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>CTA-knop</Label>
-                  <Input placeholder="BEKIJK OP PSV PLAY" value={state.psvplayCta1Label} onChange={(e) => set("psvplayCta1Label", e.target.value)} />
-                  <Input placeholder="https://www.psv.nl/psv-play" value={state.psvplayCta1Url} onChange={(e) => set("psvplayCta1Url", e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Secundaire link (optioneel)</Label>
-                  <Input placeholder="Meer over PSV Play >" value={state.psvplayCta2Label} onChange={(e) => set("psvplayCta2Label", e.target.value)} />
-                  <Input placeholder="https://www.psv.nl/psv-play" value={state.psvplayCta2Url} onChange={(e) => set("psvplayCta2Url", e.target.value)} />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Video items */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle>Video items</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {state.psvplayItems.map((item, i) => (
-                  <div key={item.id} className="rounded-md border border-input bg-card p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-muted-foreground">Item {i + 1} — foto {i % 2 === 0 ? "links" : "rechts"}</span>
-                      <button
-                        type="button"
-                        onClick={() => set("psvplayItems", state.psvplayItems.filter((_, j) => j !== i))}
-                        className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
-                        aria-label="Verwijder item"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="https://…"
-                          value={item.imagePreviewUrl}
-                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imagePreviewUrl: e.target.value } : it))}
-                          className="h-8 text-xs flex-1 min-w-0"
-                        />
-                        <Button type="button" variant="outline" size="sm" className="shrink-0 h-8 px-2" disabled={uploadingField !== null}
-                          onClick={() => triggerUpload(`pp-item-${i}`, (url) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imagePreviewUrl: url } : it)))}>
-                          {uploadingField === `pp-item-${i}` ? <span className="text-xs">…</span> : <Upload className="h-3.5 w-3.5" />}
-                        </Button>
-                      </div>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Alt-tekst"
-                          value={item.imageAlt}
-                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imageAlt: e.target.value } : it))}
-                          className="h-8 text-xs flex-1"
-                        />
-                        <Input
-                          placeholder="Klik-link (opt.)"
-                          value={item.imageLink}
-                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, imageLink: e.target.value } : it))}
-                          className="h-8 text-xs flex-1"
-                        />
-                      </div>
-                      <RichTextEditor
-                        value={item.quote}
-                        onChange={(html) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, quote: html } : it))}
-                        className="min-h-[60px] text-xs"
-                      />
-                      {!item.quote && (
-                        <p className="text-xs text-muted-foreground">Tip: gebruik de <a href="https://tools.psv.nl/dashboard/copy-generator" target="_blank" className="underline hover:text-foreground transition-colors">Mail tekst generator</a> om tekst op te bouwen.</p>
-                      )}
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="BEKIJK NU"
-                          value={item.ctaLabel}
-                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, ctaLabel: e.target.value } : it))}
-                          className="h-8 text-xs w-36 flex-shrink-0"
-                        />
-                        <Input
-                          placeholder="https://www.psv.nl/psv-play"
-                          value={item.ctaUrl}
-                          onChange={(e) => set("psvplayItems", state.psvplayItems.map((it, j) => j === i ? { ...it, ctaUrl: e.target.value } : it))}
-                          className="h-8 text-xs flex-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => set("psvplayItems", [...state.psvplayItems, newPsvPlayItem()])}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Item toevoegen
-                </button>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        {/* INHOUD */}
-        {!isPrematch && !isPsvPlay && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Inhoud</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="aanhefText">Aanhef</Label>
-                <Input
-                  ref={aanhefInputRef}
-                  id="aanhefText"
-                  placeholder="Hi {VOORNAAM}"
-                  value={state.aanhefText}
-                  onChange={(e) => set("aanhefText", e.target.value)}
-                />
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => insertAanhefToken("{VOORNAAM}")}
-                    className="rounded border border-input bg-background px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
-                  >
-                    + Voornaam
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertAanhefToken("{VOLLEDIGE NAAM}")}
-                    className="rounded border border-input bg-background px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
-                  >
-                    + Volledige naam
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Klik op een knop om personalisatie in te voegen. Fallback is altijd <em>PSV-fan</em>.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Blokken</Label>
-                <div className="space-y-3">
-                  {state.blocks.map((block, i) => (
-                    <div
-                      key={block.id}
-                      draggable
-                      onDragStart={() => { dragIndex.current = i; }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => { if (dragIndex.current !== null) moveBlock(dragIndex.current, i); dragIndex.current = null; }}
-                      className="rounded-md border border-input bg-card p-3 space-y-2"
-                    >
-                      {/* Block header */}
-                      <div className="flex items-center gap-2">
-                        <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
-                        <span className="text-xs font-medium text-muted-foreground">Blok {i + 1}</span>
-                        <div className="ml-auto flex items-center gap-2">
-                          {(["wit", "grijs", "rood", "zwart"] as const).map((bg) => {
-                            const cfg = BLOCK_BG_CONFIG[bg];
-                            return (
-                              <button
-                                key={bg}
-                                type="button"
-                                title={bg.charAt(0).toUpperCase() + bg.slice(1)}
-                                onClick={() => updateBlock(i, "blockBg", bg)}
-                                className={cn(
-                                  "h-5 w-5 rounded-sm border transition-all",
-                                  block.blockBg === bg
-                                    ? "border-primary ring-2 ring-primary ring-offset-1 scale-110"
-                                    : "border-input hover:border-primary/50"
-                                )}
-                                style={{ backgroundColor: cfg.bg }}
-                              />
-                            );
-                          })}
-                          <button
-                            type="button"
-                            onClick={() => removeBlock(i)}
-                            className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
-                            aria-label="Verwijder blok"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      {/* Content */}
-                      <RichTextEditor
-                        value={block.content}
-                        onChange={(v) => updateBlock(i, "content", v)}
-                        className="min-h-[80px]"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        ⌘B vet · ⌘I cursief · ⌘U onderstreept
-                        {!block.content && (
-                          <span className="block mt-1">Tip: gebruik de <a href="https://tools.psv.nl/dashboard/copy-generator" target="_blank" className="underline hover:text-foreground transition-colors">Mail tekst generator</a> om body-tekst op te bouwen.</span>
-                        )}
-                      </p>
-                      {/* CTA toggle */}
-                      <div className="space-y-2 border-t border-input pt-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium">CTA-knop</span>
-                          <Toggle checked={block.heeftCta} onChange={(v) => updateBlock(i, "heeftCta", v)} />
-                        </div>
-                        {block.heeftCta && (
-                          <div className="space-y-1.5 pl-3 border-l-2 border-primary/20">
-                            <Input
-                              placeholder="SCOOR DE ALLERLAATSTE TICKETS"
-                              value={block.ctaLabel}
-                              onChange={(e) => updateBlock(i, "ctaLabel", e.target.value)}
-                              className="h-8 text-xs"
-                            />
-                            <Input
-                              placeholder="https://ticketshop.psv.nl/…"
-                              value={block.ctaUrl}
-                              onChange={(e) => updateBlock(i, "ctaUrl", e.target.value)}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                        )}
-                      </div>
-                      {/* Secondary link toggle */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium">Secundaire link</span>
-                          <Toggle checked={block.heeftSecLink} onChange={(v) => updateBlock(i, "heeftSecLink", v)} />
-                        </div>
-                        {block.heeftSecLink && (
-                          <div className="space-y-1.5 pl-3 border-l-2 border-primary/20">
-                            <Input
-                              placeholder="Bekijk alle wedstrijden >"
-                              value={block.secLinkLabel}
-                              onChange={(e) => updateBlock(i, "secLinkLabel", e.target.value)}
-                              className="h-8 text-xs"
-                            />
-                            <Input
-                              placeholder="https://ticketshop.psv.nl/…"
-                              value={block.secLinkUrl}
-                              onChange={(e) => updateBlock(i, "secLinkUrl", e.target.value)}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={addBlock}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Blok toevoegen
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Afsluitende regel</Label>
-                  <Toggle
-                    checked={state.heeftAfsluitRegel}
-                    onChange={(v) => set("heeftAfsluitRegel", v)}
-                  />
-                </div>
-                {state.heeftAfsluitRegel && (
-                  <div className="pl-3 border-l-2 border-primary/20">
-                    <Input
-                      placeholder="Tot ziens in het Philips Stadion!"
-                      value={state.afsluitRegel}
-                      onChange={(e) => set("afsluitRegel", e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* FOOTER (collapsed) */}
-        <FooterCard state={state} set={set} />
+        {/* Block-gebaseerde secties via registry */}
+        {TEMPLATE_BLOCKS[state.template].map((blockType) => {
+          switch (blockType) {
+            case "hero":             return <HeroBlock key="hero" {...blockProps} />;
+            case "greeting":         return null;
+            case "text-blocks":      return <TextBlocksEditor key="text-blocks" state={blockProps.state} onChange={blockProps.onChange} />;
+            case "footer":           return <FooterBlock key="footer" state={blockProps.state} onChange={blockProps.onChange} />;
+            case "fanstore-nav":     return <FanstoreNavBlock key="fanstore-nav" state={blockProps.state} onChange={blockProps.onChange} />;
+            case "psvplay-video":    return <PsvPlayBlock key="psvplay-video" {...blockProps} />;
+            case "business-sponsor": return <BusinessSponsorBlock key="business-sponsor" {...blockProps} />;
+            case "enquete-cta":      return <EnqueteCtaBlock key="enquete-cta" {...blockProps} />;
+            case "phoxy-cta":        return <PhoxyCtaBlock key="phoxy-cta" {...blockProps} />;
+            case "prematch-images":  return <PrematchImagesBlock key="prematch-images" {...blockProps} />;
+            default:                 return null;
+          }
+        })}
       </div>
 
       {/* ---- Right column: preview ---- */}
@@ -3335,6 +2665,9 @@ export function MailBuilderForm() {
                 <Button size="sm" variant="outline" onClick={handleReset} className="gap-1.5" title="Zet terug naar standaard">
                   <RotateCcw className="h-4 w-4" />Standaard
                 </Button>
+                <Button size="sm" variant="outline" onClick={handleImportClick} className="gap-1.5" title="Laad een eerder geëxporteerd HTML-bestand">
+                  <Upload className="h-4 w-4" />Importeren
+                </Button>
                 <Button size="sm" variant="outline" onClick={handleCopy} className="gap-1.5">
                   {copied ? (
                     <><Check className="h-4 w-4" />Gekopieerd!</>
@@ -3352,6 +2685,14 @@ export function MailBuilderForm() {
               </div>
             </div>
           </CardHeader>
+          {importError && (
+            <div className="px-6 pb-3">
+              <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                {importError}
+              </p>
+            </div>
+          )}
           <CardContent className="p-0">
             <div className="border-t border-border">
               {device === "desktop" ? (
