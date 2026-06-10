@@ -1292,7 +1292,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
 
   const previewUrl = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
   const heroSrc = forExport
-    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : state.heroUrl)
+    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : previewUrl)
     : previewUrl;
   const heroWrap = state.heroLink
     ? { open: `<a href="${forExport ? wrapLink(utm(state.heroLink)) : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">`, close: `</a>` }
@@ -1540,7 +1540,7 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
 
   const previewUrl = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
   const heroSrc = forExport
-    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : state.heroUrl)
+    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : previewUrl)
     : previewUrl;
   const heroWrap = state.heroLink
     ? { open: `<a href="${forExport ? wrapLink(utm(state.heroLink)) : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">`, close: `</a>` }
@@ -1768,7 +1768,7 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
 
   const previewUrl = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
   const heroSrc = forExport
-    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : state.heroUrl)
+    ? (previewUrl.startsWith(PREVIEW_CDN_HOST) ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST) : previewUrl)
     : previewUrl;
 
   const aanhefResolved = resolveAanhef(state.aanhefText || "Hoi {VOORNAAM}", forExport);
@@ -1993,7 +1993,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const heroSrc = forExport
     ? previewUrl.startsWith(PREVIEW_CDN_HOST)
       ? previewUrl.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST)
-      : state.heroUrl
+      : previewUrl
     : previewUrl;
 
   const heroWrap = state.heroLink
