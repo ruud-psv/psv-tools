@@ -223,7 +223,12 @@ export function RichTextEditor({
       onPaste={(e) => {
         e.preventDefault();
         const text = e.clipboardData.getData("text/plain");
-        document.execCommand("insertText", false, text);
+        const html = text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\n/g, "<br>");
+        document.execCommand("insertHTML", false, html);
         onChange(ref.current?.innerHTML ?? "");
       }}
       onKeyDown={(e) => {
