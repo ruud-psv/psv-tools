@@ -220,6 +220,12 @@ export function RichTextEditor({
       contentEditable
       suppressContentEditableWarning
       onInput={() => onChange(ref.current?.innerHTML ?? "")}
+      onPaste={(e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData("text/plain");
+        document.execCommand("insertText", false, text);
+        onChange(ref.current?.innerHTML ?? "");
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
