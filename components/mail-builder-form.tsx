@@ -254,6 +254,14 @@ export function RichTextEditor({
   );
 }
 
+function richToInline(html: string): string {
+  return html
+    .replace(/<\/?(div|p)[^>]*>/gi, (tag) => (tag.startsWith("</") ? "<br>" : ""))
+    .replace(/(<br\s*\/?>\s*)+$/i, "")
+    .replace(/^(\s*<br\s*\/?>\s*)+/i, "")
+    .trim();
+}
+
 function applyUtm(url: string, campaign: string): string {
   if (!url) return url;
   try {
@@ -870,7 +878,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
           <!-- Intro -->
           <tr>
             <td bgcolor="#ED1B24" style="background-color:#ED1B24;padding:20px 30px;text-align:center;">
-              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;line-height:20px;">${state.psvplayIntroText}</p>
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;line-height:20px;">${richToInline(state.psvplayIntroText)}</p>
             </td>
           </tr>
           <tr>
@@ -914,7 +922,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
               ${itemImgHref ? "</a>" : ""}
             </td>`;
     const textCell = `<td width="300" valign="middle" style="width:300px;padding:20px;text-align:center;background-color:#000000;">
-              <div style="margin:0 0 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;line-height:22px;">${item.quote}</div>
+              <div style="margin:0 0 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:#ffffff;line-height:22px;">${richToInline(item.quote)}</div>
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
                 href="${itemCtaHref}" style="height:36px;v-text-anchor:middle;width:160px;" arcsize="0%" stroke="f" fillcolor="#E30613">
@@ -1168,7 +1176,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
     const contentRow = block.content
-      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:0;text-align:left;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:0;text-align:left;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${richToInline(block.content)}</div></td></tr>`
       : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
@@ -1338,7 +1346,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
 
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
-    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>` : "";
+    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${richToInline(block.content)}</div></td></tr>` : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
     const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px 0;text-align:center;"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${bCtaHref}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="5%" stroke="f" fillcolor="#E30613"><w:anchorlock/><center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${block.ctaLabel}</center></v:roundrect><![endif]--><!--[if !mso]><!--><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:5px;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;">${block.ctaLabel}</a></td></tr></table><!--<![endif]--></td></tr>` : "";
@@ -1606,7 +1614,7 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
 
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
-    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>` : "";
+    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${richToInline(block.content)}</div></td></tr>` : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
     const ctaRow = block.heeftCta && block.ctaLabel ? makeLeftCtaRow(block.ctaLabel, bCtaHref, cfg.bg) : "";
@@ -1808,7 +1816,7 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
 
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
-    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${block.content}</div></td></tr>` : "";
+    const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${richToInline(block.content)}</div></td></tr>` : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
     const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">${block.ctaLabel}</a></td></tr></table></td></tr>` : "";
@@ -2119,7 +2127,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const blocksHtml = state.blocks.map(block => {
     const cfg = BLOCK_BG_CONFIG[block.blockBg ?? "wit"];
     const contentRow = block.content
-      ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${block.content}</div></td></tr>`
+      ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${richToInline(block.content)}</div></td></tr>`
       : "";
     const bCtaHref = block.heeftCta && block.ctaUrl
       ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl)
