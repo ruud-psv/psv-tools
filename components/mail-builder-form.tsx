@@ -194,7 +194,7 @@ const MAILEON_CDN_HOST = "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]
 const PREVIEW_CDN_HOST = "https://images.maileon-static.com";
 
 function wrapLink(url: string): string {
-  return url ? `[[LINK|"${url}"]]` : "";
+  return url ? `[[LINK|${url}]]` : "";
 }
 
 export function RichTextEditor({
@@ -668,7 +668,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
     : "";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const changeLanguageHref = forExport
-    ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]`
+    ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]`
     : "https://login.psv.nl/Dashboard/Profile";
 
   const contactId = forExport ? "[[CONTACT|ID]]" : "000001";
@@ -680,13 +680,13 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const changeEmailHref = forExport
-    ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]`
+    ? `[[LINK|https://www.psv.nl/contact-1/e-mailadreswijziging]]`
     : "https://www.psv.nl/contact-1/e-mailadreswijziging";
   const misNiksHref = forExport
-    ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]`
+    ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]`
     : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
 
-  const sl = (url: string) => (forExport ? `[[LINK|"${url}"]]` : url);
+  const sl = (url: string) => (forExport ? `[[LINK|${url}]]` : url);
   const fbUrl = sl("https://www.facebook.com/PSV/");
   const igUrl = sl("https://www.instagram.com/psv/");
   const ytUrl = sl("https://www.youtube.com/user/psveindhoven");
@@ -698,10 +698,10 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   const mv = (variable: string, preview: string) => forExport ? variable : preview;
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
   const fbPosHref = forExport
-    ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]`
+    ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327]]`
     : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
   const fbNegHref = forExport
-    ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]`
+    ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc]]`
     : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
   return `<!DOCTYPE html>
@@ -837,7 +837,7 @@ const PSVPLAY_PATTERN_SRC_EXPORT = `${MAILEON_CDN_HOST}/c/oNgEaVc-AGBG66Sf2Grt1g
 function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string {
   const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
   const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
-  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const sl = (url: string) => forExport ? `[[LINK|${url}]]` : url;
 
   const toExportSrc = (previewUrl: string) =>
     previewUrl.startsWith(PREVIEW_CDN_HOST)
@@ -853,7 +853,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
   const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
-  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const contactId = forExport ? "[[CONTACT|ID]]" : "000001";
   const checksum = forExport ? "[[CONTACT|CHECKSUM]]" : "abc123";
   const fullName = forExport ? "[[% contact 'FULLNAME' 'onbekend']]" : "John Doe";
@@ -863,16 +863,16 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
 
   const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
-  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
-  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const changeEmailHref = forExport ? `[[LINK|https://www.psv.nl/contact-1/e-mailadreswijziging]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
 
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
-  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
-  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+  const fbPosHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
-  const cta1Href = forExport ? `[[LINK|"${utm(state.psvplayCta1Url)}"]]` : state.psvplayCta1Url || "#";
-  const cta2Href = forExport ? `[[LINK|"${utm(state.psvplayCta2Url)}"]]` : state.psvplayCta2Url || "#";
+  const cta1Href = forExport ? `[[LINK|${utm(state.psvplayCta1Url)}]]` : state.psvplayCta1Url || "#";
+  const cta2Href = forExport ? `[[LINK|${utm(state.psvplayCta2Url)}]]` : state.psvplayCta2Url || "#";
 
   const introBlock = `
           <!-- Intro -->
@@ -914,8 +914,8 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
   const itemsHtml = state.psvplayItems.map((item, i) => {
     const imageLeft = i % 2 === 0;
     const itemImgSrc = imgSrc(item.imagePreviewUrl);
-    const itemImgHref = item.imageLink ? (forExport ? `[[LINK|"${utm(item.imageLink)}"]]` : item.imageLink) : null;
-    const itemCtaHref = forExport ? `[[LINK|"${utm(item.ctaUrl)}"]]` : item.ctaUrl || "#";
+    const itemImgHref = item.imageLink ? (forExport ? `[[LINK|${utm(item.imageLink)}]]` : item.imageLink) : null;
+    const itemCtaHref = forExport ? `[[LINK|${utm(item.ctaUrl)}]]` : item.ctaUrl || "#";
     const imgCell = `<td width="300" valign="middle" style="width:300px;padding:0;">
               ${itemImgHref ? `<a href="${itemImgHref}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">` : ""}
               <img src="${itemImgSrc}" width="300" alt="${item.imageAlt}" style="display:block;width:100%;max-width:300px;height:auto;border:0;">
@@ -1016,7 +1016,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
           <!-- Hero image -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              ${state.heroLink ? `<a href="${forExport ? `[[LINK|"${utm(state.heroLink)}"]]` : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">` : ""}
+              ${state.heroLink ? `<a href="${forExport ? `[[LINK|${utm(state.heroLink)}]]` : state.heroLink}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">` : ""}
               <img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
               ${state.heroLink ? "</a>" : ""}
             </td>
@@ -1138,7 +1138,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const unsubHref = forExport ? "[[UNSUBSCRIBE]]" : "#";
   const changeEmailHref = `mailto:business@psv.nl?subject=E-mailadres%20wijzigen&body=Beste%20PSV%20Business%20Support%2C%0A%0AMijn%20e-mailadres%20is%20gewijzigd.%20Mijn%20nieuwe%20e-mailadres%20is%3A`;
-  const sponsorLinkHref = forExport ? `[[LINK|"https://www.psv.nl/business/home"]]` : "https://www.psv.nl/business/home";
+  const sponsorLinkHref = forExport ? `[[LINK|https://www.psv.nl/business/home]]` : "https://www.psv.nl/business/home";
 
   const aanhefResolved = resolveAanhef(state.aanhefText || "Hi {VOORNAAM}", forExport);
 
@@ -1281,7 +1281,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
                 ${state.disclaimerTekst}
               </p>
               <p style="margin:0 0 12px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;font-style:italic;">
-                Wil je er zeker van zijn dat je geen e-mails van PSV Business mist? Voeg dan ons e-mailadres (<a href="${forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm"}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met veilige afzenders.
+                Wil je er zeker van zijn dat je geen e-mails van PSV Business mist? Voeg dan ons e-mailadres (<a href="${forExport ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm"}" style="color:#ffffff;" target="_blank" rel="noopener noreferrer">${state.misNiksEmail}</a>) toe aan je adresboek en aan de lijst met veilige afzenders.
               </p>
               <p style="margin:0 0 12px;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:#ffffff;line-height:140%;font-style:italic;">
                 PSV Business&nbsp; | &nbsp;Philips Stadion Ingang 8&nbsp; | &nbsp;+31 (0)40 2505 531&nbsp; | &nbsp;<a href="mailto:business@psv.nl" style="color:#ffffff;text-decoration:none;">business@psv.nl</a>
@@ -1329,17 +1329,17 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
 
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
-  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
-  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+  const fbPosHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
-  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const sl = (url: string) => forExport ? `[[LINK|${url}]]` : url;
   const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubSccHref = `https://newsletter.psv.nl/hp/46jT6Ad_EzIk2W6yQ2MYxQ/psv-uitschrijven-algemeen-scc?contactId=${contactId}&checksum=${checksum}`;
-  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
-  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const changeEmailHref = forExport ? `[[LINK|https://www.psv.nl/contact-1/e-mailadreswijziging]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
-  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
   const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
@@ -1575,16 +1575,16 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
 
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
-  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
-  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+  const fbPosHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
-  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const sl = (url: string) => forExport ? `[[LINK|${url}]]` : url;
   const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
-  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
-  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const changeEmailHref = forExport ? `[[LINK|https://www.psv.nl/contact-1/e-mailadreswijziging]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
-  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
   const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
@@ -1800,16 +1800,16 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
 
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
-  const fbPosHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
-  const fbNegHref = forExport ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
+  const fbPosHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327]]` : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
+  const fbNegHref = forExport ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc]]` : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
-  const sl = (url: string) => forExport ? `[[LINK|"${url}"]]` : url;
+  const sl = (url: string) => forExport ? `[[LINK|${url}]]` : url;
   const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
-  const changeEmailHref = forExport ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
-  const misNiksHref = forExport ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
+  const changeEmailHref = forExport ? `[[LINK|https://www.psv.nl/contact-1/e-mailadreswijziging]]` : "https://www.psv.nl/contact-1/e-mailadreswijziging";
+  const misNiksHref = forExport ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]` : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
-  const changeLanguageHref = forExport ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]` : "https://login.psv.nl/Dashboard/Profile";
+  const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
   const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
@@ -2033,13 +2033,13 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const fbBase = "https://psv.typeform.com/to/ToXAKBFD";
   const fbParams = `typeform-medium=embed-email&email=${mv("[% email]","john@example.com")}&forename=${mv("[% contact 'FIRSTNAME' '-onbekend-']","John")}&surname=${mv("[% contact 'LASTNAME' '-Onbekend-']","Doe")}&groupid=${mv("[% contact 'EXTERNAL-ID' 'Onbekend']","0")}&emailname=${mv("[MAILING|NAME|]","Test")}&emailid=${mv("[MAILING|ID|]","0")}`;
   const fbPosHref = forExport
-    ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327"]]`
+    ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327]]`
     : `${fbBase}?${fbParams}&answers-contentscore=0d872ebf-a707-4bc3-88f0-125a89faa327`;
   const fbNegHref = forExport
-    ? `[[LINK|"${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc"]]`
+    ? `[[LINK|${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc]]`
     : `${fbBase}?${fbParams}&answers-contentscore=80ff86cc-c74e-4f6f-88f6-756bd7b5e6dc`;
 
-  const sl = (url: string) => (forExport ? `[[LINK|"${url}"]]` : url);
+  const sl = (url: string) => (forExport ? `[[LINK|${url}]]` : url);
   const fbUrl = sl("https://www.facebook.com/PSV/");
   const igUrl = sl("https://www.instagram.com/psv/");
   const ytUrl = sl("https://www.youtube.com/user/psveindhoven");
@@ -2050,10 +2050,10 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   const prefsHref = `https://newsletter.psv.nl/hp/iFRp1MKUfY_Q39OWNy9vbA/psv-voorkeuren-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const unsubHref = `https://newsletter.psv.nl/hp/5Tvm3Acs2ydwoB28ioz-ig/psv-uitschrijven-algemeen?contactId=${contactId}&checksum=${checksum}`;
   const changeEmailHref = forExport
-    ? `[[LINK|"https://www.psv.nl/contact-1/e-mailadreswijziging"]]`
+    ? `[[LINK|https://www.psv.nl/contact-1/e-mailadreswijziging]]`
     : "https://www.psv.nl/contact-1/e-mailadreswijziging";
   const misNiksHref = forExport
-    ? `[[LINK|"https://www.psv.nl/psv/mis-niks-van-psv.htm"]]`
+    ? `[[LINK|https://www.psv.nl/psv/mis-niks-van-psv.htm]]`
     : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
 
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
@@ -2063,7 +2063,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
     : "";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const changeLanguageHref = forExport
-    ? `[[LINK|"https://login.psv.nl/Dashboard/Profile"]]`
+    ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]`
     : "https://login.psv.nl/Dashboard/Profile";
 
   // FANstore navbar with editable URLs
