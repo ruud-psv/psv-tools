@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { kennisbankTools, kennisbankCategories } from "@/lib/kennisbank";
+import { KennisbankAssistant } from "./KennisbankAssistant";
 
 export const metadata = {
   title: "Kennisbank | PSV Tools",
@@ -43,6 +44,8 @@ export default function KennisbankPage() {
           Handleidingen en best practices voor alle tools en platforms die PSV gebruikt.
         </p>
       </div>
+
+      <KennisbankAssistant />
 
       <div className="space-y-10">
         {kennisbankCategories.map((category) => {

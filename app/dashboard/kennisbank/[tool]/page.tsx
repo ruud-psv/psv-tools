@@ -1,11 +1,41 @@
 import { notFound } from "next/navigation";
-import { ExternalLink } from "lucide-react";
-import { kennisbankTools, getToolBySlug, slugify, KennisbankTip } from "@/lib/kennisbank";
+import { ExternalLink, CheckCircle2, AlertTriangle, XCircle, type LucideIcon } from "lucide-react";
+import {
+  kennisbankTools,
+  getToolBySlug,
+  slugify,
+  KennisbankTip,
+  KennisbankChecklistGroup,
+} from "@/lib/kennisbank";
 
 const TIP_CONFIG: Record<KennisbankTip["type"], { label: string; className: string }> = {
   warning: { label: "Let op:", className: "border-l-warning bg-warning-bg" },
   note: { label: "Opmerking:", className: "border-l-info bg-info-bg" },
   tip: { label: "Tip:", className: "border-l-success bg-success-bg" },
+};
+
+const CHECKLIST_CONFIG: Record<
+  KennisbankChecklistGroup["type"],
+  { icon: LucideIcon; card: string; accent: string; chip: string }
+> = {
+  include: {
+    icon: CheckCircle2,
+    card: "border-l-success bg-success-bg",
+    accent: "text-success",
+    chip: "border-success/40 bg-white text-foreground",
+  },
+  conditional: {
+    icon: AlertTriangle,
+    card: "border-l-warning bg-warning-bg",
+    accent: "text-warning",
+    chip: "border-warning/40 bg-white text-foreground",
+  },
+  exclude: {
+    icon: XCircle,
+    card: "border-l-error bg-error-bg",
+    accent: "text-error",
+    chip: "border-error/40 bg-white text-foreground",
+  },
 };
 import {
   Card,
@@ -181,6 +211,73 @@ export default async function KennisbankToolPage({
               </div>
             </section>
           )}
+
+          {/* Checklists */}
+          {tool.checklists && tool.checklists.length > 0 &&
+            tool.checklists.map((checklist, ci) => (
+              <section
+                key={ci}
+                id={checklist.caption ? slugify(checklist.caption) : undefined}
+              >
+                {checklist.caption && (
+                  <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
+                    {checklist.caption}
+                  </h2>
+                )}
+                {checklist.intro && (
+                  <p className="text-sm text-muted-foreground mb-4 -mt-1">
+                    {checklist.intro}
+                  </p>
+                )}
+                <div className="space-y-3">
+                  {checklist.groups.map((group, gi) => {
+                    const { icon: Icon, card, accent, chip } =
+                      CHECKLIST_CONFIG[group.type];
+                    return (
+                      <Card
+                        key={gi}
+                        className={`border-l-4 border-t-0 border-r-0 border-b-0 ${card}`}
+                      >
+                        <CardContent className="pt-5 pb-5">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Icon className={`h-4 w-4 flex-shrink-0 ${accent}`} />
+                            <h3
+                              className={`font-heading text-sm uppercase tracking-wide ${accent}`}
+                            >
+                              {group.title}
+                            </h3>
+                            <span className="ml-auto text-xs font-medium text-muted-foreground">
+                              {group.items.length}
+                            </span>
+                          </div>
+                          {group.description && (
+                            <p className="text-sm text-muted-foreground mb-3">
+                              {group.description}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {group.items.map((item, ii) => (
+                              <span
+                                key={ii}
+                                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm ${chip}`}
+                              >
+                                <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${accent}`} />
+                                <span>{item.label}</span>
+                                {item.note && (
+                                  <span className="text-muted-foreground">
+                                    — {item.note}
+                                  </span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
 
           {/* Tables */}
           {tool.tables && tool.tables.length > 0 &&
