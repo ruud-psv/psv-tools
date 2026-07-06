@@ -19,6 +19,24 @@ export interface KennisbankTable {
   rows: string[][];
 }
 
+export interface KennisbankChecklistItem {
+  label: string;
+  note?: string;
+}
+
+export interface KennisbankChecklistGroup {
+  type: "include" | "conditional" | "exclude";
+  title: string;
+  description?: string;
+  items: KennisbankChecklistItem[];
+}
+
+export interface KennisbankChecklist {
+  caption?: string;
+  intro?: string;
+  groups: KennisbankChecklistGroup[];
+}
+
 export type KennisbankCategory =
   | "Adverteren & Display"
   | "E-mail & Data"
@@ -39,6 +57,7 @@ export interface KennisbankTool {
   steps?: KennisbankStep[];
   tips?: KennisbankTip[];
   tables?: KennisbankTable[];
+  checklists?: KennisbankChecklist[];
   comingSoon?: boolean;
 }
 
@@ -321,8 +340,50 @@ export const kennisbankTools: KennisbankTool[] = [
     logo: "/images/kennisbank/twocircles.svg",
     description: "Data- en ticketingplatform voor het beheren van fan- en klantdata van PSV.",
     docsUrl: "https://help.koresoftware.com/hc/en-us",
-    comingSoon: true,
     features: [],
+    checklists: [
+      {
+        caption: "Audience Builder – Seizoenkaarten 26/27",
+        intro:
+          "Bij een selectie van seizoenkaarthouders werk je in de Audience Builder onder SeizoenClubCards. Er zijn altijd 8 waardes (6 kernwaarden + 2 toegangswaarden); daarnaast zijn er opties die je juist moet uitsluiten.",
+        groups: [
+          {
+            type: "include",
+            title: "Altijd meenemen",
+            description: "De 6 kernwaarden van een seizoenkaart 26/27.",
+            items: [
+              { label: "Certificaat 26/27" },
+              { label: "Certificaat All-in 26/27" },
+              { label: "Dagkaarten 26/27" },
+              { label: "Dagkaarten All-in 26/27" },
+              { label: "Seizoen Club Card 26/27" },
+              { label: "Seizoen Club Card All-in 26/27" },
+            ],
+          },
+          {
+            type: "conditional",
+            title: "Afhankelijk van de briefing",
+            description:
+              "Gratis kaarten voor sponsors en personeel. Wel, niet of anders aanschrijven hangt af van de mailing — leg dit altijd expliciet vast in de briefing.",
+            items: [
+              { label: "Toegang SCC 26/27" },
+              { label: "Toegang SCC dagkaarten 26/27" },
+            ],
+          },
+          {
+            type: "exclude",
+            title: "Altijd uitsluiten",
+            description:
+              "Deze opties horen niet bij Seizoenkaarten 26/27 en sluit je altijd uit bij een selectie van seizoenkaarthouders.",
+            items: [
+              { label: "Certificaten" },
+              { label: "Mystery SCC" },
+              { label: "SCC wijziging 26/27" },
+            ],
+          },
+        ],
+      },
+    ],
   },
   {
     slug: "typeform",
@@ -398,6 +459,57 @@ export function getToolBySlug(slug: string): KennisbankTool | undefined {
   return kennisbankTools.find((t) => t.slug === slug);
 }
 
+const CHECKLIST_LABELS: Record<KennisbankChecklistGroup["type"], string> = {
+  include: "ALTIJD MEENEMEN",
+  conditional: "AFHANKELIJK VAN DE BRIEFING",
+  exclude: "ALTIJD UITSLUITEN",
+};
+
+/**
+ * Serialiseert de volledige kennisbank naar platte tekst voor gebruik als
+ * context in de system prompt van de kennisbank-assistent (context-stuffing).
+ */
+export function buildKennisbankContext(): string {
+  return kennisbankTools
+    .map((tool) => {
+      const lines: string[] = [];
+      lines.push(`## ${tool.name} (categorie: ${tool.category}, slug: ${tool.slug})`);
+      lines.push(tool.description);
+      if (tool.comingSoon)
+        lines.push("Status: documentatie nog niet beschikbaar (binnenkort).");
+      if (tool.accessUrl) lines.push(`Inloggen: ${tool.accessUrl}`);
+      tool.accessLinks?.forEach((l) => lines.push(`Inloggen (${l.label}): ${l.url}`));
+      if (tool.accessNote) lines.push(`Toegang: ${tool.accessNote}`);
+      if (tool.docsUrl) lines.push(`Officiële documentatie: ${tool.docsUrl}`);
+      tool.features?.forEach((f) =>
+        lines.push(`Mogelijkheid — ${f.title}: ${f.description}`)
+      );
+      tool.steps?.forEach((s, i) =>
+        lines.push(`Stap ${i + 1} — ${s.title}: ${s.description}`)
+      );
+      tool.checklists?.forEach((c) => {
+        lines.push(`Checklist — ${c.caption ?? ""}`);
+        if (c.intro) lines.push(c.intro);
+        c.groups.forEach((g) => {
+          lines.push(
+            `${CHECKLIST_LABELS[g.type]} — ${g.title}${g.description ? `: ${g.description}` : ""}`
+          );
+          g.items.forEach((it) =>
+            lines.push(`  - ${it.label}${it.note ? ` (${it.note})` : ""}`)
+          );
+        });
+      });
+      tool.tables?.forEach((t) => {
+        lines.push(`Tabel — ${t.caption ?? ""}`);
+        lines.push(t.headers.join(" | "));
+        t.rows.forEach((r) => lines.push(r.join(" | ")));
+      });
+      tool.tips?.forEach((tip) => lines.push(`Let op: ${tip.text}`));
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -418,6 +530,9 @@ export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
     sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
   if (tool.steps && tool.steps.length > 0)
     sections.push({ label: "Aan de slag", id: "aan-de-slag" });
+  tool.checklists?.forEach((c) => {
+    if (c.caption) sections.push({ label: c.caption, id: slugify(c.caption) });
+  });
   tool.tables?.forEach((t) => {
     if (t.caption) sections.push({ label: t.caption, id: slugify(t.caption) });
   });
