@@ -4,6 +4,7 @@ import {
   kennisbankTools,
   getToolBySlug,
   slugify,
+  figmaEmbedUrl,
   KennisbankTip,
   KennisbankChecklistGroup,
 } from "@/lib/kennisbank";
@@ -211,6 +212,47 @@ export default async function KennisbankToolPage({
               </div>
             </section>
           )}
+
+          {/* Embeds */}
+          {tool.embeds && tool.embeds.length > 0 &&
+            tool.embeds.map((embed, ei) => (
+              <section
+                key={ei}
+                id={embed.caption ? slugify(embed.caption) : undefined}
+              >
+                {embed.caption && (
+                  <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
+                    {embed.caption}
+                  </h2>
+                )}
+                {embed.intro && (
+                  <p className="text-sm text-muted-foreground mb-4 -mt-1">
+                    {embed.intro}
+                  </p>
+                )}
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <iframe
+                      src={figmaEmbedUrl(embed.url)}
+                      title={embed.caption ?? `${tool.name} embed`}
+                      className="w-full border-0 block"
+                      style={{ height: embed.height ?? 480 }}
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  </CardContent>
+                </Card>
+                <a
+                  href={embed.openUrl ?? embed.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-psv-red-primary hover:underline mt-3"
+                >
+                  Openen in Figma
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </section>
+            ))}
 
           {/* Checklists */}
           {tool.checklists && tool.checklists.length > 0 &&

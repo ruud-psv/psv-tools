@@ -37,6 +37,25 @@ export interface KennisbankChecklist {
   groups: KennisbankChecklistGroup[];
 }
 
+export interface KennisbankEmbed {
+  /** Section heading, e.g. "Dataprocessen". Also used as anchor id. */
+  caption?: string;
+  /** Optional short intro shown above the embed. */
+  intro?: string;
+  /** Provider — determines how the URL is rendered. */
+  type: "figma";
+  /**
+   * The Figma URL to embed. Paste a normal Figma share/file link OR a
+   * ready-made embed URL (embed.figma.com / figma.com/embed). Plain share
+   * links are wrapped automatically.
+   */
+  url: string;
+  /** Optional aspect-ratio height in px (default 480). */
+  height?: number;
+  /** Optional direct link shown under the embed as a fallback. */
+  openUrl?: string;
+}
+
 export type KennisbankCategory =
   | "Adverteren & Display"
   | "E-mail & Data"
@@ -58,6 +77,7 @@ export interface KennisbankTool {
   tips?: KennisbankTip[];
   tables?: KennisbankTable[];
   checklists?: KennisbankChecklist[];
+  embeds?: KennisbankEmbed[];
   comingSoon?: boolean;
 }
 
@@ -69,6 +89,25 @@ export const kennisbankCategories: KennisbankCategory[] = [
 ];
 
 export const kennisbankTools: KennisbankTool[] = [
+  {
+    slug: "dataprocessen",
+    name: "Dataprocessen",
+    category: "E-mail & Data",
+    description:
+      "Overzicht van onze dataprocessen en het NBA-model (Next Best Action), rechtstreeks vanuit Figma.",
+    embeds: [
+      {
+        caption: "Dataprocessen & NBA-model",
+        intro:
+          "Interactief overzicht vanuit Figma. Scroll en zoom binnen het board; klik op de knop eronder om het in Figma te openen.",
+        type: "figma",
+        // TODO: vervang door de echte Figma-URL (gewone share-link mag).
+        url: "https://www.figma.com/board/PLACEHOLDER/PSV-Dataprocessen",
+        height: 640,
+      },
+    ],
+    features: [],
+  },
   {
     slug: "asana",
     name: "Asana",
@@ -504,6 +543,11 @@ export function buildKennisbankContext(): string {
         lines.push(t.headers.join(" | "));
         t.rows.forEach((r) => lines.push(r.join(" | ")));
       });
+      tool.embeds?.forEach((e) => {
+        lines.push(`Ingesloten (${e.type}) — ${e.caption ?? ""}`);
+        if (e.intro) lines.push(e.intro);
+        lines.push(`Bron: ${e.url}`);
+      });
       tool.tips?.forEach((tip) => lines.push(`Let op: ${tip.text}`));
       return lines.join("\n");
     })
@@ -515,6 +559,19 @@ export function slugify(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+/**
+ * Zet een Figma-link om naar een insluitbare embed-URL. Accepteert zowel gewone
+ * share-/file-links (figma.com/design|file|board|proto/...) als kant-en-klare
+ * embed-URL's (embed.figma.com of figma.com/embed) — die worden ongewijzigd
+ * teruggegeven. Voorwaarde blijft dat de linkrechten in Figma bekijken toestaan.
+ */
+export function figmaEmbedUrl(url: string): string {
+  if (url.includes("embed.figma.com") || url.includes("figma.com/embed")) {
+    return url;
+  }
+  return `https://www.figma.com/embed?embed_host=psv-tools&url=${encodeURIComponent(url)}`;
 }
 
 export interface KennisbankSection {
@@ -530,6 +587,9 @@ export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
     sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
   if (tool.steps && tool.steps.length > 0)
     sections.push({ label: "Aan de slag", id: "aan-de-slag" });
+  tool.embeds?.forEach((e) => {
+    if (e.caption) sections.push({ label: e.caption, id: slugify(e.caption) });
+  });
   tool.checklists?.forEach((c) => {
     if (c.caption) sections.push({ label: c.caption, id: slugify(c.caption) });
   });
