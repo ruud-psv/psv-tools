@@ -1,5 +1,15 @@
 import { notFound } from "next/navigation";
-import { ExternalLink, CheckCircle2, AlertTriangle, XCircle, type LucideIcon } from "lucide-react";
+import {
+  ExternalLink,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ArrowDown,
+  type LucideIcon,
+} from "lucide-react";
 import {
   kennisbankTools,
   getToolBySlug,
@@ -7,6 +17,7 @@ import {
   figmaEmbedUrl,
   KennisbankTip,
   KennisbankChecklistGroup,
+  KennisbankFlowBadgeTone,
 } from "@/lib/kennisbank";
 
 const TIP_CONFIG: Record<KennisbankTip["type"], { label: string; className: string }> = {
@@ -37,6 +48,14 @@ const CHECKLIST_CONFIG: Record<
     accent: "text-error",
     chip: "border-error/40 bg-white text-foreground",
   },
+};
+
+const FLOW_BADGE_CONFIG: Record<KennisbankFlowBadgeTone, string> = {
+  "sso-on": "border-psv-red-primary/30 bg-psv-red-primary/10 text-psv-red-primary",
+  "sso-off": "border-psv-gold-primary/40 bg-psv-gold-primary/10 text-foreground",
+  visible: "border-success/40 bg-success-bg text-success",
+  hidden: "border-border bg-muted text-muted-foreground",
+  neutral: "border-border bg-white text-foreground",
 };
 import {
   Card,
@@ -195,15 +214,22 @@ export default async function KennisbankToolPage({
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 Aan de slag
               </h2>
-              <div className="space-y-3">
+              <div className="relative space-y-6">
+                {/* connecting timeline line */}
+                {tool.steps.length > 1 && (
+                  <div
+                    aria-hidden
+                    className="absolute left-[13px] top-3 bottom-3 w-px bg-border"
+                  />
+                )}
                 {tool.steps.map((step, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-psv-red-primary text-white text-xs font-heading font-bold">
+                  <div key={i} className="relative flex gap-4">
+                    <div className="relative z-10 flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-psv-red-primary text-white text-xs font-heading font-bold ring-4 ring-background">
                       {i + 1}
                     </div>
                     <div className="pt-0.5">
-                      <p className="text-sm font-medium">{step.title}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm font-semibold">{step.title}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
                         {step.description}
                       </p>
                     </div>
@@ -212,6 +238,90 @@ export default async function KennisbankToolPage({
               </div>
             </section>
           )}
+
+          {/* Flows */}
+          {tool.flows && tool.flows.length > 0 &&
+            tool.flows.map((flow, fi) => (
+              <section
+                key={fi}
+                id={flow.caption ? slugify(flow.caption) : undefined}
+              >
+                {flow.caption && (
+                  <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
+                    {flow.caption}
+                  </h2>
+                )}
+                {flow.intro && (
+                  <p className="text-sm text-muted-foreground mb-4 -mt-1">
+                    {flow.intro}
+                  </p>
+                )}
+                <div className="flex flex-col md:flex-row md:items-stretch">
+                  {flow.stages.map((stage, si) => {
+                    const VisIcon = stage.visibleToUser ? Eye : EyeOff;
+                    return (
+                      <div
+                        key={si}
+                        className="flex flex-col md:flex-1 md:flex-row md:items-stretch"
+                      >
+                        <Card
+                          className={`h-full flex-1 border-t-4 ${
+                            stage.visibleToUser
+                              ? "border-t-psv-red-primary"
+                              : "border-t-border"
+                          }`}
+                        >
+                          <CardContent className="flex h-full flex-col pt-5 pb-5">
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-psv-red-primary text-[11px] font-heading font-bold text-white">
+                                {si + 1}
+                              </span>
+                              <h3 className="font-heading text-sm uppercase tracking-wide">
+                                {stage.title}
+                              </h3>
+                            </div>
+                            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
+                                  stage.visibleToUser
+                                    ? "border-success/40 bg-success-bg text-success"
+                                    : "border-border bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                <VisIcon className="h-3 w-3" />
+                                {stage.visibilityLabel}
+                              </span>
+                              {stage.badges?.map((b, bi) => (
+                                <span
+                                  key={bi}
+                                  className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
+                                    FLOW_BADGE_CONFIG[b.tone ?? "neutral"]
+                                  }`}
+                                >
+                                  {b.label}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-sm leading-relaxed text-muted-foreground">
+                              {stage.description}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        {si < flow.stages.length - 1 && (
+                          <div
+                            aria-hidden
+                            className="flex items-center justify-center py-1 text-psv-red-primary md:px-2 md:py-0"
+                          >
+                            <ArrowDown className="h-5 w-5 md:hidden" />
+                            <ArrowRight className="hidden h-5 w-5 md:block" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
 
           {/* Embeds */}
           {tool.embeds && tool.embeds.length > 0 &&

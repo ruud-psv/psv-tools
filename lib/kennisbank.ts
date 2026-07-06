@@ -56,6 +56,37 @@ export interface KennisbankEmbed {
   openUrl?: string;
 }
 
+export type KennisbankFlowBadgeTone =
+  | "sso-on"
+  | "sso-off"
+  | "visible"
+  | "hidden"
+  | "neutral";
+
+export interface KennisbankFlowBadge {
+  label: string;
+  tone?: KennisbankFlowBadgeTone;
+}
+
+export interface KennisbankFlowStage {
+  /** Stage title, e.g. "Landing page". */
+  title: string;
+  /** Whether the end user actually sees this page — drives the eye icon. */
+  visibleToUser: boolean;
+  /** Short label for the visibility state, e.g. "Zichtbaar" / "Niet zichtbaar". */
+  visibilityLabel: string;
+  /** Optional badges (e.g. SSO State) rendered on the stage card. */
+  badges?: KennisbankFlowBadge[];
+  description: string;
+}
+
+export interface KennisbankFlow {
+  /** Section heading; also used as anchor id. */
+  caption?: string;
+  intro?: string;
+  stages: KennisbankFlowStage[];
+}
+
 export type KennisbankCategory =
   | "Adverteren & Display"
   | "E-mail & Data"
@@ -78,6 +109,7 @@ export interface KennisbankTool {
   tables?: KennisbankTable[];
   checklists?: KennisbankChecklist[];
   embeds?: KennisbankEmbed[];
+  flows?: KennisbankFlow[];
   comingSoon?: boolean;
 }
 
@@ -329,7 +361,81 @@ export const kennisbankTools: KennisbankTool[] = [
     accessUrl: "https://app.playable.com/campaigns",
     docsUrl: "https://help.playable.com/en/",
     features: [],
+    steps: [
+      {
+        title: "Backend — koppel Sports Alliance",
+        description:
+          "Ga naar Integrations > Add Integration > Sports Alliance. Login host: login.psv.nl · Tenant ID: OJJWeJFCCUmgUagZ6nre_w · Key en Secret neem je over uit een bestaande campagne.",
+      },
+      {
+        title: "Frontend — richt de drie pagina's in",
+        description:
+          "Elke campagne heeft een Landing-, Registration- en Confirmation page nodig, elk met de juiste SSO State-conditie. Zie de flow hieronder voor de instellingen per pagina.",
+      },
+      {
+        title: "Testen",
+        description:
+          "Vul via de Live URL een test in: klik op de CTA, log optioneel in, en controleer via Activity > Registrations of alle data goed binnenkomt.",
+      },
+    ],
+    flows: [
+      {
+        caption: "De SSO-flow: drie pagina's",
+        intro:
+          "De volgorde die de gebruiker doorloopt. De SSO State-conditie (Advanced > Visibility Condition > Sports Alliance) bepaalt welke pagina wanneer verschijnt.",
+        stages: [
+          {
+            title: "Landing page",
+            visibleToUser: true,
+            visibilityLabel: "Zichtbaar",
+            badges: [{ label: "SSO State: Not using SSO", tone: "sso-off" }],
+            description:
+              "CTA-button met Selection action 'Login using Sports Alliance'. Al ingelogd? De klik gaat direct door naar de Confirmation page. Nog niet ingelogd? De gebruiker ziet het login.psv.nl-scherm.",
+          },
+          {
+            title: "Registration page",
+            visibleToUser: false,
+            visibilityLabel: "Niet zichtbaar",
+            badges: [{ label: "SSO State: Using SSO", tone: "sso-on" }],
+            description:
+              "Registratieformulier dat automatisch gevuld wordt vanuit het Mijn PSV-account. Voeg 'ssoid' hidden toe en map het als 'ID' (verplicht). Overige velden: zie de veldentabel hieronder.",
+          },
+          {
+            title: "Confirmation page",
+            visibleToUser: true,
+            visibilityLabel: "Zichtbaar bij succes",
+            badges: [{ label: "SSO State: Using SSO", tone: "sso-on" }],
+            description:
+              "De bedankpagina die de gebruiker ziet na een geslaagde login en registratie.",
+          },
+        ],
+      },
+    ],
+    tips: [
+      {
+        type: "note",
+        text: "Elke campagne heeft altijd een Landing page, een Registration page én een Confirmation page nodig.",
+      },
+      {
+        type: "warning",
+        text: "Het veld 'ssoid' is verplicht voor een geslaagde SSO-login: zet het als hidden veld in de Registration page en map het bij 'Map Sports Alliance field' als 'ID'.",
+      },
+    ],
     tables: [
+      {
+        caption: "Mijn PSV-login — Formuliervelden (Sports Alliance)",
+        headers: ["Veld", "Instelling"],
+        rows: [
+          [
+            "ssoid",
+            "Verplicht — hidden veld, map als 'ID'. Zonder dit slaagt de SSO-login niet.",
+          ],
+          [
+            "E-mail, Username, Type, Forename, Middle names, Surname, Gender, Age Range, Date of birth, Has phone, Profile state, Has address, Club",
+            "Al beschikbaar in de huidige integratie.",
+          ],
+        ],
+      },
       {
         caption: "Templates",
         headers: ["Template", "ID"],
@@ -543,6 +649,16 @@ export function buildKennisbankContext(): string {
         lines.push(t.headers.join(" | "));
         t.rows.forEach((r) => lines.push(r.join(" | ")));
       });
+      tool.flows?.forEach((f) => {
+        lines.push(`Flow — ${f.caption ?? ""}`);
+        if (f.intro) lines.push(f.intro);
+        f.stages.forEach((s, i) => {
+          const badges = s.badges?.map((b) => b.label).join(", ");
+          lines.push(
+            `Stap ${i + 1} — ${s.title} (${s.visibilityLabel}${badges ? `; ${badges}` : ""}): ${s.description}`
+          );
+        });
+      });
       tool.embeds?.forEach((e) => {
         lines.push(`Ingesloten (${e.type}) — ${e.caption ?? ""}`);
         if (e.intro) lines.push(e.intro);
@@ -587,6 +703,9 @@ export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
     sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
   if (tool.steps && tool.steps.length > 0)
     sections.push({ label: "Aan de slag", id: "aan-de-slag" });
+  tool.flows?.forEach((f) => {
+    if (f.caption) sections.push({ label: f.caption, id: slugify(f.caption) });
+  });
   tool.embeds?.forEach((e) => {
     if (e.caption) sections.push({ label: e.caption, id: slugify(e.caption) });
   });
