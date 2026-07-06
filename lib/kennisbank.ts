@@ -329,7 +329,58 @@ export const kennisbankTools: KennisbankTool[] = [
     accessUrl: "https://app.playable.com/campaigns",
     docsUrl: "https://help.playable.com/en/",
     features: [],
+    steps: [
+      {
+        title: "Backend — koppel Sports Alliance",
+        description:
+          "Ga naar Integrations > Add Integration > Sports Alliance. Login host: login.psv.nl. Tenant ID: OJJWeJFCCUmgUagZ6nre_w. Key en Secret neem je over uit een bestaande campagne.",
+      },
+      {
+        title: "Landing page (zichtbaar voor de gebruiker)",
+        description:
+          "Plaats een CTA-button met Selection action 'Login using Sports Alliance'. Is de gebruiker al ingelogd, dan gaat de klik direct door naar de Confirmation page; is hij nog niet ingelogd, dan verschijnt het login.psv.nl-scherm. Zet Advanced > Visibility Condition > Sports Alliance > SSO State op 'Not using SSO'.",
+      },
+      {
+        title: "Registration page (niet zichtbaar voor de gebruiker)",
+        description:
+          "Bevat een registratieformulier dat automatisch gevuld wordt vanuit het Mijn PSV-account. Voeg het veld 'ssoid' hidden toe en map het bij 'Map Sports Alliance field' als 'ID' — dit is verplicht om de SSO-login te laten slagen. De overige velden staan in de tabel hieronder. Zet Advanced > Visibility Condition > Sports Alliance > SSO State op 'Using SSO'.",
+      },
+      {
+        title: "Confirmation page (zichtbaar bij een succesvolle flow)",
+        description:
+          "Richt hier de bedankpagina in. Zet Advanced > Visibility Condition > Sports Alliance > SSO State op 'Using SSO'.",
+      },
+      {
+        title: "Testen",
+        description:
+          "Vul via de Live URL een test in: klik op de CTA, log optioneel in, en controleer via Activity > Registrations of alle data goed binnenkomt.",
+      },
+    ],
+    tips: [
+      {
+        type: "note",
+        text: "Elke campagne heeft altijd een Landing page, een Registration page én een Confirmation page nodig.",
+      },
+      {
+        type: "warning",
+        text: "Het veld 'ssoid' is verplicht voor een geslaagde SSO-login: zet het als hidden veld in de Registration page en map het bij 'Map Sports Alliance field' als 'ID'.",
+      },
+    ],
     tables: [
+      {
+        caption: "Mijn PSV-login — Formuliervelden (Sports Alliance)",
+        headers: ["Veld", "Instelling"],
+        rows: [
+          [
+            "ssoid",
+            "Verplicht — hidden veld, map als 'ID'. Zonder dit slaagt de SSO-login niet.",
+          ],
+          [
+            "E-mail, Username, Type, Forename, Middle names, Surname, Gender, Age Range, Date of birth, Has phone, Profile state, Has address, Club",
+            "Al beschikbaar in de huidige integratie.",
+          ],
+        ],
+      },
       {
         caption: "Templates",
         headers: ["Template", "ID"],
