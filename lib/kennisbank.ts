@@ -101,8 +101,8 @@ export const kennisbankTools: KennisbankTool[] = [
         intro:
           "Interactief overzicht vanuit Figma. Scroll en zoom binnen het board; klik op de knop eronder om het in Figma te openen.",
         type: "figma",
-        // TODO: vervang door de echte Figma-URL (gewone share-link mag).
-        url: "https://www.figma.com/board/PLACEHOLDER/PSV-Dataprocessen",
+        url: "https://embed.figma.com/board/fMYZA3o9oPPpbccEbGuVyx/Data-Processen-PSV?node-id=0-1&embed-host=share",
+        openUrl: "https://www.figma.com/board/fMYZA3o9oPPpbccEbGuVyx/Data-Processen-PSV?node-id=0-1",
         height: 640,
       },
     ],
