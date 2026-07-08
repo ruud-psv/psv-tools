@@ -26,6 +26,7 @@ export async function appendSnapshot(
   await put(blobPath(eventId), JSON.stringify(updated), {
     access: "public",
     addRandomSuffix: false,
+    allowOverwrite: true,
     contentType: "application/json",
   });
 }
@@ -36,6 +37,7 @@ export async function createShareLink(token: string, params: unknown): Promise<v
   await put(`share-links/${token}.json`, JSON.stringify(params), {
     access: "public",
     addRandomSuffix: false,
+    allowOverwrite: true,
     contentType: "application/json",
   });
 }
