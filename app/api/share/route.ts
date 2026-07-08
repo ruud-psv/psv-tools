@@ -53,8 +53,9 @@ export async function POST(req: NextRequest) {
     await createShareLink(token, params);
     return NextResponse.json({ token });
   } catch (err) {
-    console.error("share POST error", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[share] POST mislukt:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
