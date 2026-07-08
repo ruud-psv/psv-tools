@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
-import { sql, ensureShareSchema } from "@/lib/db";
+import { getShareLink } from "@/lib/blob-snapshots";
 
 export const revalidate = 300;
 
 async function isValidShareToken(token: string): Promise<boolean> {
   try {
-    await ensureShareSchema();
-    const result = await sql`SELECT 1 FROM share_links WHERE token = ${token} LIMIT 1`;
-    return result.rows.length > 0;
+    return (await getShareLink(token)) !== null;
   } catch (err) {
     console.error("[analytics] token lookup error", err);
     return false;

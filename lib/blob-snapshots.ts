@@ -29,3 +29,21 @@ export async function appendSnapshot(
     contentType: "application/json",
   });
 }
+
+// --- Share links ---
+
+export async function createShareLink(token: string, params: unknown): Promise<void> {
+  await put(`share-links/${token}.json`, JSON.stringify(params), {
+    access: "public",
+    addRandomSuffix: false,
+    contentType: "application/json",
+  });
+}
+
+export async function getShareLink(token: string): Promise<unknown | null> {
+  const { blobs } = await list({ prefix: `share-links/${token}.json` });
+  if (blobs.length === 0) return null;
+  const res = await fetch(blobs[0].url, { cache: "no-store" });
+  if (!res.ok) return null;
+  return res.json();
+}

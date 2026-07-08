@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql, ensureShareSchema } from "@/lib/db";
+import { getShareLink } from "@/lib/blob-snapshots";
 import { analyzeDmMailings, type DmInsightInput } from "@/lib/insights/dm";
 import { analyzeTicketEvents, type TicketInsightInput } from "@/lib/insights/ticket";
 import { analyzeAnalytics, type AnalyticsInsightInput } from "@/lib/insights/analytics";
@@ -25,17 +25,12 @@ export async function POST(req: NextRequest) {
 
   // Token must exist in share_links — this is the auth check for public access
   try {
-    await ensureShareSchema();
-    const result = await sql`SELECT 1 FROM share_links WHERE token = ${body.token} LIMIT 1`;
-    if (!result.rows.length) {
+    const link = await getShareLink(body.token);
+    if (link === null) {
       return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
     }
   } catch (err) {
     console.error("[share/insights] token lookup error", err);
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("POSTGRES_URL") || msg.includes("connect") || msg.includes("database")) {
-      return NextResponse.json({ error: "Inzichten zijn tijdelijk niet beschikbaar (geen database)." }, { status: 503 });
-    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 
