@@ -24,7 +24,7 @@ export async function appendSnapshot(
   const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
   const updated = [...existing.filter((p) => p.ts >= cutoff), point];
   await put(blobPath(eventId), JSON.stringify(updated), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
@@ -35,7 +35,7 @@ export async function appendSnapshot(
 
 export async function createShareLink(token: string, params: unknown): Promise<void> {
   await put(`share-links/${token}.json`, JSON.stringify(params), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
