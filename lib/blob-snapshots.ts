@@ -1,4 +1,4 @@
-import { put, list } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -8,12 +8,15 @@ function blobPath(eventId: string): string {
   return `ticket-snapshots/${eventId}.json`;
 }
 
+async function readBlob<T>(pathname: string): Promise<T | null> {
+  const result = await get(pathname, { access: "private" });
+  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  const text = await new Response(result.stream).text();
+  return JSON.parse(text) as T;
+}
+
 export async function readSnapshots(eventId: string): Promise<SnapshotPoint[]> {
-  const { blobs } = await list({ prefix: blobPath(eventId) });
-  if (blobs.length === 0) return [];
-  const res = await fetch(blobs[0].url, { cache: "no-store" });
-  if (!res.ok) return [];
-  return (await res.json()) as SnapshotPoint[];
+  return (await readBlob<SnapshotPoint[]>(blobPath(eventId))) ?? [];
 }
 
 export async function appendSnapshot(
@@ -43,9 +46,5 @@ export async function createShareLink(token: string, params: unknown): Promise<v
 }
 
 export async function getShareLink(token: string): Promise<unknown | null> {
-  const { blobs } = await list({ prefix: `share-links/${token}.json` });
-  if (blobs.length === 0) return null;
-  const res = await fetch(blobs[0].url, { cache: "no-store" });
-  if (!res.ok) return null;
-  return res.json();
+  return readBlob(`share-links/${token}.json`);
 }
