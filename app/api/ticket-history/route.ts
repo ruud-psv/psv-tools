@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql, ensureSchema } from "@/lib/db";
+import { readSnapshots } from "@/lib/blob-snapshots";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -10,26 +10,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    await ensureSchema();
-
-    const result = await sql`
-      SELECT ts, available, sold
-      FROM ticket_snapshots
-      WHERE event_id = ${eventId}
-      ORDER BY ts ASC
-    `;
-
-    const history = result.rows.map((row) => ({
-      ts: new Date(row.ts).toISOString(),
-      available: row.available,
-      sold: row.sold,
-    }));
-
+    const history = await readSnapshots(eventId);
     return NextResponse.json({ history, eventId });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // When Postgres is not provisioned the feature degrades gracefully.
-    if (msg.includes("POSTGRES_URL") || msg.includes("connect") || msg.includes("database")) {
+    if (msg.includes("BLOB_READ_WRITE_TOKEN") || msg.includes("token")) {
       return NextResponse.json({ history: [], eventId });
     }
     return NextResponse.json({ error: msg }, { status: 500 });

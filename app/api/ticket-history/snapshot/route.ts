@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { sql, ensureSchema } from "@/lib/db";
+import { appendSnapshot } from "@/lib/blob-snapshots";
 
 const FEED_URL = "https://ticketshop.psv.nl/feed/eventsavailability";
-const RETENTION_DAYS = 30;
 
 function isAuthorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;
@@ -10,10 +9,8 @@ function isAuthorized(request: Request): boolean {
     console.error("[ticket-history/snapshot] CRON_SECRET niet geconfigureerd — endpoint geweigerd.");
     return false;
   }
-  // Vercel Cron stuurt: Authorization: Bearer <secret>
   const authHeader = request.headers.get("authorization");
   if (authHeader === `Bearer ${cronSecret}`) return true;
-  // Handmatige aanroep via x-cron-secret header
   return request.headers.get("x-cron-secret") === cronSecret;
 }
 
@@ -51,22 +48,10 @@ async function takeSnapshot(): Promise<NextResponse> {
     });
   }
 
-  await ensureSchema();
-
-  // Sla alle events van dit moment op in één transactie
   const now = new Date().toISOString();
   for (const e of events) {
-    await sql`
-      INSERT INTO ticket_snapshots (ts, event_id, available, sold)
-      VALUES (${now}, ${e.eventId}, ${e.available}, ${e.sold})
-    `;
+    await appendSnapshot(e.eventId, { ts: now, available: e.available, sold: e.sold });
   }
-
-  // Verwijder metingen ouder dan RETENTION_DAYS
-  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  await sql`
-    DELETE FROM ticket_snapshots WHERE ts < ${cutoff}
-  `;
 
   return NextResponse.json({
     saved: true,
@@ -75,7 +60,6 @@ async function takeSnapshot(): Promise<NextResponse> {
   });
 }
 
-// Vercel Cron maakt een GET request
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -90,7 +74,6 @@ export async function GET(request: Request) {
   }
 }
 
-// Handmatige trigger
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
