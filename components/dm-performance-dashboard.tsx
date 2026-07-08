@@ -493,6 +493,7 @@ function MailingTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ q: search, preset, customFrom, customTo }),
       });
+      if (!res.ok) throw new Error("Share aanmaken mislukt");
       const { token } = await res.json();
       navigator.clipboard.writeText(`${window.location.origin}/share/dm?token=${token}`);
       setCopied(true);
