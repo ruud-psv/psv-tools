@@ -1,4 +1,4 @@
-import { put, get } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
 
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -9,10 +9,16 @@ function blobPath(eventId: string): string {
 }
 
 async function readBlob<T>(pathname: string): Promise<T | null> {
-  const result = await get(pathname, { access: "private" });
-  if (!result || result.statusCode !== 200 || !result.stream) return null;
-  const text = await new Response(result.stream).text();
-  return JSON.parse(text) as T;
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return null;
+  const { blobs } = await list({ prefix: pathname, limit: 1, token });
+  const blob = blobs.find((b) => b.pathname === pathname);
+  if (!blob) return null;
+  const res = await fetch(blob.url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json() as T;
 }
 
 export async function readSnapshots(eventId: string): Promise<SnapshotPoint[]> {
