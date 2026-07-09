@@ -93,7 +93,7 @@ function AvailabilityChart({ eventId }: { eventId: string }) {
   const tickInterval = Math.max(1, Math.floor(formatted.length / 6));
 
   return (
-    <ResponsiveContainer width="100%" height={140}>
+    <ResponsiveContainer width="100%" height={220}>
       <AreaChart data={formatted} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id={`grad-share-${eventId}`} x1="0" y1="0" x2="0" y2="1">

@@ -49,9 +49,9 @@ async function takeSnapshot(): Promise<NextResponse> {
   }
 
   const now = new Date().toISOString();
-  for (const e of events) {
-    await appendSnapshot(e.eventId, { ts: now, available: e.available, sold: e.sold });
-  }
+  await Promise.all(
+    events.map((e) => appendSnapshot(e.eventId, { ts: now, available: e.available, sold: e.sold }))
+  );
 
   return NextResponse.json({
     saved: true,

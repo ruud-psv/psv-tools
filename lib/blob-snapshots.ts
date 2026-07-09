@@ -13,10 +13,12 @@ export async function readSnapshots(eventId: string): Promise<SnapshotPoint[]> {
       const name = b.pathname.slice(prefix.length).replace(/\.json$/, "");
       const parts = name.split("_");
       if (parts.length < 3) return null;
-      const [ts, available, sold] = parts;
+      const [rawTs, available, sold] = parts;
       const av = Number(available);
       const so = Number(sold);
-      if (!ts || isNaN(av) || isNaN(so)) return null;
+      if (!rawTs || isNaN(av) || isNaN(so)) return null;
+      // restore colons in time portion (stored with dashes to be filename-safe)
+      const ts = rawTs.replace(/T(\d{2})-(\d{2})-(\d{2})/, "T$1:$2:$3");
       return { ts, available: av, sold: so };
     })
     .filter((p): p is SnapshotPoint => p !== null && p.ts >= cutoff)
