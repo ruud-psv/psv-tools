@@ -82,7 +82,7 @@ function AvailabilityChart({ eventId }: { eventId: string }) {
 
   const formatted = history.map((p) => ({
     ...p,
-    label: new Date(p.ts).toLocaleDateString("nl-NL", {
+    label: new Date(p.ts).toLocaleString("nl-NL", {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",
@@ -90,11 +90,11 @@ function AvailabilityChart({ eventId }: { eventId: string }) {
     }),
   }));
 
-  const tickInterval = Math.max(1, Math.floor(formatted.length / 6));
+  const tickInterval = Math.max(1, Math.floor(formatted.length / 5));
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={formatted} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+      <AreaChart data={formatted} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id={`grad-share-${eventId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#e82026" stopOpacity={0.25} />
@@ -123,12 +123,12 @@ function AvailabilityChart({ eventId }: { eventId: string }) {
             fontSize: "11px",
             color: "hsl(var(--popover-foreground))",
           }}
-          formatter={(value) => [Number(value).toLocaleString("nl-NL"), "Beschikbaar"]}
+          formatter={(value) => [Number(value).toLocaleString("nl-NL"), "Verkocht"]}
           labelFormatter={(label) => label}
         />
         <Area
           type="monotone"
-          dataKey="available"
+          dataKey="sold"
           stroke="#e82026"
           strokeWidth={1.5}
           fill={`url(#grad-share-${eventId})`}
@@ -281,7 +281,7 @@ function ShareTicketContent() {
             {params && (
               <div className="border border-border rounded-lg p-5">
                 <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-3">
-                  Beschikbaarheidsverloop
+                  Verkoopverloop
                 </p>
                 <AvailabilityChart eventId={params.eventId} />
               </div>
