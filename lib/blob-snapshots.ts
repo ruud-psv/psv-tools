@@ -9,14 +9,10 @@ function blobPath(eventId: string): string {
 }
 
 async function readBlob<T>(pathname: string): Promise<T | null> {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) return null;
-  const { blobs } = await list({ prefix: pathname, limit: 1, token });
+  const { blobs } = await list({ prefix: pathname, limit: 1 });
   const blob = blobs.find((b) => b.pathname === pathname);
   if (!blob) return null;
-  const res = await fetch(blob.url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(blob.downloadUrl);
   if (!res.ok) return null;
   return res.json() as T;
 }
