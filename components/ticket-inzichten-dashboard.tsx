@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Loader2,
   Send,
+  Link,
 } from "lucide-react";
 
 interface TicketEvent {
@@ -546,6 +547,20 @@ function EventDetailPanel({
   const related = allEvents.filter(
     (e) => e.showId === event.showId && e.eventId !== event.eventId
   );
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = useCallback(async () => {
+    const res = await fetch("/api/share", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "ticket-event", eventId: event.eventId, eventName: event.eventName }),
+    });
+    if (!res.ok) return;
+    const { token } = await res.json();
+    navigator.clipboard.writeText(`${window.location.origin}/share/ticket?token=${token}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }, [event.eventId, event.eventName]);
 
   return (
     <div className="bg-muted/40 border border-border rounded-md p-4 mt-1 space-y-4">
@@ -622,6 +637,17 @@ function EventDetailPanel({
           </div>
         </div>
       )}
+
+      {/* Deel link */}
+      <div className="flex justify-end pt-1">
+        <button
+          onClick={handleShare}
+          className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Link className="h-3.5 w-3.5" />
+          {copied ? "Link gekopieerd!" : "Deel link"}
+        </button>
+      </div>
     </div>
   );
 }
