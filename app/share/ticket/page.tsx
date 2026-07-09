@@ -82,7 +82,8 @@ function AvailabilityChart({ eventId }: { eventId: string }) {
 
   const formatted = history.map((p) => ({
     ...p,
-    label: new Date(p.ts).toLocaleString("nl-NL", {
+    label: new Date(p.ts).toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit" }),
+    tooltip: new Date(p.ts).toLocaleString("nl-NL", {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",
@@ -124,7 +125,7 @@ function AvailabilityChart({ eventId }: { eventId: string }) {
             color: "hsl(var(--popover-foreground))",
           }}
           formatter={(value) => [Number(value).toLocaleString("nl-NL"), "Verkocht"]}
-          labelFormatter={(label) => label}
+          labelFormatter={(label, payload) => payload?.[0]?.payload?.tooltip ?? label}
         />
         <Area
           type="monotone"
