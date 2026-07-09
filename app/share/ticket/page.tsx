@@ -13,16 +13,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-interface TicketEvent {
-  eventId: string;
-  eventName: string;
-  nameAndDate: string;
-  eventDate: string;
-  soldTickets: number;
-  availableCapacity: number;
-  totalCapacity: number;
-  saleStatus: string;
-  category: string;
+interface TicketSnapshot {
+  available: number;
+  sold: number;
+  ts: string;
 }
 
 interface HistoryPoint {
@@ -151,7 +145,7 @@ function ShareTicketContent() {
   const token = urlParams.get("token") ?? "";
 
   const [params, setParams] = useState<ShareParams | null>(null);
-  const [event, setEvent] = useState<TicketEvent | null>(null);
+  const [latest, setLatest] = useState<TicketSnapshot | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -177,17 +171,20 @@ function ShareTicketContent() {
   useEffect(() => {
     if (!params?.eventId) return;
     const load = () => {
-      fetch("/api/ticket-feed", { cache: "no-store" })
+      fetch(`/api/ticket-history?eventId=${encodeURIComponent(params.eventId)}`)
         .then((r) => r.json())
-        .then((data: { events: TicketEvent[] }) => {
-          const found = data.events?.find((e) => e.eventId === params.eventId) ?? null;
-          setEvent(found);
+        .then((d) => {
+          const history: HistoryPoint[] = d.history ?? [];
+          if (history.length > 0) {
+            const last = history[history.length - 1];
+            setLatest({ available: last.available, sold: last.sold, ts: last.ts });
+          }
           setLastFetched(new Date());
         })
-        .catch(() => {});
+        .catch(() => setLastFetched(new Date()));
     };
     load();
-    const id = setInterval(load, 30_000);
+    const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, [params]);
 
@@ -207,13 +204,9 @@ function ShareTicketContent() {
     );
   }
 
-  const pct = event
-    ? event.totalCapacity > 0
-      ? Math.round((event.soldTickets / event.totalCapacity) * 100)
-      : 0
-    : 0;
-
-  const displayName = params?.eventName || event?.eventName || event?.nameAndDate || "Event";
+  const total = latest ? latest.sold + latest.available : 0;
+  const pct = total > 0 ? Math.round((latest!.sold / total) * 100) : 0;
+  const displayName = params?.eventName || "Event";
 
   return (
     <div className="min-h-screen bg-background">
@@ -244,62 +237,62 @@ function ShareTicketContent() {
       </header>
 
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-        {event ? (
+        {!lastFetched ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
+            Laden…
+          </div>
+        ) : (
           <>
-            {/* Bezettingsgraad */}
-            <div className="border border-border rounded-lg p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
-                  Bezettingsgraad
+            {latest && (
+              <div className="border border-border rounded-lg p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                    Bezettingsgraad
+                  </p>
+                  <span className="text-2xl font-heading">{pct}%</span>
+                </div>
+                <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className={`h-full transition-all ${progressColor(pct)}`}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">Verkocht</p>
+                    <p className="text-xl font-heading">{latest.sold.toLocaleString("nl-NL")}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">Beschikbaar</p>
+                    <p className="text-xl font-heading text-success">{latest.available.toLocaleString("nl-NL")}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">Totaal</p>
+                    <p className="text-xl font-heading">{total.toLocaleString("nl-NL")}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground text-right">
+                  Meting van {formatDateTime(latest.ts)}
                 </p>
-                <span className="text-2xl font-heading">{pct}%</span>
               </div>
-              <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
-                <div
-                  className={`h-full transition-all ${progressColor(pct)}`}
-                  style={{ width: `${Math.min(pct, 100)}%` }}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                <div>
-                  <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">Verkocht</p>
-                  <p className="text-xl font-heading">{event.soldTickets.toLocaleString("nl-NL")}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">Beschikbaar</p>
-                  <p className="text-xl font-heading text-success">{event.availableCapacity.toLocaleString("nl-NL")}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-heading uppercase tracking-wide">Totaal</p>
-                  <p className="text-xl font-heading">{event.totalCapacity.toLocaleString("nl-NL")}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Event info */}
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="border border-border rounded-lg p-4">
-                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-1">Evenementdatum</p>
-                <p>{formatDateTime(event.eventDate)}</p>
-              </div>
-              <div className="border border-border rounded-lg p-4">
-                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-1">Categorie</p>
-                <p>{event.category}</p>
-              </div>
-            </div>
+            )}
 
             {/* Beschikbaarheidsverloop */}
-            <div className="border border-border rounded-lg p-5">
-              <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-3">
-                Beschikbaarheidsverloop
-              </p>
-              <AvailabilityChart eventId={event.eventId} />
-            </div>
+            {params && (
+              <div className="border border-border rounded-lg p-5">
+                <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-3">
+                  Beschikbaarheidsverloop
+                </p>
+                <AvailabilityChart eventId={params.eventId} />
+              </div>
+            )}
+
+            {!latest && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                Nog geen metingen beschikbaar voor dit event.
+              </div>
+            )}
           </>
-        ) : (
-          <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
-            {lastFetched ? "Event niet gevonden in de huidige feed." : "Eventdata laden…"}
-          </div>
         )}
 
         <p className="text-center text-xs text-muted-foreground pt-4 border-t border-border">
