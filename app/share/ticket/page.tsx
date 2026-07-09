@@ -170,6 +170,18 @@ function ShareTicketContent() {
   }, [token]);
 
   useEffect(() => {
+    if (!params?.eventName) return;
+    document.title = `${params.eventName} — Ticketbeschikbaarheid | PSV`;
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "description";
+      document.head.appendChild(meta);
+    }
+    meta.content = "Bekijk de actuele ticketbeschikbaarheid en het verkoopverloop voor dit PSV-event.";
+  }, [params?.eventName]);
+
+  useEffect(() => {
     if (!params?.eventId) return;
     const load = () => {
       fetch(`/api/ticket-history?eventId=${encodeURIComponent(params.eventId)}`)
