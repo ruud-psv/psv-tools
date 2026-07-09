@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
-import { getShareLink } from "@/lib/blob-snapshots";
 
 export const revalidate = 300;
 
-async function isValidShareToken(token: string): Promise<boolean> {
+function isValidShareToken(token: string): boolean {
   try {
-    return (await getShareLink(token)) !== null;
-  } catch (err) {
-    console.error("[analytics] token lookup error", err);
+    const parsed = JSON.parse(Buffer.from(token, "base64url").toString());
+    return parsed !== null && typeof parsed === "object";
+  } catch {
     return false;
   }
 }
@@ -208,7 +207,7 @@ async function fetchSiteData(
 export async function GET(req: NextRequest) {
   const shareToken = req.nextUrl.searchParams.get("token");
   if (shareToken) {
-    const ok = await isValidShareToken(shareToken);
+    const ok = isValidShareToken(shareToken);
     if (!ok) return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
   } else {
     const sessionCookie = req.cookies.get("psv_session")?.value;

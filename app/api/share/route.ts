@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { createShareLink, getShareLink } from "@/lib/blob-snapshots";
 
 interface DmShareParams {
   q?: string;
@@ -38,19 +36,20 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    let params: DmShareParams | CampaignShareParams;
+    let params: DmShareParams | CampaignShareParams | Record<string, unknown>;
     if (body && typeof body === "object" && (body as { kind?: string }).kind === "campaign") {
       if (!isCampaignParams(body)) {
         return NextResponse.json({ error: "Ongeldige campagne payload." }, { status: 400 });
       }
       params = body;
+    } else if (body && typeof body === "object" && (body as { kind?: string }).kind === "ticket-event") {
+      params = body as Record<string, unknown>;
     } else {
       const { q = "", preset = "30d", customFrom = "", customTo = "" } = body ?? {};
       params = { q, preset, customFrom, customTo };
     }
 
-    const token = randomBytes(12).toString("base64url");
-    await createShareLink(token, params);
+    const token = Buffer.from(JSON.stringify(params)).toString("base64url");
     return NextResponse.json({ token });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -63,11 +62,9 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
   try {
-    const params = await getShareLink(token);
-    if (params === null) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const params = JSON.parse(Buffer.from(token, "base64url").toString());
     return NextResponse.json(params);
-  } catch (err) {
-    console.error("share GET error", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 }
