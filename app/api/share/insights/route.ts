@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getShareLink } from "@/lib/blob-snapshots";
 import { analyzeDmMailings, type DmInsightInput } from "@/lib/insights/dm";
 import { analyzeTicketEvents, type TicketInsightInput } from "@/lib/insights/ticket";
 import { analyzeAnalytics, type AnalyticsInsightInput } from "@/lib/insights/analytics";
@@ -23,15 +22,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Token, source en payload zijn verplicht." }, { status: 400 });
   }
 
-  // Token must exist in share_links — this is the auth check for public access
+  // Validate token via base64url decode (stateless)
   try {
-    const link = await getShareLink(body.token);
-    if (link === null) {
+    const parsed = JSON.parse(Buffer.from(body.token, "base64url").toString());
+    if (!parsed || typeof parsed !== "object") {
       return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
     }
-  } catch (err) {
-    console.error("[share/insights] token lookup error", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
   }
 
   try {
