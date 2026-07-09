@@ -1,0 +1,22 @@
+name: Ticket Snapshot
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # elk uur
+  workflow_dispatch:        # handmatig triggeren via GitHub UI
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger snapshot endpoint
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://tools.psv.nl/api/ticket-history/snapshot)
+          echo "HTTP status: $response"
+          if [ "$response" != "200" ]; then
+            echo "Snapshot mislukt met status $response"
+            exit 1
+          fi
