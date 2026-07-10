@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   RefreshCw, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus,
   Ticket, Globe, ShoppingBag, Euro, Package, Sparkles, CheckCircle2, Lightbulb,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -17,11 +18,13 @@ import {
   KpiCard, RateBadge,
   type MailingSummary, type Totals as DmTotals,
 } from "@/lib/dm-share";
-import type { DmInsightResult } from "@/lib/insights/dm";
-import type { TicketInsightResult } from "@/lib/insights/ticket";
-import type { AnalyticsInsightResult } from "@/lib/insights/analytics";
-import type { FanstoreInsightResult } from "@/lib/insights/fanstore";
+import type {
+  CombinedInsightResult, CombinedDm, CombinedTicket, CombinedWeb, CombinedFanstore,
+} from "@/lib/insights/combined";
 import type { PeriodConfig, ReportRecord } from "@/lib/reports";
+
+/** Rapporteert de samengevatte data van een sectie omhoog voor de gecombineerde analyse. */
+type ReportData = (payload: object | null, sig: string) => void;
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
@@ -172,74 +175,14 @@ function SectionShell({ icon: Icon, title, subtitle, children }: {
   );
 }
 
-function AiBlock({
-  loading, error, summary, highlights, recommendations, extras,
-}: {
-  loading: boolean;
-  error: string | null;
-  summary?: string;
-  highlights?: { type: string; text: string }[];
-  recommendations?: string[];
-  extras?: React.ReactNode;
-}) {
-  return (
-    <Card className="bg-gradient-to-br from-psv-red-primary/5 to-psv-gold/5 border-psv-red-primary/20">
-      <CardHeader className="flex flex-row items-center gap-2 pb-3">
-        <Sparkles className="h-4 w-4 text-psv-red-primary" />
-        <CardTitle className="text-sm font-heading uppercase tracking-wide">AI inzichten</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {loading && (
-          <p className="text-muted-foreground italic">Inzichten worden gegenereerd…</p>
-        )}
-        {error && !loading && (
-          <p className="text-destructive">Kon geen inzichten genereren: {error}</p>
-        )}
-        {!loading && !error && summary && (
-          <p className="leading-relaxed">{summary}</p>
-        )}
-        {!loading && !error && highlights && highlights.length > 0 && (
-          <ul className="space-y-1.5">
-            {highlights.map((h, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-psv-red-primary" />
-                <span className="leading-relaxed">{h.text}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!loading && !error && recommendations && recommendations.length > 0 && (
-          <div className="rounded-md bg-background/60 p-3 space-y-1.5">
-            <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-              <Lightbulb className="h-3.5 w-3.5" /> Aanbevelingen
-            </p>
-            <ul className="space-y-1">
-              {recommendations.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-green-700" />
-                  <span>{r}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {!loading && !error && extras}
-      </CardContent>
-    </Card>
-  );
-}
-
 /* ---------- DM Section ---------- */
 
 function DmSection({
-  token, from, to, queries,
-}: { token: string; from: string; to: string; queries: string[] }) {
+  from, to, queries, onData,
+}: { from: string; to: string; queries: string[]; onData: ReportData }) {
   const [mailings, setMailings] = useState<MailingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [insights, setInsights] = useState<DmInsightResult | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (queries.length === 0) return mailings;
@@ -271,29 +214,23 @@ function DmSection({
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Run AI insights when filtered data arrives (or changes meaningfully)
+  // Rapporteer een compacte samenvatting omhoog voor de gecombineerde analyse.
   useEffect(() => {
-    if (filtered.length === 0) { setInsights(null); return; }
-    setInsightsLoading(true);
-    setInsightsError(null);
-    fetch("/api/share/insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token,
-        source: "dm",
-        payload: {
-          mailings: filtered,
-          totals,
-          dateRange: { preset: "custom", from, to },
-        },
-      }),
-    })
-      .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)))
-      .then((data: DmInsightResult) => setInsights(data))
-      .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
-      .finally(() => setInsightsLoading(false));
-  }, [filtered, totals, token, from, to]);
+    if (loading) return;
+    if (filtered.length === 0) { onData(null, "dm:0"); return; }
+    const top = [...filtered]
+      .sort((a, b) => b.openRate - a.openRate)
+      .slice(0, 5)
+      .map((m) => ({ name: stripName(m.name), openRate: m.openRate, clickRate: m.clickRate, recipients: m.recipients }));
+    const payload: CombinedDm = {
+      from, to,
+      mailings: totals.mailings, recipients: totals.recipients,
+      avgOpenRate: totals.avgOpenRate, avgClickRate: totals.avgClickRate, avgCtor: totals.avgCtor,
+      bounces: totals.bounces, unsubscriptions: totals.unsubscriptions,
+      top,
+    };
+    onData(payload, `dm:${totals.mailings}:${totals.recipients}`);
+  }, [loading, filtered, totals, from, to, onData]);
 
   return (
     <SectionShell
@@ -321,38 +258,6 @@ function DmSection({
           )}
 
           {filtered.length > 0 && <DmTable mailings={filtered} totals={totals} />}
-
-          {filtered.length > 0 && (
-            <AiBlock
-              loading={insightsLoading}
-              error={insightsError}
-              summary={insights?.summary}
-              highlights={insights?.highlights}
-              recommendations={insights?.recommendations}
-              extras={
-                insights && (insights.topPerformer || insights.bottomPerformer) ? (
-                  <div className="grid gap-2 sm:grid-cols-2 pt-2">
-                    {insights.topPerformer && (
-                      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-green-800 mb-1">Top performer</p>
-                        <p className="font-medium">{insights.topPerformer.name}</p>
-                        <p className="text-muted-foreground">{insights.topPerformer.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.topPerformer.why}</p>
-                      </div>
-                    )}
-                    {insights.bottomPerformer && (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-amber-800 mb-1">Aandacht nodig</p>
-                        <p className="font-medium">{insights.bottomPerformer.name}</p>
-                        <p className="text-muted-foreground">{insights.bottomPerformer.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.bottomPerformer.suggestion}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : null
-              }
-            />
-          )}
         </>
       )}
     </SectionShell>
@@ -409,16 +314,14 @@ function DmTable({ mailings }: { mailings: MailingSummary[]; totals: DmTotals })
 interface SnapshotPoint { ts: string; available: number; sold: number }
 
 function TicketingSection({
-  token, queries, category, mode, from, to,
-}: { token: string; queries: string[]; category?: string; mode: "current" | "period"; from: string; to: string }) {
+  queries, category, mode, from, to, onData,
+}: { queries: string[]; category?: string; mode: "current" | "period"; from: string; to: string; onData: ReportData }) {
   const isPeriod = mode === "period";
   const [events, setEvents] = useState<TicketEvent[]>([]);
   const [snapshots, setSnapshots] = useState<Record<string, SnapshotPoint[]>>({});
+  const [snapLoaded, setSnapLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [insights, setInsights] = useState<TicketInsightResult | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = events.filter(
@@ -476,9 +379,10 @@ function TicketingSection({
   // Snapshot-historie ophalen per event (alleen in periode-modus), gecapt op 40 events.
   const eventsKey = useMemo(() => filtered.map((e) => e.eventId).join(","), [filtered]);
   useEffect(() => {
-    if (!isPeriod || filtered.length === 0) { setSnapshots({}); return; }
+    if (!isPeriod || filtered.length === 0) { setSnapshots({}); setSnapLoaded(true); return; }
     let active = true;
     const ctrl = new AbortController();
+    setSnapLoaded(false);
     const targets = filtered.slice(0, 40);
     Promise.all(
       targets.map((e) =>
@@ -487,7 +391,7 @@ function TicketingSection({
           .then((j) => [e.eventId, (j.history ?? []) as SnapshotPoint[]] as const)
           .catch(() => [e.eventId, [] as SnapshotPoint[]] as const)
       )
-    ).then((entries) => { if (active) setSnapshots(Object.fromEntries(entries)); });
+    ).then((entries) => { if (active) { setSnapshots(Object.fromEntries(entries)); setSnapLoaded(true); } });
     return () => { active = false; ctrl.abort(); };
   }, [isPeriod, eventsKey, from, to]);
 
@@ -524,21 +428,6 @@ function TicketingSection({
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, sold]) => ({ date, sold }));
   }, [isPeriod, snapshots, from, to]);
 
-  useEffect(() => {
-    if (filtered.length === 0) { setInsights(null); return; }
-    setInsightsLoading(true);
-    setInsightsError(null);
-    fetch("/api/share/insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, source: "ticket", payload: { events: filtered } }),
-    })
-      .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)))
-      .then((data: TicketInsightResult) => setInsights(data))
-      .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
-      .finally(() => setInsightsLoading(false));
-  }, [filtered, token]);
-
   const sortedEvents = useMemo(() => {
     const withCap = filtered.filter((e) => e.totalCapacity > 0);
     if (isPeriod) {
@@ -550,6 +439,29 @@ function TicketingSection({
       .sort((a, b) => (b.soldTickets / b.totalCapacity) - (a.soldTickets / a.totalCapacity))
       .slice(0, 30);
   }, [filtered, isPeriod, soldByEvent]);
+
+  // Rapporteer samenvatting omhoog voor de gecombineerde analyse (periode: pas als snapshots binnen zijn).
+  useEffect(() => {
+    if (loading) return;
+    if (isPeriod && !snapLoaded) return;
+    if (filtered.length === 0) { onData(null, "tk:0"); return; }
+    const top = sortedEvents.slice(0, 8).map((e) => ({
+      name: e.eventName,
+      category: e.category,
+      occupancy: e.totalCapacity > 0 ? Math.round((e.soldTickets / e.totalCapacity) * 100) : 0,
+      ...(isPeriod && { soldInPeriod: soldByEvent[e.eventId] ?? null }),
+    }));
+    const payload: CombinedTicket = {
+      mode,
+      ...(isPeriod && { from, to }),
+      events: totals.events, sold: totals.sold, available: totals.available,
+      capacity: totals.capacity, occupancy: totals.occupancy,
+      soldOut: totals.soldOut, nearlyFull: totals.nearlyFull,
+      ...(isPeriod && { periodSold: periodSoldTotal }),
+      top,
+    };
+    onData(payload, `tk:${totals.events}:${totals.sold}:${isPeriod ? periodSoldTotal : "c"}`);
+  }, [loading, isPeriod, snapLoaded, filtered, sortedEvents, totals, mode, from, to, soldByEvent, periodSoldTotal, onData]);
 
   return (
     <SectionShell
@@ -645,37 +557,6 @@ function TicketingSection({
             </Card>
           )}
 
-          {filtered.length > 0 && (
-            <AiBlock
-              loading={insightsLoading}
-              error={insightsError}
-              summary={insights?.summary}
-              highlights={insights?.highlights}
-              recommendations={insights?.recommendations}
-              extras={
-                insights && (insights.highestDemand || insights.mostAvailable) ? (
-                  <div className="grid gap-2 sm:grid-cols-2 pt-2">
-                    {insights.highestDemand && (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-amber-800 mb-1">Hoogste vraag</p>
-                        <p className="font-medium">{insights.highestDemand.name}</p>
-                        <p className="text-muted-foreground">{insights.highestDemand.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.highestDemand.action}</p>
-                      </div>
-                    )}
-                    {insights.mostAvailable && (
-                      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-blue-800 mb-1">Meeste ruimte</p>
-                        <p className="font-medium">{insights.mostAvailable.name}</p>
-                        <p className="text-muted-foreground">{insights.mostAvailable.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.mostAvailable.action}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : null
-              }
-            />
-          )}
         </>
       )}
     </SectionShell>
@@ -685,15 +566,12 @@ function TicketingSection({
 /* ---------- Web Section ---------- */
 
 function WebSection({
-  token, from, to, site, paths,
-}: { token: string; from: string; to: string; site: string; paths: string[] }) {
+  token, from, to, site, paths, onData,
+}: { token: string; from: string; to: string; site: string; paths: string[]; onData: ReportData }) {
   const period = periodForRange(from, to);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [insights, setInsights] = useState<AnalyticsInsightResult | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   const siteData = data?.sites?.[site];
 
@@ -723,29 +601,19 @@ function WebSection({
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Rapporteer samenvatting omhoog voor de gecombineerde analyse.
   useEffect(() => {
-    if (!siteData) { setInsights(null); return; }
-    const sites: Record<string, AnalyticsSiteData> = { [site]: { ...siteData, topPages: filteredTopPages } };
-    setInsightsLoading(true);
-    setInsightsError(null);
-    fetch("/api/share/insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token,
-        source: "analytics",
-        payload: {
-          sites,
-          combined: { totals: siteData.totals },
-          period,
-        },
-      }),
-    })
-      .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)))
-      .then((data: AnalyticsInsightResult) => setInsights(data))
-      .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
-      .finally(() => setInsightsLoading(false));
-  }, [siteData, filteredTopPages, site, period, token]);
+    if (loading) return;
+    if (!siteData) { onData(null, `web:${site}:0`); return; }
+    const payload: CombinedWeb = {
+      site: siteData.label ?? site,
+      from, to,
+      totals: siteData.totals,
+      topSources: (siteData.topSources ?? []).slice(0, 5).map((s) => ({ source: s.source, sessions: s.sessions })),
+      topPages: filteredTopPages.slice(0, 5).map((p) => ({ path: p.path, pageviews: p.pageviews })),
+    };
+    onData(payload, `web:${site}:${siteData.totals.sessions}:${siteData.totals.pageviews}`);
+  }, [loading, siteData, filteredTopPages, site, from, to, onData]);
 
   return (
     <SectionShell
@@ -842,38 +710,6 @@ function WebSection({
               </Card>
             )}
           </div>
-
-          {siteData && (
-            <AiBlock
-              loading={insightsLoading}
-              error={insightsError}
-              summary={insights?.summary}
-              highlights={insights?.highlights}
-              recommendations={insights?.recommendations}
-              extras={
-                insights && (insights.bestPerformer || insights.attentionNeeded) ? (
-                  <div className="grid gap-2 sm:grid-cols-2 pt-2">
-                    {insights.bestPerformer && (
-                      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-green-800 mb-1">Sterk punt</p>
-                        <p className="font-medium">{insights.bestPerformer.site}</p>
-                        <p className="text-muted-foreground">{insights.bestPerformer.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.bestPerformer.why}</p>
-                      </div>
-                    )}
-                    {insights.attentionNeeded && (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-amber-800 mb-1">Aandacht nodig</p>
-                        <p className="font-medium">{insights.attentionNeeded.site}</p>
-                        <p className="text-muted-foreground">{insights.attentionNeeded.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.attentionNeeded.action}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : null
-              }
-            />
-          )}
         </>
       )}
     </SectionShell>
@@ -895,15 +731,12 @@ interface ProductTrend {
 }
 
 function FanstoreSection({
-  token, from, to, products,
-}: { token: string; from: string; to: string; products: string[] }) {
+  token, from, to, products, onData,
+}: { token: string; from: string; to: string; products: string[]; onData: ReportData }) {
   const [data, setData] = useState<FanstoreOverview | null>(null);
   const [productTrends, setProductTrends] = useState<ProductTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [insights, setInsights] = useState<FanstoreInsightResult | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   const hasSelection = products.length > 0;
 
@@ -973,31 +806,22 @@ function FanstoreSection({
     return (data?.topProducts ?? []).slice(0, 10);
   }, [hasSelection, productRows, data]);
 
+  // Rapporteer samenvatting omhoog voor de gecombineerde analyse.
   useEffect(() => {
-    if (!data || (hasSelection && productRows.length === 0)) { setInsights(null); return; }
-    setInsightsLoading(true);
-    setInsightsError(null);
-    fetch("/api/share/insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token,
-        source: "fanstore",
-        payload: {
-          from,
-          to,
-          totals: data.totals,
-          products: hasSelection ? productRows : data.topProducts.slice(0, 20),
-          ...(!hasSelection && { topCategories: data.topCategories }),
-          ...(hasSelection && { selectedProducts: products }),
-        },
-      }),
-    })
-      .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)))
-      .then((result: FanstoreInsightResult) => setInsights(result))
-      .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
-      .finally(() => setInsightsLoading(false));
-  }, [data, hasSelection, productRows, products, token, from, to]);
+    if (loading) return;
+    if (!data || (hasSelection && productRows.length === 0)) { onData(null, "fs:0"); return; }
+    const totals = hasSelection
+      ? { revenue: selectionTotals.revenue, transactions: data.totals.transactions, avgOrderValue: data.totals.avgOrderValue, itemsPurchased: selectionTotals.itemsPurchased }
+      : data.totals;
+    const productList = hasSelection ? productRows : data.topProducts.slice(0, 20);
+    const payload: CombinedFanstore = {
+      from, to,
+      selected: hasSelection,
+      totals,
+      products: productList.map((p) => ({ name: p.name, revenue: p.revenue, itemsPurchased: p.itemsPurchased })),
+    };
+    onData(payload, `fs:${Math.round(totals.revenue)}:${totals.itemsPurchased}`);
+  }, [loading, data, hasSelection, productRows, selectionTotals, from, to, onData]);
 
   const revenueShare = hasSelection && data && data.totals.revenue > 0
     ? Math.round((selectionTotals.revenue / data.totals.revenue) * 100)
@@ -1146,40 +970,85 @@ function FanstoreSection({
             </Card>
           )}
 
-          {data && (!hasSelection || productRows.length > 0) && (
-            <AiBlock
-              loading={insightsLoading}
-              error={insightsError}
-              summary={insights?.summary}
-              highlights={insights?.highlights}
-              recommendations={insights?.recommendations}
-              extras={
-                insights && (insights.topProduct || insights.attentionNeeded) ? (
-                  <div className="grid gap-2 sm:grid-cols-2 pt-2">
-                    {insights.topProduct && (
-                      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-green-800 mb-1">Top product</p>
-                        <p className="font-medium">{insights.topProduct.name}</p>
-                        <p className="text-muted-foreground">{insights.topProduct.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.topProduct.why}</p>
-                      </div>
-                    )}
-                    {insights.attentionNeeded && (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
-                        <p className="font-heading uppercase text-amber-800 mb-1">Aandacht nodig</p>
-                        <p className="font-medium">{insights.attentionNeeded.name}</p>
-                        <p className="text-muted-foreground">{insights.attentionNeeded.metric}</p>
-                        <p className="mt-1 text-foreground/80">{insights.attentionNeeded.action}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : null
-              }
-            />
-          )}
         </>
       )}
     </SectionShell>
+  );
+}
+
+/* ---------- Gecombineerde AI-analyse ---------- */
+
+function CombinedAnalysisBlock({
+  loading, error, result, stale, hasData, hasRun, onRerun,
+}: {
+  loading: boolean;
+  error: string | null;
+  result: CombinedInsightResult | null;
+  stale: boolean;
+  hasData: boolean;
+  hasRun: boolean;
+  onRerun: () => void;
+}) {
+  return (
+    <Card className="bg-gradient-to-br from-psv-red-primary/5 to-psv-gold/5 border-psv-red-primary/20">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-psv-red-primary" />
+          <CardTitle className="text-sm font-heading uppercase tracking-wide">AI-analyse</CardTitle>
+        </div>
+        <div className="flex items-center gap-2">
+          {stale && !loading && (
+            <span className="text-xs text-warning">Nieuwe data beschikbaar</span>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRerun}
+            disabled={loading || !hasData}
+            className="gap-1.5"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            {hasRun ? "Opnieuw analyseren" : "Analyseren"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {loading && <p className="text-muted-foreground italic">Analyse wordt gegenereerd…</p>}
+        {!loading && error && <p className="text-destructive">Kon geen analyse genereren: {error}</p>}
+        {!loading && !error && !result && (
+          <p className="text-muted-foreground italic">
+            {hasData ? "Nog geen analyse. Klik op ‘Analyseren’." : "Wachten op data…"}
+          </p>
+        )}
+        {!loading && !error && result?.summary && <p className="leading-relaxed">{result.summary}</p>}
+        {!loading && !error && result?.highlights && result.highlights.length > 0 && (
+          <ul className="space-y-1.5">
+            {result.highlights.map((h, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-psv-red-primary" />
+                <span className="leading-relaxed">{h.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!loading && !error && result?.recommendations && result.recommendations.length > 0 && (
+          <div className="rounded-md bg-background/60 p-3 space-y-1.5">
+            <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <Lightbulb className="h-3.5 w-3.5" /> Aanbevelingen
+            </p>
+            <ul className="space-y-1">
+              {result.recommendations.map((r, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-green-700" />
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1255,6 +1124,85 @@ function ShareRapportageContent() {
     return () => clearInterval(id);
   }, [params]);
 
+  /* ---- Gecombineerde AI-analyse (één keer, daarna handmatig) ---- */
+  const enabledKeys = useMemo(() => {
+    const ks: string[] = [];
+    if (params?.sources.dm?.enabled) ks.push("dm");
+    if (params?.sources.ticketing?.enabled) ks.push("ticket");
+    if (params?.sources.web?.enabled) ks.push("web");
+    if (params?.sources.fanstore?.enabled) ks.push("fanstore");
+    return ks;
+  }, [params]);
+
+  const reportedRef = useRef<Record<string, { payload: object | null; sig: string }>>({});
+  const [dataSig, setDataSig] = useState("");
+  const [analysis, setAnalysis] = useState<CombinedInsightResult | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analyzedSig, setAnalyzedSig] = useState<string | null>(null);
+
+  const report = useCallback((key: string, payload: object | null, sig: string) => {
+    reportedRef.current[key] = { payload, sig };
+    const combined = Object.keys(reportedRef.current).sort()
+      .map((k) => `${k}=${reportedRef.current[k].sig}`).join("|");
+    setDataSig(combined);
+  }, []);
+
+  const reportDm = useCallback<ReportData>((p, s) => report("dm", p, s), [report]);
+  const reportTicket = useCallback<ReportData>((p, s) => report("ticket", p, s), [report]);
+  const reportWeb = useCallback<ReportData>((p, s) => report("web", p, s), [report]);
+  const reportFanstore = useCallback<ReportData>((p, s) => report("fanstore", p, s), [report]);
+
+  const runAnalysis = useCallback(async () => {
+    if (enabledKeys.length === 0) return;
+    const payload: Record<string, unknown> = {};
+    if (params?.name) payload.title = params.name;
+    if (params?.intro) payload.intro = params.intro;
+    let any = false;
+    for (const k of enabledKeys) {
+      const entry = reportedRef.current[k];
+      if (entry?.payload) { payload[k] = entry.payload; any = true; }
+    }
+    const sigAtRun = dataSig;
+    if (!any) {
+      setAnalysis(null);
+      setAnalysisError("Er is nog geen data om te analyseren.");
+      setAnalyzedSig(sigAtRun);
+      return;
+    }
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const res = await fetch("/api/share/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, source: "combined", payload }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error ?? `Fout ${res.status}`);
+      }
+      const data = await res.json();
+      setAnalysis(data as CombinedInsightResult);
+      setAnalyzedSig(sigAtRun);
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "Analyse mislukt");
+      setAnalyzedSig(sigAtRun);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [enabledKeys, params, token, dataSig]);
+
+  // Eén keer automatisch draaien zodra alle ingeschakelde bronnen data hebben gerapporteerd.
+  useEffect(() => {
+    if (analyzedSig !== null || analysisLoading || enabledKeys.length === 0) return;
+    const allReported = enabledKeys.every((k) => k in reportedRef.current);
+    if (allReported) runAnalysis();
+  }, [dataSig, enabledKeys, analyzedSig, analysisLoading, runAnalysis]);
+
+  const hasData = enabledKeys.some((k) => reportedRef.current[k]?.payload);
+  const stale = analyzedSig !== null && dataSig !== analyzedSig;
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen text-muted-foreground text-sm">Laden…</div>;
   }
@@ -1294,15 +1242,25 @@ function ShareRapportageContent() {
           </p>
         )}
 
+        <CombinedAnalysisBlock
+          loading={analysisLoading}
+          error={analysisError}
+          result={analysis}
+          stale={stale}
+          hasData={hasData}
+          hasRun={analyzedSig !== null}
+          onRerun={runAnalysis}
+        />
+
         {params.sources.dm?.enabled && (() => {
           const range = resolvePeriod(params.sources.dm.period, params.from, params.to);
           return (
             <DmSection
               key={`dm-${refreshTick}`}
-              token={token}
               from={range.from}
               to={range.to}
               queries={collectQueries(params.sources.dm)}
+              onData={reportDm}
             />
           );
         })()}
@@ -1313,12 +1271,12 @@ function ShareRapportageContent() {
           return (
             <TicketingSection
               key={`ticket-${refreshTick}`}
-              token={token}
               queries={collectQueries(tk)}
               category={tk.category}
               mode={mode}
               from={range.from}
               to={range.to}
+              onData={reportTicket}
             />
           );
         })()}
@@ -1332,6 +1290,7 @@ function ShareRapportageContent() {
               to={range.to}
               site={params.sources.web.site}
               paths={collectPaths(params.sources.web)}
+              onData={reportWeb}
             />
           );
         })()}
@@ -1344,6 +1303,7 @@ function ShareRapportageContent() {
               from={range.from}
               to={range.to}
               products={params.sources.fanstore.products ?? []}
+              onData={reportFanstore}
             />
           );
         })()}
@@ -1351,7 +1311,7 @@ function ShareRapportageContent() {
         <div className="flex items-center justify-between gap-4 pt-4 border-t border-border">
           <Badge variant="secondary" className="text-xs">PSV Tools</Badge>
           <p className="text-xs text-muted-foreground">
-            Live data — automatisch ververst elke 5 minuten.
+            Cijfers verversen automatisch elke 5 minuten · AI-analyse draait op verzoek.
           </p>
         </div>
       </div>
