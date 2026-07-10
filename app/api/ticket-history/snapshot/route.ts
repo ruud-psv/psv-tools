@@ -3,6 +3,25 @@ import { appendSnapshot } from "@/lib/blob-snapshots";
 
 const FEED_URL = "https://ticketshop.psv.nl/feed/eventsavailability";
 
+const SNAPSHOT_CATEGORIES = new Set(["Wedstrijden", "Abonnementen", "Overig"]);
+
+function categorizeEvent(name: string): string {
+  const n = name.toLowerCase();
+  if (
+    n.includes("psv") && (
+      n.includes(" - ") || n.includes(" vs ") || n.includes("eredivisie") ||
+      n.includes("champions league") || n.includes("europa league") ||
+      n.includes("conference league") || n.includes("knvb") || n.includes("supercup")
+    )
+  ) return "Wedstrijden";
+  if (n.includes("stadiontour") || n.includes("kampioenstour") || n.includes("legend tour") || n.includes("matchday tour")) return "Tours";
+  if (n.includes("museum")) return "Museum";
+  if (n.includes("minivoetbal") || n.includes("vakantie clinic") || n.includes("starclinic") || n.includes("trainingsmodule") || n.includes("individuele training") || n.includes("talent day") || n.includes("voetbalgames") || n.includes("phoxy") || n.includes("voetbaltraining")) return "Jeugd";
+  if (n.includes("kinderfeestje") || n.includes("open training") || n.includes("funpark") || n.includes("awayday") || n.includes("scholenchallenge") || n.includes("welkom bij de club") || n.includes("wedstrijdbezoek") || n.includes("fanclub")) return "Evenementen";
+  if (n.includes("mijn psv") || n.includes("seizoen club card") || n.includes("interesse seizoen")) return "Abonnementen";
+  return "Overig";
+}
+
 function isAuthorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -41,6 +60,8 @@ async function takeSnapshot(): Promise<NextResponse> {
     };
     const eventId = get("EventId");
     if (!eventId) continue;
+    const category = categorizeEvent(get("NameAndDate"));
+    if (!SNAPSHOT_CATEGORIES.has(category)) continue;
     events.push({
       eventId,
       available: parseInt(get("AvailableCapacity"), 10) || 0,
@@ -56,6 +77,7 @@ async function takeSnapshot(): Promise<NextResponse> {
   return NextResponse.json({
     saved: true,
     eventCount: events.length,
+    categories: [...SNAPSHOT_CATEGORIES],
     timestamp: now,
   });
 }
