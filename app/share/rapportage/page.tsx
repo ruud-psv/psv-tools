@@ -979,7 +979,7 @@ function FanstoreSection({
 /* ---------- Gecombineerde AI-analyse ---------- */
 
 function CombinedAnalysisBlock({
-  loading, error, result, stale, hasData, hasRun, onRerun,
+  loading, error, result, stale, hasData, hasRun, generatedAt, onRerun,
 }: {
   loading: boolean;
   error: string | null;
@@ -987,8 +987,12 @@ function CombinedAnalysisBlock({
   stale: boolean;
   hasData: boolean;
   hasRun: boolean;
+  generatedAt: string | null;
   onRerun: () => void;
 }) {
+  const generatedLabel = generatedAt
+    ? new Date(generatedAt).toLocaleString("nl-NL", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+    : null;
   return (
     <Card className="bg-gradient-to-br from-psv-red-primary/5 to-psv-gold/5 border-psv-red-primary/20">
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
@@ -997,9 +1001,11 @@ function CombinedAnalysisBlock({
           <CardTitle className="text-sm font-heading uppercase tracking-wide">AI-analyse</CardTitle>
         </div>
         <div className="flex items-center gap-2">
-          {stale && !loading && (
+          {stale && !loading ? (
             <span className="text-xs text-warning">Nieuwe data beschikbaar</span>
-          )}
+          ) : generatedLabel && !loading ? (
+            <span className="text-xs text-muted-foreground">Geanalyseerd op {generatedLabel}</span>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -1018,7 +1024,7 @@ function CombinedAnalysisBlock({
         {!loading && error && <p className="text-destructive">Kon geen analyse genereren: {error}</p>}
         {!loading && !error && !result && (
           <p className="text-muted-foreground italic">
-            {hasData ? "Nog geen analyse. Klik op ‘Analyseren’." : "Wachten op data…"}
+            {hasData ? "Nog geen analyse — klik op ‘Analyseren’ om er één te maken." : "Wachten op data…"}
           </p>
         )}
         {!loading && !error && result?.summary && <p className="leading-relaxed">{result.summary}</p>}
@@ -1124,7 +1130,7 @@ function ShareRapportageContent() {
     return () => clearInterval(id);
   }, [params]);
 
-  /* ---- Gecombineerde AI-analyse (één keer, daarna handmatig) ---- */
+  /* ---- Gecombineerde AI-analyse: opgeslagen, alleen (her)genereren via de knop ---- */
   const enabledKeys = useMemo(() => {
     const ks: string[] = [];
     if (params?.sources.dm?.enabled) ks.push("dm");
@@ -1140,6 +1146,7 @@ function ShareRapportageContent() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analyzedSig, setAnalyzedSig] = useState<string | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
 
   const report = useCallback((key: string, payload: object | null, sig: string) => {
     reportedRef.current[key] = { payload, sig };
@@ -1153,6 +1160,24 @@ function ShareRapportageContent() {
   const reportWeb = useCallback<ReportData>((p, s) => report("web", p, s), [report]);
   const reportFanstore = useCallback<ReportData>((p, s) => report("fanstore", p, s), [report]);
 
+  // Bij het openen: opgeslagen analyse ophalen (geen nieuwe AI-call).
+  useEffect(() => {
+    if (!reportId) return;
+    let active = true;
+    fetch(`/api/reports/${encodeURIComponent(reportId)}/analysis`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const a = data?.analysis;
+        if (active && a?.result) {
+          setAnalysis(a.result as CombinedInsightResult);
+          setAnalyzedSig(typeof a.sig === "string" ? a.sig : "");
+          setGeneratedAt(a.generatedAt ?? null);
+        }
+      })
+      .catch(() => { /* geen opgeslagen analyse — gebruiker kan zelf genereren */ });
+    return () => { active = false; };
+  }, [reportId]);
+
   const runAnalysis = useCallback(async () => {
     if (enabledKeys.length === 0) return;
     const payload: Record<string, unknown> = {};
@@ -1165,43 +1190,49 @@ function ShareRapportageContent() {
     }
     const sigAtRun = dataSig;
     if (!any) {
-      setAnalysis(null);
       setAnalysisError("Er is nog geen data om te analyseren.");
-      setAnalyzedSig(sigAtRun);
       return;
     }
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
-      const res = await fetch("/api/share/insights", {
+      // Rapport-id → opslaan zodat een refresh geen nieuwe AI-call doet.
+      const endpoint = reportId
+        ? `/api/reports/${encodeURIComponent(reportId)}/analysis`
+        : "/api/share/insights";
+      const requestBody = reportId
+        ? { token, sig: sigAtRun, payload }
+        : { token, source: "combined", payload };
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, source: "combined", payload }),
+        body: JSON.stringify(requestBody),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e?.error ?? `Fout ${res.status}`);
       }
       const data = await res.json();
-      setAnalysis(data as CombinedInsightResult);
-      setAnalyzedSig(sigAtRun);
+      if (reportId) {
+        const a = data.analysis;
+        setAnalysis(a.result as CombinedInsightResult);
+        setAnalyzedSig(a.sig ?? sigAtRun);
+        setGeneratedAt(a.generatedAt ?? null);
+      } else {
+        setAnalysis(data as CombinedInsightResult);
+        setAnalyzedSig(sigAtRun);
+        setGeneratedAt(new Date().toISOString());
+      }
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Analyse mislukt");
-      setAnalyzedSig(sigAtRun);
     } finally {
       setAnalysisLoading(false);
     }
-  }, [enabledKeys, params, token, dataSig]);
+  }, [enabledKeys, params, token, reportId, dataSig]);
 
-  // Eén keer automatisch draaien zodra alle ingeschakelde bronnen data hebben gerapporteerd.
-  useEffect(() => {
-    if (analyzedSig !== null || analysisLoading || enabledKeys.length === 0) return;
-    const allReported = enabledKeys.every((k) => k in reportedRef.current);
-    if (allReported) runAnalysis();
-  }, [dataSig, enabledKeys, analyzedSig, analysisLoading, runAnalysis]);
-
+  const allReported = enabledKeys.length > 0 && enabledKeys.every((k) => k in reportedRef.current);
   const hasData = enabledKeys.some((k) => reportedRef.current[k]?.payload);
-  const stale = analyzedSig !== null && dataSig !== analyzedSig;
+  const stale = analyzedSig !== null && allReported && dataSig !== analyzedSig;
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen text-muted-foreground text-sm">Laden…</div>;
@@ -1248,7 +1279,8 @@ function ShareRapportageContent() {
           result={analysis}
           stale={stale}
           hasData={hasData}
-          hasRun={analyzedSig !== null}
+          hasRun={analysis !== null}
+          generatedAt={generatedAt}
           onRerun={runAnalysis}
         />
 

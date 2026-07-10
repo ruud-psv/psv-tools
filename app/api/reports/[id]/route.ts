@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { deleteReport, getReport, parseReportInput, saveReport, type ReportRecord } from "@/lib/reports";
+import { deleteAnalysis } from "@/lib/report-analysis";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,8 @@ export async function PUT(
       updatedAt: new Date().toISOString(),
     };
     await saveReport(report);
+    // Config gewijzigd → opgeslagen analyse is niet meer representatief.
+    await deleteAnalysis(id);
     return NextResponse.json({ report });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -79,6 +82,7 @@ export async function DELETE(
   try {
     const ok = await deleteReport(id);
     if (!ok) return NextResponse.json({ error: "Ongeldig rapport id." }, { status: 400 });
+    await deleteAnalysis(id);
     return NextResponse.json({ deleted: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
