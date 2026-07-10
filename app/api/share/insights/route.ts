@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { analyzeDmMailings, type DmInsightInput } from "@/lib/insights/dm";
 import { analyzeTicketEvents, type TicketInsightInput } from "@/lib/insights/ticket";
 import { analyzeAnalytics, type AnalyticsInsightInput } from "@/lib/insights/analytics";
+import { analyzeFanstore, type FanstoreInsightInput } from "@/lib/insights/fanstore";
 import { InsightAnalysisError, InsightConfigError } from "@/lib/insights/runner";
+import { isValidShareToken } from "@/lib/share-token";
 
 interface RequestBody {
   token: string;
-  source: "dm" | "ticket" | "analytics";
+  source: "dm" | "ticket" | "analytics" | "fanstore";
   payload: unknown;
 }
 
@@ -23,12 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate token via base64url decode (stateless)
-  try {
-    const parsed = JSON.parse(Buffer.from(body.token, "base64url").toString());
-    if (!parsed || typeof parsed !== "object") {
-      return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
-    }
-  } catch {
+  if (!isValidShareToken(body.token)) {
     return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
   }
 
@@ -40,6 +37,8 @@ export async function POST(req: NextRequest) {
       analysis = await analyzeTicketEvents(body.payload as TicketInsightInput);
     } else if (body.source === "analytics") {
       analysis = await analyzeAnalytics(body.payload as AnalyticsInsightInput);
+    } else if (body.source === "fanstore") {
+      analysis = await analyzeFanstore(body.payload as FanstoreInsightInput);
     } else {
       return NextResponse.json({ error: "Onbekende source." }, { status: 400 });
     }

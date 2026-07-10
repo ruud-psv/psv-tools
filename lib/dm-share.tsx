@@ -44,6 +44,28 @@ export function formatPct(n: number) {
   return `${n.toFixed(1)}%`;
 }
 
+export function formatEuro(n: number) {
+  return `€ ${n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Datum + tijd in Nederlandse notatie, met veilige fallback. */
+export function formatDateTime(iso: string) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("nl-NL", {
+      day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return iso; }
+}
+
+/** Bepaal het GA-periodebucket (7d/30d/90d) voor een datumbereik. */
+export function periodForRange(from: string, to: string): string {
+  const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24)));
+  if (days <= 7) return "7d";
+  if (days <= 30) return "30d";
+  return "90d";
+}
+
 export function formatDate(iso: string) {
   if (!iso) return "—";
   try {

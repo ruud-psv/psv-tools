@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
+import { isValidShareToken } from "@/lib/share-token";
 
 export const revalidate = 300;
-
-function isValidShareToken(token: string): boolean {
-  try {
-    const parsed = JSON.parse(Buffer.from(token, "base64url").toString());
-    return parsed !== null && typeof parsed === "object";
-  } catch {
-    return false;
-  }
-}
 
 
 /* ---------- Config ---------- */
