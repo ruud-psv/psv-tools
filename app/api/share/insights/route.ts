@@ -3,12 +3,13 @@ import { analyzeDmMailings, type DmInsightInput } from "@/lib/insights/dm";
 import { analyzeTicketEvents, type TicketInsightInput } from "@/lib/insights/ticket";
 import { analyzeAnalytics, type AnalyticsInsightInput } from "@/lib/insights/analytics";
 import { analyzeFanstore, type FanstoreInsightInput } from "@/lib/insights/fanstore";
+import { analyzeCombined, type CombinedInsightInput } from "@/lib/insights/combined";
 import { InsightAnalysisError, InsightConfigError } from "@/lib/insights/runner";
 import { isValidShareToken } from "@/lib/share-token";
 
 interface RequestBody {
   token: string;
-  source: "dm" | "ticket" | "analytics" | "fanstore";
+  source: "dm" | "ticket" | "analytics" | "fanstore" | "combined";
   payload: unknown;
 }
 
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
       analysis = await analyzeAnalytics(body.payload as AnalyticsInsightInput);
     } else if (body.source === "fanstore") {
       analysis = await analyzeFanstore(body.payload as FanstoreInsightInput);
+    } else if (body.source === "combined") {
+      analysis = await analyzeCombined(body.payload as CombinedInsightInput);
     } else {
       return NextResponse.json({ error: "Onbekende source." }, { status: 400 });
     }
