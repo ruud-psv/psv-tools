@@ -16,8 +16,9 @@ export async function GET(
     if (!report) return NextResponse.json({ error: "Rapport niet gevonden." }, { status: 404 });
     // Publiek endpoint: alleen de velden die de deelpagina nodig heeft,
     // zonder de aanmaker (e-mailadres) te lekken naar externe kijkers.
-    const { id: rid, title, intro, preset, from, to, sources } = report;
-    return NextResponse.json({ report: { id: rid, title, intro, preset, from, to, sources } });
+    // Periode zit per bron in `sources` (genormaliseerd door getReport).
+    const { id: rid, title, intro, sources } = report;
+    return NextResponse.json({ report: { id: rid, title, intro, sources } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[reports/:id] GET mislukt:", msg);

@@ -9,10 +9,10 @@ export default function RapportageGeneratorPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <h1 className="text-3xl mb-2">Rapportage generator</h1>
       <p className="text-muted-foreground mb-6">
-        Maak een live rapportage met een titel en korte introductie. Kies welke
-        inzichten je wilt opnemen — DM Performance, Ticketing, Web verkeer en/of
-        Fanstore — en deel een link die zichzelf elke 5 minuten ververst.
-        Hieronder beheer je alle aangemaakte rapporten.
+        Stel in een paar stappen een live rapportage samen. Kies per inzicht —
+        DM Performance, Ticketing, Web verkeer en/of Fanstore — een eigen periode
+        en de items die je wilt tonen, en deel een link die zichzelf automatisch
+        ververst. Hieronder beheer je alle aangemaakte rapporten.
       </p>
       <RapportageGenerator />
     </div>

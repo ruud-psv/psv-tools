@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   computeTotals as computeDmTotals,
-  formatDate, formatNumber, formatPct, formatEuro, periodForRange, stripName,
+  formatDate, formatNumber, formatPct, formatEuro, periodForRange, getDateRange, stripName,
   KpiCard, RateBadge,
   type MailingSummary, type Totals as DmTotals,
 } from "@/lib/dm-share";
@@ -21,7 +21,7 @@ import type { DmInsightResult } from "@/lib/insights/dm";
 import type { TicketInsightResult } from "@/lib/insights/ticket";
 import type { AnalyticsInsightResult } from "@/lib/insights/analytics";
 import type { FanstoreInsightResult } from "@/lib/insights/fanstore";
-import type { ReportRecord } from "@/lib/reports";
+import type { PeriodConfig, ReportRecord } from "@/lib/reports";
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
@@ -34,14 +34,33 @@ interface CampaignParams {
   kind: "campaign";
   name: string;
   intro?: string;
-  from: string;
-  to: string;
+  // Legacy globale periode (oude ?token=-links); nieuwe rapporten hebben periode per bron.
+  from?: string;
+  to?: string;
   sources: {
-    dm?: { enabled: true; query?: string; queries?: string[] };
-    ticketing?: { enabled: true; query?: string; queries?: string[]; category?: string };
-    web?: { enabled: true; site: string; path?: string; paths?: string[] };
-    fanstore?: { enabled: true; products?: string[] };
+    dm?: { enabled: true; query?: string; queries?: string[]; period?: PeriodConfig };
+    ticketing?: { enabled: true; query?: string; queries?: string[]; category?: string; mode?: "current" | "period"; period?: PeriodConfig };
+    web?: { enabled: true; site: string; path?: string; paths?: string[]; period?: PeriodConfig };
+    fanstore?: { enabled: true; products?: string[]; period?: PeriodConfig };
   };
+}
+
+/** Los een bron-periode op naar een concreet {from,to}. Relatieve presets worden
+ *  op weergavemoment berekend (meebewegend); valt terug op de legacy globale
+ *  periode of, als laatste redmiddel, 30 dagen. */
+function resolvePeriod(
+  period: PeriodConfig | undefined,
+  legacyFrom?: string,
+  legacyTo?: string
+): { from: string; to: string } {
+  if (period) {
+    if (period.preset === "custom" && period.from && period.to) {
+      return { from: period.from, to: period.to };
+    }
+    if (period.preset !== "custom") return getDateRange(period.preset);
+  }
+  if (legacyFrom && legacyTo) return { from: legacyFrom, to: legacyTo };
+  return getDateRange("30d");
 }
 
 /** Base64url token voor de data/insights endpoints (client-side variant van Buffer#base64url). */
@@ -213,8 +232,8 @@ function AiBlock({
 /* ---------- DM Section ---------- */
 
 function DmSection({
-  token, params, queries,
-}: { token: string; params: CampaignParams; queries: string[] }) {
+  token, from, to, queries,
+}: { token: string; from: string; to: string; queries: string[] }) {
   const [mailings, setMailings] = useState<MailingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -239,7 +258,7 @@ function DmSection({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/maileon?from=${params.from}&to=${params.to}`);
+      const res = await fetch(`/api/maileon?from=${from}&to=${to}`);
       if (!res.ok) throw new Error(`API fout ${res.status}`);
       const json = await res.json();
       setMailings(json.mailings ?? []);
@@ -248,7 +267,7 @@ function DmSection({
     } finally {
       setLoading(false);
     }
-  }, [params.from, params.to]);
+  }, [from, to]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -266,7 +285,7 @@ function DmSection({
         payload: {
           mailings: filtered,
           totals,
-          dateRange: { preset: "custom", from: params.from, to: params.to },
+          dateRange: { preset: "custom", from, to },
         },
       }),
     })
@@ -274,13 +293,13 @@ function DmSection({
       .then((data: DmInsightResult) => setInsights(data))
       .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
       .finally(() => setInsightsLoading(false));
-  }, [filtered, totals, token, params.from, params.to]);
+  }, [filtered, totals, token, from, to]);
 
   return (
     <SectionShell
       icon={Mail}
       title="DM Performance"
-      subtitle={`${formatNumber(totals.mailings)} mailings · ${params.from} t/m ${params.to}${queries.length > 0 ? ` · ${queries.length === 1 ? `zoekterm "${queries[0]}"` : `${queries.length} zoektermen`}` : ""}`}
+      subtitle={`${formatNumber(totals.mailings)} mailings · ${from} t/m ${to}${queries.length > 0 ? ` · ${queries.length === 1 ? `zoekterm "${queries[0]}"` : `${queries.length} zoektermen`}` : ""}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -387,10 +406,14 @@ function DmTable({ mailings }: { mailings: MailingSummary[]; totals: DmTotals })
 
 /* ---------- Ticketing Section ---------- */
 
+interface SnapshotPoint { ts: string; available: number; sold: number }
+
 function TicketingSection({
-  token, queries, category,
-}: { token: string; queries: string[]; category?: string }) {
+  token, queries, category, mode, from, to,
+}: { token: string; queries: string[]; category?: string; mode: "current" | "period"; from: string; to: string }) {
+  const isPeriod = mode === "period";
   const [events, setEvents] = useState<TicketEvent[]>([]);
+  const [snapshots, setSnapshots] = useState<Record<string, SnapshotPoint[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [insights, setInsights] = useState<TicketInsightResult | null>(null);
@@ -450,6 +473,57 @@ function TicketingSection({
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Snapshot-historie ophalen per event (alleen in periode-modus), gecapt op 40 events.
+  const eventsKey = useMemo(() => filtered.map((e) => e.eventId).join(","), [filtered]);
+  useEffect(() => {
+    if (!isPeriod || filtered.length === 0) { setSnapshots({}); return; }
+    let active = true;
+    const ctrl = new AbortController();
+    const targets = filtered.slice(0, 40);
+    Promise.all(
+      targets.map((e) =>
+        fetch(`/api/ticket-history?eventId=${encodeURIComponent(e.eventId)}`, { signal: ctrl.signal })
+          .then((r) => (r.ok ? r.json() : Promise.reject()))
+          .then((j) => [e.eventId, (j.history ?? []) as SnapshotPoint[]] as const)
+          .catch(() => [e.eventId, [] as SnapshotPoint[]] as const)
+      )
+    ).then((entries) => { if (active) setSnapshots(Object.fromEntries(entries)); });
+    return () => { active = false; ctrl.abort(); };
+  }, [isPeriod, eventsKey, from, to]);
+
+  // Verkocht-in-periode per event = sold(laatste) − sold(eerste) binnen [from,to].
+  const soldByEvent = useMemo(() => {
+    const map: Record<string, number | null> = {};
+    for (const e of filtered) {
+      const pts = (snapshots[e.eventId] ?? []).filter((p) => {
+        const d = p.ts.slice(0, 10);
+        return d >= from && d <= to;
+      });
+      map[e.eventId] = pts.length >= 2 ? Math.max(0, pts[pts.length - 1].sold - pts[0].sold)
+        : pts.length === 1 ? 0 : null;
+    }
+    return map;
+  }, [filtered, snapshots, from, to]);
+
+  const periodSoldTotal = useMemo(
+    () => Object.values(soldByEvent).reduce((s: number, v) => s + (v ?? 0), 0),
+    [soldByEvent]
+  );
+
+  // Gecombineerde verkoop-over-tijd (som van sold per datum over de events).
+  const salesTrend = useMemo(() => {
+    if (!isPeriod) return [];
+    const byDate = new Map<string, number>();
+    for (const pts of Object.values(snapshots)) {
+      for (const p of pts) {
+        const d = p.ts.slice(0, 10);
+        if (d < from || d > to) continue;
+        byDate.set(d, (byDate.get(d) ?? 0) + p.sold);
+      }
+    }
+    return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, sold]) => ({ date, sold }));
+  }, [isPeriod, snapshots, from, to]);
+
   useEffect(() => {
     if (filtered.length === 0) { setInsights(null); return; }
     setInsightsLoading(true);
@@ -465,19 +539,23 @@ function TicketingSection({
       .finally(() => setInsightsLoading(false));
   }, [filtered, token]);
 
-  const sortedEvents = useMemo(
-    () => [...filtered]
-      .filter((e) => e.totalCapacity > 0)
+  const sortedEvents = useMemo(() => {
+    const withCap = filtered.filter((e) => e.totalCapacity > 0);
+    if (isPeriod) {
+      return [...withCap]
+        .sort((a, b) => (soldByEvent[b.eventId] ?? -1) - (soldByEvent[a.eventId] ?? -1))
+        .slice(0, 30);
+    }
+    return [...withCap]
       .sort((a, b) => (b.soldTickets / b.totalCapacity) - (a.soldTickets / a.totalCapacity))
-      .slice(0, 30),
-    [filtered]
-  );
+      .slice(0, 30);
+  }, [filtered, isPeriod, soldByEvent]);
 
   return (
     <SectionShell
       icon={Ticket}
       title="Ticketing"
-      subtitle={`${totals.events} events${category && category !== "all" ? ` in ${category}` : ""}${queries.length > 0 ? ` · ${queries.length === 1 ? `zoekterm "${queries[0]}"` : `${queries.length} zoektermen`}` : ""}`}
+      subtitle={`${totals.events} events${category && category !== "all" ? ` in ${category}` : ""}${isPeriod ? ` · ${from} t/m ${to}` : " · actuele status"}${queries.length > 0 ? ` · ${queries.length === 1 ? `zoekterm "${queries[0]}"` : `${queries.length} zoektermen`}` : ""}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -486,7 +564,10 @@ function TicketingSection({
         <>
           <MetricGrid>
             <KpiCard label="Events" value={formatNumber(totals.events)} icon={Ticket} />
-            <KpiCard label="Verkocht" value={formatNumber(totals.sold)} icon={Users} />
+            {isPeriod && (
+              <KpiCard label="Verkocht in periode" value={formatNumber(periodSoldTotal)} icon={TrendingUp} color="text-green-700" />
+            )}
+            <KpiCard label={isPeriod ? "Verkocht totaal" : "Verkocht"} value={formatNumber(totals.sold)} icon={Users} />
             <KpiCard label="Beschikbaar" value={formatNumber(totals.available)} icon={Eye} color="text-psv-gold" />
             <KpiCard label="Bezetting" value={`${totals.occupancy}%`} sub={`${formatNumber(totals.capacity)} capaciteit`} icon={TrendingUp} color="text-blue-500" />
             <KpiCard label="Uitverkocht" value={formatNumber(totals.soldOut)} icon={CheckCircle2} color="text-green-700" />
@@ -497,10 +578,31 @@ function TicketingSection({
             <p className="text-center py-8 text-muted-foreground text-sm">Geen events gevonden voor deze filter.</p>
           )}
 
+          {isPeriod && salesTrend.length > 1 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Verkoop over tijd</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={salesTrend}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <Tooltip formatter={(v) => formatNumber(Number(v))} />
+                      <Line type="monotone" dataKey="sold" stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} name="Verkocht" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {sortedEvents.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Events op bezetting (top 30)</CardTitle>
+                <CardTitle className="text-base">{isPeriod ? "Events op verkoop in periode (top 30)" : "Events op bezetting (top 30)"}</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -510,6 +612,7 @@ function TicketingSection({
                         <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Event</th>
                         <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Datum</th>
                         <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Categorie</th>
+                        {isPeriod && <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">In periode</th>}
                         <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Verkocht</th>
                         <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Beschikbaar</th>
                         <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Bezetting</th>
@@ -518,11 +621,17 @@ function TicketingSection({
                     <tbody>
                       {sortedEvents.map((e) => {
                         const pct = Math.round((e.soldTickets / e.totalCapacity) * 100);
+                        const inPeriod = soldByEvent[e.eventId];
                         return (
                           <tr key={e.eventId} className="border-b">
                             <td className="px-4 py-3 font-medium">{e.eventName}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{eventDateLabel(e.eventDate)}</td>
                             <td className="px-4 py-3 text-muted-foreground">{e.category}</td>
+                            {isPeriod && (
+                              <td className="px-4 py-3 text-right tabular-nums font-medium text-green-700">
+                                {inPeriod == null ? "—" : `+${formatNumber(inPeriod)}`}
+                              </td>
+                            )}
                             <td className="px-4 py-3 text-right tabular-nums">{formatNumber(e.soldTickets)}</td>
                             <td className="px-4 py-3 text-right tabular-nums">{formatNumber(e.availableCapacity)}</td>
                             <td className={`px-4 py-3 text-right tabular-nums font-medium ${pctClass(pct)}`}>{pct}%</td>
@@ -576,9 +685,9 @@ function TicketingSection({
 /* ---------- Web Section ---------- */
 
 function WebSection({
-  token, params, site, paths,
-}: { token: string; params: CampaignParams; site: string; paths: string[] }) {
-  const period = periodForRange(params.from, params.to);
+  token, from, to, site, paths,
+}: { token: string; from: string; to: string; site: string; paths: string[] }) {
+  const period = periodForRange(from, to);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -786,8 +895,8 @@ interface ProductTrend {
 }
 
 function FanstoreSection({
-  token, params, products,
-}: { token: string; params: CampaignParams; products: string[] }) {
+  token, from, to, products,
+}: { token: string; from: string; to: string; products: string[] }) {
   const [data, setData] = useState<FanstoreOverview | null>(null);
   const [productTrends, setProductTrends] = useState<ProductTrend[]>([]);
   const [loading, setLoading] = useState(true);
@@ -802,7 +911,7 @@ function FanstoreSection({
     setLoading(true);
     setError(null);
     try {
-      const base = `/api/fanstore-analytics?startDate=${params.from}&endDate=${params.to}&token=${encodeURIComponent(token)}`;
+      const base = `/api/fanstore-analytics?startDate=${from}&endDate=${to}&token=${encodeURIComponent(token)}`;
       const overviewReq = fetch(`${base}&limit=100`).then(async (r) => {
         if (!r.ok) {
           const j = await r.json().catch(() => ({}));
@@ -824,7 +933,7 @@ function FanstoreSection({
     } finally {
       setLoading(false);
     }
-  }, [params.from, params.to, token, products]);
+  }, [from, to, token, products]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -875,8 +984,8 @@ function FanstoreSection({
         token,
         source: "fanstore",
         payload: {
-          from: params.from,
-          to: params.to,
+          from,
+          to,
           totals: data.totals,
           products: hasSelection ? productRows : data.topProducts.slice(0, 20),
           ...(!hasSelection && { topCategories: data.topCategories }),
@@ -888,7 +997,7 @@ function FanstoreSection({
       .then((result: FanstoreInsightResult) => setInsights(result))
       .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
       .finally(() => setInsightsLoading(false));
-  }, [data, hasSelection, productRows, products, token, params.from, params.to]);
+  }, [data, hasSelection, productRows, products, token, from, to]);
 
   const revenueShare = hasSelection && data && data.totals.revenue > 0
     ? Math.round((selectionTotals.revenue / data.totals.revenue) * 100)
@@ -898,7 +1007,7 @@ function FanstoreSection({
     <SectionShell
       icon={ShoppingBag}
       title="Fanstore"
-      subtitle={`${params.from} t/m ${params.to}${hasSelection ? ` · ${products.length === 1 ? `product "${products[0]}"` : `${products.length} producten`}` : " · hele winkel"}`}
+      subtitle={`${from} t/m ${to}${hasSelection ? ` · ${products.length === 1 ? `product "${products[0]}"` : `${products.length} producten`}` : " · hele winkel"}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -1165,7 +1274,7 @@ function ShareRapportageContent() {
                 {params.name}
               </h1>
               <p className="text-xs text-sidebar-foreground/60 mt-0.5">
-                {params.from} t/m {params.to}
+                Live rapportage — elk inzicht met eigen periode
               </p>
             </div>
           </div>
@@ -1185,39 +1294,59 @@ function ShareRapportageContent() {
           </p>
         )}
 
-        {params.sources.dm?.enabled && (
-          <DmSection
-            key={`dm-${refreshTick}`}
-            token={token}
-            params={params}
-            queries={collectQueries(params.sources.dm)}
-          />
-        )}
-        {params.sources.ticketing?.enabled && (
-          <TicketingSection
-            key={`ticket-${refreshTick}`}
-            token={token}
-            queries={collectQueries(params.sources.ticketing)}
-            category={params.sources.ticketing.category}
-          />
-        )}
-        {params.sources.web?.enabled && (
-          <WebSection
-            key={`web-${refreshTick}`}
-            token={token}
-            params={params}
-            site={params.sources.web.site}
-            paths={collectPaths(params.sources.web)}
-          />
-        )}
-        {params.sources.fanstore?.enabled && (
-          <FanstoreSection
-            key={`fanstore-${refreshTick}`}
-            token={token}
-            params={params}
-            products={params.sources.fanstore.products ?? []}
-          />
-        )}
+        {params.sources.dm?.enabled && (() => {
+          const range = resolvePeriod(params.sources.dm.period, params.from, params.to);
+          return (
+            <DmSection
+              key={`dm-${refreshTick}`}
+              token={token}
+              from={range.from}
+              to={range.to}
+              queries={collectQueries(params.sources.dm)}
+            />
+          );
+        })()}
+        {params.sources.ticketing?.enabled && (() => {
+          const tk = params.sources.ticketing;
+          const mode = tk.mode === "period" ? "period" : "current";
+          const range = resolvePeriod(tk.period, params.from, params.to);
+          return (
+            <TicketingSection
+              key={`ticket-${refreshTick}`}
+              token={token}
+              queries={collectQueries(tk)}
+              category={tk.category}
+              mode={mode}
+              from={range.from}
+              to={range.to}
+            />
+          );
+        })()}
+        {params.sources.web?.enabled && (() => {
+          const range = resolvePeriod(params.sources.web.period, params.from, params.to);
+          return (
+            <WebSection
+              key={`web-${refreshTick}`}
+              token={token}
+              from={range.from}
+              to={range.to}
+              site={params.sources.web.site}
+              paths={collectPaths(params.sources.web)}
+            />
+          );
+        })()}
+        {params.sources.fanstore?.enabled && (() => {
+          const range = resolvePeriod(params.sources.fanstore.period, params.from, params.to);
+          return (
+            <FanstoreSection
+              key={`fanstore-${refreshTick}`}
+              token={token}
+              from={range.from}
+              to={range.to}
+              products={params.sources.fanstore.products ?? []}
+            />
+          );
+        })()}
 
         <div className="flex items-center justify-between gap-4 pt-4 border-t border-border">
           <Badge variant="secondary" className="text-xs">PSV Tools</Badge>
