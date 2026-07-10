@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
+import { isValidShareToken } from "@/lib/share-token";
 
 export const revalidate = 300;
 
@@ -63,9 +64,16 @@ export interface ProductTrendData {
 }
 
 export async function GET(req: NextRequest) {
-  const sessionCookie = req.cookies.get("psv_session")?.value;
-  const authError = authorize(sessionCookie);
-  if (authError) return NextResponse.json({ error: authError }, { status: 401 });
+  const shareToken = req.nextUrl.searchParams.get("token");
+  if (shareToken) {
+    if (!isValidShareToken(shareToken)) {
+      return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
+    }
+  } else {
+    const sessionCookie = req.cookies.get("psv_session")?.value;
+    const authError = authorize(sessionCookie);
+    if (authError) return NextResponse.json({ error: authError }, { status: 401 });
+  }
 
   const { client, error: clientError } = getClient();
   if (!client) {
@@ -86,6 +94,8 @@ export async function GET(req: NextRequest) {
   const customStart = req.nextUrl.searchParams.get("startDate") ?? undefined;
   const customEnd = req.nextUrl.searchParams.get("endDate") ?? undefined;
   const productFilter = req.nextUrl.searchParams.get("product");
+  const rawLimit = parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10);
+  const productLimit = isNaN(rawLimit) ? 20 : Math.min(Math.max(rawLimit, 1), 100);
   const dateRange = getDateRange(period, customStart, customEnd);
   const property = `properties/${FANSTORE_PROPERTY_ID}`;
 
@@ -154,7 +164,7 @@ export async function GET(req: NextRequest) {
         dimensions: [{ name: "itemName" }],
         metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
         orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-        limit: 20,
+        limit: productLimit,
       }),
       client.runReport({
         property,

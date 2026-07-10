@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   RefreshCw, Mail, Users, Eye, MousePointerClick, TrendingUp, AlertTriangle, UserMinus,
-  Ticket, Globe, Sparkles, CheckCircle2, Lightbulb,
+  Ticket, Globe, ShoppingBag, Euro, Package, Sparkles, CheckCircle2, Lightbulb,
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -13,13 +13,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   computeTotals as computeDmTotals,
-  formatDate, formatNumber, formatPct, stripName,
+  formatDate, formatNumber, formatPct, formatEuro, periodForRange, stripName,
   KpiCard, RateBadge,
   type MailingSummary, type Totals as DmTotals,
 } from "@/lib/dm-share";
 import type { DmInsightResult } from "@/lib/insights/dm";
 import type { TicketInsightResult } from "@/lib/insights/ticket";
 import type { AnalyticsInsightResult } from "@/lib/insights/analytics";
+import type { FanstoreInsightResult } from "@/lib/insights/fanstore";
+import type { ReportRecord } from "@/lib/reports";
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
@@ -31,13 +33,34 @@ const CHART_COLORS = ["#e82026", "#bb9753", "#09101d", "#c00d0d", "#2e5aac", "#2
 interface CampaignParams {
   kind: "campaign";
   name: string;
+  intro?: string;
   from: string;
   to: string;
   sources: {
     dm?: { enabled: true; query?: string; queries?: string[] };
     ticketing?: { enabled: true; query?: string; queries?: string[]; category?: string };
-    web?: { enabled: true; site: string; path?: string };
+    web?: { enabled: true; site: string; path?: string; paths?: string[] };
+    fanstore?: { enabled: true; products?: string[] };
   };
+}
+
+/** Base64url token voor de data/insights endpoints (client-side variant van Buffer#base64url). */
+function makeShareToken(payload: object): string {
+  return btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Normalize legacy `path` (single string) and new `paths` (array) into one list. */
+function collectPaths(src: { path?: string; paths?: string[] } | undefined): string[] {
+  if (!src) return [];
+  const out: string[] = [];
+  if (Array.isArray(src.paths)) {
+    for (const p of src.paths) {
+      const t = p?.trim?.();
+      if (t) out.push(t);
+    }
+  }
+  if (typeof src.path === "string" && src.path.trim()) out.push(src.path.trim());
+  return [...new Set(out)];
 }
 
 /** Normalize legacy `query` (single string) and new `queries` (array) into one list. */
@@ -552,18 +575,9 @@ function TicketingSection({
 
 /* ---------- Web Section ---------- */
 
-function periodForRange(from: string, to: string): string {
-  const fromMs = new Date(from).getTime();
-  const toMs = new Date(to).getTime();
-  const days = Math.max(1, Math.round((toMs - fromMs) / (1000 * 60 * 60 * 24)));
-  if (days <= 7) return "7d";
-  if (days <= 30) return "30d";
-  return "90d";
-}
-
 function WebSection({
-  token, params, site, path,
-}: { token: string; params: CampaignParams; site: string; path?: string }) {
+  token, params, site, paths,
+}: { token: string; params: CampaignParams; site: string; paths: string[] }) {
   const period = periodForRange(params.from, params.to);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -576,9 +590,9 @@ function WebSection({
 
   const filteredTopPages = useMemo(() => {
     if (!siteData) return [];
-    if (!path?.trim()) return siteData.topPages;
-    return siteData.topPages.filter((p) => p.path.startsWith(path));
-  }, [siteData, path]);
+    if (paths.length === 0) return siteData.topPages;
+    return siteData.topPages.filter((p) => paths.some((prefix) => p.path.startsWith(prefix)));
+  }, [siteData, paths]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -628,7 +642,7 @@ function WebSection({
     <SectionShell
       icon={Globe}
       title="Web verkeer"
-      subtitle={`${siteData?.label ?? site}${path ? ` · pad "${path}"` : ""} · periode ${period}`}
+      subtitle={`${siteData?.label ?? site}${paths.length > 0 ? ` · ${paths.length === 1 ? `pad "${paths[0]}"` : `${paths.length} pagina's`}` : ""} · periode ${period}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -696,7 +710,7 @@ function WebSection({
             {filteredTopPages.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Top pagina&apos;s{path ? ` onder ${path}` : ""}</CardTitle>
+                  <CardTitle className="text-base">Top pagina&apos;s{paths.length === 1 ? ` onder ${paths[0]}` : paths.length > 1 ? " (geselecteerde pagina's)" : ""}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <table className="w-full text-sm">
@@ -757,11 +771,315 @@ function WebSection({
   );
 }
 
+/* ---------- Fanstore Section ---------- */
+
+interface FanstoreOverview {
+  totals: { revenue: number; transactions: number; avgOrderValue: number; itemsPurchased: number };
+  dailyTrend: { date: string; revenue: number; transactions: number }[];
+  topProducts: { name: string; revenue: number; itemsPurchased: number }[];
+  topCategories: { category: string; revenue: number; transactions: number }[];
+}
+
+interface ProductTrend {
+  productName: string;
+  dailyTrend: { date: string; revenue: number; itemsPurchased: number }[];
+}
+
+function FanstoreSection({
+  token, params, products,
+}: { token: string; params: CampaignParams; products: string[] }) {
+  const [data, setData] = useState<FanstoreOverview | null>(null);
+  const [productTrends, setProductTrends] = useState<ProductTrend[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [insights, setInsights] = useState<FanstoreInsightResult | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+
+  const hasSelection = products.length > 0;
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const base = `/api/fanstore-analytics?startDate=${params.from}&endDate=${params.to}&token=${encodeURIComponent(token)}`;
+      const overviewReq = fetch(`${base}&limit=100`).then(async (r) => {
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          throw new Error(j.error ?? `API fout ${r.status}`);
+        }
+        return r.json() as Promise<FanstoreOverview>;
+      });
+      const trendReqs = products.map((p) =>
+        fetch(`${base}&product=${encodeURIComponent(p)}`).then(async (r) => {
+          if (!r.ok) return null;
+          return r.json() as Promise<ProductTrend>;
+        })
+      );
+      const [overview, ...trends] = await Promise.all([overviewReq, ...trendReqs]);
+      setData(overview);
+      setProductTrends(trends.filter((t): t is ProductTrend => t !== null));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ophalen mislukt");
+    } finally {
+      setLoading(false);
+    }
+  }, [params.from, params.to, token, products]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Per geselecteerd product: totalen uit de dagelijkse trend (exact, ook buiten de top-100)
+  const productRows = useMemo(() => {
+    if (!hasSelection) return [];
+    return productTrends
+      .map((t) => ({
+        name: t.productName,
+        revenue: t.dailyTrend.reduce((s, d) => s + d.revenue, 0),
+        itemsPurchased: t.dailyTrend.reduce((s, d) => s + d.itemsPurchased, 0),
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [hasSelection, productTrends]);
+
+  const selectionTotals = useMemo(() => ({
+    revenue: productRows.reduce((s, p) => s + p.revenue, 0),
+    itemsPurchased: productRows.reduce((s, p) => s + p.itemsPurchased, 0),
+  }), [productRows]);
+
+  // Gecombineerde omzet per dag voor de geselecteerde producten (één lijn per product)
+  const selectionChartData = useMemo(() => {
+    if (!hasSelection) return [];
+    const byDate = new Map<string, Record<string, number | string>>();
+    for (const trend of productTrends) {
+      for (const d of trend.dailyTrend) {
+        const row = byDate.get(d.date) ?? { date: d.date };
+        row[trend.productName] = parseFloat((((row[trend.productName] as number) ?? 0) + d.revenue).toFixed(2));
+        byDate.set(d.date, row);
+      }
+    }
+    return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  }, [hasSelection, productTrends]);
+
+  const displayProducts = useMemo(() => {
+    if (hasSelection) return productRows;
+    return (data?.topProducts ?? []).slice(0, 10);
+  }, [hasSelection, productRows, data]);
+
+  useEffect(() => {
+    if (!data || (hasSelection && productRows.length === 0)) { setInsights(null); return; }
+    setInsightsLoading(true);
+    setInsightsError(null);
+    fetch("/api/share/insights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token,
+        source: "fanstore",
+        payload: {
+          from: params.from,
+          to: params.to,
+          totals: data.totals,
+          products: hasSelection ? productRows : data.topProducts.slice(0, 20),
+          ...(!hasSelection && { topCategories: data.topCategories }),
+          ...(hasSelection && { selectedProducts: products }),
+        },
+      }),
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)))
+      .then((result: FanstoreInsightResult) => setInsights(result))
+      .catch((err) => setInsightsError(typeof err === "string" ? err : "Onbekende fout"))
+      .finally(() => setInsightsLoading(false));
+  }, [data, hasSelection, productRows, products, token, params.from, params.to]);
+
+  const revenueShare = hasSelection && data && data.totals.revenue > 0
+    ? Math.round((selectionTotals.revenue / data.totals.revenue) * 100)
+    : null;
+
+  return (
+    <SectionShell
+      icon={ShoppingBag}
+      title="Fanstore"
+      subtitle={`${params.from} t/m ${params.to}${hasSelection ? ` · ${products.length === 1 ? `product "${products[0]}"` : `${products.length} producten`}` : " · hele winkel"}`}
+    >
+      {error && (
+        <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
+      )}
+      {!error && (
+        <>
+          <MetricGrid>
+            {hasSelection ? (
+              <>
+                <KpiCard label="Omzet (selectie)" value={formatEuro(selectionTotals.revenue)} icon={Euro} />
+                <KpiCard label="Stuks verkocht" value={formatNumber(selectionTotals.itemsPurchased)} icon={Package} color="text-psv-gold" />
+                <KpiCard label="Producten" value={formatNumber(productRows.length)} icon={ShoppingBag} color="text-blue-500" />
+                <KpiCard
+                  label="Aandeel winkelomzet"
+                  value={revenueShare !== null ? `${revenueShare}%` : "—"}
+                  sub={data ? `winkel totaal ${formatEuro(data.totals.revenue)}` : undefined}
+                  icon={TrendingUp}
+                  color="text-green-700"
+                />
+              </>
+            ) : (
+              <>
+                <KpiCard label="Omzet" value={data ? formatEuro(data.totals.revenue) : "—"} icon={Euro} />
+                <KpiCard label="Transacties" value={data ? formatNumber(data.totals.transactions) : "—"} icon={Users} />
+                <KpiCard label="Gem. orderwaarde" value={data ? formatEuro(data.totals.avgOrderValue) : "—"} icon={TrendingUp} color="text-blue-500" />
+                <KpiCard label="Stuks verkocht" value={data ? formatNumber(data.totals.itemsPurchased) : "—"} icon={Package} color="text-psv-gold" />
+              </>
+            )}
+          </MetricGrid>
+
+          {hasSelection && productRows.length === 0 && !loading && (
+            <p className="text-center py-8 text-muted-foreground text-sm">
+              Geen verkoopdata gevonden voor de geselecteerde producten in deze periode.
+            </p>
+          )}
+
+          {hasSelection && selectionChartData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Dagelijkse omzet per product</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={selectionChartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <Tooltip formatter={(v) => formatEuro(Number(v))} />
+                      {productTrends.map((t, i) => (
+                        <Line
+                          key={t.productName}
+                          type="monotone"
+                          dataKey={t.productName}
+                          stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!hasSelection && (data?.dailyTrend?.length ?? 0) > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Dagelijkse omzet</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={data!.dailyTrend}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <Tooltip formatter={(v, name) => (name === "revenue" ? formatEuro(Number(v)) : formatNumber(Number(v)))} />
+                      <Line type="monotone" dataKey="revenue" stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} name="Omzet" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {displayProducts.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{hasSelection ? "Geselecteerde producten" : "Top producten"}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Product</th>
+                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Omzet</th>
+                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Stuks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayProducts.map((p) => (
+                        <tr key={p.name} className="border-b">
+                          <td className="px-4 py-3 max-w-md"><span className="font-medium">{p.name}</span></td>
+                          <td className="px-4 py-3 text-right tabular-nums">{formatEuro(p.revenue)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums">{formatNumber(p.itemsPurchased)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!hasSelection && (data?.topCategories?.length ?? 0) > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Top categorieën</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: "100%", height: 200 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={data!.topCategories.slice(0, 6)} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <YAxis dataKey="category" type="category" tick={{ fontSize: 11 }} tickLine={false} width={130} />
+                      <Tooltip formatter={(v) => formatEuro(Number(v))} />
+                      <Bar dataKey="revenue" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} name="Omzet" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {data && (!hasSelection || productRows.length > 0) && (
+            <AiBlock
+              loading={insightsLoading}
+              error={insightsError}
+              summary={insights?.summary}
+              highlights={insights?.highlights}
+              recommendations={insights?.recommendations}
+              extras={
+                insights && (insights.topProduct || insights.attentionNeeded) ? (
+                  <div className="grid gap-2 sm:grid-cols-2 pt-2">
+                    {insights.topProduct && (
+                      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs">
+                        <p className="font-heading uppercase text-green-800 mb-1">Top product</p>
+                        <p className="font-medium">{insights.topProduct.name}</p>
+                        <p className="text-muted-foreground">{insights.topProduct.metric}</p>
+                        <p className="mt-1 text-foreground/80">{insights.topProduct.why}</p>
+                      </div>
+                    )}
+                    {insights.attentionNeeded && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
+                        <p className="font-heading uppercase text-amber-800 mb-1">Aandacht nodig</p>
+                        <p className="font-medium">{insights.attentionNeeded.name}</p>
+                        <p className="text-muted-foreground">{insights.attentionNeeded.metric}</p>
+                        <p className="mt-1 text-foreground/80">{insights.attentionNeeded.action}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : null
+              }
+            />
+          )}
+        </>
+      )}
+    </SectionShell>
+  );
+}
+
 /* ---------- Main ---------- */
 
 function ShareRapportageContent() {
   const urlParams = useSearchParams();
-  const token = urlParams.get("token") ?? "";
+  const reportId = urlParams.get("id") ?? "";
+  const legacyToken = urlParams.get("token") ?? "";
 
   const [params, setParams] = useState<CampaignParams | null>(null);
   const [loading, setLoading] = useState(true);
@@ -770,9 +1088,41 @@ function ShareRapportageContent() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
+  // Token voor de data/insights endpoints is volledig afleidbaar uit de URL.
+  const token = useMemo(
+    () => (reportId ? makeShareToken({ kind: "report", id: reportId }) : legacyToken),
+    [reportId, legacyToken]
+  );
+
   useEffect(() => {
-    if (!token) { setTokenError("Ongeldige link"); setLoading(false); return; }
-    fetch(`/api/share?token=${encodeURIComponent(token)}`)
+    if (reportId) {
+      // Opgeslagen rapport: configuratie ophalen via het rapport-id
+      fetch(`/api/reports/${encodeURIComponent(reportId)}`)
+        .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)).catch(() => Promise.reject(`Fout ${r.status}`)))
+        .then((data) => {
+          const report = data?.report as ReportRecord | undefined;
+          if (!report || !report.sources) {
+            setTokenError("Rapport niet gevonden.");
+            setLoading(false);
+            return;
+          }
+          setParams({
+            kind: "campaign",
+            name: report.title,
+            intro: report.intro,
+            from: report.from,
+            to: report.to,
+            sources: report.sources,
+          });
+          setLoading(false);
+          setLastRefresh(new Date());
+        })
+        .catch((err) => { setTokenError(String(err)); setLoading(false); });
+      return;
+    }
+
+    if (!legacyToken) { setTokenError("Ongeldige link"); setLoading(false); return; }
+    fetch(`/api/share?token=${encodeURIComponent(legacyToken)}`)
       .then((r) => r.ok ? r.json() : Promise.reject(`Fout ${r.status}`))
       .then((data) => {
         if (!data || data.kind !== "campaign") {
@@ -785,7 +1135,7 @@ function ShareRapportageContent() {
         setLastRefresh(new Date());
       })
       .catch((err) => { setTokenError(String(err)); setLoading(false); });
-  }, [token]);
+  }, [reportId, legacyToken]);
 
   useEffect(() => {
     if (!params) return;
@@ -829,6 +1179,12 @@ function ShareRapportageContent() {
       </header>
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+        {params.intro && (
+          <p className="text-sm leading-relaxed text-muted-foreground border-l-2 border-psv-red-primary pl-4 whitespace-pre-line">
+            {params.intro}
+          </p>
+        )}
+
         {params.sources.dm?.enabled && (
           <DmSection
             key={`dm-${refreshTick}`}
@@ -851,7 +1207,15 @@ function ShareRapportageContent() {
             token={token}
             params={params}
             site={params.sources.web.site}
-            path={params.sources.web.path}
+            paths={collectPaths(params.sources.web)}
+          />
+        )}
+        {params.sources.fanstore?.enabled && (
+          <FanstoreSection
+            key={`fanstore-${refreshTick}`}
+            token={token}
+            params={params}
+            products={params.sources.fanstore.products ?? []}
           />
         )}
 
