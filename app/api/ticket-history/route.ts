@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { readSnapshots } from "@/lib/blob-snapshots";
 
+export const revalidate = 3600; // cache 1 uur — voorkomt een list() per page view
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const eventId = searchParams.get("eventId");

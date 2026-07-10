@@ -2,7 +2,7 @@ name: Ticket Snapshot
 
 on:
   schedule:
-    - cron: "0 * * * *"   # elk uur
+    - cron: "0 */4 * * *"  # elke 4 uur
   workflow_dispatch:        # handmatig triggeren via GitHub UI
 
 jobs:
