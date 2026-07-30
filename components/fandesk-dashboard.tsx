@@ -91,6 +91,22 @@ function formatPercent(value: number): string {
   return `${value.toLocaleString("nl-NL", { maximumFractionDigits: 1 })}%`;
 }
 
+/**
+ * Compact datumbereik in Nederlandse notatie: "1 – 30 jun" binnen één maand,
+ * "25 jun – 24 jul" daarbuiten. Middaguur om tijdzone-schuif te vermijden.
+ */
+function formatDayRange(from: string, to: string): string {
+  const start = new Date(`${from}T12:00:00Z`);
+  const end = new Date(`${to}T12:00:00Z`);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return "";
+  const day = (d: Date) => d.toLocaleDateString("nl-NL", { day: "numeric", timeZone: "UTC" });
+  const dayMonth = (d: Date) =>
+    d.toLocaleDateString("nl-NL", { day: "numeric", month: "short", timeZone: "UTC" });
+  const sameMonth =
+    start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth();
+  return `${sameMonth ? day(start) : dayMonth(start)} – ${dayMonth(end)}`;
+}
+
 function formatDelta(current: number, previous: number): { text: string; up: boolean | null } {
   if (previous === 0) {
     if (current === 0) return { text: "gelijk aan vorige periode", up: null };
@@ -441,8 +457,7 @@ export function FANdeskDashboard() {
                   Nog geen tickets ontvangen in deze periode.
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Zodra de n8n workflow zijn eerste batch naar het dashboard stuurt, verschijnen de
-                  cijfers hier. Zie &ldquo;Hoe stuur je data vanuit n8n?&rdquo; onderaan.
+                  Zodra de n8n workflow zijn eerste batch stuurt, verschijnen de cijfers hier.
                 </p>
               </CardContent>
             </Card>
@@ -604,7 +619,8 @@ export function FANdeskDashboard() {
                       Waar gaan ze over?
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Aantal tickets per categorie, met het verschil t.o.v. de vorige periode
+                      Aantal tickets per categorie, met het verschil t.o.v. de even lange periode
+                      ervoor
                     </p>
                   </CardHeader>
                   <CardContent>
@@ -669,6 +685,9 @@ export function FANdeskDashboard() {
                             </th>
                             <th className="py-2 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
                               Vorige periode
+                              <span className="block font-sans normal-case tracking-normal">
+                                {formatDayRange(data.previous.from, data.previous.to)}
+                              </span>
                             </th>
                           </tr>
                         </thead>
@@ -763,8 +782,6 @@ export function FANdeskDashboard() {
           </p>
         </div>
       )}
-
-      <N8nInstructions />
     </div>
   );
 }
@@ -914,44 +931,5 @@ function RhythmChart({
         </ResponsiveContainer>
       </div>
     </div>
-  );
-}
-
-function N8nInstructions() {
-  return (
-    <details className="accordion">
-      <summary>Hoe stuur je data vanuit n8n?</summary>
-      <div className="accordion__content">
-        <p className="text-sm text-muted-foreground">
-          De workflow stuurt zijn batch naar één endpoint. Voeg achter de analyse-node twee nodes
-          toe:
-        </p>
-        <ol className="mt-3 space-y-3 text-sm">
-          <li>
-            <span className="font-heading uppercase tracking-wide">1. Aggregate</span> — zet{" "}
-            <em>Aggregate</em> op <code>All Item Data (Into a Single List)</code> en{" "}
-            <em>Put Output in Field</em> op <code>items</code>. Alle losse tickets worden zo één
-            item; <code>created_at</code> gaat automatisch mee.
-          </li>
-          <li>
-            <span className="font-heading uppercase tracking-wide">2. HTTP Request</span> —{" "}
-            <code>POST</code> naar{" "}
-            <code>https://tools.psv.nl/api/fandesk/ingest</code>, met header{" "}
-            <code>Authorization: Bearer &lt;FANDESK_INGEST_SECRET&gt;</code>. Zet{" "}
-            <em>Send Body</em> aan, <em>Body Content Type</em> op <code>JSON</code>,{" "}
-            <em>Specify Body</em> op <code>Using JSON</code> en gebruik als body:
-            <pre className="mt-2 overflow-x-auto bg-psv-gray-07 p-3 text-xs">
-              {"{{ JSON.stringify({ items: $json.items }) }}"}
-            </pre>
-          </li>
-        </ol>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Tickets worden op <code>id</code> ontdubbeld, dus een handmatige re-run of een backfill
-          telt niets dubbel. Een lege batch is geldig. Onbekende categorieën worden als{" "}
-          <em>Overig</em> geteld en in de response teruggemeld onder{" "}
-          <code>unknownCategories</code>.
-        </p>
-      </div>
-    </details>
   );
 }
