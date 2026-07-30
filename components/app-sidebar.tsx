@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   FileText,
   Globe,
+  Headset,
   LayoutDashboard,
   LayoutTemplate,
   Link2,
@@ -105,6 +106,12 @@ const insights = [
     name: "FANstore",
     href: "/dashboard/fanstore",
     icon: ShoppingBag,
+    badge: null as string | null,
+  },
+  {
+    name: "FANdesk",
+    href: "/dashboard/fandesk",
+    icon: Headset,
     badge: null as string | null,
   },
 ];
