@@ -3,32 +3,15 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-
-interface TicketSnapshot {
-  available: number;
-  sold: number;
-  ts: string;
-}
-
-interface HistoryPoint {
-  ts: string;
-  available: number;
-  sold: number;
-}
+import { TicketSalesChart } from "@/components/ticket-sales-chart";
+import type { SnapshotPoint } from "@/lib/blob-snapshots";
 
 interface ShareParams {
   kind: string;
   eventId: string;
   eventName: string;
+  /** Ontbreekt in links die zijn gemaakt voordat de eventdatum werd meegegeven. */
+  eventDate?: string;
 }
 
 function formatDateTime(iso: string): string {
@@ -52,101 +35,13 @@ function progressColor(pct: number): string {
   return "bg-success";
 }
 
-function AvailabilityChart({ eventId }: { eventId: string }) {
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/ticket-history?eventId=${encodeURIComponent(eventId)}`)
-      .then((r) => r.json())
-      .then((d) => setHistory(d.history ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, [eventId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-28 text-xs text-muted-foreground">
-        Verloop laden…
-      </div>
-    );
-  }
-
-  if (history.length < 2) {
-    return (
-      <div className="flex items-center justify-center h-28 text-xs text-muted-foreground">
-        Nog geen historische data — metingen worden elk uur opgeslagen.
-      </div>
-    );
-  }
-
-  const formatted = history.map((p) => ({
-    ...p,
-    label: new Date(p.ts).toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit" }),
-    tooltip: new Date(p.ts).toLocaleString("nl-NL", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  }));
-
-  const tickInterval = Math.max(1, Math.floor(formatted.length / 5));
-
-  return (
-    <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={formatted} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
-        <defs>
-          <linearGradient id={`grad-share-${eventId}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#e82026" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="#e82026" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-          interval={tickInterval}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-          tickLine={false}
-          axisLine={false}
-          allowDecimals={false}
-        />
-        <Tooltip
-          contentStyle={{
-            background: "hsl(var(--popover))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: "6px",
-            fontSize: "11px",
-            color: "hsl(var(--popover-foreground))",
-          }}
-          formatter={(value) => [Number(value).toLocaleString("nl-NL"), "Verkocht"]}
-          labelFormatter={(label, payload) => payload?.[0]?.payload?.tooltip ?? label}
-        />
-        <Area
-          type="monotone"
-          dataKey="sold"
-          stroke="#e82026"
-          strokeWidth={1.5}
-          fill={`url(#grad-share-${eventId})`}
-          dot={false}
-          activeDot={{ r: 3, fill: "#e82026" }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
-
 function ShareTicketContent() {
   const urlParams = useSearchParams();
   const token = urlParams.get("token") ?? "";
 
   const [params, setParams] = useState<ShareParams | null>(null);
-  const [latest, setLatest] = useState<TicketSnapshot | null>(null);
+  const [history, setHistory] = useState<SnapshotPoint[] | null>(null);
+  const [feedEventDate, setFeedEventDate] = useState<string | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -181,25 +76,46 @@ function ShareTicketContent() {
     meta.content = "Bekijk de actuele ticketbeschikbaarheid en het verkoopverloop voor dit PSV-event.";
   }, [params?.eventName]);
 
+  // Eén fetch voor zowel de KPI-tegel als de grafiek, zodat die niet uit elkaar lopen.
   useEffect(() => {
-    if (!params?.eventId) return;
+    const eventId = params?.eventId;
+    if (!eventId) return;
     const load = () => {
-      fetch(`/api/ticket-history?eventId=${encodeURIComponent(params.eventId)}`)
+      fetch(`/api/ticket-history?eventId=${encodeURIComponent(eventId)}`)
         .then((r) => r.json())
         .then((d) => {
-          const history: HistoryPoint[] = d.history ?? [];
-          if (history.length > 0) {
-            const last = history[history.length - 1];
-            setLatest({ available: last.available, sold: last.sold, ts: last.ts });
-          }
+          setHistory(d.history ?? []);
           setLastFetched(new Date());
         })
-        .catch(() => setLastFetched(new Date()));
+        .catch(() => {
+          setHistory((prev) => prev ?? []);
+          setLastFetched(new Date());
+        });
     };
     load();
     const id = setInterval(load, 10 * 60_000);
     return () => clearInterval(id);
-  }, [params]);
+  }, [params?.eventId]);
+
+  // Links van vóór deze wijziging bevatten geen eventDate; die halen we uit de
+  // live feed zodat de dagen-tot-event ook daar zichtbaar zijn.
+  useEffect(() => {
+    const eventId = params?.eventId;
+    if (!eventId || params?.eventDate) return;
+    let cancelled = false;
+    fetch("/api/ticket-feed")
+      .then((r) => r.json())
+      .then((d: { events?: { eventId: string; eventDate: string }[] }) => {
+        const match = d.events?.find((e) => e.eventId === eventId);
+        if (!cancelled && match?.eventDate) setFeedEventDate(match.eventDate);
+      })
+      .catch(() => {
+        /* zonder eventdatum rendert de grafiek gewoon zonder dagen-tot-event */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params?.eventId, params?.eventDate]);
 
   if (tokenLoading) {
     return (
@@ -217,9 +133,11 @@ function ShareTicketContent() {
     );
   }
 
+  const latest = history && history.length > 0 ? history[history.length - 1] : null;
   const total = latest ? latest.sold + latest.available : 0;
-  const pct = total > 0 ? Math.round((latest!.sold / total) * 100) : 0;
+  const pct = total > 0 && latest ? Math.round((latest.sold / total) * 100) : 0;
   const displayName = params?.eventName || "Event";
+  const eventDate = params?.eventDate || feedEventDate || undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -290,13 +208,17 @@ function ShareTicketContent() {
               </div>
             )}
 
-            {/* Beschikbaarheidsverloop */}
-            {params && (
+            {/* Verkochte tickets per dag */}
+            {params && history && (
               <div className="border border-border rounded-lg p-5">
                 <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-3">
-                  Verkoopverloop
+                  Verkochte tickets per dag
                 </p>
-                <AvailabilityChart eventId={params.eventId} />
+                <TicketSalesChart
+                  eventId={params.eventId}
+                  eventDate={eventDate}
+                  history={history}
+                />
               </div>
             )}
 

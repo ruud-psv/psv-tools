@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from "react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { TicketSalesChart } from "@/components/ticket-sales-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -441,101 +433,6 @@ function KpiCard({
   );
 }
 
-interface HistoryPoint {
-  ts: string;
-  available: number;
-  sold: number;
-}
-
-function AvailabilityHistoryChart({ eventId }: { eventId: string }) {
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/ticket-history?eventId=${encodeURIComponent(eventId)}`)
-      .then((r) => r.json())
-      .then((data) => setHistory(data.history ?? []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, [eventId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-        Verloop laden…
-      </div>
-    );
-  }
-
-  if (history.length < 2) {
-    return (
-      <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-        Nog geen historische data — de eerste meting wordt elk uur opgeslagen.
-      </div>
-    );
-  }
-
-  const formatted = history.map((p) => ({
-    ...p,
-    label: new Date(p.ts).toLocaleDateString("nl-NL", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  }));
-
-  const tickInterval = Math.max(1, Math.floor(formatted.length / 6));
-
-  return (
-    <ResponsiveContainer width="100%" height={120}>
-      <AreaChart data={formatted} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-        <defs>
-          <linearGradient id={`grad-${eventId}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#e82026" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="#e82026" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-          interval={tickInterval}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-          tickLine={false}
-          axisLine={false}
-          allowDecimals={false}
-        />
-        <Tooltip
-          contentStyle={{
-            background: "hsl(var(--popover))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: "6px",
-            fontSize: "11px",
-            color: "hsl(var(--popover-foreground))",
-          }}
-          formatter={(value) => [Number(value).toLocaleString("nl-NL"), "Beschikbaar"]}
-          labelFormatter={(label) => label}
-        />
-        <Area
-          type="monotone"
-          dataKey="available"
-          stroke="#e82026"
-          strokeWidth={1.5}
-          fill={`url(#grad-${eventId})`}
-          dot={false}
-          activeDot={{ r: 3, fill: "#e82026" }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
-
 function EventDetailPanel({
   event,
   allEvents,
@@ -553,14 +450,21 @@ function EventDetailPanel({
     const res = await fetch("/api/share", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "ticket-event", eventId: event.eventId, eventName: event.eventName }),
+      body: JSON.stringify({
+        kind: "ticket-event",
+        eventId: event.eventId,
+        eventName: event.eventName,
+        // meegegeven zodat de share-pagina de dagen-tot-event kan tonen zonder
+        // de live feed te hoeven raadplegen
+        eventDate: event.eventDate,
+      }),
     });
     if (!res.ok) return;
     const { token } = await res.json();
     navigator.clipboard.writeText(`${window.location.origin}/share/ticket?token=${token}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-  }, [event.eventId, event.eventName]);
+  }, [event.eventId, event.eventName, event.eventDate]);
 
   return (
     <div className="bg-muted/40 border border-border rounded-md p-4 mt-1 space-y-4">
@@ -583,12 +487,16 @@ function EventDetailPanel({
         </div>
       </div>
 
-      {/* Beschikbaarheidsverloop */}
+      {/* Verkochte tickets per dag */}
       <div>
         <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-2">
-          Beschikbaarheidsverloop
+          Verkochte tickets per dag
         </p>
-        <AvailabilityHistoryChart eventId={event.eventId} />
+        <TicketSalesChart
+          eventId={event.eventId}
+          eventDate={event.eventDate}
+          variant="compact"
+        />
       </div>
 
       {/* Tijden */}
