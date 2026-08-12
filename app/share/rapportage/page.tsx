@@ -145,14 +145,6 @@ interface AnalyticsSiteData {
   devices: { device: string; sessions: number; percentage: number }[];
 }
 
-interface AnalyticsResponse {
-  sites: Record<string, AnalyticsSiteData>;
-  combined: {
-    totals: { sessions: number; users: number; pageviews: number };
-    dailyTrend: { date: string; sessions: number; users: number; pageviews: number }[];
-  };
-}
-
 /* ---------- Helpers ---------- */
 
 function eventDateLabel(iso: string): string {
@@ -593,6 +585,7 @@ interface WebBlock {
   label: string;
   paths: string[];
   siteData: AnalyticsSiteData | undefined;
+  error?: string;
   pages: { path: string; pageviews: number }[];
 }
 
@@ -603,50 +596,67 @@ function WebSection({
   sites: { site: string; paths: string[] }[];
   onData: ReportData;
 }) {
-  const [data, setData] = useState<AnalyticsResponse | null>(null);
+  const [results, setResults] = useState<Record<string, { data?: AnalyticsSiteData; error?: string; dropped?: number }>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Eén analytics-call levert álle sites; per site filteren op de eigen selectie.
-  const blocks = useMemo<WebBlock[]>(() => sites.map((sel) => {
-    const siteData = data?.sites?.[sel.site];
-    const all = siteData?.topPages ?? [];
+  // `sites` krijgt elke render een nieuwe identiteit; via de serialisatie blijft
+  // de selectie stabiel en haalt het effect niet onnodig opnieuw op.
+  const sitesKey = JSON.stringify(sites);
+  const selection = useMemo(
+    () => JSON.parse(sitesKey) as { site: string; paths: string[] }[],
+    [sitesKey]
+  );
+
+  // De API filtert nu zelf op de gekozen pagina's, dus topPages hoeft hier niet
+  // nogmaals gefilterd te worden — cijfers en tabel komen uit dezelfde query.
+  const blocks = useMemo<WebBlock[]>(() => selection.map((sel) => {
+    const entry = results[sel.site];
     return {
       site: sel.site,
-      label: siteData?.label ?? sel.site,
+      label: entry?.data?.label ?? sel.site,
       paths: sel.paths,
-      siteData,
-      pages: sel.paths.length === 0
-        ? all
-        : all.filter((p) => sel.paths.some((prefix) => p.path.startsWith(prefix))),
+      siteData: entry?.data,
+      error: entry?.error,
+      pages: entry?.data?.topPages ?? [],
     };
-  }), [data, sites]);
+  }), [results, selection]);
 
   const multi = blocks.length > 1;
   const anyData = blocks.some((b) => b.siteData);
+  const filtered = selection.some((s) => s.paths.length > 0);
+  const totalDropped = Object.values(results).reduce((n, r) => n + (r.dropped ?? 0), 0);
 
+  // Per site een eigen call: het pagina-filter hoort bij precies die site, en
+  // één falende site mag de rest niet meesleuren.
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setError(null);
-    try {
+    const list = JSON.parse(sitesKey) as { site: string; paths: string[] }[];
+    const settled = await Promise.all(list.map(async (sel) => {
       const params = new URLSearchParams({
         from, to,
+        site: sel.site,
         pageLimit: String(PAGE_SELECT_LIMIT),
         token,
       });
-      const res = await fetch(`/api/analytics?${params}`);
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `API fout ${res.status}`);
+      for (const p of sel.paths) params.append("paths", p);
+      try {
+        const res = await fetch(`/api/analytics?${params}`);
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error ?? `API fout ${res.status}`);
+        }
+        const json = await res.json();
+        const data = json.sites?.[sel.site] as AnalyticsSiteData | undefined;
+        if (!data) throw new Error("Geen data voor deze site ontvangen.");
+        const dropped = json.pathFilter?.dropped as number | undefined;
+        return [sel.site, { data, ...(dropped ? { dropped } : {}) }] as const;
+      } catch (err) {
+        return [sel.site, { error: err instanceof Error ? err.message : "Ophalen mislukt" }] as const;
       }
-      const json = await res.json();
-      setData(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ophalen mislukt");
-    } finally {
-      setLoading(false);
-    }
-  }, [from, to, token]);
+    }));
+    setResults(Object.fromEntries(settled));
+    setLoading(false);
+  }, [from, to, token, sitesKey]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -687,25 +697,39 @@ function WebSection({
 
   return (
     <SectionShell icon={Globe} title="Web verkeer" subtitle={subtitle}>
-      {error && (
-        <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
+      {filtered && anyData && (
+        <p className="text-xs text-muted-foreground">
+          Alle cijfers hieronder zijn gefilterd op de geselecteerde pagina&apos;s. Sessies,
+          gebruikers en bounce-/engagementcijfers gaan over bezoeken waarin die pagina&apos;s
+          zijn bekeken.
+        </p>
       )}
-      {!error && !loading && !anyData && (
+      {totalDropped > 0 && (
+        <p className="text-xs text-warning">
+          Let op: {totalDropped} geselecteerde pagina&apos;s vielen buiten het filter — er
+          passen er maximaal 250 per site in één query.
+        </p>
+      )}
+      {!loading && !anyData && blocks.every((b) => !b.error) && (
         <p className="text-center py-8 text-muted-foreground text-sm">
           Geen data beschikbaar voor {multi ? "deze sites" : "deze site"}.
         </p>
       )}
-      {!error && anyData && blocks.map((b, i) => (
+      {blocks.map((b, i) => (
         <div
           key={b.site}
           className={`space-y-4${multi && i > 0 ? " pt-5 border-t border-border" : ""}`}
         >
-          {multi && (
+          {multi && (b.siteData || b.error) && (
             <h3 className="text-sm font-heading uppercase tracking-wide text-psv-red-primary">{b.label}</h3>
           )}
-          {b.siteData
-            ? <WebSiteBlock block={b} />
-            : <p className="text-sm text-muted-foreground">Geen data beschikbaar voor deze site.</p>}
+          {b.error ? (
+            <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">
+              {multi ? `${b.label}: ` : ""}{b.error}
+            </div>
+          ) : b.siteData ? (
+            <WebSiteBlock block={b} />
+          ) : null}
         </div>
       ))}
     </SectionShell>
@@ -781,7 +805,7 @@ function WebSiteBlock({ block }: { block: WebBlock }) {
         {pages.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Top pagina&apos;s{paths.length === 1 ? ` onder ${paths[0]}` : paths.length > 1 ? " (geselecteerde pagina's)" : ""}</CardTitle>
+              <CardTitle className="text-base">Top pagina&apos;s{paths.length > 0 ? " (selectie)" : ""}</CardTitle>
             </CardHeader>
             <CardContent className="p-0 max-h-96 overflow-y-auto">
               <table className="w-full text-sm">
