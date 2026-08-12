@@ -8,9 +8,18 @@ export interface PeriodConfig {
   to?: string; // YYYY-MM-DD, alleen bij "custom"
 }
 
+/** Eén site binnen het webverkeer-inzicht met de pagina's die daarvoor gekozen
+ *  zijn. Geen `paths` = alle pagina's van die site. */
+export interface WebSiteSelection {
+  site: string;
+  paths?: string[];
+}
+
 export interface ReportSources {
   dm?: { enabled: true; period: PeriodConfig; queries?: string[] };
-  web?: { enabled: true; period: PeriodConfig; site: string; paths?: string[] };
+  /** Meerdere sites per rapport. Oude rapporten hadden één `site` + `paths`;
+   *  die worden bij het lezen naar `sites` genormaliseerd. */
+  web?: { enabled: true; period: PeriodConfig; sites: WebSiteSelection[] };
   fanstore?: { enabled: true; period: PeriodConfig; products?: string[] };
   ticketing?: {
     enabled: true;
@@ -67,6 +76,31 @@ function parsePeriod(v: unknown): PeriodConfig | null {
   return { preset: p.preset };
 }
 
+/** Sites voor het webverkeer-inzicht uit een request body of opgeslagen blob:
+ *  nieuwe vorm `sites: [{ site, paths }]`, met terugvalpad op de oude enkele
+ *  `site` + `paths`. Dubbele sites worden weggelaten. */
+function parseWebSites(w: Record<string, unknown>): WebSiteSelection[] {
+  const raw: unknown[] = Array.isArray(w.sites)
+    ? w.sites
+    : typeof w.site === "string" && w.site
+      ? [{ site: w.site, paths: w.paths }]
+      : [];
+
+  const out: WebSiteSelection[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.site !== "string" || !e.site || seen.has(e.site)) continue;
+    seen.add(e.site);
+    out.push({
+      site: e.site,
+      ...(isStringArray(e.paths) && e.paths.length > 0 && { paths: e.paths }),
+    });
+  }
+  return out;
+}
+
 /** Valideer en normaliseer een rapport payload uit de request body. */
 export function parseReportInput(body: unknown): ReportInput | null {
   if (!body || typeof body !== "object") return null;
@@ -89,15 +123,11 @@ export function parseReportInput(body: unknown): ReportInput | null {
   }
   if (s.web && typeof s.web === "object") {
     const w = s.web as Record<string, unknown>;
-    if (typeof w.site !== "string" || !w.site) return null;
     const period = parsePeriod(w.period);
     if (!period) return null;
-    sources.web = {
-      enabled: true,
-      period,
-      site: w.site,
-      ...(isStringArray(w.paths) && w.paths.length > 0 && { paths: w.paths }),
-    };
+    const sites = parseWebSites(w);
+    if (sites.length === 0) return null;
+    sources.web = { enabled: true, period, sites };
   }
   if (s.fanstore && typeof s.fanstore === "object") {
     const f = s.fanstore as Record<string, unknown>;
@@ -136,8 +166,9 @@ export function parseReportInput(body: unknown): ReportInput | null {
   };
 }
 
-/** Oude rapporten hadden één top-level periode i.p.v. per bron. Injecteer die
- *  bij het lezen zodat bestaande links blijven werken. */
+/** Oude rapporten hadden één top-level periode i.p.v. per bron, en één site per
+ *  webverkeer-inzicht i.p.v. een lijst. Normaliseer beide bij het lezen zodat
+ *  bestaande links blijven werken. */
 function normalizeReport(record: ReportRecord): ReportRecord {
   const legacyPeriod: PeriodConfig | null =
     record.from && record.to
@@ -146,16 +177,26 @@ function normalizeReport(record: ReportRecord): ReportRecord {
         ? { preset: record.preset }
         : null;
 
-  if (!legacyPeriod) return record;
-
   const sources: ReportSources = { ...record.sources };
-  if (sources.dm && !sources.dm.period) sources.dm = { ...sources.dm, period: legacyPeriod };
-  if (sources.web && !sources.web.period) sources.web = { ...sources.web, period: legacyPeriod };
-  if (sources.fanstore && !sources.fanstore.period) sources.fanstore = { ...sources.fanstore, period: legacyPeriod };
-  if (sources.ticketing && !sources.ticketing.mode) {
-    // Oud ticketing kende geen periode/mode → actuele status.
-    sources.ticketing = { ...sources.ticketing, mode: "current" };
+
+  if (legacyPeriod) {
+    if (sources.dm && !sources.dm.period) sources.dm = { ...sources.dm, period: legacyPeriod };
+    if (sources.web && !sources.web.period) sources.web = { ...sources.web, period: legacyPeriod };
+    if (sources.fanstore && !sources.fanstore.period) sources.fanstore = { ...sources.fanstore, period: legacyPeriod };
+    if (sources.ticketing && !sources.ticketing.mode) {
+      // Oud ticketing kende geen periode/mode → actuele status.
+      sources.ticketing = { ...sources.ticketing, mode: "current" };
+    }
   }
+
+  if (sources.web) {
+    sources.web = {
+      enabled: true,
+      period: sources.web.period,
+      sites: parseWebSites(sources.web as unknown as Record<string, unknown>),
+    };
+  }
+
   return { ...record, sources };
 }
 

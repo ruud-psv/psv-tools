@@ -44,7 +44,13 @@ interface CampaignParams {
   sources: {
     dm?: { enabled: true; query?: string; queries?: string[]; period?: PeriodConfig };
     ticketing?: { enabled: true; query?: string; queries?: string[]; category?: string; mode?: "current" | "period"; period?: PeriodConfig };
-    web?: { enabled: true; site: string; path?: string; paths?: string[]; period?: PeriodConfig };
+    // `sites` is de huidige vorm; `site`/`path`/`paths` zijn oude links.
+    web?: {
+      enabled: true;
+      sites?: { site: string; paths?: string[] }[];
+      site?: string; path?: string; paths?: string[];
+      period?: PeriodConfig;
+    };
     fanstore?: { enabled: true; products?: string[]; period?: PeriodConfig };
   };
 }
@@ -84,6 +90,21 @@ function collectPaths(src: { path?: string; paths?: string[] } | undefined): str
   }
   if (typeof src.path === "string" && src.path.trim()) out.push(src.path.trim());
   return [...new Set(out)];
+}
+
+/** Sites van het webverkeer-inzicht: de huidige `sites`-lijst, met terugvalpad op
+ *  de oude enkele `site` (+ `path`/`paths`) van bestaande links. */
+function collectWebSites(
+  src: CampaignParams["sources"]["web"]
+): { site: string; paths: string[] }[] {
+  if (!src) return [];
+  if (Array.isArray(src.sites) && src.sites.length > 0) {
+    return src.sites
+      .filter((s) => !!s?.site)
+      .map((s) => ({ site: s.site, paths: collectPaths(s) }));
+  }
+  if (src.site) return [{ site: src.site, paths: collectPaths(src) }];
+  return [];
 }
 
 /** Normalize legacy `query` (single string) and new `queries` (array) into one list. */
@@ -566,27 +587,43 @@ function TicketingSection({
 
 /* ---------- Web Section ---------- */
 
+/** Eén geselecteerde site met zijn gefilterde pagina's, klaar om te renderen. */
+interface WebBlock {
+  site: string;
+  label: string;
+  paths: string[];
+  siteData: AnalyticsSiteData | undefined;
+  pages: { path: string; pageviews: number }[];
+}
+
 function WebSection({
-  token, from, to, site, paths, onData,
-}: { token: string; from: string; to: string; site: string; paths: string[]; onData: ReportData }) {
+  token, from, to, sites, onData,
+}: {
+  token: string; from: string; to: string;
+  sites: { site: string; paths: string[] }[];
+  onData: ReportData;
+}) {
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const siteData = data?.sites?.[site];
+  // Eén analytics-call levert álle sites; per site filteren op de eigen selectie.
+  const blocks = useMemo<WebBlock[]>(() => sites.map((sel) => {
+    const siteData = data?.sites?.[sel.site];
+    const all = siteData?.topPages ?? [];
+    return {
+      site: sel.site,
+      label: siteData?.label ?? sel.site,
+      paths: sel.paths,
+      siteData,
+      pages: sel.paths.length === 0
+        ? all
+        : all.filter((p) => sel.paths.some((prefix) => p.path.startsWith(prefix))),
+    };
+  }), [data, sites]);
 
-  const filteredTopPages = useMemo(() => {
-    if (!siteData) return [];
-    if (paths.length === 0) return siteData.topPages;
-    return siteData.topPages.filter((p) => paths.some((prefix) => p.path.startsWith(prefix)));
-  }, [siteData, paths]);
-
-  // Bij een expliciete selectie alle gekozen pagina's tonen — anders zou een
-  // selectie van meer dan 8 pagina's stilzwijgend worden afgekapt.
-  const visibleTopPages = useMemo(
-    () => (paths.length > 0 ? filteredTopPages : filteredTopPages.slice(0, 8)),
-    [filteredTopPages, paths.length]
-  );
+  const multi = blocks.length > 1;
+  const anyData = blocks.some((b) => b.siteData);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -616,115 +653,158 @@ function WebSection({
   // Rapporteer samenvatting omhoog voor de gecombineerde analyse.
   useEffect(() => {
     if (loading) return;
-    if (!siteData) { onData(null, `web:${site}:0`); return; }
+    const withData = blocks.filter((b) => !!b.siteData);
+    if (withData.length === 0) { onData(null, "web:0"); return; }
     const payload: CombinedWeb = {
-      site: siteData.label ?? site,
       from, to,
-      totals: siteData.totals,
-      topSources: (siteData.topSources ?? []).slice(0, 5).map((s) => ({ source: s.source, sessions: s.sessions })),
-      topPages: filteredTopPages.slice(0, 5).map((p) => ({ path: p.path, pageviews: p.pageviews })),
+      sites: withData.map((b) => ({
+        site: b.label,
+        totals: b.siteData!.totals,
+        topSources: (b.siteData!.topSources ?? []).slice(0, 5).map((s) => ({ source: s.source, sessions: s.sessions })),
+        topPages: b.pages.slice(0, 5).map((p) => ({ path: p.path, pageviews: p.pageviews })),
+      })),
     };
-    onData(payload, `web:${site}:${siteData.totals.sessions}:${siteData.totals.pageviews}`);
-  }, [loading, siteData, filteredTopPages, site, from, to, onData]);
+    const sig = `web:${withData
+      .map((b) => `${b.site}:${b.siteData!.totals.sessions}:${b.siteData!.totals.pageviews}`)
+      .join(",")}`;
+    onData(payload, sig);
+  }, [loading, blocks, from, to, onData]);
+
+  const subtitle = useMemo(() => {
+    const parts: string[] = [];
+    if (blocks.length === 1) {
+      const b = blocks[0];
+      parts.push(b.label, `${from} t/m ${to}`);
+      if (b.paths.length === 1) parts.push(`pad "${b.paths[0]}"`);
+      else if (b.paths.length > 1) parts.push(`${b.paths.length} pagina's`);
+    } else {
+      parts.push(`${blocks.length} sites`, `${from} t/m ${to}`);
+      const total = blocks.reduce((n, b) => n + b.paths.length, 0);
+      if (total > 0) parts.push(`${total} pagina's`);
+    }
+    return parts.join(" · ");
+  }, [blocks, from, to]);
 
   return (
-    <SectionShell
-      icon={Globe}
-      title="Web verkeer"
-      subtitle={`${siteData?.label ?? site} · ${from} t/m ${to}${paths.length > 0 ? ` · ${paths.length === 1 ? `pad "${paths[0]}"` : `${paths.length} pagina's`}` : ""}`}
-    >
+    <SectionShell icon={Globe} title="Web verkeer" subtitle={subtitle}>
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
       )}
-      {!error && !siteData && !loading && (
+      {!error && !loading && !anyData && (
         <p className="text-center py-8 text-muted-foreground text-sm">
-          Geen data beschikbaar voor deze site.
+          Geen data beschikbaar voor {multi ? "deze sites" : "deze site"}.
         </p>
       )}
-      {!error && siteData && (
-        <>
-          <MetricGrid>
-            <KpiCard label="Sessies" value={formatNumber(siteData.totals.sessions)} icon={Globe} />
-            <KpiCard label="Gebruikers" value={formatNumber(siteData.totals.users)} icon={Users} />
-            <KpiCard label="Pageviews" value={formatNumber(siteData.totals.pageviews)} icon={Eye} color="text-psv-gold" />
-            <KpiCard label="Nieuwe gebruikers" value={formatNumber(siteData.totals.newUsers)} icon={TrendingUp} color="text-blue-500" />
-            <KpiCard label="Bounce rate" value={`${siteData.totals.bounceRate}%`} icon={AlertTriangle} color="text-warning" />
-            <KpiCard label="Engagement rate" value={`${siteData.totals.engagementRate}%`} icon={CheckCircle2} color="text-green-700" />
-          </MetricGrid>
-
-          {siteData.dailyTrend?.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Dagelijks verkeer</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div style={{ width: "100%", height: 240 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={siteData.dailyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="sessions" stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} name="Sessies" />
-                      <Line type="monotone" dataKey="users" stroke={CHART_COLORS[1]} strokeWidth={2} dot={false} name="Gebruikers" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+      {!error && anyData && blocks.map((b, i) => (
+        <div
+          key={b.site}
+          className={`space-y-4${multi && i > 0 ? " pt-5 border-t border-border" : ""}`}
+        >
+          {multi && (
+            <h3 className="text-sm font-heading uppercase tracking-wide text-psv-red-primary">{b.label}</h3>
           )}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {siteData.topSources?.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Top verkeersbronnen</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div style={{ width: "100%", height: 200 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={siteData.topSources.slice(0, 6)} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
-                        <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                        <YAxis dataKey="source" type="category" tick={{ fontSize: 11 }} tickLine={false} width={110} />
-                        <Tooltip />
-                        <Bar dataKey="sessions" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {filteredTopPages.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Top pagina&apos;s{paths.length === 1 ? ` onder ${paths[0]}` : paths.length > 1 ? " (geselecteerde pagina's)" : ""}</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 max-h-96 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="sticky top-0 bg-muted text-left px-4 py-2 font-heading uppercase tracking-wide text-xs">Pagina</th>
-                        <th className="sticky top-0 bg-muted text-right px-4 py-2 font-heading uppercase tracking-wide text-xs">Pageviews</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleTopPages.map((p, i) => (
-                        <tr key={i} className="border-b">
-                          <td className="px-4 py-2 truncate max-w-xs font-mono text-xs">{p.path}</td>
-                          <td className="px-4 py-2 text-right tabular-nums">{formatNumber(p.pageviews)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </>
-      )}
+          {b.siteData
+            ? <WebSiteBlock block={b} />
+            : <p className="text-sm text-muted-foreground">Geen data beschikbaar voor deze site.</p>}
+        </div>
+      ))}
     </SectionShell>
+  );
+}
+
+function WebSiteBlock({ block }: { block: WebBlock }) {
+  const siteData = block.siteData!;
+  const { paths, pages } = block;
+
+  // Bij een expliciete selectie alle gekozen pagina's tonen — anders zou een
+  // selectie van meer dan 8 pagina's stilzwijgend worden afgekapt.
+  const visibleTopPages = useMemo(
+    () => (paths.length > 0 ? pages : pages.slice(0, 8)),
+    [pages, paths.length]
+  );
+
+  return (
+    <>
+      <MetricGrid>
+        <KpiCard label="Sessies" value={formatNumber(siteData.totals.sessions)} icon={Globe} />
+        <KpiCard label="Gebruikers" value={formatNumber(siteData.totals.users)} icon={Users} />
+        <KpiCard label="Pageviews" value={formatNumber(siteData.totals.pageviews)} icon={Eye} color="text-psv-gold" />
+        <KpiCard label="Nieuwe gebruikers" value={formatNumber(siteData.totals.newUsers)} icon={TrendingUp} color="text-blue-500" />
+        <KpiCard label="Bounce rate" value={`${siteData.totals.bounceRate}%`} icon={AlertTriangle} color="text-warning" />
+        <KpiCard label="Engagement rate" value={`${siteData.totals.engagementRate}%`} icon={CheckCircle2} color="text-green-700" />
+      </MetricGrid>
+
+      {siteData.dailyTrend?.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Dagelijks verkeer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div style={{ width: "100%", height: 240 }}>
+              <ResponsiveContainer>
+                <LineChart data={siteData.dailyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="sessions" stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} name="Sessies" />
+                  <Line type="monotone" dataKey="users" stroke={CHART_COLORS[1]} strokeWidth={2} dot={false} name="Gebruikers" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {siteData.topSources?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Top verkeersbronnen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div style={{ width: "100%", height: 200 }}>
+                <ResponsiveContainer>
+                  <BarChart data={siteData.topSources.slice(0, 6)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="source" type="category" tick={{ fontSize: 11 }} tickLine={false} width={110} />
+                    <Tooltip />
+                    <Bar dataKey="sessions" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {pages.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Top pagina&apos;s{paths.length === 1 ? ` onder ${paths[0]}` : paths.length > 1 ? " (geselecteerde pagina's)" : ""}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="sticky top-0 bg-muted text-left px-4 py-2 font-heading uppercase tracking-wide text-xs">Pagina</th>
+                    <th className="sticky top-0 bg-muted text-right px-4 py-2 font-heading uppercase tracking-wide text-xs">Pageviews</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleTopPages.map((p) => (
+                    <tr key={p.path} className="border-b">
+                      <td className="px-4 py-2 truncate max-w-xs font-mono text-xs">{p.path}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatNumber(p.pageviews)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1325,6 +1405,8 @@ function ShareRapportageContent() {
           );
         })()}
         {params.sources.web?.enabled && (() => {
+          const webSites = collectWebSites(params.sources.web);
+          if (webSites.length === 0) return null;
           const range = resolvePeriod(params.sources.web.period, params.from, params.to);
           return (
             <WebSection
@@ -1332,8 +1414,7 @@ function ShareRapportageContent() {
               token={token}
               from={range.from}
               to={range.to}
-              site={params.sources.web.site}
-              paths={collectPaths(params.sources.web)}
+              sites={webSites}
               onData={reportWeb}
             />
           );

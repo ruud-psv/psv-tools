@@ -28,9 +28,17 @@ interface WizardState {
   intro: string;
   dm: { enabled: boolean; period: PeriodValue; queries: string[] };
   ticketing: { enabled: boolean; period: PeriodValue; category: string; queries: string[] };
-  web: { enabled: boolean; period: PeriodValue; site: string; paths: string[] };
+  web: { enabled: boolean; period: PeriodValue; sites: WebSiteState[] };
   fanstore: { enabled: boolean; period: PeriodValue; products: string[] };
 }
+
+/** Eén aangevinkte site met zijn pagina-selectie; leeg = alle pagina's. */
+interface WebSiteState {
+  site: string;
+  paths: string[];
+}
+
+const DEFAULT_WEB_SITE = "psv";
 
 const DEFAULT_PERIOD: PeriodValue = { preset: "30d", customFrom: "", customTo: "" };
 
@@ -41,6 +49,16 @@ function periodValueFromConfig(config: PeriodConfig | undefined, fallbackPreset:
     customFrom: config.from ?? "",
     customTo: config.to ?? "",
   };
+}
+
+/** Sites uit een bestaand rapport. De API normaliseert oude rapporten al naar
+ *  `sites`; de legacy-tak vangt records op die daar nog langs komen. */
+function initialWebSites(web: ReportSources["web"] | undefined): WebSiteState[] {
+  const list = (web?.sites ?? []).filter((s) => !!s?.site).map((s) => ({ site: s.site, paths: s.paths ?? [] }));
+  if (list.length > 0) return list;
+  const legacy = web as unknown as { site?: string; paths?: string[] } | undefined;
+  if (legacy?.site) return [{ site: legacy.site, paths: legacy.paths ?? [] }];
+  return [{ site: DEFAULT_WEB_SITE, paths: [] }];
 }
 
 function initialState(initial: ReportRecord | null): WizardState {
@@ -65,8 +83,7 @@ function initialState(initial: ReportRecord | null): WizardState {
     web: {
       enabled: !!s?.web?.enabled,
       period: periodValueFromConfig(s?.web?.period, "30d"),
-      site: s?.web?.site ?? "psv",
-      paths: s?.web?.paths ?? [],
+      sites: initialWebSites(s?.web),
     },
     fanstore: {
       enabled: !!s?.fanstore?.enabled,
@@ -104,8 +121,10 @@ function buildSources(state: WizardState): ReportSources {
     sources.web = {
       enabled: true,
       period: toPeriodConfig(state.web.period),
-      site: state.web.site,
-      ...(state.web.paths.length > 0 && { paths: state.web.paths }),
+      sites: state.web.sites.map((s) => ({
+        site: s.site,
+        ...(s.paths.length > 0 && { paths: s.paths }),
+      })),
     };
   }
   if (state.fanstore.enabled) {
@@ -156,19 +175,46 @@ async function loadEvents(category: string, signal: AbortSignal): Promise<string
   return [...names].sort((a, b) => a.localeCompare(b, "nl"));
 }
 
-/** Alle pagina's van een site binnen het exacte datumbereik — niet alleen de
- *  top 10, zodat elke pagina selecteerbaar is. */
-async function loadPages(site: string, range: { from: string; to: string }, signal: AbortSignal): Promise<string[]> {
+/** Alle pagina's per site binnen het exacte datumbereik — niet alleen de top 10,
+ *  zodat elke pagina selecteerbaar is. */
+async function fetchPagesByRange(range: { from: string; to: string }): Promise<Record<string, string[]>> {
   const params = new URLSearchParams({
     from: range.from,
     to: range.to,
     pageLimit: String(PAGE_SELECT_LIMIT),
   });
-  const res = await fetch(`/api/analytics?${params}`, { signal });
+  const res = await fetch(`/api/analytics?${params}`);
   if (!res.ok) throw new Error(String(res.status));
   const json = await res.json();
-  const siteData = json.sites?.[site] as { topPages?: { path: string }[] } | undefined;
-  return [...new Set((siteData?.topPages ?? []).map((p) => p.path).filter(Boolean))];
+  const sites = (json.sites ?? {}) as Record<string, { topPages?: { path: string }[] } | undefined>;
+  const bySite: Record<string, string[]> = {};
+  for (const [key, data] of Object.entries(sites)) {
+    bySite[key] = [...new Set((data?.topPages ?? []).map((p) => p.path).filter(Boolean))];
+  }
+  return bySite;
+}
+
+/** Eén analytics-call levert álle sites. De pagina-lijsten van de aangevinkte
+ *  sites delen daarom per datumbereik dezelfde request. */
+const pagesByRange = new Map<string, Promise<Record<string, string[]>>>();
+
+function loadPagesByRange(range: { from: string; to: string }): Promise<Record<string, string[]>> {
+  const key = `${range.from}|${range.to}`;
+  let inflight = pagesByRange.get(key);
+  if (!inflight) {
+    inflight = fetchPagesByRange(range).catch((err) => {
+      pagesByRange.delete(key); // een fout niet blijvend cachen
+      throw err;
+    });
+    pagesByRange.set(key, inflight);
+  }
+  return inflight;
+}
+
+async function loadPages(site: string, range: { from: string; to: string }, signal: AbortSignal): Promise<string[]> {
+  const bySite = await loadPagesByRange(range);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  return bySite[site] ?? [];
 }
 
 async function loadProducts(range: { from: string; to: string }, signal: AbortSignal): Promise<string[]> {
@@ -216,7 +262,8 @@ export function ReportWizard({
     switch (step) {
       case 0: return state.title.trim().length > 0;
       case 1: return enabledSources.length > 0;
-      case 2: return enabledSources.every((m) => periodComplete(state[m.key].period));
+      case 2: return enabledSources.every((m) => periodComplete(state[m.key].period))
+        && (!state.web.enabled || state.web.sites.length > 0);
       default: return true;
     }
   }, [step, state, enabledSources]);
@@ -543,32 +590,84 @@ function TicketingConfig({ state, patch }: { state: WizardState; patch: WizardPa
 
 function WebConfig({ state, patch }: { state: WizardState; patch: WizardPatch }) {
   const range = resolvePeriodValue(state.web.period);
-  const depKey = `web:${state.web.site}:${range?.from ?? ""}:${range?.to ?? ""}`;
+  const selected = state.web.sites;
+
+  // WEB_SITES plus eventuele onbekende sites uit een bestaand rapport, zodat een
+  // bestaande selectie nooit stil verdwijnt.
+  const siteOptions = useMemo(() => [
+    ...WEB_SITES,
+    ...selected
+      .filter((s) => !WEB_SITES.some((w) => w.value === s.site))
+      .map((s) => ({ value: s.site, label: s.site })),
+  ], [selected]);
+
+  // Vaste weergave-volgorde, onafhankelijk van de aanvinkvolgorde.
+  const activeOptions = siteOptions.filter((o) => selected.some((s) => s.site === o.value));
+
+  function toggleSite(site: string) {
+    const next = selected.some((s) => s.site === site)
+      ? selected.filter((s) => s.site !== site)
+      : [...selected, { site, paths: [] }];
+    patch("web", { sites: next });
+  }
+
+  function setPaths(site: string, paths: string[]) {
+    patch("web", { sites: selected.map((s) => (s.site === site ? { ...s, paths } : s)) });
+  }
+
   return (
     <>
       <div className="space-y-1.5">
-        <Label className="text-sm font-heading uppercase tracking-wide">Site</Label>
-        <Select
-          value={state.web.site}
-          onValueChange={(v) => patch("web", { site: v, paths: [] })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {WEB_SITES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <Label className="text-sm font-heading uppercase tracking-wide">Sites</Label>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {siteOptions.map((o) => {
+            const active = selected.some((s) => s.site === o.value);
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => toggleSite(o.value)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                  active
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-background hover:border-primary/50 hover:bg-accent/30"
+                )}
+              >
+                <span className={cn(
+                  "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-sm border",
+                  active ? "border-primary bg-primary text-primary-foreground" : "border-input"
+                )}>
+                  {active && <Check className="h-3 w-3" />}
+                </span>
+                <span className="truncate">{o.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {selected.length === 0 ? (
+          <p className="text-xs text-destructive">Kies minstens één site.</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Per site kies je hieronder de pagina&apos;s. Alle sites gebruiken dezelfde periode.
+          </p>
+        )}
       </div>
-      <ItemChecklist
-        label="Pagina's"
-        depKey={depKey}
-        disabled={!range}
-        disabledHint="Kies eerst een geldige periode om pagina's te laden."
-        load={(signal) => loadPages(state.web.site, range!, signal)}
-        values={state.web.paths}
-        onChange={(next) => patch("web", { paths: next })}
-        searchPlaceholder="Zoek pagina-pad…"
-        emptyAllHint="Leeg = alle pagina's van deze site."
-      />
+
+      {activeOptions.map((o) => (
+        <ItemChecklist
+          key={o.value}
+          label={`Pagina's — ${o.label}`}
+          depKey={`web:${o.value}:${range?.from ?? ""}:${range?.to ?? ""}`}
+          disabled={!range}
+          disabledHint="Kies eerst een geldige periode om pagina's te laden."
+          load={(signal) => loadPages(o.value, range!, signal)}
+          values={selected.find((s) => s.site === o.value)?.paths ?? []}
+          onChange={(next) => setPaths(o.value, next)}
+          searchPlaceholder="Zoek pagina-pad…"
+          emptyAllHint={`Leeg = alle pagina's van ${o.label}.`}
+        />
+      ))}
     </>
   );
 }
@@ -605,7 +704,10 @@ function ReviewStep({
   function selectionSummary(key: SourceKey): string {
     if (key === "dm") return state.dm.queries.length > 0 ? `${state.dm.queries.length} mailings` : "Alle mailings";
     if (key === "ticketing") return state.ticketing.queries.length > 0 ? `${state.ticketing.queries.length} events` : "Alle events";
-    if (key === "web") return state.web.paths.length > 0 ? `${state.web.paths.length} pagina's` : "Alle pagina's";
+    if (key === "web") {
+      const paths = state.web.sites.reduce((total, s) => total + s.paths.length, 0);
+      return paths > 0 ? `${paths} pagina's` : "Alle pagina's";
+    }
     return state.fanstore.products.length > 0 ? `${state.fanstore.products.length} producten` : "Hele winkel";
   }
 
@@ -624,7 +726,8 @@ function ReviewStep({
       <div className="space-y-2">
         {enabledSources.map((m) => {
           const Icon = m.icon;
-          const extra = m.key === "web" ? ` · ${WEB_SITES.find((s) => s.value === state.web.site)?.label ?? state.web.site}`
+          const extra = m.key === "web"
+            ? ` · ${state.web.sites.map((s) => WEB_SITES.find((w) => w.value === s.site)?.label ?? s.site).join(", ")}`
             : m.key === "ticketing" && state.ticketing.category !== "all" ? ` · ${state.ticketing.category}`
             : "";
           return (

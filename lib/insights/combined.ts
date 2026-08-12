@@ -19,11 +19,16 @@ export interface CombinedTicket {
   top: { name: string; category: string; occupancy: number; soldInPeriod?: number | null }[];
 }
 
-export interface CombinedWeb {
-  site: string; from: string; to: string;
+export interface CombinedWebSite {
+  site: string;
   totals: { sessions: number; users: number; pageviews: number; newUsers: number; bounceRate: number; engagementRate: number };
   topSources: { source: string; sessions: number }[];
   topPages: { path: string; pageviews: number }[];
+}
+
+export interface CombinedWeb {
+  from: string; to: string;
+  sites: CombinedWebSite[];
 }
 
 export interface CombinedFanstore {
@@ -116,10 +121,17 @@ function buildContext(input: CombinedInsightInput): string {
 
   if (input.web) {
     const w = input.web;
-    lines.push(`— WEBVERKEER (${w.site}, ${w.from} t/m ${w.to})`);
-    lines.push(`  ${num(w.totals.sessions)} sessies · ${num(w.totals.users)} gebruikers · ${num(w.totals.pageviews)} pageviews · bounce ${w.totals.bounceRate}% · engagement ${w.totals.engagementRate}%`);
-    if (w.topSources.length) lines.push(`  Top bronnen: ${w.topSources.slice(0, 5).map((s) => `${s.source} (${num(s.sessions)})`).join(", ")}`);
-    if (w.topPages.length) lines.push(`  Top pagina's: ${w.topPages.slice(0, 5).map((p) => `${p.path} (${num(p.pageviews)})`).join(", ")}`);
+    const sites = w.sites ?? [];
+    lines.push(`— WEBVERKEER (${w.from} t/m ${w.to}${sites.length > 1 ? `, ${sites.length} sites` : ""})`);
+    for (const s of sites) {
+      lines.push(`  ${s.site}:`);
+      lines.push(`    ${num(s.totals.sessions)} sessies · ${num(s.totals.users)} gebruikers · ${num(s.totals.pageviews)} pageviews · bounce ${s.totals.bounceRate}% · engagement ${s.totals.engagementRate}%`);
+      if (s.topSources.length) lines.push(`    Top bronnen: ${s.topSources.slice(0, 5).map((x) => `${x.source} (${num(x.sessions)})`).join(", ")}`);
+      if (s.topPages.length) lines.push(`    Top pagina's: ${s.topPages.slice(0, 5).map((p) => `${p.path} (${num(p.pageviews)})`).join(", ")}`);
+    }
+    if (sites.length > 1) {
+      lines.push(`  (Vergelijk de sites onderling waar dat iets toevoegt.)`);
+    }
     lines.push("");
   }
 
