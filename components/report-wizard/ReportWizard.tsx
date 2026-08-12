@@ -11,11 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getDateRange, periodForRange, stripName } from "@/lib/dm-share";
+import { stripName } from "@/lib/dm-share";
 import type { PeriodConfig, ReportInput, ReportRecord, ReportSources } from "@/lib/reports";
 import {
-  PRESETS_BY_SOURCE, SOURCE_ALLOWS_CUSTOM, SOURCE_META, TICKET_CATEGORIES, WEB_SITES,
-  periodLabel, type SourceKey,
+  PAGE_SELECT_LIMIT, PRESETS_BY_SOURCE, SOURCE_ALLOWS_CUSTOM, SOURCE_META, TICKET_CATEGORIES,
+  WEB_SITES, periodLabel, type SourceKey,
 } from "./constants";
 import { StepIndicator } from "./StepIndicator";
 import { PeriodPicker, resolvePeriodValue, type PeriodValue } from "./PeriodPicker";
@@ -156,9 +156,15 @@ async function loadEvents(category: string, signal: AbortSignal): Promise<string
   return [...names].sort((a, b) => a.localeCompare(b, "nl"));
 }
 
+/** Alle pagina's van een site binnen het exacte datumbereik — niet alleen de
+ *  top 10, zodat elke pagina selecteerbaar is. */
 async function loadPages(site: string, range: { from: string; to: string }, signal: AbortSignal): Promise<string[]> {
-  const period = periodForRange(range.from, range.to);
-  const res = await fetch(`/api/analytics?period=${period}`, { signal });
+  const params = new URLSearchParams({
+    from: range.from,
+    to: range.to,
+    pageLimit: String(PAGE_SELECT_LIMIT),
+  });
+  const res = await fetch(`/api/analytics?${params}`, { signal });
   if (!res.ok) throw new Error(String(res.status));
   const json = await res.json();
   const siteData = json.sites?.[site] as { topPages?: { path: string }[] } | undefined;
@@ -537,7 +543,7 @@ function TicketingConfig({ state, patch }: { state: WizardState; patch: WizardPa
 
 function WebConfig({ state, patch }: { state: WizardState; patch: WizardPatch }) {
   const range = resolvePeriodValue(state.web.period);
-  const depKey = `web:${state.web.site}:${range ? periodForRange(range.from, range.to) : ""}`;
+  const depKey = `web:${state.web.site}:${range?.from ?? ""}:${range?.to ?? ""}`;
   return (
     <>
       <div className="space-y-1.5">
@@ -556,7 +562,7 @@ function WebConfig({ state, patch }: { state: WizardState; patch: WizardPatch })
         label="Pagina's"
         depKey={depKey}
         disabled={!range}
-        disabledHint="Kies eerst een periode om pagina's te laden."
+        disabledHint="Kies eerst een geldige periode om pagina's te laden."
         load={(signal) => loadPages(state.web.site, range!, signal)}
         values={state.web.paths}
         onChange={(next) => patch("web", { paths: next })}

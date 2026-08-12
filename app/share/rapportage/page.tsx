@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   computeTotals as computeDmTotals,
-  formatDate, formatNumber, formatPct, formatEuro, periodForRange, getDateRange, stripName,
+  formatDate, formatNumber, formatPct, formatEuro, getDateRange, stripName,
   KpiCard, RateBadge,
   type MailingSummary, type Totals as DmTotals,
 } from "@/lib/dm-share";
@@ -22,6 +22,7 @@ import type {
   CombinedInsightResult, CombinedDm, CombinedTicket, CombinedWeb, CombinedFanstore,
 } from "@/lib/insights/combined";
 import type { PeriodConfig, ReportRecord } from "@/lib/reports";
+import { PAGE_SELECT_LIMIT } from "@/components/report-wizard/constants";
 
 /** Rapporteert de samengevatte data van een sectie omhoog voor de gecombineerde analyse. */
 type ReportData = (payload: object | null, sig: string) => void;
@@ -568,7 +569,6 @@ function TicketingSection({
 function WebSection({
   token, from, to, site, paths, onData,
 }: { token: string; from: string; to: string; site: string; paths: string[]; onData: ReportData }) {
-  const period = periodForRange(from, to);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -581,11 +581,23 @@ function WebSection({
     return siteData.topPages.filter((p) => paths.some((prefix) => p.path.startsWith(prefix)));
   }, [siteData, paths]);
 
+  // Bij een expliciete selectie alle gekozen pagina's tonen — anders zou een
+  // selectie van meer dan 8 pagina's stilzwijgend worden afgekapt.
+  const visibleTopPages = useMemo(
+    () => (paths.length > 0 ? filteredTopPages : filteredTopPages.slice(0, 8)),
+    [filteredTopPages, paths.length]
+  );
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/analytics?period=${period}&token=${encodeURIComponent(token)}`);
+      const params = new URLSearchParams({
+        from, to,
+        pageLimit: String(PAGE_SELECT_LIMIT),
+        token,
+      });
+      const res = await fetch(`/api/analytics?${params}`);
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error ?? `API fout ${res.status}`);
@@ -597,7 +609,7 @@ function WebSection({
     } finally {
       setLoading(false);
     }
-  }, [period, token]);
+  }, [from, to, token]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -619,7 +631,7 @@ function WebSection({
     <SectionShell
       icon={Globe}
       title="Web verkeer"
-      subtitle={`${siteData?.label ?? site}${paths.length > 0 ? ` · ${paths.length === 1 ? `pad "${paths[0]}"` : `${paths.length} pagina's`}` : ""} · periode ${period}`}
+      subtitle={`${siteData?.label ?? site} · ${from} t/m ${to}${paths.length > 0 ? ` · ${paths.length === 1 ? `pad "${paths[0]}"` : `${paths.length} pagina's`}` : ""}`}
     >
       {error && (
         <div className="border border-destructive rounded-lg px-4 py-3 text-sm text-destructive">{error}</div>
@@ -689,16 +701,16 @@ function WebSection({
                 <CardHeader>
                   <CardTitle className="text-base">Top pagina&apos;s{paths.length === 1 ? ` onder ${paths[0]}` : paths.length > 1 ? " (geselecteerde pagina's)" : ""}</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="p-0 max-h-96 overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left px-4 py-2 font-heading uppercase tracking-wide text-xs">Pagina</th>
-                        <th className="text-right px-4 py-2 font-heading uppercase tracking-wide text-xs">Pageviews</th>
+                      <tr className="border-b">
+                        <th className="sticky top-0 bg-muted text-left px-4 py-2 font-heading uppercase tracking-wide text-xs">Pagina</th>
+                        <th className="sticky top-0 bg-muted text-right px-4 py-2 font-heading uppercase tracking-wide text-xs">Pageviews</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredTopPages.slice(0, 8).map((p, i) => (
+                      {visibleTopPages.map((p, i) => (
                         <tr key={i} className="border-b">
                           <td className="px-4 py-2 truncate max-w-xs font-mono text-xs">{p.path}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{formatNumber(p.pageviews)}</td>

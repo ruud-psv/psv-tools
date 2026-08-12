@@ -64,6 +64,14 @@ function getClient(): { client: BetaAnalyticsDataClient | null; error: string | 
   }
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Aantal pagina's dat de topPages-query oplevert. Standaard ruim genoeg voor
+ *  de dashboardweergave; de rapportage-generator vraagt een hogere limiet op
+ *  zodat álle pagina's selecteerbaar zijn. */
+const PAGE_LIMIT_DEFAULT = 100;
+const PAGE_LIMIT_MAX = 1000;
+
 function getDateRange(period: string): { startDate: string; endDate: string } {
   const end = "today";
   switch (period) {
@@ -71,6 +79,25 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
     case "90d": return { startDate: "90daysAgo", endDate: end };
     default: return { startDate: "30daysAgo", endDate: end };
   }
+}
+
+/** Expliciet `from`/`to` (YYYY-MM-DD) heeft voorrang op de `period`-preset, zodat
+ *  een vrij datumbereik opgevraagd kan worden. */
+function resolveDateRange(params: URLSearchParams): { startDate: string; endDate: string } {
+  const from = params.get("from");
+  const to = params.get("to");
+  if (from && to && DATE_RE.test(from) && DATE_RE.test(to)) {
+    return from <= to
+      ? { startDate: from, endDate: to }
+      : { startDate: to, endDate: from };
+  }
+  return getDateRange(params.get("period") ?? "30d");
+}
+
+function resolvePageLimit(raw: string | null): number {
+  const n = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isFinite(n) || n <= 0) return PAGE_LIMIT_DEFAULT;
+  return Math.min(n, PAGE_LIMIT_MAX);
 }
 
 /* ---------- Query helpers ---------- */
@@ -94,7 +121,8 @@ interface SiteData {
 async function fetchSiteData(
   client: BetaAnalyticsDataClient,
   site: SiteConfig,
-  dateRange: { startDate: string; endDate: string }
+  dateRange: { startDate: string; endDate: string },
+  pageLimit: number
 ): Promise<SiteData> {
   const property = `properties/${site.propertyId}`;
 
@@ -136,7 +164,7 @@ async function fetchSiteData(
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }],
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-      limit: 10,
+      limit: pageLimit,
     }),
     client.runReport({
       property,
@@ -223,11 +251,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const period = req.nextUrl.searchParams.get("period") ?? "30d";
-  const dateRange = getDateRange(period);
+  const dateRange = resolveDateRange(req.nextUrl.searchParams);
+  const pageLimit = resolvePageLimit(req.nextUrl.searchParams.get("pageLimit"));
 
   const settled = await Promise.allSettled(
-    sites.map((site) => fetchSiteData(client, site, dateRange).then((data) => ({ key: site.key, data })))
+    sites.map((site) => fetchSiteData(client, site, dateRange, pageLimit).then((data) => ({ key: site.key, data })))
   );
 
   const sitesMap: Record<string, SiteData> = {};
@@ -279,6 +307,7 @@ export async function GET(req: NextRequest) {
       dailyTrend: combinedDailyTrend,
     },
     ...(Object.keys(errors).length > 0 && { siteErrors: errors }),
+    dateRange,
     fetchedAt: new Date().toISOString(),
   });
 }
