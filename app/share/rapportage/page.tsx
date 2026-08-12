@@ -23,6 +23,9 @@ import type {
 } from "@/lib/insights/combined";
 import type { PeriodConfig, ReportRecord } from "@/lib/reports";
 import { PAGE_SELECT_LIMIT } from "@/components/report-wizard/constants";
+import {
+  SortHeader, sortRows, timeValue, useTableSort, type SortAccessors,
+} from "@/lib/table-sort";
 
 /** Rapporteert de samengevatte data van een sectie omhoog voor de gecombineerde analyse. */
 type ReportData = (payload: object | null, sig: string) => void;
@@ -278,11 +281,20 @@ function DmSection({
   );
 }
 
+type DmSortKey = "name" | "date" | "recipients" | "openRate" | "clickRate" | "bounceRate";
+
+const DM_SORT: SortAccessors<MailingSummary, DmSortKey> = {
+  name: (m) => stripName(m.name),
+  date: (m) => timeValue(m.scheduleTime),
+  recipients: (m) => m.recipients,
+  openRate: (m) => m.openRate,
+  clickRate: (m) => m.clickRate,
+  bounceRate: (m) => m.bounceRate,
+};
+
 function DmTable({ mailings }: { mailings: MailingSummary[]; totals: DmTotals }) {
-  const sorted = useMemo(
-    () => [...mailings].sort((a, b) => new Date(b.scheduleTime).getTime() - new Date(a.scheduleTime).getTime()),
-    [mailings]
-  );
+  const { sort, toggle } = useTableSort<DmSortKey>("date");
+  const sorted = useMemo(() => sortRows(mailings, DM_SORT[sort.key], sort.dir), [mailings, sort]);
   return (
     <Card>
       <CardHeader>
@@ -293,12 +305,12 @@ function DmTable({ mailings }: { mailings: MailingSummary[]; totals: DmTotals })
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Naam</th>
-                <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Datum</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Ontvangers</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Open %</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Click %</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Bounce %</th>
+                <SortHeader label="Naam" sortKey="name" sort={sort} onSort={toggle} align="left" firstDir="asc" />
+                <SortHeader label="Datum" sortKey="date" sort={sort} onSort={toggle} align="left" />
+                <SortHeader label="Ontvangers" sortKey="recipients" sort={sort} onSort={toggle} />
+                <SortHeader label="Open %" sortKey="openRate" sort={sort} onSort={toggle} />
+                <SortHeader label="Click %" sortKey="clickRate" sort={sort} onSort={toggle} />
+                <SortHeader label="Bounce %" sortKey="bounceRate" sort={sort} onSort={toggle} />
               </tr>
             </thead>
             <tbody>
@@ -326,6 +338,12 @@ function DmTable({ mailings }: { mailings: MailingSummary[]; totals: DmTotals })
 /* ---------- Ticketing Section ---------- */
 
 interface SnapshotPoint { ts: string; available: number; sold: number }
+
+/** Hoeveel events de tabel maximaal toont. */
+const EVENT_ROW_LIMIT = 30;
+
+type EventSortKey =
+  | "name" | "date" | "category" | "inPeriod" | "sold" | "available" | "occupancy";
 
 function TicketingSection({
   queries, category, mode, from, to, onData,
@@ -442,17 +460,38 @@ function TicketingSection({
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, sold]) => ({ date, sold }));
   }, [isPeriod, snapshots, from, to]);
 
+  const withCap = useMemo(() => filtered.filter((e) => e.totalCapacity > 0), [filtered]);
+
+  // Vaste rangschikking voor de AI-samenvatting — die mag niet meebewegen met
+  // hoe de gebruiker de tabel sorteert, anders geldt elke klik als nieuwe data.
   const sortedEvents = useMemo(() => {
-    const withCap = filtered.filter((e) => e.totalCapacity > 0);
     if (isPeriod) {
       return [...withCap]
         .sort((a, b) => (soldByEvent[b.eventId] ?? -1) - (soldByEvent[a.eventId] ?? -1))
-        .slice(0, 30);
+        .slice(0, EVENT_ROW_LIMIT);
     }
     return [...withCap]
       .sort((a, b) => (b.soldTickets / b.totalCapacity) - (a.soldTickets / a.totalCapacity))
-      .slice(0, 30);
-  }, [filtered, isPeriod, soldByEvent]);
+      .slice(0, EVENT_ROW_LIMIT);
+  }, [withCap, isPeriod, soldByEvent]);
+
+  // Weergave-sortering: eerst sorteren over álle events, dan afkappen, zodat
+  // "laag naar hoog" echt de laagste laat zien en niet de laagste van de top 30.
+  const eventSort = useMemo<SortAccessors<TicketEvent, EventSortKey>>(() => ({
+    name: (e) => e.eventName,
+    date: (e) => timeValue(e.eventDate),
+    category: (e) => e.category,
+    inPeriod: (e) => soldByEvent[e.eventId],
+    sold: (e) => e.soldTickets,
+    available: (e) => e.availableCapacity,
+    occupancy: (e) => (e.totalCapacity > 0 ? e.soldTickets / e.totalCapacity : null),
+  }), [soldByEvent]);
+
+  const { sort, toggle } = useTableSort<EventSortKey>(isPeriod ? "inPeriod" : "occupancy");
+  const visibleEvents = useMemo(
+    () => sortRows(withCap, eventSort[sort.key], sort.dir).slice(0, EVENT_ROW_LIMIT),
+    [withCap, eventSort, sort]
+  );
 
   // Rapporteer samenvatting omhoog voor de gecombineerde analyse (periode: pas als snapshots binnen zijn).
   useEffect(() => {
@@ -525,27 +564,34 @@ function TicketingSection({
             </Card>
           )}
 
-          {sortedEvents.length > 0 && (
+          {visibleEvents.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">{isPeriod ? "Events op verkoop in periode (top 30)" : "Events op bezetting (top 30)"}</CardTitle>
+                <CardTitle className="text-base">
+                  Events
+                  {withCap.length > EVENT_ROW_LIMIT && (
+                    <span className="font-normal normal-case text-muted-foreground text-sm">
+                      {" "}— {EVENT_ROW_LIMIT} van {withCap.length}
+                    </span>
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Event</th>
-                        <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Datum</th>
-                        <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Categorie</th>
-                        {isPeriod && <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">In periode</th>}
-                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Verkocht</th>
-                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Beschikbaar</th>
-                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Bezetting</th>
+                        <SortHeader label="Event" sortKey="name" sort={sort} onSort={toggle} align="left" firstDir="asc" />
+                        <SortHeader label="Datum" sortKey="date" sort={sort} onSort={toggle} align="left" />
+                        <SortHeader label="Categorie" sortKey="category" sort={sort} onSort={toggle} align="left" firstDir="asc" />
+                        {isPeriod && <SortHeader label="In periode" sortKey="inPeriod" sort={sort} onSort={toggle} />}
+                        <SortHeader label="Verkocht" sortKey="sold" sort={sort} onSort={toggle} />
+                        <SortHeader label="Beschikbaar" sortKey="available" sort={sort} onSort={toggle} />
+                        <SortHeader label="Bezetting" sortKey="occupancy" sort={sort} onSort={toggle} />
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedEvents.map((e) => {
+                      {visibleEvents.map((e) => {
                         const pct = Math.round((e.soldTickets / e.totalCapacity) * 100);
                         const inPeriod = soldByEvent[e.eventId];
                         return (
@@ -736,16 +782,28 @@ function WebSection({
   );
 }
 
+type PageSortKey = "path" | "pageviews";
+
+const PAGE_SORT: SortAccessors<{ path: string; pageviews: number }, PageSortKey> = {
+  path: (p) => p.path,
+  pageviews: (p) => p.pageviews,
+};
+
+const PAGE_ROW_LIMIT = 8;
+
 function WebSiteBlock({ block }: { block: WebBlock }) {
   const siteData = block.siteData!;
   const { paths, pages } = block;
 
+  const { sort, toggle } = useTableSort<PageSortKey>("pageviews");
+
   // Bij een expliciete selectie alle gekozen pagina's tonen — anders zou een
-  // selectie van meer dan 8 pagina's stilzwijgend worden afgekapt.
-  const visibleTopPages = useMemo(
-    () => (paths.length > 0 ? pages : pages.slice(0, 8)),
-    [pages, paths.length]
-  );
+  // selectie van meer dan 8 pagina's stilzwijgend worden afgekapt. Eerst
+  // sorteren, dan afkappen, zodat "laag naar hoog" echt de laagste toont.
+  const visibleTopPages = useMemo(() => {
+    const sorted = sortRows(pages, PAGE_SORT[sort.key], sort.dir);
+    return paths.length > 0 ? sorted : sorted.slice(0, PAGE_ROW_LIMIT);
+  }, [pages, paths.length, sort]);
 
   return (
     <>
@@ -811,8 +869,14 @@ function WebSiteBlock({ block }: { block: WebBlock }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="sticky top-0 bg-muted text-left px-4 py-2 font-heading uppercase tracking-wide text-xs">Pagina</th>
-                    <th className="sticky top-0 bg-muted text-right px-4 py-2 font-heading uppercase tracking-wide text-xs">Pageviews</th>
+                    <SortHeader
+                      label="Pagina" sortKey="path" sort={sort} onSort={toggle}
+                      align="left" firstDir="asc" className="sticky top-0 bg-muted !py-2"
+                    />
+                    <SortHeader
+                      label="Pageviews" sortKey="pageviews" sort={sort} onSort={toggle}
+                      className="sticky top-0 bg-muted !py-2"
+                    />
                   </tr>
                 </thead>
                 <tbody>
@@ -833,6 +897,20 @@ function WebSiteBlock({ block }: { block: WebBlock }) {
 }
 
 /* ---------- Fanstore Section ---------- */
+
+/** Hoeveel producten de tabel toont wanneer er geen selectie is. */
+const PRODUCT_ROW_LIMIT = 10;
+
+type ProductSortKey = "name" | "revenue" | "itemsPurchased";
+
+const PRODUCT_SORT: SortAccessors<
+  { name: string; revenue: number; itemsPurchased: number },
+  ProductSortKey
+> = {
+  name: (p) => p.name,
+  revenue: (p) => p.revenue,
+  itemsPurchased: (p) => p.itemsPurchased,
+};
 
 interface FanstoreOverview {
   totals: { revenue: number; transactions: number; avgOrderValue: number; itemsPurchased: number };
@@ -917,10 +995,15 @@ function FanstoreSection({
     return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   }, [hasSelection, productTrends]);
 
+  const { sort: productSort, toggle: toggleProductSort } = useTableSort<ProductSortKey>("revenue");
+
+  // Eerst sorteren, dan afkappen — anders geeft "laag naar hoog" de laagste van
+  // de top 10 in plaats van de laagste van de winkel.
   const displayProducts = useMemo(() => {
-    if (hasSelection) return productRows;
-    return (data?.topProducts ?? []).slice(0, 10);
-  }, [hasSelection, productRows, data]);
+    const rows = hasSelection ? productRows : (data?.topProducts ?? []);
+    const sorted = sortRows(rows, PRODUCT_SORT[productSort.key], productSort.dir);
+    return hasSelection ? sorted : sorted.slice(0, PRODUCT_ROW_LIMIT);
+  }, [hasSelection, productRows, data, productSort]);
 
   // Rapporteer samenvatting omhoog voor de gecombineerde analyse.
   useEffect(() => {
@@ -1045,9 +1128,9 @@ function FanstoreSection({
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Product</th>
-                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Omzet</th>
-                        <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Stuks</th>
+                        <SortHeader label="Product" sortKey="name" sort={productSort} onSort={toggleProductSort} align="left" firstDir="asc" />
+                        <SortHeader label="Omzet" sortKey="revenue" sort={productSort} onSort={toggleProductSort} />
+                        <SortHeader label="Stuks" sortKey="itemsPurchased" sort={productSort} onSort={toggleProductSort} />
                       </tr>
                     </thead>
                     <tbody>
