@@ -8,6 +8,7 @@
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_BATCH_ITEMS = 5000;
 const MAX_ID_LENGTH = 200;
+const MAX_TOPIC_LENGTH = 120;
 const TIME_ZONE = "Europe/Amsterdam";
 
 /** Ondergrens voor een plausibel ticket-tijdstip. */
@@ -31,6 +32,11 @@ export interface FandeskTicket {
   id: string;
   category: FandeskCategory;
   at: string;
+  /**
+   * Korte geanonimiseerde onderwerpregel uit n8n, waar de samenvatting op werkt.
+   * Optioneel: tickets van vóór deze functie hebben hem niet.
+   */
+  topic?: string;
 }
 
 /** Ruw item uit de n8n payload, na validatie. */
@@ -39,6 +45,7 @@ export interface RawFandeskItem {
   rawCategory: string;
   /** ISO-string uit `created_at`, of null wanneer die ontbrak of onbruikbaar was. */
   at: string | null;
+  topic?: string;
 }
 
 export function emptyCategoryCounts(): Record<FandeskCategory, number> {
@@ -208,6 +215,31 @@ function parseTimestamp(item: Record<string, unknown>): string | null {
   return null;
 }
 
+/**
+ * Maakt een onderwerpregel schoon voordat hij wordt opgeslagen. n8n is
+ * geïnstrueerd om geen persoonsgegevens mee te sturen, maar dat is een instructie
+ * aan een taalmodel en geen garantie — dit is de vangnetlaag. E-mailadressen,
+ * telefoonnummers en lange cijferreeksen (order- en ticketnummers) zijn
+ * identificerend en voegen voor het clusteren van onderwerpen niets toe.
+ */
+export function sanitizeTopic(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const cleaned = raw
+    .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "…")
+    // Telefoonnummers: +31 6 12345678, 06-12345678, (040) 123 45 67
+    .replace(/(?:\+\d{1,3}[\s-]?)?(?:\(\d{2,4}\)[\s-]?)?\d[\d\s-]{7,}\d/g, "…")
+    // Overgebleven cijferreeksen van 5 of meer: order-, ticket- en klantnummers
+    .replace(/\d{5,}/g, "…")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length > MAX_TOPIC_LENGTH) {
+    return `${cleaned.slice(0, MAX_TOPIC_LENGTH).trimEnd()}…`;
+  }
+  // Alleen leestekens of losse vervangingstekens overgebleven → geen inhoud.
+  if (!/\p{L}{2,}/u.test(cleaned)) return undefined;
+  return cleaned;
+}
+
 function parseItem(value: unknown): RawFandeskItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -218,11 +250,13 @@ function parseItem(value: unknown): RawFandeskItem | null {
   if (!id || id.length > MAX_ID_LENGTH) return null;
 
   const rawCategory = item.category ?? item.categorie ?? "";
+  const rawTopic = item.topic ?? item.subject ?? item.onderwerp ?? item.samenvatting;
 
   return {
     id,
     rawCategory: typeof rawCategory === "string" ? rawCategory : String(rawCategory),
     at: parseTimestamp(item),
+    topic: sanitizeTopic(rawTopic),
   };
 }
 

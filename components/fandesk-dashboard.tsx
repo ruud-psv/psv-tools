@@ -15,10 +15,14 @@ import {
 } from "recharts";
 import {
   AlertCircle,
+  AlertTriangle,
   CalendarClock,
+  CheckCircle2,
   Headset,
   Layers,
+  Lightbulb,
   Loader2,
+  MessageSquareText,
   RefreshCw,
   TrendingDown,
   TrendingUp,
@@ -34,7 +38,16 @@ import {
   shiftDayKey,
   toAmsterdamParts,
 } from "@/lib/fandesk";
-import type { FandeskData } from "@/app/api/fandesk/route";
+import type { FandeskData, FandeskDaySummary } from "@/app/api/fandesk/route";
+import type { FandeskAlert } from "@/lib/insights/fandesk";
+
+/** Prozatekst over de periode, zoals /api/fandesk/summary hem teruggeeft. */
+interface PeriodSummary {
+  summary: string;
+  highlights: { type: string; text: string }[];
+  recommendations: string[];
+  generatedAt: string;
+}
 
 /**
  * Kleuren per categorie. Recharts heeft letterlijke waarden nodig, dus dit zijn
@@ -159,6 +172,9 @@ export function FANdeskDashboard() {
   const [data, setData] = useState<FandeskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [periodSummary, setPeriodSummary] = useState<PeriodSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const range = useMemo(() => {
     if (period === "custom" && customFrom && customTo) {
@@ -178,7 +194,12 @@ export function FANdeskDashboard() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error ?? "Ophalen mislukt.");
-      setData(payload as FandeskData);
+      const next = payload as FandeskData;
+      setData(next);
+      // De opgeslagen periodetekst overnemen; is die verlopen, dan komt hier null
+      // en biedt de kaart de knop om hem bij te werken.
+      setPeriodSummary(next.periodSummary ?? null);
+      setSummaryError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ophalen mislukt.");
     } finally {
@@ -189,6 +210,26 @@ export function FANdeskDashboard() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  /** De enige plek waar een klik een AI-call kost. */
+  const refreshPeriodSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const res = await fetch("/api/fandesk/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: range.from, to: range.to }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error ?? "Analyse mislukt.");
+      setPeriodSummary(payload as PeriodSummary);
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : "Analyse mislukt.");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [range.from, range.to]);
 
   const spanDays = dayCount(range.from, range.to);
 
@@ -272,6 +313,24 @@ export function FANdeskDashboard() {
       hours[parts.hour].total += count;
     }
     return { weekdays, hours };
+  }, [data]);
+
+  /**
+   * De heads-up hoort bij de meest recente dag met een samenvatting. Oudere
+   * alerts blijven in de "Per dag"-lijst staan maar horen niet als banner boven
+   * het dashboard — dan zou een piek van drie weken terug nog om aandacht vragen.
+   */
+  const activeAlerts = useMemo(() => {
+    const days = data?.daySummaries ?? [];
+    if (!days.length) return [];
+    // daySummaries komt nieuwste eerst uit de API.
+    const latest = days[0];
+    // Alleen als die dag ook echt actueel is. Bij een periode uit het verleden
+    // hoort een heads-up niet bovenaan de pagina — de tekst zegt "vandaag" en het
+    // is geen actie meer. Hij blijft wel staan in de "Per dag"-lijst.
+    const yesterday = shiftDayKey(todayKey(), -1);
+    if (latest.day < yesterday) return [];
+    return (latest.alerts ?? []).map((alert) => ({ ...alert, day: latest.day }));
   }, [data]);
 
   const totals = data?.totals ?? null;
@@ -419,6 +478,8 @@ export function FANdeskDashboard() {
       {data && (
         // Bij verversen de vorige render vasthouden op halve dekking — geen layout-sprong.
         <div className={cn("space-y-8 transition-opacity", loading && "opacity-50")}>
+          <HeadsUpBanner alerts={activeAlerts} />
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
               label="Tickets totaal"
@@ -463,6 +524,14 @@ export function FANdeskDashboard() {
             </Card>
           ) : (
             <>
+              <ContentCard
+                data={data}
+                onRefreshSummary={refreshPeriodSummary}
+                summaryLoading={summaryLoading}
+                summaryError={summaryError}
+                periodSummary={periodSummary}
+              />
+
               <Card>
                 <CardHeader className="flex flex-row items-start justify-between gap-4">
                   <div>
@@ -930,6 +999,259 @@ function RhythmChart({
           </BarChart>
         </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Heads-up voor de support desk. Alleen zichtbaar als er echt iets uitspringt —
+ * het model geeft standaard een lege lijst terug. De onderbouwing staat er bewust
+ * bij: het model beoordeelt zelf wat opvalt, dus de lezer moet kunnen zien waarop
+ * dat gebaseerd is.
+ */
+function HeadsUpBanner({ alerts }: { alerts: Array<FandeskAlert & { day: string }> }) {
+  if (!alerts.length) return null;
+  // Alerts ouder dan gisteren worden niet als banner getoond, dus de dag is altijd
+  // vandaag of gisteren. Alleen dat laatste is het benoemen waard.
+  const today = todayKey();
+  return (
+    <div className="space-y-3">
+      {alerts.map((alert, index) => (
+        <div key={index} className="alert alert--warning">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm">
+                <span className="font-heading uppercase tracking-wide">
+                  Let op{alert.day !== today ? ", gisteren" : ""}
+                </span>
+                {" — "}
+                {String(alert.label ?? "")}
+              </p>
+              {alert.evidence && (
+                <p className="text-xs tabular-nums">{String(alert.evidence)}</p>
+              )}
+              {alert.advice && (
+                <p className="text-xs italic">Advies: {String(alert.advice)}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function highlightIcon(type: string) {
+  const base = "h-4 w-4 shrink-0 mt-0.5";
+  switch (type) {
+    case "achievement":
+      return <CheckCircle2 className={cn(base, "text-success")} />;
+    case "warning":
+      return <AlertTriangle className={cn(base, "text-error")} />;
+    case "anomaly":
+      return <AlertTriangle className={cn(base, "text-warning")} />;
+    default:
+      return <TrendingUp className={cn(base, "text-info")} />;
+  }
+}
+
+/** "Wat wordt er gevraagd?" — de inhoudelijke kaart naast de cijfers. */
+function ContentCard({
+  data,
+  periodSummary,
+  summaryLoading,
+  summaryError,
+  onRefreshSummary,
+}: {
+  data: FandeskData;
+  periodSummary: PeriodSummary | null;
+  summaryLoading: boolean;
+  summaryError: string | null;
+  onRefreshSummary: () => void;
+}) {
+  const daySummaries = data.daySummaries ?? [];
+  const themes = data.topThemes ?? [];
+  const themeTotal = themes.reduce((sum, t) => sum + (Number(t.count) || 0), 0);
+  const singleDay = data.from === data.to;
+
+  // Bij één dag in het bereik is de dagsamenvatting de periodesamenvatting.
+  const prose = singleDay ? daySummaries[0]?.summary ?? null : periodSummary?.summary ?? null;
+  const highlights = singleDay ? [] : periodSummary?.highlights ?? [];
+  const recommendations = singleDay ? [] : periodSummary?.recommendations ?? [];
+
+  // Nog geen enkele onderwerpregel aangeleverd: dit is de normale staat vlak na
+  // het uitrollen, en voor alle tickets van vóór deze functie.
+  if (!daySummaries.length) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex items-start gap-3 py-8">
+          <MessageSquareText className="h-5 w-5 shrink-0 text-psv-gold" />
+          <div>
+            <p className="text-sm">Nog geen inhoud over deze periode.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {data.hasTopics
+                ? "De samenvatting wordt gemaakt zodra de volgende n8n-batch binnenkomt."
+                : "Zodra n8n onderwerpregels meestuurt, staat hier wat er gevraagd wordt en waar de desk op moet letten."}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-t-2 border-t-psv-gold">
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle className="text-lg font-heading uppercase tracking-wide">
+            Wat wordt er gevraagd?
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            {singleDay
+              ? "Samenvatting van deze dag"
+              : `Samenvatting over ${daySummaries.length} ${
+                  daySummaries.length === 1 ? "dag" : "dagen"
+                } met inhoud`}
+          </p>
+        </div>
+        {!singleDay && (
+          <button
+            onClick={onRefreshSummary}
+            disabled={summaryLoading}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-heading uppercase tracking-wide bg-card border border-border text-muted-foreground hover:text-foreground disabled:opacity-40"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", summaryLoading && "animate-spin")} />
+            {periodSummary ? "Bijwerken" : "Samenvatten"}
+          </button>
+        )}
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+        {summaryLoading && !prose ? (
+          <div className="flex items-center gap-3 py-2">
+            <Loader2 className="h-5 w-5 animate-spin text-psv-gold" />
+            <span className="text-sm text-muted-foreground">Samenvatting wordt gemaakt…</span>
+          </div>
+        ) : prose ? (
+          <p className="text-sm leading-relaxed">{String(prose)}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {data.periodSummaryStale
+              ? "Er is nieuwe data sinds de laatste samenvatting. Klik op Bijwerken voor een tekst over deze periode."
+              : "Klik op Samenvatten voor een tekst over deze periode."}
+          </p>
+        )}
+
+        {summaryError && <p className="text-xs text-error">{summaryError}</p>}
+
+        {themes.length > 0 && (
+          <div>
+            <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-2">
+              Meest voorkomende vragen
+              {themeTotal > 0 && (
+                <span className="font-sans normal-case tracking-normal">
+                  {" "}
+                  — aandeel van {formatNumber(themeTotal)} vragen met onderwerp
+                </span>
+              )}
+            </p>
+            <ul className="space-y-1.5">
+              {themes.slice(0, 8).map((theme) => (
+                <li key={theme.label} className="flex items-baseline justify-between gap-4 text-sm">
+                  <span className="flex items-baseline gap-2 min-w-0">
+                    <span
+                      aria-hidden
+                      className="inline-block h-1.5 w-1.5 shrink-0 translate-y-[-2px] bg-psv-red-primary"
+                    />
+                    <span className="truncate">{String(theme.label)}</span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {formatNumber(Number(theme.count) || 0)}
+                    {themeTotal > 0 && (
+                      <span className="ml-2">
+                        {formatPercent(((Number(theme.count) || 0) / themeTotal) * 100)}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {highlights.length > 0 && (
+          <div className="space-y-2">
+            {highlights.map((h, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                {highlightIcon(String(h.type ?? "trend"))}
+                <span>{String(h.text ?? "")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {recommendations.length > 0 && (
+          <div>
+            <p className="flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground mb-2">
+              <Lightbulb className="h-3.5 w-3.5" />
+              Zo nemen deze vragen af
+            </p>
+            <ul className="space-y-2">
+              {recommendations.map((r, i) => (
+                <li
+                  key={i}
+                  className="text-sm pl-3 border-l-2 border-psv-gold text-muted-foreground"
+                >
+                  {String(r ?? "")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!singleDay && daySummaries.length > 0 && (
+          <details className="accordion">
+            <summary>Per dag</summary>
+            <div className="accordion__content space-y-4">
+              {daySummaries.map((day) => (
+                <DaySummaryBlock key={day.day} day={day} />
+              ))}
+            </div>
+          </details>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DaySummaryBlock({ day }: { day: FandeskDaySummary }) {
+  const label = new Date(`${day.day}T12:00:00Z`).toLocaleDateString("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+  return (
+    <div className="space-y-1.5">
+      <p className="font-heading text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-sm leading-relaxed">{String(day.summary ?? "")}</p>
+      {day.themes.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {day.themes
+            .slice(0, 5)
+            .map((t) => `${String(t.label)} (${Number(t.count) || 0})`)
+            .join(" · ")}
+        </p>
+      )}
+      {day.alerts.length > 0 && (
+        <p className="flex items-start gap-1.5 text-xs text-warning">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>{day.alerts.map((a) => String(a.label)).join(" · ")}</span>
+        </p>
+      )}
     </div>
   );
 }
