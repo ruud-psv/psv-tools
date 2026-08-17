@@ -118,34 +118,85 @@ De instructie voor `topic`:
 
 ### Code Parse
 
-Deze node zet de modeloutput om in items. Voeg `topic` toe aan het object dat je teruggeeft:
+Deze node parseert de JSON uit Claude's antwoord en koppelt die op `id` terug aan de originele
+tickets, zodat `created_at` uit de bron komt en niet uit het model:
 
 ```js
-// De batch waar het model op werkte, op id ontsloten
-const batch = new Map($input.all().map(i => [String(i.json.id), i.json]));
+const results = [];
+const errors = [];
+const skipped = [];
 
-return parsed.map(row => {
-  const ticket = batch.get(String(row.id));
-  if (!ticket) return null;            // geen match → overslaan, niet doorschuiven
-  return {
-    json: {
-      id: String(row.id),
-      category: row.category,
-      created_at: ticket.created_at,
-      topic: row.topic,
-    },
-  };
-}).filter(Boolean);
+// Lookup van alle originele tickets (id -> created_at), zodat Claude's output
+// op id terugkoppelt in plaats van op positie.
+const ticketLookup = {};
+for (const item of $('Code in Batches').all()) {
+  for (const ticket of item.json.ticket_batch) {
+    ticketLookup[String(ticket.id)] = ticket.created_at;
+  }
+}
+
+for (const [batchIndex, item] of items.entries()) {
+  try {
+    const rawText = item.json.content[0].text;
+    const cleanText = rawText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Claude gaf geen array terug maar ${typeof parsed}`);
+    }
+
+    for (const ticket of parsed) {
+      const id = String(ticket.id ?? '').trim();
+      const created_at = ticketLookup[id];
+
+      // Geen match betekent dat Claude het id heeft aangepast of verzonnen.
+      // Dan liever overslaan dan met een verkeerd tijdstip doorsturen.
+      if (!id || created_at === undefined) {
+        skipped.push({ batch_index: batchIndex, id: ticket.id ?? null });
+        continue;
+      }
+
+      results.push({
+        json: {
+          id,
+          category: ticket.category,
+          created_at,
+          topic: typeof ticket.topic === 'string' ? ticket.topic.trim() : undefined
+        }
+      });
+    }
+  } catch (err) {
+    errors.push({
+      batch_index: batchIndex,
+      raw_output: item.json.content?.[0]?.text || 'geen content gevonden',
+      error_message: err.message
+    });
+  }
+}
+
+if (errors.length > 0) {
+  console.log('Parse errors:', JSON.stringify(errors));
+}
+if (skipped.length > 0) {
+  console.log(`${skipped.length} ticket(s) overgeslagen omdat het id niet terug te vinden was:`, JSON.stringify(skipped));
+}
+
+return results;
 ```
 
-**Let op bij het koppelen.** Als je de modeloutput op positie aan de batch zipt, verschuift bij
-een batch waar het model één regel minder teruggeeft alles één op — en krijgt een ticket het
-onderwerp én de categorie van zijn buur. Dat risico bestaat al voor `category`, maar met een
-onderwerpregel erbij wordt een verkeerde koppeling zichtbaar in het dashboard. Match daarom op
-`id` en sla tickets zonder match over.
+**Waarom een ticket zonder match wordt overgeslagen en niet met `created_at: null` doorgestuurd.**
+De ingest behandelt een ontbrekende `created_at` als "gebruik het moment van binnenkomst". Zo'n
+ticket landt dus stil op vandaag in plaats van op zijn echte dag, én triggert een hersamenvatting
+van vandaag met een onderwerp dat er niet hoort. Een id dat niet in de lookup zit komt uit
+dezelfde batch die net verstuurd is, dus een miss betekent vrijwel altijd dat het model het id
+heeft aangepast. Overslaan en loggen is dan eerlijker.
 
-De ingest accepteert naast `topic` ook `subject`, `onderwerp` en `samenvatting` als veldnaam, dus
-als je parse-node al een van die namen uitspuugt hoef je niets om te noemen.
+**Koppel niet op positie.** Zipt de parse de modeloutput op index aan de batch, dan verschuift bij
+een batch waar het model één regel minder teruggeeft alles één op — en krijgt een ticket het
+onderwerp én de categorie van zijn buur. De lookup hierboven voorkomt dat.
+
+`topic` mag ontbreken: dat ticket telt gewoon mee in de aantallen, alleen zonder inhoud. De ingest
+accepteert naast `topic` ook `subject`, `onderwerp` en `samenvatting` als veldnaam.
 
 ### Aggregate en HTTP Request
 
