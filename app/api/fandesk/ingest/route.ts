@@ -1,7 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { isBatchTooLarge, MAX_ITEMS_PER_BATCH, parseIngestPayload } from "@/lib/fandesk";
+import {
+  isBatchTooLarge,
+  MAX_ITEMS_PER_BATCH,
+  parseIngestPayload,
+  toAmsterdamParts,
+} from "@/lib/fandesk";
 import { appendTickets, readSummary } from "@/lib/fandesk-store";
+import { refreshDaySummaries } from "@/lib/fandesk-summarize";
 
 /**
  * Ingest-endpoint voor de n8n workflow die support tickets ophaalt en
@@ -73,6 +79,26 @@ export async function POST(request: Request) {
         result.unknownCategories.join(", ")
       );
     }
+
+    // Samenvattingen bijwerken voor de dagen die deze batch raakt — normaal
+    // alleen vandaag, bij een backfill meerdere. Dit draait via `after()` ná het
+    // versturen van de response: de ingest wordt er niet langzamer van, en een
+    // AI-storing kan het opslaan van tickets niet laten mislukken.
+    if (result.added > 0) {
+      const days = [
+        ...new Set(
+          parsed.items
+            .map((item) => toAmsterdamParts(item.at ?? batchAt)?.dayKey)
+            .filter((day): day is string => Boolean(day))
+        ),
+      ];
+      after(async () => {
+        const outcomes = await refreshDaySummaries(days);
+        const done = outcomes.filter((o) => o.status === "geanalyseerd").length;
+        if (done) console.log(`[fandesk/ingest] ${done} dagsamenvatting(en) bijgewerkt.`);
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       received: parsed.items.length,

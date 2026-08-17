@@ -5,9 +5,13 @@ export class InsightAnalysisError extends Error {
   constructor(message: string, public details?: string) { super(message); }
 }
 
+const DEFAULT_MAX_TOKENS = 2048;
+
 export async function runInsightAnalysis<T>(args: {
   systemPrompt: string;
   userMessage: string;
+  /** Alleen meegeven wanneer de verwachte JSON niet in 2048 tokens past. */
+  maxTokens?: number;
 }): Promise<T> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new InsightConfigError("ANTHROPIC_API_KEY ontbreekt.");
@@ -15,7 +19,7 @@ export async function runInsightAnalysis<T>(args: {
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
+    max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: args.systemPrompt,
     messages: [{ role: "user", content: args.userMessage }],
   });
