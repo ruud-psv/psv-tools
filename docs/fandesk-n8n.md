@@ -42,12 +42,8 @@ Body: een object met een `items` array (een kale array mag ook). Per ticket:
 
 ### De onderwerpregel
 
-Laat de analyse-node per ticket een `topic` schrijven met deze instructie:
-
-> Vat de vraag samen in maximaal 10 woorden Nederlands, als onderwerp — niet als vraag.
-> Noem geen namen, e-mailadressen, ordernummers of ticketnummers. Wel het onderwerp waar het
-> over gaat, inclusief de wedstrijd of het product als dat de kern is.
-> Voorbeeld: `vervoer en parkeren rond uitwedstrijd Ajax`.
+De `topic` wordt geschreven door de AI-node in de workflow — zie
+[Message a model](#message-a-model) voor de instructie.
 
 De ingest maakt de regel daarna alsnog schoon: e-mailadressen, telefoonnummers en cijferreeksen
 van vijf of meer worden vervangen door `…`, en de tekst wordt afgekapt op 120 tekens. Dat is een
@@ -76,13 +72,87 @@ Response:
 }
 ```
 
-## De laatste twee nodes in n8n
+## De workflow in n8n
 
-De workflow heeft losse items; een HTTP Request node zou daar één request per ticket van maken.
-Voeg daarom achter de analyse-node twee nodes toe:
+De keten ziet er zo uit:
+
+```
+Schedule Trigger → Code → Get many tickets → Filter → Code in Batches
+  → Message a model → Code Parse → Aggregate → HTTP Request
+```
+
+Per node wat er moet gebeuren:
+
+| Node | Wijziging |
+|---|---|
+| Schedule Trigger, Code, Get many tickets, Filter | Geen. |
+| **Code in Batches** | Zorg dat de tickettekst meegaat naar het model — zonder tekst kan er geen onderwerpregel geschreven worden. |
+| **Message a model** | Prompt uitbreiden: per ticket náást `category` ook `topic`, en de `id` mee-echoën. |
+| **Code Parse** | `topic` doorgeven in het item dat de node teruggeeft, en op `id` matchen in plaats van op positie. |
+| Aggregate | Geen — neemt alle velden van een item mee. |
+| HTTP Request | Geen — stuurt `$json.items` in z'n geheel door. |
+
+De onderwerpregel ontstaat dus in **Message a model** (de enige node die de tickettekst ziet) en
+wordt doorgegeven in **Code Parse**. De twee nodes daarna hoef je niet aan te raken.
+
+### Message a model
+
+Laat het model per ticket een object teruggeven met drie velden. De `id` mee-echoën is geen
+overbodige luxe — zie de waarschuwing bij Code Parse.
+
+```json
+[
+  { "id": "48211", "category": "Tickets", "topic": "terugbetaling na afgelasting" },
+  { "id": "48212", "category": "Wedstrijdinformatie", "topic": "vervoer en parkeren rond uitwedstrijd Ajax" }
+]
+```
+
+De instructie voor `topic`:
+
+> Vat de vraag samen in maximaal 10 woorden Nederlands, als onderwerp — niet als vraag.
+> Noem geen namen, e-mailadressen, ordernummers of ticketnummers. Wel het onderwerp waar het
+> over gaat, inclusief de wedstrijd of het product als dat de kern is.
+> Voorbeeld: `vervoer en parkeren rond uitwedstrijd Ajax`.
+>
+> Geef de `id` van het ticket ongewijzigd terug, zodat de koppeling klopt.
+
+### Code Parse
+
+Deze node zet de modeloutput om in items. Voeg `topic` toe aan het object dat je teruggeeft:
+
+```js
+// De batch waar het model op werkte, op id ontsloten
+const batch = new Map($input.all().map(i => [String(i.json.id), i.json]));
+
+return parsed.map(row => {
+  const ticket = batch.get(String(row.id));
+  if (!ticket) return null;            // geen match → overslaan, niet doorschuiven
+  return {
+    json: {
+      id: String(row.id),
+      category: row.category,
+      created_at: ticket.created_at,
+      topic: row.topic,
+    },
+  };
+}).filter(Boolean);
+```
+
+**Let op bij het koppelen.** Als je de modeloutput op positie aan de batch zipt, verschuift bij
+een batch waar het model één regel minder teruggeeft alles één op — en krijgt een ticket het
+onderwerp én de categorie van zijn buur. Dat risico bestaat al voor `category`, maar met een
+onderwerpregel erbij wordt een verkeerde koppeling zichtbaar in het dashboard. Match daarom op
+`id` en sla tickets zonder match over.
+
+De ingest accepteert naast `topic` ook `subject`, `onderwerp` en `samenvatting` als veldnaam, dus
+als je parse-node al een van die namen uitspuugt hoef je niets om te noemen.
+
+### Aggregate en HTTP Request
+
+Deze twee zorgen voor de bezorging en veranderen niet:
 
 1. **Aggregate** — *Aggregate* op `All Item Data (Into a Single List)`, *Put Output in Field* op
-   `items`. Alle tickets worden zo één item; `created_at` gaat automatisch mee.
+   `items`. Alle tickets worden zo één item; `created_at` en `topic` gaan automatisch mee.
 2. **HTTP Request** — `POST` naar het endpoint hierboven.
    - *Send Headers* aan: `Authorization` = `Bearer <FANDESK_INGEST_SECRET>`. Gebruik liever een
      *Header Auth* credential, dan staat het secret niet in de workflow-JSON.
