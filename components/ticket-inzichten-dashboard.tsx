@@ -456,6 +456,7 @@ function EventDetailPanel({
   const [comparisons, setComparisons] = useState<ComparisonInput[]>([]);
   const [compareMode, setCompareMode] = useState<ComparisonMode>("perDag");
   const [compareWindow, setCompareWindow] = useState<ComparisonWindow>("live");
+  const [compareExcludedTypes, setCompareExcludedTypes] = useState<string[]>([]);
 
   const handleShare = useCallback(async () => {
     const res = await fetch("/api/share", {
@@ -471,7 +472,14 @@ function EventDetailPanel({
         // De gekozen vergelijking meesturen, zodat de ontvanger hetzelfde beeld
         // ziet. Die kan het op de share-pagina zelf nog aanpassen.
         ...(compareIds.length > 0
-          ? { compare: compareIds, compareMode, compareWindow }
+          ? {
+              compare: compareIds,
+              compareMode,
+              compareWindow,
+              ...(compareExcludedTypes.length > 0
+                ? { compareExcludedTypes }
+                : {}),
+            }
           : {}),
       }),
     });
@@ -487,6 +495,7 @@ function EventDetailPanel({
     compareIds,
     compareMode,
     compareWindow,
+    compareExcludedTypes,
   ]);
 
   return (
@@ -533,6 +542,8 @@ function EventDetailPanel({
             onModeChange={setCompareMode}
             window={compareWindow}
             onWindowChange={setCompareWindow}
+            excludedTypes={compareExcludedTypes}
+            onExcludedTypesChange={setCompareExcludedTypes}
             onInputsChange={setComparisons}
           />
         </div>

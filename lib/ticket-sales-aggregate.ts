@@ -221,6 +221,85 @@ export function extractOpponent(name: string): string {
     .toLowerCase();
 }
 
+/**
+ * Dagreeks van één tickettype: `v[0]` hoort bij `first`, elke volgende stap is één
+ * dag richting de wedstrijd. Dicht binnen het eigen actieve venster, zodat een type
+ * dat maar op drie dagen voorkomt ook maar drie getallen kost.
+ */
+export interface TypeSeries {
+  first: number;
+  v: number[];
+}
+
+/** Meer typen dan dit per wedstrijd vouwt samen naar `"overig"`. */
+export const MAX_TICKET_TYPES = 20;
+
+/** Naam waaronder de tail van te veel tickettypes samenkomt. */
+export const OTHER_TYPE = "overig";
+
+/** Waarde waarmee een lege of onbruikbare tickettype-cel wordt vervangen. */
+export const UNKNOWN_TYPE = "onbekend";
+
+/**
+ * Tickettypes komen ongefilterd uit een export, dus ze worden genormaliseerd
+ * voordat ze een sleutel in de opslag én een vinkje in de UI worden.
+ */
+export function normalizeTicketType(value: string): string {
+  const trimmed = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed) return UNKNOWN_TYPE;
+  return trimmed.slice(0, 40);
+}
+
+/**
+ * Het minimum dat `sumSeries` nodig heeft, zodat zowel een net geaggregeerd event
+ * als een uit de opslag gelezen event erin past.
+ */
+export interface SeriesCarrier {
+  firstOffset: number;
+  tickets: number[];
+  series?: Record<string, TypeSeries>;
+}
+
+/** De tickettypes van een event, alfabetisch. Leeg `series` = alleen het totaal. */
+export function ticketTypesOf(event: SeriesCarrier): string[] {
+  return event.series ? Object.keys(event.series).sort() : [];
+}
+
+/**
+ * Tickets per dagen-tot-event, opgeteld over de meegegeven tickettypes.
+ *
+ * Dit is de enige plek waar het filter wordt toegepast. `null` of `undefined` voor
+ * `includedTypes` betekent alles; een leeg array betekent expliciet niets. Events
+ * zonder `series` — opgeslagen vóór de uitsplitsing bestond — leveren hun totaal.
+ */
+export function sumSeries(
+  event: SeriesCarrier,
+  includedTypes?: string[] | null
+): Map<number, number> {
+  const out = new Map<number, number>();
+
+  if (!event.series || Object.keys(event.series).length === 0) {
+    // Oude vorm: er is niets om op te filteren, dus het totaal is het antwoord.
+    if (includedTypes && includedTypes.length === 0) return out;
+    for (let i = 0; i < event.tickets.length; i++) {
+      out.set(event.firstOffset - i, event.tickets[i]);
+    }
+    return out;
+  }
+
+  const wanted = includedTypes ? new Set(includedTypes) : null;
+  for (const [type, series] of Object.entries(event.series)) {
+    if (wanted && !wanted.has(type)) continue;
+    for (let i = 0; i < series.v.length; i++) {
+      const offset = series.first - i;
+      const value = series.v[i];
+      if (value === 0 && !out.has(offset)) out.set(offset, 0);
+      else if (value !== 0) out.set(offset, (out.get(offset) ?? 0) + value);
+    }
+  }
+  return out;
+}
+
 /** Eén samengevat event zoals het wordt opgeslagen. */
 export interface AggregatedEvent {
   id: string;
@@ -237,6 +316,12 @@ export interface AggregatedEvent {
   tickets: number[];
   /** Unieke orders per dag, zelfde indexering als `tickets`. */
   orders: number[];
+  /**
+   * Dezelfde verkoop, uitgesplitst per tickettype. De som hiervan per dag is
+   * gelijk aan `tickets` — dat is wat filteren mogelijk maakt zonder dat het
+   * ongefilterde totaal opnieuw berekend hoeft te worden.
+   */
+  series: Record<string, TypeSeries>;
 }
 
 export interface EventBreakdown {
@@ -277,11 +362,14 @@ interface EventAccumulator {
   name: string;
   date: string;
   eventDay: string;
-  /** Tickets per dagen-tot-event. */
-  perOffset: Map<number, number>;
+  /**
+   * Tickets per tickettype per dagen-tot-event. Het eventtotaal wordt hier bij
+   * `finish()` uit opgeteld, zodat er één bron van waarheid is en de som van de
+   * typen per definitie klopt met het totaal.
+   */
+  perTypeOffset: Map<string, Map<number, number>>;
   /** Order-id's per dagen-tot-event, om transacties los te kunnen tellen. */
   ordersPerOffset: Map<number, Set<string>>;
-  byTicketType: Map<string, number>;
   byChannel: Map<string, number>;
   freeTickets: number;
   totalTickets: number;
@@ -302,6 +390,41 @@ export interface Aggregator {
 
 function bump<K>(map: Map<K, number>, key: K, by = 1): void {
   map.set(key, (map.get(key) ?? 0) + by);
+}
+
+/**
+ * Houdt het aantal tickettypes hanteerbaar. Een export met tientallen varianten
+ * zou anders evenveel reeksen per wedstrijd opleveren — en evenveel vinkjes in
+ * de UI. De grootste typen blijven staan, de rest telt op in `"overig"`.
+ */
+function capTicketTypes(
+  perTypeOffset: Map<string, Map<number, number>>
+): Map<string, Map<number, number>> {
+  if (perTypeOffset.size <= MAX_TICKET_TYPES) return perTypeOffset;
+
+  const volumes = [...perTypeOffset.entries()]
+    .map(([type, map]) => {
+      let total = 0;
+      for (const value of map.values()) total += value;
+      return { type, map, total };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const kept = new Map<string, Map<number, number>>();
+  for (const { type, map } of volumes.slice(0, MAX_TICKET_TYPES)) kept.set(type, map);
+
+  const other = new Map<number, number>();
+  for (const { map } of volumes.slice(MAX_TICKET_TYPES)) {
+    for (const [offset, value] of map) bump(other, offset, value);
+  }
+  // `"overig"` kan al bestaan als het zelf een van de grootste typen was.
+  const existing = kept.get(OTHER_TYPE);
+  if (existing) {
+    for (const [offset, value] of other) bump(existing, offset, value);
+  } else {
+    kept.set(OTHER_TYPE, other);
+  }
+  return kept;
 }
 
 /**
@@ -361,9 +484,8 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
           name,
           date: `${eventDay}T${pad(eventAt.hour)}:${pad(eventAt.minute)}`,
           eventDay,
-          perOffset: new Map(),
+          perTypeOffset: new Map(),
           ordersPerOffset: new Map(),
-          byTicketType: new Map(),
           byChannel: new Map(),
           freeTickets: 0,
           totalTickets: 0,
@@ -372,7 +494,13 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
       }
 
       const offset = offsetBetween(toDayKey(purchasedAt), eventDay);
-      bump(acc.perOffset, offset);
+      const ticketType = normalizeTicketType(cells[columns.ticketType]);
+      let perOffset = acc.perTypeOffset.get(ticketType);
+      if (!perOffset) {
+        perOffset = new Map();
+        acc.perTypeOffset.set(ticketType, perOffset);
+      }
+      bump(perOffset, offset);
       acc.totalTickets++;
 
       const orderId = cells[columns.orderId];
@@ -385,8 +513,7 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
         orders.add(orderId);
       }
 
-      bump(acc.byTicketType, cells[columns.ticketType] || "onbekend");
-      bump(acc.byChannel, cells[columns.channel] || "onbekend");
+      bump(acc.byChannel, clean(cells[columns.channel]) || UNKNOWN_TYPE);
 
       // Prijzen zijn NL-geformatteerd ("12,5"); alleen de nulcheck is nodig.
       const price = Number((cells[columns.price] || "0").replace(",", "."));
@@ -398,8 +525,12 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
       const breakdowns: EventBreakdown[] = [];
 
       for (const acc of events.values()) {
-        const offsets = [...acc.perOffset.keys()];
-        if (offsets.length === 0) continue;
+        const perType = capTicketTypes(acc.perTypeOffset);
+        const offsets = new Set<number>();
+        for (const map of perType.values()) {
+          for (const offset of map.keys()) offsets.add(offset);
+        }
+        if (offsets.size === 0) continue;
 
         // Aflopend: van de vroegste verkoopdag (hoogste dagen-tot-event) naar
         // de laatste. Dagen zonder verkoop binnen dat venster worden een echte
@@ -409,13 +540,37 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
         const lastOffset = Math.min(...offsets);
         const length = firstOffset - lastOffset + 1;
 
+        // Het eventtotaal wordt uit de typen opgeteld in plaats van los
+        // bijgehouden, zodat de som van de reeksen per definitie klopt met
+        // `tickets` — precies de eigenschap waar het filteren op leunt.
         const tickets = new Array<number>(length).fill(0);
         const orders = new Array<number>(length).fill(0);
         for (let i = 0; i < length; i++) {
           const offset = firstOffset - i;
-          tickets[i] = acc.perOffset.get(offset) ?? 0;
+          let total = 0;
+          for (const map of perType.values()) total += map.get(offset) ?? 0;
+          tickets[i] = total;
           orders[i] = acc.ordersPerOffset.get(offset)?.size ?? 0;
         }
+
+        const series: Record<string, TypeSeries> = {};
+        const byTicketType: Record<string, number> = {};
+        for (const [type, map] of perType) {
+          const typeOffsets = [...map.keys()];
+          const typeFirst = Math.max(...typeOffsets);
+          const typeLast = Math.min(...typeOffsets);
+          const v = new Array<number>(typeFirst - typeLast + 1).fill(0);
+          let typeTotal = 0;
+          for (let i = 0; i < v.length; i++) {
+            const value = map.get(typeFirst - i) ?? 0;
+            v[i] = value;
+            typeTotal += value;
+          }
+          series[type] = { first: typeFirst, v };
+          byTicketType[type] = typeTotal;
+        }
+
+        const totalOrders = orders.reduce((a, b) => a + b, 0);
 
         out.push({
           id: acc.id,
@@ -424,10 +579,11 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
           season,
           opponent: extractOpponent(acc.name),
           totalTickets: acc.totalTickets,
-          totalOrders: orders.reduce((a, b) => a + b, 0),
+          totalOrders,
           firstOffset,
           tickets,
           orders,
+          series,
         });
 
         breakdowns.push({
@@ -435,10 +591,10 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
           name: acc.name,
           date: acc.date,
           totalTickets: acc.totalTickets,
-          totalOrders: orders.reduce((a, b) => a + b, 0),
+          totalOrders,
           firstOffset,
           lastOffset,
-          byTicketType: Object.fromEntries(acc.byTicketType),
+          byTicketType,
           byChannel: Object.fromEntries(acc.byChannel),
           freeTickets: acc.freeTickets,
         });

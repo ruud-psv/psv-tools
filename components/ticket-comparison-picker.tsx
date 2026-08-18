@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, History } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, History } from "lucide-react";
 import { ItemChecklist } from "@/components/report-wizard/ItemChecklist";
-import { extractOpponent } from "@/lib/ticket-sales-aggregate";
+import {
+  extractOpponent,
+  sumSeries,
+  type TypeSeries,
+} from "@/lib/ticket-sales-aggregate";
 import type { ComparisonInput, ComparisonMode, ComparisonWindow } from "@/lib/ticket-sales-comparison";
 
 /**
@@ -26,10 +30,13 @@ interface IndexEntry {
   totalTickets: number;
   firstOffset: number;
   lastOffset: number;
+  ticketTypes?: string[];
 }
 
 interface DetailEvent extends IndexEntry {
   tickets: number[];
+  /** Ontbreekt bij data die is geüpload voordat de uitsplitsing bestond. */
+  series?: Record<string, TypeSeries>;
 }
 
 function formatDate(value: string): string {
@@ -51,6 +58,10 @@ export interface TicketComparisonPickerProps {
   onModeChange: (next: ComparisonMode) => void;
   window: ComparisonWindow;
   onWindowChange: (next: ComparisonWindow) => void;
+  /** Tickettypes die *niet* meetellen. Uitsluitingen, zodat een type dat later
+   * in een nieuwe upload verschijnt vanzelf meedoet in plaats van weg te vallen. */
+  excludedTypes: string[];
+  onExcludedTypesChange: (next: string[]) => void;
   /** De opgehaalde dagreeksen, zodat de grafiek ze kan tekenen. */
   onInputsChange: (inputs: ComparisonInput[]) => void;
   /** Open klappen bij het eerste renderen — bv. wanneer een share-link al een selectie bevat. */
@@ -65,6 +76,8 @@ export function TicketComparisonPicker({
   onModeChange,
   window: windowMode,
   onWindowChange,
+  excludedTypes,
+  onExcludedTypesChange,
   onInputsChange,
   defaultOpen = false,
 }: TicketComparisonPickerProps) {
@@ -99,44 +112,88 @@ export function TicketComparisonPicker({
     };
   }, [open, index]);
 
-  // Dagreeksen van de gekozen wedstrijden ophalen en doorgeven aan de grafiek.
+  // Dagreeksen van de gekozen wedstrijden ophalen. Het filter wordt hier niet
+  // toegepast: de ruwe reeksen blijven staan zodat aan- en uitvinken geen
+  // nieuwe fetch kost.
+  const [details, setDetails] = useState<DetailEvent[]>([]);
+  const selectedKey = selected.join(",");
+
   useEffect(() => {
     if (selected.length === 0) {
-      onInputsChange([]);
+      setDetails([]);
       return;
     }
     let cancelled = false;
     fetch(`/api/ticket-history/historical?ids=${encodeURIComponent(selected.join(","))}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: { events?: DetailEvent[] }) => {
-        if (cancelled) return;
-        const inputs: ComparisonInput[] = (d.events ?? []).map((event) => {
-          const perOffset = new Map<number, number>();
-          for (let i = 0; i < event.tickets.length; i++) {
-            perOffset.set(event.firstOffset - i, event.tickets[i]);
-          }
-          return {
-            id: event.id,
-            name: `${event.name} (${event.season})`,
-            season: event.season,
-            eventDate: event.date,
-            perOffset,
-            total: event.tickets.reduce((a, b) => a + b, 0),
-          };
-        });
-        // Volgorde van de selectie aanhouden, zodat kleuren niet verspringen.
-        inputs.sort((a, b) => selected.indexOf(a.id) - selected.indexOf(b.id));
-        onInputsChange(inputs);
+        if (!cancelled) setDetails(d.events ?? []);
       })
       .catch(() => {
-        if (!cancelled) onInputsChange([]);
+        if (!cancelled) setDetails([]);
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey]);
+
+  /** Alle tickettypes die in de gekozen wedstrijden voorkomen, alfabetisch. */
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const event of details) {
+      for (const type of Object.keys(event.series ?? {})) types.add(type);
+    }
+    return [...types].sort();
+  }, [details]);
+
+  const includedTypes = useMemo(
+    () => availableTypes.filter((t) => !excludedTypes.includes(t)),
+    [availableTypes, excludedTypes]
+  );
+
+  /**
+   * De reeksen die de grafiek tekent, met het filter erop. `sumSeries` is de
+   * enige plek waar dat gebeurt, zodat de dagwaarden én het eindtotaal — waar de
+   * tempo-weergave tegen afzet — uit dezelfde bron komen.
+   */
+  const inputs = useMemo<ComparisonInput[]>(() => {
+    const hasFilter = availableTypes.length > 0 && includedTypes.length !== availableTypes.length;
+    return details
+      .map((event) => {
+        const perOffset = sumSeries(event, hasFilter ? includedTypes : null);
+        let total = 0;
+        for (const value of perOffset.values()) total += value;
+        return {
+          id: event.id,
+          name: `${event.name} (${event.season})`,
+          season: event.season,
+          eventDate: event.date,
+          perOffset,
+          total,
+          unfilteredTotal: event.tickets.reduce((a, b) => a + b, 0),
+        };
+      })
+      // Volgorde van de selectie aanhouden, zodat kleuren niet verspringen.
+      .sort((a, b) => selected.indexOf(a.id) - selected.indexOf(b.id));
+  }, [details, includedTypes, availableTypes, selected]);
+
+  useEffect(() => {
+    onInputsChange(inputs);
     // `onInputsChange` hoort niet in de deps: die verandert per render van de ouder.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected.join(",")]);
+  }, [inputs]);
+
+  const toggleType = useCallback(
+    (type: string) => {
+      onExcludedTypesChange(
+        excludedTypes.includes(type)
+          ? excludedTypes.filter((t) => t !== type)
+          : [...excludedTypes, type]
+      );
+    },
+    [excludedTypes, onExcludedTypesChange]
+  );
 
   const liveOpponent = useMemo(() => extractOpponent(liveEventName), [liveEventName]);
 
@@ -272,6 +329,52 @@ export function TicketComparisonPicker({
                       { value: "full", label: "Volledige verkoop" },
                     ]}
                   />
+                </div>
+              )}
+
+              {selected.length > 0 && availableTypes.length > 1 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-heading uppercase tracking-wide text-muted-foreground">
+                    Meetellen
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableTypes.map((type) => {
+                      const on = !excludedTypes.includes(type);
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => toggleType(type)}
+                          className={
+                            "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors " +
+                            (on
+                              ? "border-primary/40 bg-primary/5 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-accent/40")
+                          }
+                        >
+                          <span
+                            className={
+                              "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border " +
+                              (on ? "border-primary bg-primary text-primary-foreground" : "border-input")
+                            }
+                          >
+                            {on && <Check className="h-2.5 w-2.5" />}
+                          </span>
+                          {type}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {includedTypes.length === 0 ? (
+                    <p className="text-[10px] text-warning">
+                      Alle tickettypes staan uit — vink er minstens één aan.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] leading-snug text-muted-foreground">
+                      Geldt alleen voor de historische wedstrijden. De ticketfeed geeft één
+                      totaal per wedstrijd, dus de huidige wedstrijd kan dit filter niet volgen.
+                    </p>
+                  )}
                 </div>
               )}
             </>

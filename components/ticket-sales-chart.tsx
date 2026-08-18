@@ -396,10 +396,12 @@ function ComparisonLegend({
   series,
   liveName,
   mode,
+  filtered,
 }: {
   series: ComparisonSeries[];
   liveName: string;
   mode: ComparisonMode;
+  filtered: boolean;
 }) {
   return (
     <div className="mt-2 space-y-1.5">
@@ -421,7 +423,14 @@ function ComparisonLegend({
           ? "Tempo: aandeel van de eigen totale verkoop, dus onderling vergelijkbaar. "
           : ""}
         Live cijfers komen uit de ticketfeed (netto stand, retouren eraf); historische cijfers
-        zijn transacties per aankoopdag (bruto). Abonnementhouders zitten niet in de historie.
+        zijn transacties per aankoopdag (bruto).
+        {filtered && (
+          <>
+            {" "}
+            Het tickettype-filter geldt alleen voor de historische wedstrijden: de feed geeft
+            één totaal per wedstrijd en kan niet uitgesplitst worden.
+          </>
+        )}
       </p>
     </div>
   );
@@ -457,8 +466,24 @@ function ComparisonChart({
     );
   }
 
+  // Wel wedstrijden gekozen, maar geen enkele reeks over: alle tickettypes staan
+  // uit. Dat is iets anders dan "geen data" en verdient een eigen boodschap.
+  if (comparisons.length > 0 && series.length === 0) {
+    return (
+      <div className="flex h-28 items-center justify-center px-4 text-center text-xs text-muted-foreground">
+        Alle tickettypes staan uit — vink er minstens één aan om te vergelijken.
+      </div>
+    );
+  }
+
   const visible = visibleOffsetTicks(rows, chartWidth || (compact ? 460 : 620));
   const hasEventDay = rows.some((r) => r.offset === 0);
+
+  // De ticketfeed geeft één totaal per wedstrijd, dus de live reeks kan een
+  // tickettype-filter niet volgen. Als er gefilterd wordt, moet dat te zien zijn
+  // in plaats van dat de twee reeksen zogenaamd hetzelfde meten.
+  const filtered = comparisons.some((c) => c.total < c.unfilteredTotal);
+  const liveLabel = filtered ? `${liveName} (ongefilterd)` : liveName;
 
   // Gegroepeerde staven worden onleesbaar zodra het venster de volledige
   // verkoopperiode beslaat (~130 kolommen × meerdere series), en tempo is per
@@ -494,7 +519,7 @@ function ComparisonChart({
           <Tooltip
             cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.4 }}
             content={
-              <ComparisonTooltip series={series} liveName={liveName} mode={mode} />
+              <ComparisonTooltip series={series} liveName={liveLabel} mode={mode} />
             }
           />
           {hasEventDay && (
@@ -512,7 +537,7 @@ function ComparisonChart({
                 yAxisId="daily"
                 type="monotone"
                 dataKey="live"
-                name={liveName}
+                name={liveLabel}
                 stroke={BAR_COLORS.near}
                 strokeWidth={2}
                 dot={false}
@@ -538,7 +563,7 @@ function ComparisonChart({
               <Bar
                 yAxisId="daily"
                 dataKey="live"
-                name={liveName}
+                name={liveLabel}
                 fill={BAR_COLORS.near}
                 radius={[2, 2, 0, 0]}
                 maxBarSize={barSize}
@@ -559,7 +584,9 @@ function ComparisonChart({
         </ComposedChart>
       </ResponsiveContainer>
 
-      {!compact && <ComparisonLegend series={series} liveName={liveName} mode={mode} />}
+      {!compact && (
+        <ComparisonLegend series={series} liveName={liveLabel} mode={mode} filtered={filtered} />
+      )}
 
       {/* Eén getal per wedstrijd zegt meer dan honderd extra kolommen. */}
       {windowMode === "live" && mode === "perDag" && (

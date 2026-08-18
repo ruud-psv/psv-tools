@@ -25,6 +25,9 @@ interface ShareParams {
   compare?: string[];
   compareMode?: ComparisonMode;
   compareWindow?: ComparisonWindow;
+  /** Tickettypes die niet meetellen. Uitsluitingen, zodat een type dat later in
+   * een nieuwe upload verschijnt vanzelf meedoet in plaats van weg te vallen. */
+  compareExcludedTypes?: string[];
 }
 
 /**
@@ -38,6 +41,14 @@ function sanitizeCompare(value: unknown): string[] {
   return value
     .filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 120)
     .slice(0, MAX_COMPARE);
+}
+
+/** Zelfde reden als `sanitizeCompare`: het token is niet ondertekend. */
+function sanitizeTypes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 40)
+    .slice(0, 40);
 }
 
 function sanitizeMode(value: unknown): ComparisonMode {
@@ -89,6 +100,7 @@ function ShareTicketContent() {
   const [comparisons, setComparisons] = useState<ComparisonInput[]>([]);
   const [compareMode, setCompareMode] = useState<ComparisonMode>("perDag");
   const [compareWindow, setCompareWindow] = useState<ComparisonWindow>("live");
+  const [compareExcludedTypes, setCompareExcludedTypes] = useState<string[]>([]);
   const [compareTouched, setCompareTouched] = useState(Boolean(compareFromUrl));
 
   useEffect(() => {
@@ -106,6 +118,7 @@ function ShareTicketContent() {
           setCompareIds(sanitizeCompare(data.compare));
           setCompareMode(sanitizeMode(data.compareMode));
           setCompareWindow(sanitizeWindow(data.compareWindow));
+          setCompareExcludedTypes(sanitizeTypes(data.compareExcludedTypes));
         }
       })
       .catch((err) => {
@@ -297,6 +310,8 @@ function ShareTicketContent() {
                     onModeChange={setCompareMode}
                     window={compareWindow}
                     onWindowChange={setCompareWindow}
+                    excludedTypes={compareExcludedTypes}
+                    onExcludedTypesChange={setCompareExcludedTypes}
                     onInputsChange={setComparisons}
                     defaultOpen={compareIds.length > 0}
                   />

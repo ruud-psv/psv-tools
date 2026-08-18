@@ -8,7 +8,11 @@ import {
   lastOffsetOf,
   type StoredEvent,
 } from "@/lib/historical-ticket-sales";
-import type { AggregatedEvent } from "@/lib/ticket-sales-aggregate";
+import {
+  MAX_TICKET_TYPES,
+  type AggregatedEvent,
+  type TypeSeries,
+} from "@/lib/ticket-sales-aggregate";
 
 /**
  * Historische verkoopcijfers per wedstrijd.
@@ -27,6 +31,8 @@ import type { AggregatedEvent } from "@/lib/ticket-sales-aggregate";
 /** Bovengrenzen zodat één request de dataset niet kan laten ontploffen. */
 const MAX_EVENTS = 500;
 const MAX_SERIES_LENGTH = 800;
+/** Maximale lengte van een tickettype-naam; gelijk aan `normalizeTicketType`. */
+const MAX_TYPE_NAME = 40;
 
 function isValidSeason(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.trim().length <= 20;
@@ -54,6 +60,24 @@ function parseEvent(value: unknown): AggregatedEvent | null {
   // zodat de indexering met `tickets` blijft kloppen.
   const orders = numbers(e.orders);
 
+  // De uitsplitsing per tickettype is waar het filteren op leunt, dus die wordt
+  // strikt gecontroleerd: een half kloppende reeks zou stille rekenfouten geven.
+  const series: Record<string, TypeSeries> = {};
+  if (e.series !== undefined) {
+    if (!e.series || typeof e.series !== "object" || Array.isArray(e.series)) return null;
+    const entries = Object.entries(e.series as Record<string, unknown>);
+    if (entries.length > MAX_TICKET_TYPES + 1) return null;
+    for (const [type, raw] of entries) {
+      if (!type || type.length > MAX_TYPE_NAME) return null;
+      if (!raw || typeof raw !== "object") return null;
+      const candidate = raw as Record<string, unknown>;
+      if (typeof candidate.first !== "number" || !Number.isFinite(candidate.first)) return null;
+      const v = numbers(candidate.v);
+      if (!v) return null;
+      series[type] = { first: Math.round(candidate.first), v };
+    }
+  }
+
   return {
     id: e.id,
     name: e.name,
@@ -66,6 +90,7 @@ function parseEvent(value: unknown): AggregatedEvent | null {
     firstOffset: Math.round(e.firstOffset),
     tickets,
     orders: orders && orders.length === tickets.length ? orders : tickets.map(() => 0),
+    series,
   };
 }
 

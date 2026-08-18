@@ -1,5 +1,10 @@
 import { put, get } from "@vercel/blob";
-import type { AggregatedEvent } from "@/lib/ticket-sales-aggregate";
+import {
+  sumSeries,
+  ticketTypesOf,
+  type AggregatedEvent,
+  type TypeSeries,
+} from "@/lib/ticket-sales-aggregate";
 
 /**
  * Historische verkoopcijfers per wedstrijd, opgeslagen als **één** blob op
@@ -40,6 +45,12 @@ export interface StoredEvent {
   /** Dicht: een 0 betekent "die dag niets verkocht", geen ontbrekende meting. */
   tickets: number[];
   orders: number[];
+  /**
+   * Dezelfde verkoop uitgesplitst per tickettype; de som per dag is gelijk aan
+   * `tickets`. Optioneel, want datasets die zijn geüpload voordat de
+   * uitsplitsing bestond hebben dit veld niet — die tellen als één geheel.
+   */
+  series?: Record<string, TypeSeries>;
 }
 
 export interface HistoricalDataset {
@@ -58,6 +69,8 @@ export interface HistoricalEventIndex {
   totalTickets: number;
   firstOffset: number;
   lastOffset: number;
+  /** Voorkomende tickettypes, zodat de filtervinkjes al te tonen zijn. */
+  ticketTypes: string[];
 }
 
 export const EMPTY_DATASET: HistoricalDataset = {
@@ -66,18 +79,37 @@ export const EMPTY_DATASET: HistoricalDataset = {
   events: {},
 };
 
+function isTypeSeries(value: unknown): value is TypeSeries {
+  if (!value || typeof value !== "object") return false;
+  const s = value as Record<string, unknown>;
+  return (
+    typeof s.first === "number" &&
+    Array.isArray(s.v) &&
+    s.v.every((n) => typeof n === "number")
+  );
+}
+
 function isStoredEvent(value: unknown): value is StoredEvent {
   if (!value || typeof value !== "object") return false;
   const e = value as Record<string, unknown>;
-  return (
-    typeof e.id === "string" &&
-    typeof e.name === "string" &&
-    typeof e.date === "string" &&
-    typeof e.season === "string" &&
-    typeof e.firstOffset === "number" &&
-    Array.isArray(e.tickets) &&
-    e.tickets.every((t) => typeof t === "number")
-  );
+  if (
+    typeof e.id !== "string" ||
+    typeof e.name !== "string" ||
+    typeof e.date !== "string" ||
+    typeof e.season !== "string" ||
+    typeof e.firstOffset !== "number" ||
+    !Array.isArray(e.tickets) ||
+    !e.tickets.every((t) => typeof t === "number")
+  ) {
+    return false;
+  }
+  // `series` mag ontbreken (oude vorm), maar niet half kloppen: dan zou een
+  // filter stilzwijgend de verkeerde aantallen opleveren.
+  if (e.series !== undefined) {
+    if (!e.series || typeof e.series !== "object") return false;
+    if (!Object.values(e.series).every(isTypeSeries)) return false;
+  }
+  return true;
 }
 
 export async function readDataset(): Promise<HistoricalDataset> {
@@ -143,6 +175,7 @@ export async function replaceSeason(
       firstOffset: event.firstOffset,
       tickets: event.tickets,
       orders: event.orders,
+      series: event.series,
     };
   }
 
@@ -192,19 +225,21 @@ export function toIndex(dataset: HistoricalDataset): HistoricalEventIndex[] {
       totalTickets: event.totalTickets,
       firstOffset: event.firstOffset,
       lastOffset: lastOffsetOf(event),
+      ticketTypes: ticketTypesOf(event),
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /**
- * Tickets per dagen-tot-event. Buiten het verkoopvenster staat er bewust geen
- * sleutel: in de grafiek is dat het verschil tussen "niemand kocht die dag" en
- * "stond toen niet in de verkoop".
+ * Tickets per dagen-tot-event, optioneel beperkt tot bepaalde tickettypes.
+ * Dunne doorgeefluik naar `sumSeries`, zodat server-side code de reeksvorm niet
+ * zelf hoeft te kennen. Buiten het verkoopvenster staat er bewust geen sleutel:
+ * in de grafiek is dat het verschil tussen "niemand kocht die dag" en "stond
+ * toen niet in de verkoop".
  */
-export function toOffsetMap(event: StoredEvent): Map<number, number> {
-  const map = new Map<number, number>();
-  for (let i = 0; i < event.tickets.length; i++) {
-    map.set(event.firstOffset - i, event.tickets[i]);
-  }
-  return map;
+export function toOffsetMap(
+  event: StoredEvent,
+  includedTypes?: string[] | null
+): Map<number, number> {
+  return sumSeries(event, includedTypes);
 }

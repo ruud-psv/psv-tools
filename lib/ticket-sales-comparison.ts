@@ -30,10 +30,16 @@ export interface ComparisonInput {
   season: string;
   /** Wedstrijddatum als `YYYY-MM-DD` (of ISO — alleen de datum wordt gebruikt). */
   eventDate: string;
-  /** Verkochte tickets per dagen-tot-event. */
+  /** Verkochte tickets per dagen-tot-event, ná het tickettype-filter. */
   perOffset: Map<number, number>;
   /** Totaal over het volledige verkoopvenster, ook buiten het getoonde deel. */
   total: number;
+  /**
+   * Hetzelfde totaal zonder tickettype-filter. Hieraan ziet de grafiek of er
+   * gefilterd wordt, want de live reeks kan dat filter niet volgen en moet dan
+   * als "ongefilterd" gelabeld worden.
+   */
+  unfilteredTotal: number;
 }
 
 /** Serie zoals de grafiek die tekent. */
