@@ -2,6 +2,12 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { TicketSalesChart } from "@/components/ticket-sales-chart";
+import { TicketComparisonPicker } from "@/components/ticket-comparison-picker";
+import type {
+  ComparisonInput,
+  ComparisonMode,
+  ComparisonWindow,
+} from "@/lib/ticket-sales-comparison";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -446,6 +452,12 @@ function EventDetailPanel({
   );
   const [copied, setCopied] = useState(false);
 
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [comparisons, setComparisons] = useState<ComparisonInput[]>([]);
+  const [compareMode, setCompareMode] = useState<ComparisonMode>("perDag");
+  const [compareWindow, setCompareWindow] = useState<ComparisonWindow>("live");
+  const [compareExcludedTypes, setCompareExcludedTypes] = useState<string[]>([]);
+
   const handleShare = useCallback(async () => {
     const res = await fetch("/api/share", {
       method: "POST",
@@ -457,6 +469,18 @@ function EventDetailPanel({
         // meegegeven zodat de share-pagina de dagen-tot-event kan tonen zonder
         // de live feed te hoeven raadplegen
         eventDate: event.eventDate,
+        // De gekozen vergelijking meesturen, zodat de ontvanger hetzelfde beeld
+        // ziet. Die kan het op de share-pagina zelf nog aanpassen.
+        ...(compareIds.length > 0
+          ? {
+              compare: compareIds,
+              compareMode,
+              compareWindow,
+              ...(compareExcludedTypes.length > 0
+                ? { compareExcludedTypes }
+                : {}),
+            }
+          : {}),
       }),
     });
     if (!res.ok) return;
@@ -464,7 +488,15 @@ function EventDetailPanel({
     navigator.clipboard.writeText(`${window.location.origin}/share/ticket?token=${token}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-  }, [event.eventId, event.eventName, event.eventDate]);
+  }, [
+    event.eventId,
+    event.eventName,
+    event.eventDate,
+    compareIds,
+    compareMode,
+    compareWindow,
+    compareExcludedTypes,
+  ]);
 
   return (
     <div className="bg-muted/40 border border-border rounded-md p-4 mt-1 space-y-4">
@@ -496,7 +528,25 @@ function EventDetailPanel({
           eventId={event.eventId}
           eventDate={event.eventDate}
           variant="compact"
+          comparisons={comparisons}
+          liveName={event.eventName}
+          comparisonMode={compareMode}
+          comparisonWindow={compareWindow}
         />
+        <div className="mt-3">
+          <TicketComparisonPicker
+            liveEventName={event.eventName}
+            selected={compareIds}
+            onSelectedChange={setCompareIds}
+            mode={compareMode}
+            onModeChange={setCompareMode}
+            window={compareWindow}
+            onWindowChange={setCompareWindow}
+            excludedTypes={compareExcludedTypes}
+            onExcludedTypesChange={setCompareExcludedTypes}
+            onInputsChange={setComparisons}
+          />
+        </div>
       </div>
 
       {/* Tijden */}

@@ -21,7 +21,8 @@ export const PERIOD_LABELS: Record<string, string> = {
   custom: "Aangepaste periode",
 };
 
-/** Presets per bron — alleen wat de databron daadwerkelijk kan leveren. */
+/** Presets per bron — alleen wat de databron daadwerkelijk kan leveren. De
+ *  "Aangepast"-knop komt uit SOURCE_ALLOWS_CUSTOM en hoort hier dus niet in. */
 export const PRESETS_BY_SOURCE: Record<SourceKey, PresetOption[]> = {
   dm: [
     { value: "7d", label: "7 dagen" },
@@ -31,7 +32,6 @@ export const PRESETS_BY_SOURCE: Record<SourceKey, PresetOption[]> = {
     { value: "1y", label: "1 jaar" },
     { value: "seizoen2425", label: "Seizoen 24/25" },
     { value: "seizoen2526", label: "Seizoen 25/26" },
-    { value: "custom", label: "Aangepast" },
   ],
   web: [
     { value: "7d", label: "7 dagen" },
@@ -44,7 +44,6 @@ export const PRESETS_BY_SOURCE: Record<SourceKey, PresetOption[]> = {
     { value: "90d", label: "90 dagen" },
     { value: "6m", label: "6 maanden" },
     { value: "1y", label: "1 jaar" },
-    { value: "custom", label: "Aangepast" },
   ],
   // Ticketing: actuele status of snapshot-gedekte periode (max 30d retentie).
   ticketing: [
@@ -56,10 +55,15 @@ export const PRESETS_BY_SOURCE: Record<SourceKey, PresetOption[]> = {
 
 export const SOURCE_ALLOWS_CUSTOM: Record<SourceKey, boolean> = {
   dm: true,
-  web: false,
+  web: true,
   fanstore: true,
   ticketing: false,
 };
+
+/** Hoeveel pagina's de analytics-API mag teruggeven voor de pagina-selectie en
+ *  voor het terugvinden van geselecteerde pagina's in het rapport. Ruim boven de
+ *  standaardweergave, zodat de selectie niet stilzwijgend wordt afgekapt. */
+export const PAGE_SELECT_LIMIT = 500;
 
 export const WEB_SITES: PresetOption[] = [
   { value: "psv", label: "psv.nl" },

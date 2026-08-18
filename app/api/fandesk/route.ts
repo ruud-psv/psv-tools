@@ -10,6 +10,10 @@ import {
   toAmsterdamParts,
 } from "@/lib/fandesk";
 import { readRange } from "@/lib/fandesk-store";
+import { aggregateThemes, type FandeskTheme } from "@/lib/fandesk-analysis";
+import { getDaySummaries, getPeriodSummary } from "@/lib/fandesk-summary-store";
+import { dayKeysInRange, periodSig } from "@/lib/fandesk-summarize";
+import type { FandeskAlert } from "@/lib/insights/fandesk";
 
 /**
  * Leesroute voor het FANdesk dashboard. Aggregeert de opgeslagen tickets naar
@@ -27,6 +31,15 @@ export interface FandeskBucket {
   counts: Record<FandeskCategory, number>;
 }
 
+/** Samenvatting van één dag, zoals de ingest hem heeft laten maken. */
+export interface FandeskDaySummary {
+  day: string;
+  summary: string;
+  themes: FandeskTheme[];
+  alerts: FandeskAlert[];
+  generatedAt: string;
+}
+
 export interface FandeskData {
   from: string;
   to: string;
@@ -40,6 +53,25 @@ export interface FandeskData {
   };
   lastTicketAt: string | null;
   generatedAt: string;
+  /**
+   * Alle velden hieronder zijn optioneel: de fallback onderaan deze route (voor
+   * een ontbrekende blob-token) bouwt een FandeskData met de hand, en verplichte
+   * velden zouden die laten breken.
+   */
+  daySummaries?: FandeskDaySummary[];
+  /** Opgeteld uit de dagen — puur rekenwerk, dus werkt voor elk bereik. */
+  topThemes?: FandeskTheme[];
+  /** Prozatekst over de hele periode; null zolang die niet gegenereerd is. */
+  periodSummary?: {
+    summary: string;
+    highlights: { type: string; text: string }[];
+    recommendations: string[];
+    generatedAt: string;
+  } | null;
+  /** True als de opgeslagen periodetekst niet meer bij de data past. */
+  periodSummaryStale?: boolean;
+  /** True zodra er ergens in het bereik onderwerpregels zijn aangeleverd. */
+  hasTopics?: boolean;
 }
 
 function todayKey(): string {
@@ -97,13 +129,41 @@ export async function GET(req: NextRequest) {
     const current = amsterdamDayBounds(from, to);
     const previous = amsterdamDayBounds(prevFrom, prevTo);
 
-    const [currentTickets, previousTickets] = await Promise.all([
+    const [currentTickets, previousTickets, storedDays, storedPeriod] = await Promise.all([
       readRange(current.fromInstant, current.toInstant),
       readRange(previous.fromInstant, previous.toInstant),
+      getDaySummaries(dayKeysInRange(from, to)),
+      getPeriodSummary(from, to),
     ]);
 
     const now = aggregate(currentTickets);
     const before = aggregate(previousTickets);
+
+    const daySummaries: FandeskDaySummary[] = storedDays
+      .filter((entry) => entry.stored !== null)
+      .map(({ day, stored }) => ({
+        day,
+        summary: stored!.result.summary,
+        themes: stored!.result.themes ?? [],
+        alerts: stored!.result.alerts ?? [],
+        generatedAt: stored!.generatedAt,
+      }))
+      .sort((a, b) => b.day.localeCompare(a.day));
+
+    // Thema's over de hele periode zijn puur rekenwerk uit de dagen — geen
+    // AI-call, dus dit werkt ook voor een eigen datumbereik.
+    const topThemes = aggregateThemes(daySummaries.map((d) => d.themes));
+
+    // De periodetekst wordt hier nooit gegenereerd; dat kost geld en gebeurt
+    // alleen op verzoek via /api/fandesk/summary. Wel bepalen of de opgeslagen
+    // versie nog bij de data past.
+    const currentPeriodSig = periodSig(
+      daySummaries.map((d) => ({
+        day: d.day,
+        total: d.themes.reduce((sum, t) => sum + (Number(t.count) || 0), 0),
+      }))
+    );
+    const periodCurrent = storedPeriod !== null && storedPeriod.sig === currentPeriodSig;
 
     const data: FandeskData = {
       from,
@@ -118,6 +178,19 @@ export async function GET(req: NextRequest) {
       },
       lastTicketAt: currentTickets.length ? currentTickets[currentTickets.length - 1].at : null,
       generatedAt: new Date().toISOString(),
+      daySummaries,
+      topThemes,
+      periodSummary:
+        storedPeriod && periodCurrent
+          ? {
+              summary: storedPeriod.result.summary,
+              highlights: storedPeriod.result.highlights ?? [],
+              recommendations: storedPeriod.result.recommendations ?? [],
+              generatedAt: storedPeriod.generatedAt,
+            }
+          : null,
+      periodSummaryStale: daySummaries.length > 0 && !periodCurrent,
+      hasTopics: currentTickets.some((t) => t.topic),
     };
 
     return NextResponse.json(data);

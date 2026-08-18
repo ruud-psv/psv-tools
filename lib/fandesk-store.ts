@@ -53,7 +53,9 @@ function isTicket(value: unknown): value is FandeskTicket {
     typeof t.id === "string" &&
     typeof t.at === "string" &&
     typeof t.category === "string" &&
-    (FANDESK_CATEGORIES as readonly string[]).includes(t.category)
+    (FANDESK_CATEGORIES as readonly string[]).includes(t.category) &&
+    // `topic` is optioneel — alleen afkeuren als hij aanwezig is met de verkeerde vorm.
+    (t.topic === undefined || typeof t.topic === "string")
   );
 }
 
@@ -101,6 +103,7 @@ export async function appendTickets(
     if (!matched && item.rawCategory.trim()) unknown.add(item.rawCategory.trim());
     const at = item.at ?? batchAt;
     const ticket: FandeskTicket = { id: item.id, category, at };
+    if (item.topic) ticket.topic = item.topic;
     const bucket = perMonth.get(monthOf(at));
     if (bucket) bucket.push(ticket);
     else perMonth.set(monthOf(at), [ticket]);

@@ -1,13 +1,32 @@
 import { put, list } from "@vercel/blob";
 
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * Hoe lang terug we metingen meenemen. Puur een leesfilter: er wordt niets
+ * verwijderd, dus een ruimere termijn maakt eerder opgeslagen historie gewoon
+ * weer zichtbaar. Twaalf maanden is veilig omdat de groei per event begrensd
+ * is — `shouldSnapshot` stopt met meten één dag na de eventdatum.
+ */
+const RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 
 export type SnapshotPoint = { ts: string; available: number; sold: number };
 
 export async function readSnapshots(eventId: string): Promise<SnapshotPoint[]> {
   const cutoff = new Date(Date.now() - RETENTION_MS).toISOString();
   const prefix = `ticket-snapshots/${eventId}/`;
-  const { blobs } = await list({ prefix });
+
+  // `list()` levert max 1000 blobs per call, lexicografisch oplopend — en het
+  // pathname begint met de timestamp, dus zonder doorlussen krijg je de
+  // *oudste* 1000 terug. Een event dat maanden in de verkoop staat komt daar
+  // ruim boven (twee crons, samen ~13 metingen per dag) en zou dan een reeks
+  // opleveren die volledig buiten `cutoff` valt: een lege grafiek.
+  const blobs: { pathname: string }[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix, cursor });
+    blobs.push(...page.blobs);
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+
   return blobs
     .map((b) => {
       const name = b.pathname.slice(prefix.length).replace(/\.json$/, "");

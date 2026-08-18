@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { TicketSalesChart } from "@/components/ticket-sales-chart";
+import { TicketComparisonPicker } from "@/components/ticket-comparison-picker";
 import type { SnapshotPoint } from "@/lib/blob-snapshots";
+import type {
+  ComparisonInput,
+  ComparisonMode,
+  ComparisonWindow,
+} from "@/lib/ticket-sales-comparison";
+
+/** Zoveel wedstrijden tekent de grafiek; meer is onleesbaar én onnodig werk. */
+const MAX_COMPARE = 3;
 
 interface ShareParams {
   kind: string;
@@ -12,6 +21,42 @@ interface ShareParams {
   eventName: string;
   /** Ontbreekt in links die zijn gemaakt voordat de eventdatum werd meegegeven. */
   eventDate?: string;
+  /** Voorgeselecteerde historische wedstrijden; ontbreekt in oudere links. */
+  compare?: string[];
+  compareMode?: ComparisonMode;
+  compareWindow?: ComparisonWindow;
+  /** Tickettypes die niet meetellen. Uitsluitingen, zodat een type dat later in
+   * een nieuwe upload verschijnt vanzelf meedoet in plaats van weg te vallen. */
+  compareExcludedTypes?: string[];
+}
+
+/**
+ * Het share-token is niet ondertekend, dus de inhoud is niet te vertrouwen: een
+ * bewerkte link kan er honderden id's in stoppen. Daarom kappen op het maximum
+ * en alleen strings overhouden; onbekende id's leveren straks simpelweg geen
+ * dagreeks op en vallen stil weg.
+ */
+function sanitizeCompare(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 120)
+    .slice(0, MAX_COMPARE);
+}
+
+/** Zelfde reden als `sanitizeCompare`: het token is niet ondertekend. */
+function sanitizeTypes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 40)
+    .slice(0, 40);
+}
+
+function sanitizeMode(value: unknown): ComparisonMode {
+  return value === "tempo" ? "tempo" : "perDag";
+}
+
+function sanitizeWindow(value: unknown): ComparisonWindow {
+  return value === "full" ? "full" : "live";
 }
 
 function formatDateTime(iso: string): string {
@@ -46,6 +91,18 @@ function ShareTicketContent() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
+  // Een `?compare=` in de URL is een keuze van de bezoeker zelf en gaat vóór de
+  // voorselectie uit het token.
+  const compareFromUrl = urlParams.get("compare");
+  const [compareIds, setCompareIds] = useState<string[]>(() =>
+    sanitizeCompare(compareFromUrl ? compareFromUrl.split(",") : undefined)
+  );
+  const [comparisons, setComparisons] = useState<ComparisonInput[]>([]);
+  const [compareMode, setCompareMode] = useState<ComparisonMode>("perDag");
+  const [compareWindow, setCompareWindow] = useState<ComparisonWindow>("live");
+  const [compareExcludedTypes, setCompareExcludedTypes] = useState<string[]>([]);
+  const [compareTouched, setCompareTouched] = useState(Boolean(compareFromUrl));
+
   useEffect(() => {
     if (!token) {
       setTokenError("Ongeldige link");
@@ -57,12 +114,33 @@ function ShareTicketContent() {
       .then((data: ShareParams) => {
         setParams(data);
         setTokenLoading(false);
+        if (!compareTouched) {
+          setCompareIds(sanitizeCompare(data.compare));
+          setCompareMode(sanitizeMode(data.compareMode));
+          setCompareWindow(sanitizeWindow(data.compareWindow));
+          setCompareExcludedTypes(sanitizeTypes(data.compareExcludedTypes));
+        }
       })
       .catch((err) => {
         setTokenError(String(err));
         setTokenLoading(false);
       });
+    // `compareTouched` bewust niet in de deps: die mag het token niet opnieuw laten laden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  /**
+   * Selectie van de bezoeker in de URL zetten, zodat die het beeld dat hij nu
+   * ziet zelf kan doorsturen. `replaceState` houdt de historie schoon.
+   */
+  const changeCompare = useCallback((next: string[]) => {
+    setCompareTouched(true);
+    setCompareIds(next);
+    const url = new URL(window.location.href);
+    if (next.length > 0) url.searchParams.set("compare", next.join(","));
+    else url.searchParams.delete("compare");
+    window.history.replaceState(null, "", url.toString());
+  }, []);
 
   useEffect(() => {
     if (!params?.eventName) return;
@@ -218,7 +296,26 @@ function ShareTicketContent() {
                   eventId={params.eventId}
                   eventDate={eventDate}
                   history={history}
+                  comparisons={comparisons}
+                  liveName={displayName}
+                  comparisonMode={compareMode}
+                  comparisonWindow={compareWindow}
                 />
+                <div className="mt-4 border-t border-border pt-4">
+                  <TicketComparisonPicker
+                    liveEventName={displayName}
+                    selected={compareIds}
+                    onSelectedChange={changeCompare}
+                    mode={compareMode}
+                    onModeChange={setCompareMode}
+                    window={compareWindow}
+                    onWindowChange={setCompareWindow}
+                    excludedTypes={compareExcludedTypes}
+                    onExcludedTypesChange={setCompareExcludedTypes}
+                    onInputsChange={setComparisons}
+                    defaultOpen={compareIds.length > 0}
+                  />
+                </div>
               </div>
             )}
 

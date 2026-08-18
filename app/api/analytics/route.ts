@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BetaAnalyticsDataClient } from "@google-analytics/data";
+import { BetaAnalyticsDataClient, protos } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
 import { isValidShareToken } from "@/lib/share-token";
 
 export const revalidate = 300;
+
+type RunReportRequest = protos.google.analytics.data.v1beta.IRunReportRequest;
 
 
 /* ---------- Config ---------- */
@@ -64,6 +66,14 @@ function getClient(): { client: BetaAnalyticsDataClient | null; error: string | 
   }
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Aantal pagina's dat de topPages-query oplevert. Standaard ruim genoeg voor
+ *  de dashboardweergave; de rapportage-generator vraagt een hogere limiet op
+ *  zodat álle pagina's selecteerbaar zijn. */
+const PAGE_LIMIT_DEFAULT = 100;
+const PAGE_LIMIT_MAX = 1000;
+
 function getDateRange(period: string): { startDate: string; endDate: string } {
   const end = "today";
   switch (period) {
@@ -71,6 +81,41 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
     case "90d": return { startDate: "90daysAgo", endDate: end };
     default: return { startDate: "30daysAgo", endDate: end };
   }
+}
+
+/** Expliciet `from`/`to` (YYYY-MM-DD) heeft voorrang op de `period`-preset, zodat
+ *  een vrij datumbereik opgevraagd kan worden. */
+function resolveDateRange(params: URLSearchParams): { startDate: string; endDate: string } {
+  const from = params.get("from");
+  const to = params.get("to");
+  if (from && to && DATE_RE.test(from) && DATE_RE.test(to)) {
+    return from <= to
+      ? { startDate: from, endDate: to }
+      : { startDate: to, endDate: from };
+  }
+  return getDateRange(params.get("period") ?? "30d");
+}
+
+function resolvePageLimit(raw: string | null): number {
+  const n = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isFinite(n) || n <= 0) return PAGE_LIMIT_DEFAULT;
+  return Math.min(n, PAGE_LIMIT_MAX);
+}
+
+/** Hoeveel pagina-paden er maximaal in één GA-filter passen. Boven deze grens
+ *  wordt afgekapt en dat gemeld in de response — niet stilzwijgend. */
+const PATH_FILTER_MAX = 250;
+
+/** Pagina-filter uit herhaalde `paths`-parameters. Niet splitsen op komma's:
+ *  een pagina-pad mag zelf een komma bevatten. */
+function resolvePaths(params: URLSearchParams): { paths: string[]; dropped: number } {
+  const seen = new Set<string>();
+  for (const raw of params.getAll("paths")) {
+    const trimmed = raw.trim();
+    if (trimmed) seen.add(trimmed);
+  }
+  const all = [...seen];
+  return { paths: all.slice(0, PATH_FILTER_MAX), dropped: Math.max(0, all.length - PATH_FILTER_MAX) };
 }
 
 /* ---------- Query helpers ---------- */
@@ -94,9 +139,26 @@ interface SiteData {
 async function fetchSiteData(
   client: BetaAnalyticsDataClient,
   site: SiteConfig,
-  dateRange: { startDate: string; endDate: string }
+  dateRange: { startDate: string; endDate: string },
+  pageLimit: number,
+  paths: string[]
 ): Promise<SiteData> {
   const property = `properties/${site.propertyId}`;
+
+  // Het pagina-filter hoort op élke query: anders zijn de totalen, de trend en
+  // de verkeersbronnen property-breed terwijl de pagina-tabel wel gefilterd is.
+  // Exacte match — de selectie bestaat uit concrete pagina-paden, en een
+  // prefix-match zou bij een pad als "/" de hele site meenemen.
+  const filtered: Pick<RunReportRequest, "dimensionFilter"> = paths.length > 0
+    ? {
+        dimensionFilter: {
+          filter: {
+            fieldName: "pagePath",
+            inListFilter: { values: paths, caseSensitive: true },
+          },
+        },
+      }
+    : {};
 
   const [totalsRes, trendRes, sourcesRes, pagesRes, devicesRes] = await Promise.all([
     client.runReport({
@@ -110,6 +172,7 @@ async function fetchSiteData(
         { name: "bounceRate" },
         { name: "engagementRate" },
       ],
+      ...filtered,
     }),
     client.runReport({
       property,
@@ -121,6 +184,7 @@ async function fetchSiteData(
         { name: "screenPageViews" },
       ],
       orderBys: [{ dimension: { dimensionName: "date", orderType: "ALPHANUMERIC" } }],
+      ...filtered,
     }),
     client.runReport({
       property,
@@ -129,6 +193,7 @@ async function fetchSiteData(
       metrics: [{ name: "sessions" }, { name: "activeUsers" }],
       orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
       limit: 10,
+      ...filtered,
     }),
     client.runReport({
       property,
@@ -136,7 +201,8 @@ async function fetchSiteData(
       dimensions: [{ name: "pagePath" }],
       metrics: [{ name: "screenPageViews" }],
       orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-      limit: 10,
+      limit: pageLimit,
+      ...filtered,
     }),
     client.runReport({
       property,
@@ -144,6 +210,7 @@ async function fetchSiteData(
       dimensions: [{ name: "deviceCategory" }],
       metrics: [{ name: "sessions" }],
       orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      ...filtered,
     }),
   ]);
 
@@ -215,19 +282,33 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const sites = getSites();
-  if (sites.length === 0) {
+  const configured = getSites();
+  if (configured.length === 0) {
     return NextResponse.json(
       { error: "Geen GA4 properties geconfigureerd. Stel GA_PROPERTY_PSV, GA_PROPERTY_TICKETSHOP, GA_PROPERTY_FANSTORE en/of GA_PROPERTY_ACTIES in." },
       { status: 500 }
     );
   }
 
-  const period = req.nextUrl.searchParams.get("period") ?? "30d";
-  const dateRange = getDateRange(period);
+  // Eén site opvragen maakt een pagina-filter per site mogelijk: `paths` hoort
+  // bij precies die site. Zonder `site` blijven alle properties terugkomen.
+  const siteParam = req.nextUrl.searchParams.get("site");
+  const sites = siteParam ? configured.filter((s) => s.key === siteParam) : configured;
+  if (sites.length === 0) {
+    return NextResponse.json(
+      {
+        error: `Site "${siteParam}" is niet geconfigureerd. Beschikbaar: ${configured.map((s) => s.key).join(", ")}.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const dateRange = resolveDateRange(req.nextUrl.searchParams);
+  const pageLimit = resolvePageLimit(req.nextUrl.searchParams.get("pageLimit"));
+  const { paths, dropped } = resolvePaths(req.nextUrl.searchParams);
 
   const settled = await Promise.allSettled(
-    sites.map((site) => fetchSiteData(client, site, dateRange).then((data) => ({ key: site.key, data })))
+    sites.map((site) => fetchSiteData(client, site, dateRange, pageLimit, paths).then((data) => ({ key: site.key, data })))
   );
 
   const sitesMap: Record<string, SiteData> = {};
@@ -279,6 +360,8 @@ export async function GET(req: NextRequest) {
       dailyTrend: combinedDailyTrend,
     },
     ...(Object.keys(errors).length > 0 && { siteErrors: errors }),
+    dateRange,
+    ...(paths.length > 0 && { pathFilter: { paths, ...(dropped > 0 && { dropped }) } }),
     fetchedAt: new Date().toISOString(),
   });
 }

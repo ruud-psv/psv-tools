@@ -36,7 +36,8 @@ export function PeriodPicker({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {presets.map((p) => {
+        {/* "custom" komt uit de aparte Aangepast-knop hieronder, nooit dubbel. */}
+        {presets.filter((p) => p.value !== "custom").map((p) => {
           const active = value.preset === p.value;
           return (
             <button

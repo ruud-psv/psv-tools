@@ -15,6 +15,16 @@ import {
 } from "recharts";
 import type { SnapshotPoint } from "@/lib/blob-snapshots";
 import { buildDailySales, countSalesDays, type DailySalesPoint } from "@/lib/ticket-daily-sales";
+import {
+  buildComparisonRows,
+  offsetSentence,
+  visibleOffsetTicks,
+  type ComparisonInput,
+  type ComparisonMode,
+  type ComparisonRow,
+  type ComparisonSeries,
+  type ComparisonWindow,
+} from "@/lib/ticket-sales-comparison";
 
 /**
  * Staafkleuren uit de PSV-tokens (`@psv/branding/tokens/tokens.json`). Recharts
@@ -242,6 +252,359 @@ function LegendStrip({
   );
 }
 
+/* ---------- Vergelijkmodus ---------- */
+
+/**
+ * Aslabel in vergelijkmodus. Regel 1 is de kolomidentiteit (`D-14`), regel 2 de
+ * kalenderdatum van de live wedstrijd — omgekeerd aan de enkelvoudige weergave,
+ * want die datum hoort nu bij één van de series in plaats van bij de hele as.
+ */
+function OffsetTick({
+  x,
+  y,
+  index,
+  rows,
+  visible,
+}: {
+  x?: number;
+  y?: number;
+  index?: number;
+  rows: ComparisonRow[];
+  visible: Set<number>;
+}) {
+  if (typeof x !== "number" || typeof y !== "number" || typeof index !== "number") return null;
+  if (!visible.has(index)) return null;
+  const row = rows[index];
+  if (!row) return null;
+  const isEventDay = row.offset === 0;
+
+  // De buitenste labels staan pal op de rand van het tekengebied; gecentreerd
+  // zou de helft ("EVENT" op de eventdag) buiten de svg vallen.
+  const anchor =
+    index === 0 ? "start" : index === rows.length - 1 ? "end" : "middle";
+
+  return (
+    <g>
+      <text
+        x={x}
+        y={y + 11}
+        textAnchor={anchor}
+        fontSize={isEventDay ? 8 : 9}
+        fontWeight={isEventDay || row.offset <= 7 ? 700 : 400}
+        fill={countdownColor(row.offset)}
+      >
+        {row.axisLabel}
+      </text>
+      {row.liveLabel && (
+        <text
+          x={x}
+          y={y + 23}
+          textAnchor={anchor}
+          fontSize={9}
+          fill="hsl(var(--muted-foreground))"
+        >
+          {row.liveLabel}
+        </text>
+      )}
+    </g>
+  );
+}
+
+interface TooltipPayloadItem {
+  payload?: ComparisonRow;
+}
+
+function ComparisonTooltip({
+  active,
+  payload,
+  series,
+  liveName,
+  mode,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  series: ComparisonSeries[];
+  liveName: string;
+  mode: ComparisonMode;
+}) {
+  // Bewust via de payload en niet via een lookup op het aslabel: in
+  // vergelijkmodus staat er per kolom meer dan één wedstrijd, dus een label
+  // wijst niet meer naar één punt.
+  const row = active ? payload?.[0]?.payload : undefined;
+  if (!row) return null;
+
+  const unit = mode === "tempo" ? "%" : "";
+  const value = (v: unknown): string | null => {
+    if (typeof v !== "number") return null;
+    return mode === "tempo"
+      ? `${v.toLocaleString("nl-NL")}%`
+      : v.toLocaleString("nl-NL");
+  };
+
+  return (
+    <div className="rounded-md border border-border bg-popover px-2.5 py-2 text-[11px] text-popover-foreground shadow-sm">
+      <p className="font-heading uppercase tracking-wide">{row.axisLabel}</p>
+      <p className="text-muted-foreground">{offsetSentence(row.offset)}</p>
+
+      <div className="mt-1.5 space-y-1">
+        <div className="flex items-baseline gap-1.5">
+          <span
+            className="mt-0.5 h-2 w-2 shrink-0 rounded-sm"
+            style={{ background: BAR_COLORS.near }}
+          />
+          <span className="min-w-0">
+            <span className="font-heading">{value(row.live) ?? "geen meting"}</span>{" "}
+            <span className="text-muted-foreground">
+              {liveName}
+              {row.liveDate && ` · ${formatFullDate(row.liveDate)}`}
+            </span>
+          </span>
+        </div>
+
+        {series.map((s) => {
+          const shown = value(row[s.dataKey]);
+          const count = row.counts[s.dataKey];
+          return (
+            <div key={s.id} className="flex items-baseline gap-1.5">
+              <span
+                className="mt-0.5 h-2 w-2 shrink-0 rounded-sm"
+                style={{ background: s.color }}
+              />
+              <span className="min-w-0">
+                <span className="font-heading">{shown ?? "niet in verkoop"}</span>{" "}
+                {mode === "tempo" && typeof count === "number" && (
+                  <span className="text-muted-foreground">
+                    ({count.toLocaleString("nl-NL")} die dag){" "}
+                  </span>
+                )}
+                <span className="text-muted-foreground">
+                  {s.name} · {formatFullDate(row.dates[s.dataKey])}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {unit === "%" && (
+        <p className="mt-1 text-muted-foreground">Aandeel van de totale verkoop</p>
+      )}
+    </div>
+  );
+}
+
+function ComparisonLegend({
+  series,
+  liveName,
+  mode,
+  filtered,
+}: {
+  series: ComparisonSeries[];
+  liveName: string;
+  mode: ComparisonMode;
+  filtered: boolean;
+}) {
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-sm" style={{ background: BAR_COLORS.near }} />
+          {liveName}
+        </span>
+        {series.map((s) => (
+          <span key={s.id} className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />
+            {s.name}
+          </span>
+        ))}
+      </div>
+      {/* De twee reeksen zijn niet dezelfde meting; dat hoort erbij te staan. */}
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        {mode === "tempo"
+          ? "Tempo: aandeel van de eigen totale verkoop, dus onderling vergelijkbaar. "
+          : ""}
+        Live cijfers komen uit de ticketfeed (netto stand, retouren eraf); historische cijfers
+        zijn transacties per aankoopdag (bruto).
+        {filtered && (
+          <>
+            {" "}
+            Het prijstype-filter geldt alleen voor de historische wedstrijden: de feed geeft
+            één totaal per wedstrijd en kan niet uitgesplitst worden.
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function ComparisonChart({
+  livePoints,
+  comparisons,
+  liveName,
+  mode,
+  window: windowMode,
+  compact,
+  chartWidth,
+}: {
+  livePoints: DailySalesPoint[];
+  comparisons: ComparisonInput[];
+  liveName: string;
+  mode: ComparisonMode;
+  window: ComparisonWindow;
+  compact: boolean;
+  chartWidth: number;
+}) {
+  const { rows, series } = useMemo(
+    () => buildComparisonRows(livePoints, comparisons, { mode, window: windowMode }),
+    [livePoints, comparisons, mode, windowMode]
+  );
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex h-28 items-center justify-center px-4 text-center text-xs text-muted-foreground">
+        Geen overlappende dagen om te vergelijken.
+      </div>
+    );
+  }
+
+  // Wel wedstrijden gekozen, maar geen enkele reeks over: alle tickettypes staan
+  // uit. Dat is iets anders dan "geen data" en verdient een eigen boodschap.
+  if (comparisons.length > 0 && series.length === 0) {
+    return (
+      <div className="flex h-28 items-center justify-center px-4 text-center text-xs text-muted-foreground">
+        Alle prijstypes staan uit — vink er minstens één aan om te vergelijken.
+      </div>
+    );
+  }
+
+  const visible = visibleOffsetTicks(rows, chartWidth || (compact ? 460 : 620));
+  const hasEventDay = rows.some((r) => r.offset === 0);
+
+  // De ticketfeed geeft één totaal per wedstrijd, dus de live reeks kan een
+  // tickettype-filter niet volgen. Als er gefilterd wordt, moet dat te zien zijn
+  // in plaats van dat de twee reeksen zogenaamd hetzelfde meten.
+  const filtered = comparisons.some((c) => c.total < c.unfilteredTotal);
+  const liveLabel = filtered ? `${liveName} (ongefilterd)` : liveName;
+
+  // Gegroepeerde staven worden onleesbaar zodra het venster de volledige
+  // verkoopperiode beslaat (~130 kolommen × meerdere series), en tempo is per
+  // definitie een doorlopende curve. In beide gevallen lijnen.
+  const useLines = mode === "tempo" || windowMode === "full";
+  const barSize = Math.max(3, Math.floor((compact ? 42 : 64) / (series.length + 1)));
+
+  return (
+    <div>
+      <ResponsiveContainer width="100%" height={compact ? 200 : 260}>
+        <ComposedChart data={rows} margin={{ top: 8, right: 4, left: -14, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+          <XAxis
+            dataKey="key"
+            type="category"
+            interval={0}
+            height={34}
+            tickLine={false}
+            axisLine={false}
+            tick={<OffsetTick rows={rows} visible={visible} />}
+          />
+          <YAxis
+            yAxisId="daily"
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            tickLine={false}
+            axisLine={false}
+            allowDecimals={false}
+            domain={mode === "tempo" ? [0, 100] : undefined}
+            tickFormatter={
+              mode === "tempo" ? (v: number) => `${v}%` : formatCompactNumber
+            }
+          />
+          <Tooltip
+            cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.4 }}
+            content={
+              <ComparisonTooltip series={series} liveName={liveLabel} mode={mode} />
+            }
+          />
+          {hasEventDay && (
+            <ReferenceLine
+              yAxisId="daily"
+              x="0"
+              stroke={BAR_COLORS.event}
+              strokeDasharray="4 2"
+            />
+          )}
+
+          {useLines ? (
+            <>
+              <Line
+                yAxisId="daily"
+                type="monotone"
+                dataKey="live"
+                name={liveLabel}
+                stroke={BAR_COLORS.near}
+                strokeWidth={2}
+                dot={false}
+                connectNulls={false}
+              />
+              {series.map((s) => (
+                <Line
+                  key={s.id}
+                  yAxisId="daily"
+                  type="monotone"
+                  dataKey={s.dataKey}
+                  name={s.name}
+                  stroke={s.color}
+                  strokeDasharray={s.dash || undefined}
+                  strokeWidth={1.5}
+                  dot={false}
+                  connectNulls={false}
+                />
+              ))}
+            </>
+          ) : (
+            <>
+              <Bar
+                yAxisId="daily"
+                dataKey="live"
+                name={liveLabel}
+                fill={BAR_COLORS.near}
+                radius={[2, 2, 0, 0]}
+                maxBarSize={barSize}
+              />
+              {series.map((s) => (
+                <Bar
+                  key={s.id}
+                  yAxisId="daily"
+                  dataKey={s.dataKey}
+                  name={s.name}
+                  fill={s.color}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={barSize}
+                />
+              ))}
+            </>
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      {!compact && (
+        <ComparisonLegend series={series} liveName={liveLabel} mode={mode} filtered={filtered} />
+      )}
+
+      {/* Eén getal per wedstrijd zegt meer dan honderd extra kolommen. */}
+      {windowMode === "live" && mode === "perDag" && (
+        <div className="mt-2 space-y-0.5">
+          {series
+            .filter((s) => s.total > 0)
+            .map((s) => (
+              <p key={s.id} className="text-[10px] text-muted-foreground">
+                <span style={{ color: s.color }}>■</span> In dit venster:{" "}
+                {Math.round((s.windowTotal / s.total) * 100)}% van de totale verkoop van {s.name}
+              </p>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface TicketSalesChartProps {
   eventId: string;
   /** Eventdatum uit de feed. Zonder datum vervallen de dagen-tot-event-labels. */
@@ -249,6 +612,15 @@ interface TicketSalesChartProps {
   /** Al opgehaalde snapshots; laat weg om de component zelf te laten fetchen. */
   history?: SnapshotPoint[];
   variant?: "compact" | "full";
+  /**
+   * Historische wedstrijden om tegen af te zetten. Leeg of weggelaten laat de
+   * grafiek precies renderen zoals zonder deze functionaliteit.
+   */
+  comparisons?: ComparisonInput[];
+  /** Naam van de live wedstrijd, voor legenda en tooltip. */
+  liveName?: string;
+  comparisonMode?: ComparisonMode;
+  comparisonWindow?: ComparisonWindow;
 }
 
 /**
@@ -260,6 +632,10 @@ export function TicketSalesChart({
   eventDate,
   history: providedHistory,
   variant = "full",
+  comparisons,
+  liveName = "Deze wedstrijd",
+  comparisonMode = "perDag",
+  comparisonWindow = "live",
 }: TicketSalesChartProps) {
   const isControlled = providedHistory !== undefined;
   const [fetched, setFetched] = useState<SnapshotPoint[]>([]);
@@ -302,9 +678,12 @@ export function TicketSalesChart({
 
   const compact = variant === "compact";
   const stateHeight = compact ? "h-24" : "h-28";
+  const hasComparisons = Boolean(comparisons && comparisons.length > 0);
 
-  // De wrapper rendert altijd, zodat de breedtemeting blijft werken.
-  if (loading || countSalesDays(points) < 1) {
+  // Met vergelijkingen erbij is de grafiek ook zinvol als de live reeks nog
+  // te kort is voor een eigen dagverkoop — dan zie je in ieder geval de
+  // historie. Zonder vergelijkingen blijft de oorspronkelijke lege staat staan.
+  if (loading || (countSalesDays(points) < 1 && !hasComparisons)) {
     return (
       <div ref={wrapperRef}>
         <div
@@ -314,6 +693,22 @@ export function TicketSalesChart({
             ? "Verloop laden…"
             : "Nog geen dagelijkse verkoopdata — er zijn minimaal twee meetdagen nodig. Metingen worden elke 2 uur opgeslagen."}
         </div>
+      </div>
+    );
+  }
+
+  if (hasComparisons) {
+    return (
+      <div ref={wrapperRef}>
+        <ComparisonChart
+          livePoints={points}
+          comparisons={comparisons!}
+          liveName={liveName}
+          mode={comparisonMode}
+          window={comparisonWindow}
+          compact={compact}
+          chartWidth={chartWidth}
+        />
       </div>
     );
   }

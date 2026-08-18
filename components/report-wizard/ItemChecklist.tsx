@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -10,10 +10,16 @@ import { Input } from "@/components/ui/input";
  * beschikbare items voor de huidige context; wanneer `depKey` verandert wordt
  * opnieuw geladen. Reeds geselecteerde items die niet (meer) in de lijst zitten
  * worden alsnog getoond zodat ze uit te vinken zijn.
+ *
+ * De items zijn strings. Staat er achter zo'n string eigenlijk een id met meer
+ * gegevens (naam, datum, aantallen), geef dan `renderItem` mee om de rij te
+ * tekenen en `searchTextOf` om op de zichtbare tekst te kunnen zoeken in plaats
+ * van op het id. `max` begrenst het aantal selecties.
  */
 export function ItemChecklist({
   load, depKey, values, onChange, label, emptyAllHint,
   searchPlaceholder = "Zoeken…", disabled = false, disabledHint,
+  renderItem, searchTextOf, max,
 }: {
   load: (signal: AbortSignal) => Promise<string[]>;
   depKey: string;
@@ -24,6 +30,12 @@ export function ItemChecklist({
   searchPlaceholder?: string;
   disabled?: boolean;
   disabledHint?: string;
+  /** Eigen weergave van een rij; standaard de string zelf. */
+  renderItem?: (item: string) => ReactNode;
+  /** Tekst waarop gezocht wordt; standaard de string zelf. */
+  searchTextOf?: (item: string) => string;
+  /** Maximum aantal selecties; daarboven zijn niet-gekozen items uitgeschakeld. */
+  max?: number;
 }) {
   const [items, setItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,14 +69,16 @@ export function ItemChecklist({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return allOptions;
-    return allOptions.filter((o) => o.toLowerCase().includes(q));
+    return allOptions.filter((o) => (searchTextOf ? searchTextOf(o) : o).toLowerCase().includes(q));
   }, [allOptions, query]);
 
   const selectedSet = useMemo(() => new Set(values), [values]);
 
+  const atMax = max !== undefined && values.length >= max;
+
   function toggle(item: string) {
     if (selectedSet.has(item)) onChange(values.filter((v) => v !== item));
-    else onChange([...values, item]);
+    else if (!atMax) onChange([...values, item]);
   }
 
   if (disabled) {
@@ -125,9 +139,11 @@ export function ItemChecklist({
               key={item}
               type="button"
               onClick={() => toggle(item)}
+              disabled={!checked && atMax}
               className={cn(
                 "flex w-full items-center gap-2.5 border-b px-3 py-2 text-left text-sm last:border-b-0 transition-colors",
-                checked ? "bg-primary/5" : "hover:bg-accent/40"
+                checked ? "bg-primary/5" : "hover:bg-accent/40",
+                !checked && atMax && "opacity-40 cursor-not-allowed hover:bg-transparent"
               )}
             >
               <span
@@ -138,13 +154,17 @@ export function ItemChecklist({
               >
                 {checked && <Check className="h-3 w-3" />}
               </span>
-              <span className="truncate">{item}</span>
+              <span className="min-w-0 flex-1">{renderItem ? renderItem(item) : item}</span>
             </button>
           );
         })}
       </div>
 
-      <p className="text-xs text-muted-foreground">{values.length === 0 ? emptyAllHint : `${values.length} geselecteerd`}</p>
+      <p className="text-xs text-muted-foreground">
+        {values.length === 0
+          ? emptyAllHint
+          : `${values.length} geselecteerd${max !== undefined ? ` van maximaal ${max}` : ""}`}
+      </p>
     </div>
   );
 }

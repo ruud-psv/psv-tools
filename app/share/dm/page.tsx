@@ -17,6 +17,9 @@ import {
   RateBadge,
   type MailingSummary,
 } from "@/lib/dm-share";
+import {
+  SortHeader, sortRows, timeValue, useTableSort, type SortAccessors,
+} from "@/lib/table-sort";
 
 interface FilterParams {
   q: string;
@@ -111,14 +114,30 @@ function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose:
 
 /* ---------- Mailings tabel ---------- */
 
+type MailingSortKey =
+  | "name" | "date" | "recipients" | "uniqueOpens" | "openRate"
+  | "uniqueClicks" | "clickRate" | "bounceRate";
+
+const MAILING_SORT: SortAccessors<MailingSummary, MailingSortKey> = {
+  name: (m) => stripName(m.name),
+  date: (m) => timeValue(m.scheduleTime),
+  recipients: (m) => m.recipients,
+  uniqueOpens: (m) => m.uniqueOpens,
+  openRate: (m) => m.openRate,
+  uniqueClicks: (m) => m.uniqueClicks,
+  clickRate: (m) => m.clickRate,
+  bounceRate: (m) => m.bounceRate,
+};
+
 function MailingsTable({ mailings, onSelect, selected }: {
   mailings: MailingSummary[];
   onSelect: (m: MailingSummary | null) => void;
   selected: MailingSummary | null;
 }) {
+  const { sort, toggle } = useTableSort<MailingSortKey>("date");
   const sorted = useMemo(
-    () => [...mailings].sort((a, b) => new Date(b.scheduleTime).getTime() - new Date(a.scheduleTime).getTime()),
-    [mailings]
+    () => sortRows(mailings, MAILING_SORT[sort.key], sort.dir),
+    [mailings, sort]
   );
 
   return (
@@ -131,14 +150,14 @@ function MailingsTable({ mailings, onSelect, selected }: {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Naam</th>
-                <th className="text-left px-4 py-3 font-heading uppercase tracking-wide text-xs">Datum</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Ontvangers</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Opens</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Open %</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Clicks</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Click %</th>
-                <th className="text-right px-4 py-3 font-heading uppercase tracking-wide text-xs">Bounce %</th>
+                <SortHeader label="Naam" sortKey="name" sort={sort} onSort={toggle} align="left" firstDir="asc" />
+                <SortHeader label="Datum" sortKey="date" sort={sort} onSort={toggle} align="left" />
+                <SortHeader label="Ontvangers" sortKey="recipients" sort={sort} onSort={toggle} />
+                <SortHeader label="Opens" sortKey="uniqueOpens" sort={sort} onSort={toggle} />
+                <SortHeader label="Open %" sortKey="openRate" sort={sort} onSort={toggle} />
+                <SortHeader label="Clicks" sortKey="uniqueClicks" sort={sort} onSort={toggle} />
+                <SortHeader label="Click %" sortKey="clickRate" sort={sort} onSort={toggle} />
+                <SortHeader label="Bounce %" sortKey="bounceRate" sort={sort} onSort={toggle} />
               </tr>
             </thead>
             <tbody>

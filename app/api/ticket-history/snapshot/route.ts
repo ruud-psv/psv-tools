@@ -1,25 +1,25 @@
 import { NextResponse } from "next/server";
 import { appendSnapshot } from "@/lib/blob-snapshots";
+import { selectSnapshotRows, type SnapshotRow } from "@/lib/ticket-snapshot-feed";
 
 const FEED_URL = "https://ticketshop.psv.nl/feed/eventsavailability";
 
-const SNAPSHOT_CATEGORIES = new Set(["Wedstrijden", "Abonnementen", "Overig"]);
+/** Aantal blob-writes dat we tegelijk laten lopen. */
+const WRITE_CONCURRENCY = 12;
 
-function categorizeEvent(name: string): string {
-  const n = name.toLowerCase();
-  if (
-    n.includes("psv") && (
-      n.includes(" - ") || n.includes(" vs ") || n.includes("eredivisie") ||
-      n.includes("champions league") || n.includes("europa league") ||
-      n.includes("conference league") || n.includes("knvb") || n.includes("supercup")
-    )
-  ) return "Wedstrijden";
-  if (n.includes("stadiontour") || n.includes("kampioenstour") || n.includes("legend tour") || n.includes("matchday tour")) return "Tours";
-  if (n.includes("museum")) return "Museum";
-  if (n.includes("minivoetbal") || n.includes("vakantie clinic") || n.includes("starclinic") || n.includes("trainingsmodule") || n.includes("individuele training") || n.includes("talent day") || n.includes("voetbalgames") || n.includes("phoxy") || n.includes("voetbaltraining")) return "Jeugd";
-  if (n.includes("kinderfeestje") || n.includes("open training") || n.includes("funpark") || n.includes("awayday") || n.includes("scholenchallenge") || n.includes("welkom bij de club") || n.includes("wedstrijdbezoek") || n.includes("fanclub")) return "Evenementen";
-  if (n.includes("mijn psv") || n.includes("seizoen club card") || n.includes("interesse seizoen")) return "Abonnementen";
-  return "Overig";
+/** Writes in blokjes, zodat we de blob-API niet met honderden calls tegelijk raken. */
+async function writeSnapshots(rows: SnapshotRow[], ts: string): Promise<number> {
+  let written = 0;
+  for (let i = 0; i < rows.length; i += WRITE_CONCURRENCY) {
+    const batch = rows.slice(i, i + WRITE_CONCURRENCY);
+    await Promise.all(
+      batch.map((row) =>
+        appendSnapshot(row.eventId, { ts, available: row.available, sold: row.sold })
+      )
+    );
+    written += batch.length;
+  }
+  return written;
 }
 
 function isAuthorized(request: Request): boolean {
@@ -33,7 +33,7 @@ function isAuthorized(request: Request): boolean {
   return request.headers.get("x-cron-secret") === cronSecret;
 }
 
-async function takeSnapshot(): Promise<NextResponse> {
+async function takeSnapshot(request: Request): Promise<NextResponse> {
   const res = await fetch(FEED_URL, {
     headers: { "User-Agent": "PSV-Tools/1.0" },
     cache: "no-store",
@@ -47,38 +47,30 @@ async function takeSnapshot(): Promise<NextResponse> {
   }
 
   const xml = await res.text();
-  const events: Array<{ eventId: string; available: number; sold: number }> = [];
+  const now = new Date();
+  const { rows, skipped } = selectSnapshotRows(xml, now.getTime());
+  const ts = now.toISOString();
 
-  const eventRegex = /<Event>([\s\S]*?)<\/Event>/g;
-  let match;
-  while ((match = eventRegex.exec(xml)) !== null) {
-    const block = match[1];
-    const get = (tag: string) => {
-      const r = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`);
-      const m = block.match(r);
-      return m ? m[1].trim() : "";
-    };
-    const eventId = get("EventId");
-    if (!eventId) continue;
-    const category = categorizeEvent(get("NameAndDate"));
-    if (!SNAPSHOT_CATEGORIES.has(category)) continue;
-    events.push({
-      eventId,
-      available: parseInt(get("AvailableCapacity"), 10) || 0,
-      sold: parseInt(get("SoldTickets"), 10) || 0,
+  // `?dryRun=1` laat zien wát er gemeten zou worden zonder te schrijven —
+  // handig om te controleren of een specifiek event meeloopt.
+  if (new URL(request.url).searchParams.get("dryRun") === "1") {
+    return NextResponse.json({
+      saved: false,
+      dryRun: true,
+      eventCount: rows.length,
+      skipped,
+      eventIds: rows.map((r) => r.eventId),
+      timestamp: ts,
     });
   }
 
-  const now = new Date().toISOString();
-  await Promise.all(
-    events.map((e) => appendSnapshot(e.eventId, { ts: now, available: e.available, sold: e.sold }))
-  );
+  const written = await writeSnapshots(rows, ts);
 
   return NextResponse.json({
     saved: true,
-    eventCount: events.length,
-    categories: [...SNAPSHOT_CATEGORIES],
-    timestamp: now,
+    eventCount: written,
+    skipped,
+    timestamp: ts,
   });
 }
 
@@ -87,7 +79,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    return await takeSnapshot();
+    return await takeSnapshot(request);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Snapshot mislukt" },
@@ -101,7 +93,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    return await takeSnapshot();
+    return await takeSnapshot(request);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Snapshot mislukt" },
