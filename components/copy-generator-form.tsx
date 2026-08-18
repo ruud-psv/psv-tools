@@ -629,6 +629,7 @@ export function CopyGeneratorForm() {
                   <SelectItem value="Fanclub members">
                     Fanclub members
                   </SelectItem>
+                  <SelectItem value="FANstore">FANstore</SelectItem>
                 </SelectContent>
               </Select>
             </div>
