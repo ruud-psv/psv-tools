@@ -157,10 +157,23 @@ export function detectColumns(firstLine: string, delimiter: string): ColumnDetec
  * `D-M-YYYY HH:mm` (en `DD-MM-YYYY`, met of zonder tijd) naar losse delen.
  * De export is Nederlands geformatteerd, dus `new Date(string)` interpreteert
  * dit fout of helemaal niet — vandaar een eigen parser.
+ *
+ * `YYYY-MM-DD` wordt ook geaccepteerd: Excel herformatteert datumkolommen soms
+ * bij het opslaan, en zonder deze variant zou dan élke regel afvallen op een
+ * onleesbare datum in plaats van dat het bestand gewoon werkt.
  */
 export function parseNlDateTime(
   value: string
 ): { year: number; month: number; day: number; hour: number; minute: number } | null {
+  const iso = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return { year, month, day, hour: Number(iso[4] ?? 0), minute: Number(iso[5] ?? 0) };
+  }
+
   const m = value.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[ T](\d{1,2}):(\d{2}))?/);
   if (!m) return null;
   const day = Number(m[1]);
@@ -168,6 +181,39 @@ export function parseNlDateTime(
   const year = Number(m[3]);
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return { year, month, day, hour: Number(m[4] ?? 0), minute: Number(m[5] ?? 0) };
+}
+
+/**
+ * Prijs uit een exportcel. Alleen nodig om gratis regels te kunnen tonen in het
+ * rapport — de aantallen hangen er niet van af.
+ *
+ * Nederlandse notatie gebruikt de punt als duizendscheiding en de komma als
+ * decimaalteken ("1.250,00"), Engelse precies omgekeerd. Staan ze beide in de
+ * cel, dan is het laatste teken het decimaalteken; staat er één, dan is dat het
+ * decimaalteken. Zonder deze afweging werd "1.250,00" een NaN, en omdat NaN
+ * falsy is zou zo'n regel als gratis geteld worden.
+ */
+export function parsePrice(value: string): number {
+  const cleaned = (value ?? "").replace(/[^0-9,.-]/g, "");
+  if (!cleaned) return 0;
+
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    // Het laatste van de twee is het decimaalteken, het andere de scheiding.
+    normalized =
+      lastComma > lastDot
+        ? cleaned.replace(/\./g, "").replace(",", ".")
+        : cleaned.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = cleaned.replace(",", ".");
+  } else {
+    normalized = cleaned;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function pad(n: number): string {
@@ -532,9 +578,7 @@ export function createAggregator({ season, columns, delimiter }: AggregatorOptio
 
       bump(acc.byChannel, clean(cells[columns.channel]) || UNKNOWN_TYPE);
 
-      // Prijzen zijn NL-geformatteerd ("12,5"); alleen de nulcheck is nodig.
-      const price = Number((cells[columns.price] || "0").replace(",", "."));
-      if (!price) acc.freeTickets++;
+      if (parsePrice(cells[columns.price]) === 0) acc.freeTickets++;
     },
 
     finish(): AggregateResult {
