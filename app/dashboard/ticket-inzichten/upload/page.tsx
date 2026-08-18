@@ -33,8 +33,12 @@ import type { SeasonMeta } from "@/lib/historical-ticket-sales";
  * Het samenvatten gebeurt hier in de browser, niet op de server: een export van
  * één seizoen is ~450.000 regels (60-90 MB) en een serverless function neemt
  * maximaal ~4,5 MB request body aan. De browser leest het bestand streamend en
- * stuurt alleen het resultaat (~100-250 KB) op. Bijkomend: de regels met stoel-,
- * order- en prijsdata verlaten dit apparaat nooit.
+ * stuurt alleen het resultaat op — gemeten enkele tientallen kB.
+ *
+ * Bijkomend voordeel, en geen kleine: de export bevat per regel een `Eigenaar
+ * CRM ID` en een `gekocht door`, plus stoel- en prijsgegevens. Die kolommen
+ * worden niet gelezen en verlaten dit apparaat niet; alleen aantallen per dag
+ * gaan over de lijn.
  */
 
 const SEASON_SUGGESTIONS = ["24/25", "25/26"];
@@ -88,7 +92,11 @@ function formatDate(value: string): string {
   });
 }
 
-function topEntries(counts: Record<string, number>, limit = 3): string {
+/**
+ * Aflopend op aantal. De prijstypes bepalen straks de filtervinkjes, dus die
+ * lijst wordt niet afgekapt op een handvol — je wil hier zien wat er is.
+ */
+function topEntries(counts: Record<string, number>, limit = 8): string {
   return Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
@@ -473,15 +481,21 @@ export default function HistorischeDataUploadPage() {
                 </span>
               </p>
               <div className="flex flex-wrap gap-2 text-xs">
-                {(Object.keys(COLUMN_LABELS) as (keyof ColumnMap)[]).map((key) => (
-                  <span
-                    key={key}
-                    className="rounded border border-border bg-muted/40 px-2 py-1"
-                  >
-                    {COLUMN_LABELS[key]}: kolom {detection.columns[key] + 1}
-                    <span className="text-muted-foreground"> ({detection.source[key]})</span>
-                  </span>
-                ))}
+                {(Object.keys(COLUMN_LABELS) as (keyof ColumnMap)[]).map((key) => {
+                  const header = detection.hasHeader
+                    ? detection.cells[detection.columns[key]]
+                    : "";
+                  return (
+                    <span
+                      key={key}
+                      className="rounded border border-border bg-muted/40 px-2 py-1"
+                    >
+                      {COLUMN_LABELS[key]}: kolom {detection.columns[key] + 1}
+                      {header && <span className="text-foreground"> &ldquo;{header}&rdquo;</span>}
+                      <span className="text-muted-foreground"> ({detection.source[key]})</span>
+                    </span>
+                  );
+                })}
               </div>
             </div>
 

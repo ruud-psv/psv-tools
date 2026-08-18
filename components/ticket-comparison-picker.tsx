@@ -367,7 +367,7 @@ export function TicketComparisonPicker({
                   </div>
                   {includedTypes.length === 0 ? (
                     <p className="text-[10px] text-warning">
-                      Alle tickettypes staan uit — vink er minstens één aan.
+                      Alle prijstypes staan uit — vink er minstens één aan.
                     </p>
                   ) : (
                     <p className="text-[10px] leading-snug text-muted-foreground">

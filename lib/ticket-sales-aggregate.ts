@@ -23,12 +23,17 @@ export interface ColumnMap {
 }
 
 /**
- * Positionele mapping van de bekende export. Wordt alleen gebruikt wanneer er
- * geen headerrij is; de aanroeper toont hem zodat de aanname zichtbaar blijft.
+ * Positionele mapping van de bekende export. Wordt alleen gebruikt wanneer een
+ * koptekst niet te herkennen is; de aanroeper toont hem zodat de aanname
+ * zichtbaar blijft.
  *
- * 0 nameAndDate · 1 eventName · 2 eventDate · 3 blokId · 4 blok · 5 rij ·
- * 6 stoel · 7 prijs · 8 tickettype · 9 kanaal · 10 aankoopmoment ·
- * 11 ticketId · 12 orderId · 13 blokId
+ * Kolomnamen zoals ze uit het ticketsysteem komen:
+ * 0 Event · 1 Wedstrijd · 2 Event datum · 3 Eigenaar CRM ID · 4 Vak · 5 Rij ·
+ * 6 Stoel · 7 Prijs · 8 Prijstype · 9 Verkoopkanaal · 10 Transactietijd ·
+ * 11 Ticket nr. · 12 Transaction Number · 13 gekocht door
+ *
+ * `Eigenaar CRM ID` en `gekocht door` identificeren personen. Die kolommen
+ * worden hier bewust niet gelezen: de samenvatting bevat alleen aantallen.
  */
 export const DEFAULT_COLUMNS: ColumnMap = {
   eventName: 1,
@@ -42,22 +47,24 @@ export const DEFAULT_COLUMNS: ColumnMap = {
 
 export const COLUMN_LABELS: Record<keyof ColumnMap, string> = {
   eventName: "Wedstrijd",
-  eventDate: "Wedstrijddatum",
-  purchasedAt: "Aankoopmoment",
+  eventDate: "Event datum",
+  purchasedAt: "Transactietijd",
   orderId: "Order-ID",
   price: "Prijs",
-  ticketType: "Tickettype",
-  channel: "Kanaal",
+  ticketType: "Prijstype",
+  channel: "Verkoopkanaal",
 };
 
 /** Kopteksten waarop we een kolom herkennen, genormaliseerd naar kleine letters. */
 const HEADER_PATTERNS: Record<keyof ColumnMap, RegExp> = {
   eventName: /^(event ?name|wedstrijd|evenement|omschrijving)$/,
-  eventDate: /^(event ?date|actual ?event ?date|wedstrijddatum|datum event)$/,
-  purchasedAt: /^(purchase|purchased ?at|order ?date|aankoop|aankoopdatum|aankoopmoment|verkoopdatum|besteldatum)$/,
-  orderId: /^(order ?id|ordernummer|order ?number|bestelnummer)$/,
+  eventDate: /^(event ?date|event ?datum|actual ?event ?date|wedstrijddatum|datum event)$/,
+  purchasedAt:
+    /^(transactietijd|transactie ?tijd|transaction ?time|purchase|purchased ?at|order ?date|aankoop|aankoopdatum|aankoopmoment|verkoopdatum|besteldatum)$/,
+  orderId:
+    /^(transaction ?number|transactienummer|transactie ?nummer|order ?id|ordernummer|order ?number|bestelnummer)$/,
   price: /^(price|prijs|amount|bedrag)$/,
-  ticketType: /^(ticket ?type|tickettype|type|soort)$/,
+  ticketType: /^(prijstype|prijs ?type|price ?type|ticket ?type|tickettype|type|soort)$/,
   channel: /^(channel|kanaal|verkoopkanaal|source)$/,
 };
 
@@ -98,6 +105,12 @@ export interface ColumnDetection {
   hasHeader: boolean;
   /** Per kolom hoe die is bepaald — voor weergave in de UI. */
   source: Record<keyof ColumnMap, "header" | "positie">;
+  /**
+   * De cellen van de eerste regel, ongewijzigd. Daarmee kan de UI naast elke
+   * gekozen kolom de echte koptekst uit het bestand zetten, zodat de mapping
+   * tegen het bronbestand te controleren is in plaats van op ons woord.
+   */
+  cells: string[];
 }
 
 /**
@@ -107,7 +120,8 @@ export interface ColumnDetection {
  * een export met afwijkende namen niet meteen alles onbruikbaar maakt.
  */
 export function detectColumns(firstLine: string, delimiter: string): ColumnDetection {
-  const cells = splitLine(firstLine, delimiter).map((c) => c.toLowerCase());
+  const raw = splitLine(firstLine, delimiter);
+  const cells = raw.map((c) => c.toLowerCase());
   const columns = { ...DEFAULT_COLUMNS };
   const source = {} as Record<keyof ColumnMap, "header" | "positie">;
 
@@ -123,9 +137,12 @@ export function detectColumns(firstLine: string, delimiter: string): ColumnDetec
     }
   }
 
-  // Eén toevallige match maakt van een datarij nog geen header. Pas vanaf drie
-  // herkende kopteksten nemen we aan dat dit echt een headerrij is.
-  const hasHeader = matched >= 3;
+  // Eén toevallige match maakt van een datarij nog geen header. Naast het aantal
+  // herkende kopteksten kijken we naar de datumcel: staat daar geen leesbare
+  // datum, dan is dit sowieso geen datarij. Dat vangt ook een export waarvan de
+  // kolomnamen allemaal afwijken.
+  const dateCellIsDate = parseNlDateTime(cells[columns.eventDate] ?? "") !== null;
+  const hasHeader = matched >= 3 || !dateCellIsDate;
   if (!hasHeader) {
     for (const key of Object.keys(HEADER_PATTERNS) as (keyof ColumnMap)[]) {
       columns[key] = DEFAULT_COLUMNS[key];
@@ -133,7 +150,7 @@ export function detectColumns(firstLine: string, delimiter: string): ColumnDetec
     }
   }
 
-  return { columns, hasHeader, source };
+  return { columns, hasHeader, source, cells: raw };
 }
 
 /**

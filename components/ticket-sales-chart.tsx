@@ -427,7 +427,7 @@ function ComparisonLegend({
         {filtered && (
           <>
             {" "}
-            Het tickettype-filter geldt alleen voor de historische wedstrijden: de feed geeft
+            Het prijstype-filter geldt alleen voor de historische wedstrijden: de feed geeft
             één totaal per wedstrijd en kan niet uitgesplitst worden.
           </>
         )}
@@ -471,7 +471,7 @@ function ComparisonChart({
   if (comparisons.length > 0 && series.length === 0) {
     return (
       <div className="flex h-28 items-center justify-center px-4 text-center text-xs text-muted-foreground">
-        Alle tickettypes staan uit — vink er minstens één aan om te vergelijken.
+        Alle prijstypes staan uit — vink er minstens één aan om te vergelijken.
       </div>
     );
   }

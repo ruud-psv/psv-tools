@@ -25,7 +25,8 @@ import {
  * Het aggregeren gebeurt in de browser (zie
  * `app/dashboard/ticket-inzichten/upload/page.tsx`): een export van ~450.000
  * regels is 60-90 MB en past niet in de ~4,5 MB request body van een
- * serverless function. Wat hier binnenkomt is de samenvatting, ~100-250 KB.
+ * serverless function. Wat hier binnenkomt is de samenvatting — gemeten enkele
+ * tientallen kB, ook met de uitsplitsing per prijstype erbij.
  */
 
 /** Bovengrenzen zodat één request de dataset niet kan laten ontploffen. */
