@@ -17,6 +17,7 @@ import {
   LogOut,
   Mail,
   MailPlus,
+  Megaphone,
   ShoppingBag,
   Ticket,
   PanelLeftClose,
@@ -78,6 +79,12 @@ const kennisbank = [
 ];
 
 const insights = [
+  {
+    name: "Paid Ads",
+    href: "/dashboard/paid-ads",
+    icon: Megaphone,
+    badge: null as string | null,
+  },
   {
     name: "Ticket Inzichten",
     href: "/dashboard/ticket-inzichten",
