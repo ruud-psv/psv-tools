@@ -96,15 +96,16 @@ Response:
 De keten ziet er zo uit:
 
 ```
-Schedule Trigger → Code → Get many tickets → Filter → Code in Batches
-  → [HTTP: GET taxonomy] → Message a model → Code Parse → Aggregate → HTTP Request
+Schedule Trigger → [Taxonomie] → Code → Get many tickets → Filter
+  → Code in Batches → Message a model → Code Parse → Aggregate → HTTP Request
 ```
 
 | Node | Wijziging |
 |---|---|
-| Schedule Trigger, Code, Get many tickets, Filter | Geen. |
+| Schedule Trigger, Get many tickets, Filter | Geen. |
+| Code | Alleen als hij uit `items` of `$json` leest — zie hieronder. |
 | **Code in Batches** | De drie Freshdesk-velden plat meegeven, plus een vlag of het ticket ingedeeld moet worden. |
-| **HTTP (nieuw)** | Haalt de woordenlijst op waaruit het model mag kiezen. |
+| **Taxonomie (nieuw)** | HTTP GET die de woordenlijst ophaalt waaruit het model mag kiezen. |
 | **Message a model** | Schrijft altijd `topic`; vult soort/type/subtype alléén in als Freshdesk ze leeg liet. |
 | **Code Parse** | Freshdesk-waarden winnen; modelwaarden alleen als vangnet, met `inferred: true`. |
 | Aggregate | Geen — neemt alle velden van een item mee. |
@@ -177,10 +178,22 @@ Zelfde credential als de push: *Generic Credential Type* → *Header Auth* → `
 Het endpoint accepteert zowel een `Authorization: Bearer <secret>`-header als
 `x-fandesk-secret: <secret>`, dus welke van de twee in je credential staat maakt niet uit.
 
-**Zet deze node niet tussen Code in Batches en het model.** Daar draait hij één keer per batch,
-dus vijf batches worden vijf identieke requests. Hang hem als eigen tak aan de Schedule Trigger,
-noem hem `Taxonomie`, en verwijs er in de prompt naar met `$('Taxonomie').first().json.soorten`. Het endpoint geeft terug welke
-soort/type/subtype-combinaties de afgelopen 180 dagen echt uit Freshdesk zijn binnengekomen:
+**Waar hang je hem: lineair, direct achter de Schedule Trigger**, vóór de bestaande `Code`-node.
+En noem hem exact `Taxonomie` — daar verwijst de prompt straks naar.
+
+Twee plaatsingen die niet werken:
+
+- *Tussen Code in Batches en het model.* Daar draait hij één keer per batch, dus vijf batches
+  worden vijf identieke requests.
+- *Als aparte tak naast de Schedule Trigger.* Bij twee parallelle takken bepaalt n8n zelf de
+  volgorde, en `$('Taxonomie')` werkt alleen als die node in deze uitvoering al gedraaid heeft.
+
+Let op bij lineaire plaatsing: de node vervangt het item dat doorstroomt. Leest je eerste
+`Code`-node uit `items` of `$json` van de trigger, pas die dan aan; rekent hij alleen met `$now`
+of een vaste datum, dan verandert er niets.
+
+Het endpoint geeft terug welke soort/type/subtype-combinaties de afgelopen 180 dagen echt uit
+Freshdesk zijn binnengekomen:
 
 ```json
 {
@@ -216,7 +229,34 @@ vangnet. De `id` mee-echoën is geen overbodige luxe — zie de waarschuwing bij
 ]
 ```
 
-De instructie:
+### Waar zet je dit in de node
+
+- De instructietekst hieronder hoort in het veld **System Message**, onderaan de node.
+- De user-**Prompt** blijft `{{ $json.ticket_batch_json }}`; daar verandert niets.
+- **Zet System Message op Expression.** Hover over het veld en klik erboven op *Expression* in
+  plaats van *Fixed*. Staat het op *Fixed*, dan komt `{{ ... }}` letterlijk in de prompt terecht
+  en merk je daar niets van — het model gokt dan gewoon wat.
+
+Onderaan de System Message de woordenlijst, als expressie:
+
+```
+BESCHIKBARE INDELING (kies uitsluitend hieruit):
+{{ $('Taxonomie').first().json.soorten.map(s => s.soort + ' > ' + s.types.map(t => t.type + ' (' + t.subtypes.map(x => x.subtype).join(', ') + ')').join(' | ')).join('\n') }}
+```
+
+Dat rendert leesbare regels in plaats van ruwe JSON met tellingen, die voor een keuzetaak alleen
+ruis zijn:
+
+```
+Thuiswedstrijden > Kaartverkoop (Champions League, Eredivisie) | Vervoer (Bus)
+FANstore > Bestelling (Retour, Maat)
+```
+
+`$('Taxonomie')` werkt alleen als de HTTP-node exact **Taxonomie** heet. Bij de allereerste run
+is de lijst leeg en blijft dit blok leeg; de regel "laat de velden weg als je twijfelt" zorgt dan
+dat het model niets invult, wat het gewenste gedrag is.
+
+### De instructie
 
 > Geef de `id` van het ticket ongewijzigd terug, zodat de koppeling klopt.
 >
