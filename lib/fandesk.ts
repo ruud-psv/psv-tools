@@ -9,6 +9,7 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_BATCH_ITEMS = 5000;
 const MAX_ID_LENGTH = 200;
 const MAX_TOPIC_LENGTH = 120;
+const MAX_TAXONOMY_LENGTH = 80;
 const TIME_ZONE = "Europe/Amsterdam";
 
 /** Ondergrens voor een plausibel ticket-tijdstip. */
@@ -27,25 +28,46 @@ export const FANDESK_CATEGORIES = [
 
 export type FandeskCategory = (typeof FANDESK_CATEGORIES)[number];
 
+/**
+ * De naam waaronder tickets zonder ingevulde taxonomie worden geteld. Een gewone
+ * waarde in de boom, geen speciaal geval in de UI.
+ */
+export const UNSET_LABEL = "Niet ingevuld";
+
 /** Eén support ticket. `at` is ISO-8601 in UTC. */
 export interface FandeskTicket {
   id: string;
-  category: FandeskCategory;
   at: string;
   /**
    * Korte geanonimiseerde onderwerpregel uit n8n, waar de samenvatting op werkt.
    * Optioneel: tickets van vóór deze functie hebben hem niet.
    */
   topic?: string;
+  /** Freshdesk `cf_soort` — het bovenste niveau van de indeling. */
+  soort?: string;
+  /** Freshdesk `cf_type`. */
+  type?: string;
+  /** Freshdesk `cf_subtype`. */
+  subtype?: string;
+  /** true als het model de taxonomie invulde omdat Freshdesk hem leeg liet. */
+  inferred?: boolean;
+  /**
+   * De oude, door een model bepaalde categorie. Alleen nog aanwezig op tickets
+   * van vóór de overstap op de Freshdesk-velden; verdwenen uit de UI.
+   */
+  category?: FandeskCategory;
 }
 
 /** Ruw item uit de n8n payload, na validatie. */
 export interface RawFandeskItem {
   id: string;
-  rawCategory: string;
   /** ISO-string uit `created_at`, of null wanneer die ontbrak of onbruikbaar was. */
   at: string | null;
   topic?: string;
+  soort?: string;
+  type?: string;
+  subtype?: string;
+  inferred?: boolean;
 }
 
 export function emptyCategoryCounts(): Record<FandeskCategory, number> {
@@ -240,6 +262,43 @@ export function sanitizeTopic(raw: unknown): string | undefined {
   return cleaned;
 }
 
+/**
+ * Maakt een taxonomiewaarde uit Freshdesk schoon. Anders dan een onderwerpregel
+ * is dit een vaste keuzewaarde, dus er hoeft niets geanonimiseerd te worden —
+ * alleen genormaliseerd. Niet lowercasen: dit is de weergavewaarde. Waarden
+ * hoofdletterongevoelig samenvoegen gebeurt pas bij het optellen.
+ */
+export function sanitizeTaxonomyValue(raw: unknown): string | undefined {
+  if (typeof raw !== "string" && typeof raw !== "number") return undefined;
+  const cleaned = String(raw).replace(/\s+/g, " ").trim();
+  if (!cleaned) return undefined;
+  // Freshdesk levert een leeg veld soms als de letterlijke string "null".
+  if (/^(null|undefined|n\/a|-|--)$/i.test(cleaned)) return undefined;
+  if (cleaned.length > MAX_TAXONOMY_LENGTH) {
+    return `${cleaned.slice(0, MAX_TAXONOMY_LENGTH).trimEnd()}…`;
+  }
+  return cleaned;
+}
+
+/**
+ * Leest één taxonomieveld. Accepteert drie vormen, zodat elke redelijke
+ * n8n-mapping werkt: plat (`soort`), met Freshdesk-prefix (`cf_soort`) en genest
+ * onder `custom_fields` — dat laatste is wat je krijgt als je het ticket
+ * ongewijzigd doorgeeft, dus dan hoeft er in n8n niets gemapt te worden.
+ */
+function readTaxonomyField(
+  item: Record<string, unknown>,
+  name: "soort" | "type" | "subtype"
+): string | undefined {
+  const custom =
+    item.custom_fields && typeof item.custom_fields === "object"
+      ? (item.custom_fields as Record<string, unknown>)
+      : {};
+  return sanitizeTaxonomyValue(
+    item[name] ?? item[`cf_${name}`] ?? custom[`cf_${name}`] ?? custom[name]
+  );
+}
+
 function parseItem(value: unknown): RawFandeskItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -249,14 +308,16 @@ function parseItem(value: unknown): RawFandeskItem | null {
   const id = String(rawId).trim();
   if (!id || id.length > MAX_ID_LENGTH) return null;
 
-  const rawCategory = item.category ?? item.categorie ?? "";
   const rawTopic = item.topic ?? item.subject ?? item.onderwerp ?? item.samenvatting;
 
   return {
     id,
-    rawCategory: typeof rawCategory === "string" ? rawCategory : String(rawCategory),
     at: parseTimestamp(item),
     topic: sanitizeTopic(rawTopic),
+    soort: readTaxonomyField(item, "soort"),
+    type: readTaxonomyField(item, "type"),
+    subtype: readTaxonomyField(item, "subtype"),
+    inferred: item.inferred === true,
   };
 }
 
@@ -299,4 +360,114 @@ export function parseIngestPayload(
 
 export function isBatchTooLarge(count: number): boolean {
   return count > MAX_BATCH_ITEMS;
+}
+
+// ---------------------------------------------------------------------------
+// Taxonomie: soort → type → subtype
+// ---------------------------------------------------------------------------
+
+export interface SubtypeNode {
+  subtype: string;
+  count: number;
+}
+
+export interface TypeNode {
+  type: string;
+  count: number;
+  subtypes: SubtypeNode[];
+}
+
+export interface SoortNode {
+  soort: string;
+  count: number;
+  types: TypeNode[];
+}
+
+/**
+ * Verzamelt waarden hoofdletterongevoelig, zodat "Champions League" en "champions
+ * league" één vakje worden. De eerst gevonden schrijfwijze is de weergavevorm;
+ * omdat tickets op tijd gesorteerd binnenkomen is dat een stabiele keuze.
+ */
+class LabelCounter<T> {
+  private readonly entries = new Map<string, { label: string; count: number; child: T }>();
+
+  constructor(private readonly makeChild: () => T) {}
+
+  add(label: string): T {
+    const key = label.toLowerCase();
+    const existing = this.entries.get(key);
+    if (existing) {
+      existing.count++;
+      return existing.child;
+    }
+    const fresh = { label, count: 1, child: this.makeChild() };
+    this.entries.set(key, fresh);
+    return fresh.child;
+  }
+
+  list(): Array<{ label: string; count: number; child: T }> {
+    return [...this.entries.values()].sort(
+      (a, b) => b.count - a.count || a.label.localeCompare(b.label, "nl")
+    );
+  }
+}
+
+type TaxonomyTicket = Pick<FandeskTicket, "soort" | "type" | "subtype">;
+
+/**
+ * Bouwt de geneste boom uit een lijst tickets. Een ontbrekend niveau telt mee
+ * onder `UNSET_LABEL`, zodat elk ticket precies één plek in de boom heeft en de
+ * aantallen per niveau optellen tot het totaal.
+ */
+export function buildTaxonomy(tickets: TaxonomyTicket[]): SoortNode[] {
+  const root = new LabelCounter(() => new LabelCounter(() => new LabelCounter(() => null)));
+
+  for (const ticket of tickets) {
+    const types = root.add(ticket.soort ?? UNSET_LABEL);
+    const subtypes = types.add(ticket.type ?? UNSET_LABEL);
+    subtypes.add(ticket.subtype ?? UNSET_LABEL);
+  }
+
+  return root.list().map(({ label, count, child }) => ({
+    soort: label,
+    count,
+    types: child.list().map((typeEntry) => ({
+      type: typeEntry.label,
+      count: typeEntry.count,
+      subtypes: typeEntry.child.list().map((sub) => ({
+        subtype: sub.label,
+        count: sub.count,
+      })),
+    })),
+  }));
+}
+
+/**
+ * Bepaalt per soort de weergavevorm, hoofdletterongevoelig. Dit is dezelfde
+ * regel die `buildTaxonomy` hanteert, en dat moet ook: als de tijdgrafiek
+ * "thuiswedstrijden" apart zou tellen terwijl de treemap hem samenvoegt, staan er
+ * twee verschillende cijfers voor hetzelfde op één pagina.
+ */
+export function buildSoortResolver(tickets: TaxonomyTicket[]): (soort?: string) => string {
+  const canonical = new Map<string, string>();
+  for (const ticket of tickets) {
+    const raw = ticket.soort ?? UNSET_LABEL;
+    const key = raw.toLowerCase();
+    if (!canonical.has(key)) canonical.set(key, raw);
+  }
+  return (soort?: string) => {
+    const raw = soort ?? UNSET_LABEL;
+    return canonical.get(raw.toLowerCase()) ?? raw;
+  };
+}
+
+/** Aantal tickets per soort, met ontbrekende waarden onder `UNSET_LABEL`. */
+export function countsBySoort(tickets: TaxonomyTicket[]): Record<string, number> {
+  const resolve = buildSoortResolver(tickets);
+  const counts: Record<string, number> = {};
+  for (const ticket of tickets) {
+    const key = resolve(ticket.soort);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }

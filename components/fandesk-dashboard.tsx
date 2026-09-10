@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Line,
   LineChart,
   ResponsiveContainer,
   Tooltip,
+  Treemap,
   XAxis,
   YAxis,
 } from "recharts";
@@ -24,6 +24,7 @@ import {
   Loader2,
   MessageSquareText,
   RefreshCw,
+  Sparkles,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -32,11 +33,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KpiCard, formatNumber } from "@/lib/dm-share";
 import {
-  FANDESK_CATEGORIES,
-  FandeskCategory,
   dayCount,
   shiftDayKey,
   toAmsterdamParts,
+  UNSET_LABEL,
+  type SoortNode,
 } from "@/lib/fandesk";
 import type { FandeskData, FandeskDaySummary } from "@/app/api/fandesk/route";
 import type { FandeskAlert } from "@/lib/insights/fandesk";
@@ -50,17 +51,61 @@ interface PeriodSummary {
 }
 
 /**
- * Kleuren per categorie. Recharts heeft letterlijke waarden nodig, dus dit zijn
- * de vier verzadigde PSV-tokens. De volgorde is bewust: het is het
- * CVD-veiligheidsmechanisme (alleen buren raken elkaar in een gestapelde staaf,
- * en deze reeks haalt de kleurenblindheids-scheiding). Niet herordenen.
+ * Kleuren per soort. Recharts heeft letterlijke waarden nodig, dus dit zijn de
+ * PSV-tokens.
+ *
+ * Waarom maar drie hues: in een treemap kan elk vlak aan elk ander grenzen, dus
+ * geldt de strengere all-pairs kleurenblindheidstoets. Rood naast oranje zakt
+ * daar naar ΔE 10,7 — onder de harde ondergrens van 15 — terwijl rood/blauw/groen
+ * de toets wél haalt. Soorten daarbuiten krijgen grijs; in een treemap draagt het
+ * label de identiteit, en de tabel eronder geeft de exacte aantallen.
  */
-const CATEGORY_COLORS: Record<FandeskCategory, string> = {
-  Tickets: "#e82026", // color.red.primary
-  FANstore: "#287d3c", // color.success
-  Wedstrijdinformatie: "#2e5aac", // color.info
-  Overig: "#b95000", // color.warning
-};
+const SOORT_HUES = [
+  "#e82026", // color.red.primary
+  "#2e5aac", // color.info
+  "#287d3c", // color.success
+] as const;
+
+/**
+ * Soorten buiten de eerste drie. Twee grijstinten in plaats van één, zodat twee
+ * naast elkaar liggende restsoorten in de legenda niet hetzelfde vakje krijgen.
+ */
+const OTHER_SOORT_COLORS = ["#595959", "#8c8c8c"];
+const OTHER_SOORT_COLOR = OTHER_SOORT_COLORS[0];
+/** Tickets waar Freshdesk niets invulde. */
+const UNSET_COLOR = "#cccccc"; // color.gray.08
+
+/**
+ * Kleur per soort. De volgorde komt van de server, bepaald over een vast venster
+ * van 180 dagen — niet over de gekozen periode. Zo krijgen de grootste soorten de
+ * onderscheidende kleuren, terwijl een wissel van 30 naar 7 dagen ze niet omgooit:
+ * kleur hoort bij de categorie, niet bij zijn positie in de ranglijst van nu.
+ */
+function buildSoortColors(colorOrder: string[], present: string[]): Record<string, string> {
+  const colors: Record<string, string> = { [UNSET_LABEL]: UNSET_COLOR };
+  // Soorten die alleen in deze periode voorkomen achteraan toevoegen, zodat ze
+  // ook een kleur hebben.
+  const ordered = [...colorOrder, ...present.filter((s) => !colorOrder.includes(s))].filter(
+    (soort) => soort !== UNSET_LABEL
+  );
+  ordered.forEach((soort, index) => {
+    colors[soort] =
+      index < SOORT_HUES.length
+        ? SOORT_HUES[index]
+        : OTHER_SOORT_COLORS[(index - SOORT_HUES.length) % OTHER_SOORT_COLORS.length];
+  });
+  return colors;
+}
+
+/** Lichtere tint van dezelfde kleur, voor de diepere niveaus in de treemap. */
+function lighten(hex: string, amount: number): string {
+  const value = hex.replace("#", "");
+  const to = (offset: number) => {
+    const channel = parseInt(value.slice(offset, offset + 2), 16);
+    return Math.round(channel + (255 - channel) * amount);
+  };
+  return `rgb(${to(0)}, ${to(2)}, ${to(4)})`;
+}
 
 /** Surface-kleur voor de 2px tussenruimte in gestapelde staven. */
 const SURFACE = "hsl(var(--card))";
@@ -156,11 +201,17 @@ function weekStart(dayKey: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-interface SeriesRow extends Record<FandeskCategory, number> {
+/**
+ * Eén rij in de tijdgrafiek. De aantallen per soort staan als losse sleutels op
+ * het object omdat recharts op `dataKey` stapelt, en de soorten pas op
+ * runtime bekend zijn — ze komen uit Freshdesk, niet uit een vaste lijst.
+ */
+interface SeriesRow {
   key: string;
   label: string;
   fullLabel: string;
   total: number;
+  [soort: string]: number | string;
 }
 
 export function FANdeskDashboard() {
@@ -236,6 +287,41 @@ export function FANdeskDashboard() {
   const activeGranularity: Granularity =
     granularity !== "auto" ? granularity : spanDays <= 2 ? "hour" : spanDays <= 62 ? "day" : "week";
 
+  /** Soorten in de volgorde die de server bepaalde: op aantal, hoogste eerst. */
+  const soorten = useMemo(() => data?.soorten ?? [], [data]);
+  const soortColors = useMemo(
+    () => buildSoortColors(data?.soortColorOrder ?? [], soorten),
+    [data, soorten]
+  );
+  const taxonomy = useMemo<SoortNode[]>(() => data?.taxonomy ?? [], [data]);
+
+  /**
+   * De boom in de vorm die recharts verwacht. `soort` en `typeName` reizen mee op
+   * elk knooppunt, zodat de renderer de kleur kan bepalen en de tooltip het hele
+   * pad kan tonen. `tint` maakt opeenvolgende subtypes binnen één soort iets
+   * lichter, zodat aangrenzende vlakken van elkaar te onderscheiden zijn.
+   */
+  const treemapData = useMemo(
+    () =>
+      taxonomy.map((soortNode) => ({
+        name: soortNode.soort,
+        soort: soortNode.soort,
+        children: soortNode.types.map((typeNode) => ({
+          name: typeNode.type,
+          soort: soortNode.soort,
+          typeName: typeNode.type,
+          children: typeNode.subtypes.map((sub, index) => ({
+            name: sub.subtype,
+            soort: soortNode.soort,
+            typeName: typeNode.type,
+            tint: index % 4,
+            size: sub.count,
+          })),
+        })),
+      })),
+    [taxonomy]
+  );
+
   /** Buckets herrekenen naar de gekozen granulariteit, in Amsterdamse tijd. */
   const series = useMemo<SeriesRow[]>(() => {
     if (!data) return [];
@@ -276,26 +362,20 @@ export function FANdeskDashboard() {
 
       let row = rows.get(key);
       if (!row) {
-        row = {
-          key,
-          label,
-          fullLabel,
-          total: 0,
-          Tickets: 0,
-          FANstore: 0,
-          Wedstrijdinformatie: 0,
-          Overig: 0,
-        };
+        row = { key, label, fullLabel, total: 0 };
+        // Elke soort krijgt een sleutel, ook als hij in dit bucket niet voorkomt:
+        // recharts stapelt anders een gat in plaats van een nul.
+        for (const soort of soorten) row[soort] = 0;
         rows.set(key, row);
       }
-      for (const category of FANDESK_CATEGORIES) {
-        row[category] += bucket.counts[category];
-        row.total += bucket.counts[category];
+      for (const [soort, count] of Object.entries(bucket.counts)) {
+        row[soort] = ((row[soort] as number) ?? 0) + count;
+        row.total += count;
       }
     }
 
     return [...rows.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }, [data, activeGranularity]);
+  }, [data, activeGranularity, soorten]);
 
   /** Verdeling per weekdag en per uur van de dag, beide in Amsterdamse tijd. */
   const rhythm = useMemo(() => {
@@ -308,7 +388,7 @@ export function FANdeskDashboard() {
     for (const bucket of data.buckets) {
       const parts = toAmsterdamParts(bucket.ts);
       if (!parts) continue;
-      const count = FANDESK_CATEGORIES.reduce((sum, c) => sum + bucket.counts[c], 0);
+      const count = Object.values(bucket.counts).reduce((sum, n) => sum + n, 0);
       weekdays[parts.weekday].total += count;
       hours[parts.hour].total += count;
     }
@@ -340,22 +420,22 @@ export function FANdeskDashboard() {
     return series.reduce((best, row) => (row.total > best.total ? row : best), series[0]);
   }, [series]);
 
-  const categoryRows = useMemo(() => {
+  const soortRows = useMemo(() => {
     if (!data) return [];
-    return FANDESK_CATEGORIES.map((category) => {
-      const count = data.totals.byCategory[category];
-      const before = data.previous.byCategory[category];
+    return soorten.map((soort) => {
+      const count = data.totals.bySoort[soort] ?? 0;
+      const before = data.previous.bySoort[soort] ?? 0;
       return {
-        category,
+        soort,
         count,
         before,
         share: total > 0 ? (count / total) * 100 : 0,
         delta: count - before,
       };
-    }).sort((a, b) => b.count - a.count);
-  }, [data, total]);
+    });
+  }, [data, soorten, total]);
 
-  const largest = categoryRows[0] ?? null;
+  const largest = soortRows[0] ?? null;
   const totalDelta = data ? formatDelta(total, data.previous.total) : { text: "", up: null };
   const perDay = total / Math.max(1, spanDays);
 
@@ -500,8 +580,8 @@ export function FANdeskDashboard() {
               icon={TrendingUp}
             />
             <KpiCard
-              label="Grootste categorie"
-              value={largest && largest.count > 0 ? largest.category : "—"}
+              label="Grootste soort"
+              value={largest && largest.count > 0 ? largest.soort : "—"}
               sub={
                 largest && largest.count > 0
                   ? `${formatNumber(largest.count)} tickets · ${formatPercent(largest.share)}`
@@ -546,11 +626,11 @@ export function FANdeskDashboard() {
                     onClick={() => setStacked((s) => !s)}
                     className="shrink-0 px-3 py-1.5 text-xs font-heading uppercase tracking-wide bg-card border border-border text-muted-foreground hover:text-foreground"
                   >
-                    {stacked ? "Alleen totaal" : "Per categorie"}
+                    {stacked ? "Alleen totaal" : "Per soort"}
                   </button>
                 </CardHeader>
                 <CardContent>
-                  {stacked && <CategoryLegend />}
+                  {stacked && <SoortLegend soorten={soorten} colors={soortColors} />}
                   <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       {stacked ? (
@@ -573,20 +653,20 @@ export function FANdeskDashboard() {
                           />
                           <Tooltip
                             cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.4 }}
-                            content={<SeriesTooltip />}
+                            content={<SeriesTooltip soorten={soorten} colors={soortColors} />}
                           />
-                          {FANDESK_CATEGORIES.map((category, index) => (
+                          {soorten.map((soort, index) => (
                             <Bar
-                              key={category}
-                              dataKey={category}
+                              key={soort}
+                              dataKey={soort}
                               stackId="tickets"
-                              fill={CATEGORY_COLORS[category]}
+                              fill={soortColors[soort]}
                               maxBarSize={24}
                               // 2px in surface-kleur = de tussenruimte tussen segmenten
                               stroke={SURFACE}
                               strokeWidth={2}
                               radius={
-                                index === FANDESK_CATEGORIES.length - 1
+                                index === soorten.length - 1
                                   ? ([4, 4, 0, 0] as [number, number, number, number])
                                   : undefined
                               }
@@ -619,7 +699,7 @@ export function FANdeskDashboard() {
                             type="monotone"
                             dataKey="total"
                             name="Totaal"
-                            stroke={CATEGORY_COLORS.Tickets}
+                            stroke={SOORT_HUES[0]}
                             strokeWidth={2}
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -641,12 +721,12 @@ export function FANdeskDashboard() {
                               <th className="py-2 pr-4 font-heading text-xs uppercase tracking-wide text-muted-foreground">
                                 Periode
                               </th>
-                              {FANDESK_CATEGORIES.map((category) => (
+                              {soorten.map((soort) => (
                                 <th
-                                  key={category}
+                                  key={soort}
                                   className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground"
                                 >
-                                  {category}
+                                  {soort}
                                 </th>
                               ))}
                               <th className="py-2 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
@@ -660,12 +740,12 @@ export function FANdeskDashboard() {
                                 <td className="py-1.5 pr-4 text-muted-foreground">
                                   {row.fullLabel}
                                 </td>
-                                {FANDESK_CATEGORIES.map((category) => (
+                                {soorten.map((soort) => (
                                   <td
-                                    key={category}
+                                    key={soort}
                                     className="py-1.5 pr-4 text-right tabular-nums"
                                   >
-                                    {formatNumber(row[category])}
+                                    {formatNumber((row[soort] as number) ?? 0)}
                                   </td>
                                 ))}
                                 <td className="py-1.5 text-right tabular-nums font-bold">
@@ -681,128 +761,53 @@ export function FANdeskDashboard() {
                 </CardContent>
               </Card>
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-4">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg font-heading uppercase tracking-wide">
-                      Waar gaan ze over?
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Aantal tickets per categorie, met het verschil t.o.v. de even lange periode
-                      ervoor
-                    </p>
+                  <CardHeader className="flex flex-row items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg font-heading uppercase tracking-wide">
+                        Waar gaan ze over?
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Soort, type en subtype zoals Freshdesk de tickets indeelt. De grootte van
+                        een vlak is het aantal tickets.
+                      </p>
+                    </div>
+                    {(data.inferredCount ?? 0) > 0 && (
+                      <span className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Sparkles className="h-3.5 w-3.5 text-psv-gold" />
+                        {formatNumber(data.inferredCount ?? 0)} door AI ingedeeld
+                      </span>
+                    )}
                   </CardHeader>
                   <CardContent>
-                    <div className="h-52 w-full">
+                    <SoortLegend soorten={soorten} colors={soortColors} />
+                    <div className="h-96 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={categoryRows}
-                          layout="vertical"
-                          margin={{ top: 4, right: 40, left: 0, bottom: 0 }}
+                        <Treemap
+                          data={treemapData}
+                          dataKey="size"
+                          isAnimationActive={false}
+                          stroke={SURFACE}
+                          content={<TreemapCell colors={soortColors} />}
                         >
-                          <CartesianGrid horizontal={false} stroke={GRID_INK} />
-                          <XAxis
-                            type="number"
-                            tick={{ fontSize: 10, fill: AXIS_INK }}
-                            tickLine={false}
-                            axisLine={false}
-                            allowDecimals={false}
-                          />
-                          <YAxis
-                            type="category"
-                            dataKey="category"
-                            tick={{ fontSize: 11, fill: AXIS_INK }}
-                            tickLine={false}
-                            axisLine={false}
-                            width={128}
-                          />
-                          <Tooltip
-                            cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.4 }}
-                            content={<CategoryTooltip />}
-                          />
-                          <Bar
-                            dataKey="count"
-                            maxBarSize={24}
-                            radius={[0, 4, 4, 0]}
-                            label={{
-                              position: "right",
-                              fontSize: 11,
-                              fill: AXIS_INK,
-                              formatter: (value: unknown) => formatNumber(Number(value) || 0),
-                            }}
-                          >
-                            {categoryRows.map((row) => (
-                              <Cell key={row.category} fill={CATEGORY_COLORS[row.category]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
+                          <Tooltip content={<TreemapTooltip total={total} />} />
+                        </Treemap>
                       </ResponsiveContainer>
                     </div>
 
-                    <div className="overflow-x-auto mt-4">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border text-left">
-                            <th className="py-2 pr-4 font-heading text-xs uppercase tracking-wide text-muted-foreground">
-                              Categorie
-                            </th>
-                            <th className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
-                              Aantal
-                            </th>
-                            <th className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
-                              Aandeel
-                            </th>
-                            <th className="py-2 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
-                              Vorige periode
-                              <span className="block font-sans normal-case tracking-normal">
-                                {formatDayRange(data.previous.from, data.previous.to)}
-                              </span>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {categoryRows.map((row) => (
-                            <tr key={row.category} className="border-b border-border/50">
-                              <td className="py-2 pr-4">
-                                <span className="flex items-center gap-2">
-                                  <span
-                                    aria-hidden
-                                    className="inline-block h-2.5 w-2.5 shrink-0"
-                                    style={{ backgroundColor: CATEGORY_COLORS[row.category] }}
-                                  />
-                                  {row.category}
-                                </span>
-                              </td>
-                              <td className="py-2 pr-4 text-right tabular-nums">
-                                {formatNumber(row.count)}
-                              </td>
-                              <td className="py-2 pr-4 text-right tabular-nums">
-                                {formatPercent(row.share)}
-                              </td>
-                              <td className="py-2 text-right">
-                                <span className="inline-flex items-center gap-1.5 tabular-nums">
-                                  {formatNumber(row.before)}
-                                  {row.delta !== 0 && (
-                                    <Badge
-                                      variant={row.delta > 0 ? "warning" : "success"}
-                                      className="gap-1"
-                                    >
-                                      {row.delta > 0 ? (
-                                        <TrendingUp className="h-3 w-3" />
-                                      ) : (
-                                        <TrendingDown className="h-3 w-3" />
-                                      )}
-                                      {row.delta > 0 ? "+" : "−"}
-                                      {formatNumber(Math.abs(row.delta))}
-                                    </Badge>
-                                  )}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <details className="accordion mt-4">
+                      <summary>Tabelweergave</summary>
+                      <div className="accordion__content">
+                        <TaxonomyTable
+                          taxonomy={taxonomy}
+                          colors={soortColors}
+                          total={total}
+                          soortRows={soortRows}
+                          previousLabel={formatDayRange(data.previous.from, data.previous.to)}
+                        />
+                      </div>
+                    </details>
                   </CardContent>
                 </Card>
 
@@ -856,17 +861,24 @@ export function FANdeskDashboard() {
 }
 
 /** Legenda — de betrouwbare identiteitslaag; kleur alleen is nooit genoeg. */
-function CategoryLegend() {
+function SoortLegend({
+  soorten,
+  colors,
+}: {
+  soorten: string[];
+  colors: Record<string, string>;
+}) {
+  if (soorten.length < 2) return null;
   return (
     <div className="flex flex-wrap items-center gap-4 mb-4">
-      {FANDESK_CATEGORIES.map((category) => (
-        <span key={category} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {soorten.map((soort) => (
+        <span key={soort} className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span
             aria-hidden
             className="inline-block h-2.5 w-2.5"
-            style={{ backgroundColor: CATEGORY_COLORS[category] }}
+            style={{ backgroundColor: colors[soort] ?? OTHER_SOORT_COLOR }}
           />
-          {category}
+          {soort}
         </span>
       ))}
     </div>
@@ -881,10 +893,14 @@ function SeriesTooltip({
   active,
   payload,
   totalOnly = false,
+  soorten = [],
+  colors = {},
 }: {
   active?: boolean;
   payload?: TooltipPayloadEntry[];
   totalOnly?: boolean;
+  soorten?: string[];
+  colors?: Record<string, string>;
 }) {
   const row = active && payload?.length ? payload[0].payload : null;
   if (!row) return null;
@@ -892,15 +908,19 @@ function SeriesTooltip({
     <div className="border border-border bg-card px-3 py-2 shadow-card">
       <p className="text-xs text-muted-foreground mb-1.5">{row.fullLabel}</p>
       {!totalOnly &&
-        FANDESK_CATEGORIES.map((category) => (
-          <p key={category} className="flex items-center gap-2 text-sm">
+        soorten
+          .filter((soort) => ((row[soort] as number) ?? 0) > 0)
+          .map((soort) => (
+          <p key={soort} className="flex items-center gap-2 text-sm">
             <span
               aria-hidden
               className="inline-block h-0.5 w-3 shrink-0"
-              style={{ backgroundColor: CATEGORY_COLORS[category] }}
+              style={{ backgroundColor: colors[soort] ?? OTHER_SOORT_COLOR }}
             />
-            <span className="font-bold tabular-nums">{formatNumber(row[category])}</span>
-            <span className="text-xs text-muted-foreground">{category}</span>
+            <span className="font-bold tabular-nums">
+              {formatNumber((row[soort] as number) ?? 0)}
+            </span>
+            <span className="text-xs text-muted-foreground">{soort}</span>
           </p>
         ))}
       <p className="mt-1.5 pt-1.5 border-t border-border text-sm">
@@ -911,24 +931,237 @@ function SeriesTooltip({
   );
 }
 
-function CategoryTooltip({
+/** Eén knooppunt zoals recharts het aan de renderer geeft. */
+interface TreemapNodeProps {
+  depth?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  name?: string;
+  value?: number;
+  soort?: string;
+  tint?: number;
+  colors?: Record<string, string>;
+}
+
+/**
+ * Eigen renderer voor de treemap. De diepte bepaalt de rol: een soort krijgt
+ * alleen een omlijsting en zijn naam, een subtype is het gevulde vlak. Zo zie je
+ * de drie lagen zonder dat de kleuren gaan schreeuwen.
+ */
+function TreemapCell(props: TreemapNodeProps) {
+  const {
+    depth = 0,
+    x = 0,
+    y = 0,
+    width = 0,
+    height = 0,
+    name = "",
+    value = 0,
+    soort,
+    tint = 0,
+    colors = {},
+  } = props;
+
+  if (width <= 0 || height <= 0) return null;
+
+  const base = colors[soort ?? name] ?? OTHER_SOORT_COLOR;
+
+  // Diepte 1 is de soort. Alleen een kader: de kinderen vullen de ouder volledig,
+  // dus een label hier zou er altijd achter verdwijnen. De groepering leest af aan
+  // de kleurfamilie van de vlakken, met de legenda als naamgeving.
+  if (depth === 1) {
+    return (
+      <rect x={x} y={y} width={width} height={height} fill="none" stroke={base} strokeWidth={2} />
+    );
+  }
+
+  // Diepte 2 is het type: geen vulling, alleen een fijne scheiding.
+  if (depth === 2) {
+    return (
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill="none"
+        stroke={SURFACE}
+        strokeWidth={2}
+      />
+    );
+  }
+
+  // Diepte 3 is het subtype: het gevulde vlak dat het aantal draagt.
+  const fill = lighten(base, 0.25 + Math.min(tint, 3) * 0.15);
+  // Alleen labelen als het past. Een afgekapt label is slechter dan geen label;
+  // de waarde blijft bereikbaar via de tooltip en de tabel.
+  const fits = width > name.length * 6.2 + 12 && height > 30;
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill={fill} stroke={SURFACE} strokeWidth={2} />
+      {fits && (
+        <>
+          <text x={x + 6} y={y + 16} fill="#09101d" fontSize={11}>
+            {name}
+          </text>
+          <text x={x + 6} y={y + 29} fill="#333333" fontSize={10} className="tabular-nums">
+            {formatNumber(value)}
+          </text>
+        </>
+      )}
+    </g>
+  );
+}
+
+function TreemapTooltip({
   active,
   payload,
+  total,
 }: {
   active?: boolean;
-  payload?: Array<{ payload?: { category: FandeskCategory; count: number; share: number } }>;
+  payload?: Array<{ payload?: Record<string, unknown> }>;
+  total?: number;
 }) {
-  const row = active && payload?.length ? payload[0].payload : null;
-  if (!row) return null;
+  const node = active && payload?.length ? payload[0].payload : null;
+  if (!node) return null;
+  const count = Number(node.value) || 0;
+  const path = [node.soort, node.typeName, node.name]
+    .filter((part): part is string => typeof part === "string" && part.length > 0)
+    .filter((part, index, all) => all.indexOf(part) === index);
   return (
     <div className="border border-border bg-card px-3 py-2 shadow-card">
       <p className="text-sm">
-        <span className="font-bold tabular-nums">{formatNumber(row.count)}</span>{" "}
+        <span className="font-bold tabular-nums">{formatNumber(count)}</span>{" "}
         <span className="text-xs text-muted-foreground">tickets</span>
       </p>
-      <p className="text-xs text-muted-foreground mt-0.5">
-        {row.category} · {formatPercent(row.share)} van het totaal
-      </p>
+      <p className="text-xs text-muted-foreground mt-0.5">{path.join(" › ")}</p>
+      {total && total > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {formatPercent((count / total) * 100)} van het totaal
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * De tabel naast de treemap. Oppervlaktes zijn slecht te vergelijken, dus dit is
+ * waar de exacte aantallen staan — en waar de hele boom leesbaar blijft, ook de
+ * vlakjes die te klein waren voor een label.
+ */
+function TaxonomyTable({
+  taxonomy,
+  colors,
+  total,
+  soortRows,
+  previousLabel,
+}: {
+  taxonomy: SoortNode[];
+  colors: Record<string, string>;
+  total: number;
+  soortRows: Array<{ soort: string; count: number; before: number; delta: number }>;
+  previousLabel: string;
+}) {
+  const deltaFor = (soort: string) => soortRows.find((row) => row.soort === soort);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left">
+            <th className="py-2 pr-4 font-heading text-xs uppercase tracking-wide text-muted-foreground">
+              Soort · type · subtype
+            </th>
+            <th className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
+              Aantal
+            </th>
+            <th className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
+              Aandeel
+            </th>
+            <th className="py-2 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
+              Vorige periode
+              <span className="block font-sans normal-case tracking-normal">{previousLabel}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {taxonomy.map((soortNode) => {
+            const row = deltaFor(soortNode.soort);
+            return (
+              <Fragment key={soortNode.soort}>
+                <tr className="border-b border-border/50">
+                  <td className="py-2 pr-4">
+                    <span className="flex items-center gap-2 font-bold">
+                      <span
+                        aria-hidden
+                        className="inline-block h-2.5 w-2.5 shrink-0"
+                        style={{ backgroundColor: colors[soortNode.soort] ?? OTHER_SOORT_COLOR }}
+                      />
+                      {soortNode.soort}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4 text-right tabular-nums font-bold">
+                    {formatNumber(soortNode.count)}
+                  </td>
+                  <td className="py-2 pr-4 text-right tabular-nums">
+                    {formatPercent(total > 0 ? (soortNode.count / total) * 100 : 0)}
+                  </td>
+                  <td className="py-2 text-right">
+                    {row && (
+                      <span className="inline-flex items-center gap-1.5 tabular-nums">
+                        {formatNumber(row.before)}
+                        {row.delta !== 0 && (
+                          <Badge variant={row.delta > 0 ? "warning" : "success"} className="gap-1">
+                            {row.delta > 0 ? (
+                              <TrendingUp className="h-3 w-3" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3" />
+                            )}
+                            {row.delta > 0 ? "+" : "−"}
+                            {formatNumber(Math.abs(row.delta))}
+                          </Badge>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+                {soortNode.types.map((typeNode) => (
+                  <Fragment key={`${soortNode.soort}/${typeNode.type}`}>
+                    <tr className="border-b border-border/30">
+                      <td className="py-1.5 pr-4 pl-6 text-muted-foreground">{typeNode.type}</td>
+                      <td className="py-1.5 pr-4 text-right tabular-nums">
+                        {formatNumber(typeNode.count)}
+                      </td>
+                      <td className="py-1.5 pr-4 text-right tabular-nums text-muted-foreground">
+                        {formatPercent(total > 0 ? (typeNode.count / total) * 100 : 0)}
+                      </td>
+                      <td />
+                    </tr>
+                    {typeNode.subtypes.map((sub) => (
+                      <tr
+                        key={`${soortNode.soort}/${typeNode.type}/${sub.subtype}`}
+                        className="border-b border-border/20"
+                      >
+                        <td className="py-1 pr-4 pl-12 text-xs text-muted-foreground">
+                          {sub.subtype}
+                        </td>
+                        <td className="py-1 pr-4 text-right text-xs tabular-nums text-muted-foreground">
+                          {formatNumber(sub.count)}
+                        </td>
+                        <td className="py-1 pr-4 text-right text-xs tabular-nums text-muted-foreground">
+                          {formatPercent(total > 0 ? (sub.count / total) * 100 : 0)}
+                        </td>
+                        <td />
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -992,7 +1225,7 @@ function RhythmChart({
             />
             <Bar
               dataKey="total"
-              fill={CATEGORY_COLORS.Tickets}
+              fill={SOORT_HUES[0]}
               maxBarSize={24}
               radius={[4, 4, 0, 0]}
             />

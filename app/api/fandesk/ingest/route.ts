@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { isFandeskRequestAuthorized } from "@/lib/fandesk-auth";
 import {
   isBatchTooLarge,
   MAX_ITEMS_PER_BATCH,
@@ -11,33 +11,15 @@ import { refreshDaySummaries } from "@/lib/fandesk-summarize";
 
 /**
  * Ingest-endpoint voor de n8n workflow die support tickets ophaalt en
- * categoriseert. Verwacht elk uur een batch items met `id`, `category` en
- * `created_at`. Beveiligd met FANDESK_INGEST_SECRET — middleware.ts laat alle
+ * categoriseert. Verwacht elk uur een batch items met `id`, `created_at`, de
+ * Freshdesk-taxonomie (`soort`/`type`/`subtype`) en een onderwerpregel. Beveiligd met FANDESK_INGEST_SECRET — middleware.ts laat alle
  * /api/* routes ongeauthenticeerd door, dus de check zit hier.
  */
 
 export const dynamic = "force-dynamic";
 
-function secretsMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.FANDESK_INGEST_SECRET;
-  if (!secret) {
-    console.error("[fandesk/ingest] FANDESK_INGEST_SECRET niet geconfigureerd — endpoint geweigerd.");
-    return false;
-  }
-  const authHeader = request.headers.get("authorization");
-  if (authHeader?.startsWith("Bearer ") && secretsMatch(authHeader.slice(7), secret)) {
-    return true;
-  }
-  const custom = request.headers.get("x-fandesk-secret");
-  return custom ? secretsMatch(custom, secret) : false;
-}
+const isAuthorized = (request: Request) =>
+  isFandeskRequestAuthorized(request, "fandesk/ingest");
 
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
@@ -73,10 +55,9 @@ export async function POST(request: Request) {
 
   try {
     const result = await appendTickets(parsed.items, batchAt);
-    if (result.unknownCategories.length) {
+    if (result.withoutSoort) {
       console.warn(
-        "[fandesk/ingest] onbekende categorieën geteld als Overig:",
-        result.unknownCategories.join(", ")
+        `[fandesk/ingest] ${result.withoutSoort} van ${result.added} toegevoegde tickets zonder soort — Freshdesk liet het veld leeg en het model vulde niets in.`
       );
     }
 
@@ -105,8 +86,9 @@ export async function POST(request: Request) {
       skipped: parsed.skipped,
       added: result.added,
       duplicates: result.duplicates,
-      unknownCategories: result.unknownCategories,
-      byCategory: result.byCategory,
+      bySoort: result.bySoort,
+      inferred: result.inferred,
+      withoutSoort: result.withoutSoort,
       batchAt,
     });
   } catch (err) {

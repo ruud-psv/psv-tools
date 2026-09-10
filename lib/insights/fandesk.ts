@@ -4,7 +4,7 @@ import {
   type DayHistoryEntry,
   type FandeskTheme,
 } from "@/lib/fandesk-analysis";
-import type { FandeskCategory, FandeskTicket } from "@/lib/fandesk";
+import type { FandeskTicket } from "@/lib/fandesk";
 import { runInsightAnalysis } from "./runner";
 
 export interface FandeskDayInsightInput {
@@ -17,7 +17,7 @@ export interface FandeskPeriodInsightInput {
   from: string;
   to: string;
   total: number;
-  byCategory: Record<FandeskCategory, number>;
+  bySoort: Record<string, number>;
   previousTotal: number;
   days: Array<{ day: string; total: number; summary: string; themes: FandeskTheme[] }>;
 }
@@ -39,7 +39,9 @@ export interface FandeskInsightResult {
   recommendations: string[];
 }
 
-const SHARED_CONTEXT = `CONTEXT: PSV Eindhoven is een profvoetbalclub. De support desk (FANdesk) krijgt vragen van fans binnen over vier gebieden: Tickets (kaartverkoop, bestellingen, terugbetalingen), FANstore (webshop, bestellingen, retouren, maatvragen), Wedstrijdinformatie (aanvangstijden, vervoer, parkeren, toegang, huisregels) en Overig.
+const SHARED_CONTEXT = `CONTEXT: PSV Eindhoven is een profvoetbalclub. De support desk (FANdesk) krijgt vragen van fans binnen over kaartverkoop, de webshop (FANstore), praktische wedstrijdinformatie en alles daaromheen.
+
+De tickets zijn in Freshdesk zelf ingedeeld op drie niveaus — soort, type en subtype (bijvoorbeeld Thuiswedstrijden → Kaartverkoop → Champions League). Die indeling krijg je mee en is leidend: gebruik hem om je waarnemingen aan op te hangen. Bij tickets waar Freshdesk niets invulde staat "Niet ingevuld"; benoem dat alleen als het om veel tickets gaat.
 
 Je krijgt per ticket een korte, geanonimiseerde onderwerpregel — niet de volledige vraag. Namen, e-mailadressen en ordernummers zijn eruit gehaald en vervangen door "…".
 
