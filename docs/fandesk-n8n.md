@@ -183,8 +183,12 @@ En noem hem exact `Taxonomie` — daar verwijst de prompt straks naar.
 
 Twee plaatsingen die niet werken:
 
-- *Tussen Code in Batches en het model.* Daar draait hij één keer per batch, dus vijf batches
-  worden vijf identieke requests.
+- *Tussen Code in Batches en het model.* **Een HTTP Request node vervangt het item dat
+  doorstroomt door zijn eigen response.** Bij `Message a model` is `$json` dan de woordenlijst en
+  niet meer je batch, dus `{{ $json.ticket_batch_json }}` levert niets op en het model krijgt een
+  lege ticketlijst — zonder foutmelding, de node wordt gewoon groen. Daarbovenop draait hij daar
+  één keer per batch. Moet hij toch op die plek blijven staan, verwijs dan in de Prompt expliciet
+  naar de node ervoor: `{{ $('Code in Batches').item.json.ticket_batch_json }}`.
 - *Als aparte tak naast de Schedule Trigger.* Bij twee parallelle takken bepaalt n8n zelf de
   volgorde, en `$('Taxonomie')` werkt alleen als die node in deze uitvoering al gedraaid heeft.
 
