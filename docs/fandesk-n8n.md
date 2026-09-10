@@ -103,7 +103,7 @@ Schedule Trigger → Code → Get many tickets → Filter → Code in Batches
 | Node | Wijziging |
 |---|---|
 | Schedule Trigger, Code, Get many tickets, Filter | Geen. |
-| **Code in Batches** | Naast de tickettekst ook `custom_fields` meegeven. |
+| **Code in Batches** | De drie Freshdesk-velden plat meegeven, plus een vlag of het ticket ingedeeld moet worden. |
 | **HTTP (nieuw)** | Haalt de woordenlijst op waaruit het model mag kiezen. |
 | **Message a model** | Schrijft altijd `topic`; vult soort/type/subtype alléén in als Freshdesk ze leeg liet. |
 | **Code Parse** | Freshdesk-waarden winnen; modelwaarden alleen als vangnet, met `inferred: true`. |
@@ -114,14 +114,72 @@ Schedule Trigger → Code → Get many tickets → Filter → Code in Batches
 indeling die de organisatie zelf hanteert. Het model doet nog twee dingen: het schrijft de
 onderwerpregel, en het springt bij wanneer `cf_soort` leeg is.
 
+### Code in Batches
+
+Geeft de drie Freshdesk-velden plat mee en zet een vlag of het ticket nog ingedeeld moet worden.
+De velden blijven in `ticket_batch` staan voor de parse-node; naar het model gaat een kleinere
+projectie, wat tokens scheelt.
+
+```js
+const BATCH_SIZE = 20;
+
+// Freshdesk levert een leeg keuzeveld soms als null en soms als de string "null".
+const clean = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || /^(null|undefined|n\/a|-)$/i.test(trimmed)) return null;
+  return trimmed;
+};
+
+const allTickets = items.map(item => {
+  const cf = item.json.custom_fields || {};
+  const soort = clean(cf.cf_soort);
+  return {
+    id: item.json.id,
+    subject: item.json.subject,
+    description_text: item.json.description_text || '',
+    created_at: item.json.created_at,
+    soort,
+    type: clean(cf.cf_type),
+    subtype: clean(cf.cf_subtype),
+    // Alleen tickets zonder soort hoeft het model in te delen.
+    needs_classification: soort === null
+  };
+});
+
+const batches = [];
+for (let i = 0; i < allTickets.length; i += BATCH_SIZE) {
+  batches.push(allTickets.slice(i, i + BATCH_SIZE));
+}
+
+return batches.map(batch => ({
+  json: {
+    ticket_batch: batch,
+    batch_size: batch.length,
+    to_classify: batch.filter(t => t.needs_classification).length,
+    ticket_batch_json: JSON.stringify(batch.map(t => ({
+      id: t.id,
+      subject: t.subject,
+      description_text: t.description_text,
+      needs_classification: t.needs_classification
+    })))
+  }
+}));
+```
+
 ### HTTP: de woordenlijst ophalen
 
 ```
 GET https://tools.psv.nl/api/fandesk/taxonomy
-Authorization: Bearer <FANDESK_INGEST_SECRET>
 ```
 
-Zelfde secret als de push, dus geen nieuwe credential. Het endpoint geeft terug welke
+Zelfde credential als de push: *Generic Credential Type* → *Header Auth* → `Fandesk Ingest Auth`.
+Het endpoint accepteert zowel een `Authorization: Bearer <secret>`-header als
+`x-fandesk-secret: <secret>`, dus welke van de twee in je credential staat maakt niet uit.
+
+**Zet deze node niet tussen Code in Batches en het model.** Daar draait hij één keer per batch,
+dus vijf batches worden vijf identieke requests. Hang hem als eigen tak aan de Schedule Trigger,
+noem hem `Taxonomie`, en verwijs er in de prompt naar met `$('Taxonomie').first().json.soorten`. Het endpoint geeft terug welke
 soort/type/subtype-combinaties de afgelopen 180 dagen echt uit Freshdesk zijn binnengekomen:
 
 ```json
@@ -215,19 +273,19 @@ for (const [batchIndex, item] of items.entries()) {
         continue;
       }
 
-      // Freshdesk wint altijd. Het model springt alleen bij waar cf_soort leeg is,
+      // Freshdesk wint altijd. Het model springt alleen bij waar soort leeg is,
       // en dan gaat inferred mee zodat het dashboard dat kan laten zien.
-      const bron = batch.get(id)?.custom_fields ?? {};
-      const heeftFreshdesk = Boolean(bron.cf_soort);
+      const bron = batch.get(id) || {};
+      const heeftFreshdesk = Boolean(bron.soort);
 
       results.push({
         json: {
           id,
           created_at,
           topic: typeof ticket.topic === 'string' ? ticket.topic.trim() : undefined,
-          soort: heeftFreshdesk ? bron.cf_soort : ticket.soort,
-          type: heeftFreshdesk ? bron.cf_type : ticket.type,
-          subtype: heeftFreshdesk ? bron.cf_subtype : ticket.subtype,
+          soort: heeftFreshdesk ? bron.soort : ticket.soort,
+          type: heeftFreshdesk ? bron.type : ticket.type,
+          subtype: heeftFreshdesk ? bron.subtype : ticket.subtype,
           inferred: !heeftFreshdesk && Boolean(ticket.soort)
         }
       });
