@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import {
   amsterdamDayBounds,
+  buildSoortResolver,
+  buildTaxonomy,
+  countsBySoort,
   dayCount,
-  emptyCategoryCounts,
-  FandeskCategory,
+  FandeskTicket,
   isValidDayKey,
   shiftDayKey,
+  SoortNode,
   toAmsterdamParts,
 } from "@/lib/fandesk";
 import { readRange } from "@/lib/fandesk-store";
@@ -25,10 +28,20 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_DAYS = 30;
 
+/**
+ * Over hoeveel dagen de kleurvolgorde van de soorten wordt bepaald. Bewust een
+ * vast venster en niet de gekozen periode: kleur hoort bij de categorie, niet bij
+ * zijn positie in de ranglijst van dit moment. Zou je op de gekozen periode
+ * sorteren, dan wisselen rood en blauw van soort zodra iemand van 30 naar 7 dagen
+ * gaat.
+ */
+const COLOR_ORDER_DAYS = 180;
+
 export interface FandeskBucket {
   /** Begin van het uur, ISO-8601 in UTC. */
   ts: string;
-  counts: Record<FandeskCategory, number>;
+  /** Aantallen per soort. Dynamische sleutels: de indeling komt uit Freshdesk. */
+  counts: Record<string, number>;
 }
 
 /** Samenvatting van één dag, zoals de ingest hem heeft laten maken. */
@@ -44,12 +57,12 @@ export interface FandeskData {
   from: string;
   to: string;
   buckets: FandeskBucket[];
-  totals: { total: number; byCategory: Record<FandeskCategory, number> };
+  totals: { total: number; bySoort: Record<string, number> };
   previous: {
     from: string;
     to: string;
     total: number;
-    byCategory: Record<FandeskCategory, number>;
+    bySoort: Record<string, number>;
   };
   lastTicketAt: string | null;
   generatedAt: string;
@@ -72,35 +85,53 @@ export interface FandeskData {
   periodSummaryStale?: boolean;
   /** True zodra er ergens in het bereik onderwerpregels zijn aangeleverd. */
   hasTopics?: boolean;
+  /** De volledige boom soort → type → subtype over de gekozen periode. */
+  taxonomy?: SoortNode[];
+  /**
+   * Soorten op aantal gesorteerd. De client neemt hier de stapelvolgorde en de
+   * kleurtoekenning uit over, zodat die niet per render opnieuw wordt bepaald.
+   */
+  soorten?: string[];
+  /** Hoeveel tickets in de periode hun taxonomie van het model kregen. */
+  inferredCount?: number;
+  /**
+   * Soorten op aantal over een vast venster van 180 dagen. Hieruit kiest de
+   * client zijn kleuren, zodat een periodewissel ze niet omgooit.
+   */
+  soortColorOrder?: string[];
 }
 
 function todayKey(): string {
   return toAmsterdamParts(new Date().toISOString())?.dayKey ?? new Date().toISOString().slice(0, 10);
 }
 
-function aggregate(
-  tickets: Array<{ category: FandeskCategory; at: string }>
-): { buckets: FandeskBucket[]; byCategory: Record<FandeskCategory, number>; total: number } {
-  const byHour = new Map<string, Record<FandeskCategory, number>>();
-  const byCategory = emptyCategoryCounts();
+function aggregate(tickets: FandeskTicket[]): {
+  buckets: FandeskBucket[];
+  bySoort: Record<string, number>;
+  total: number;
+} {
+  const byHour = new Map<string, Record<string, number>>();
+  // Zelfde canonicalisatie als de treemap, anders splitst de tijdgrafiek een
+  // soort die de treemap samenvoegt.
+  const resolveSoort = buildSoortResolver(tickets);
 
   for (const ticket of tickets) {
     // Uur-bucket in UTC; de client rekent voor weergave om naar Amsterdam.
     const ts = `${ticket.at.slice(0, 13)}:00:00.000Z`;
     let counts = byHour.get(ts);
     if (!counts) {
-      counts = emptyCategoryCounts();
+      counts = {};
       byHour.set(ts, counts);
     }
-    counts[ticket.category]++;
-    byCategory[ticket.category]++;
+    const soort = resolveSoort(ticket.soort);
+    counts[soort] = (counts[soort] ?? 0) + 1;
   }
 
   const buckets = [...byHour.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([ts, counts]) => ({ ts, counts }));
 
-  return { buckets, byCategory, total: tickets.length };
+  return { buckets, bySoort: countsBySoort(tickets), total: tickets.length };
 }
 
 export async function GET(req: NextRequest) {
@@ -129,15 +160,24 @@ export async function GET(req: NextRequest) {
     const current = amsterdamDayBounds(from, to);
     const previous = amsterdamDayBounds(prevFrom, prevTo);
 
-    const [currentTickets, previousTickets, storedDays, storedPeriod] = await Promise.all([
-      readRange(current.fromInstant, current.toInstant),
-      readRange(previous.fromInstant, previous.toInstant),
-      getDaySummaries(dayKeysInRange(from, to)),
-      getPeriodSummary(from, to),
-    ]);
+    const colorWindow = amsterdamDayBounds(shiftDayKey(to, -(COLOR_ORDER_DAYS - 1)), to);
+
+    const [currentTickets, previousTickets, storedDays, storedPeriod, colorWindowTickets] =
+      await Promise.all([
+        readRange(current.fromInstant, current.toInstant),
+        readRange(previous.fromInstant, previous.toInstant),
+        getDaySummaries(dayKeysInRange(from, to)),
+        getPeriodSummary(from, to),
+        readRange(colorWindow.fromInstant, colorWindow.toInstant),
+      ]);
 
     const now = aggregate(currentTickets);
     const before = aggregate(previousTickets);
+
+    // De boom telt door het model ingevulde waarden wél mee: het gaat hier om
+    // wat er binnenkwam. Alleen het taxonomy-endpoint, dat de woordenlijst voor
+    // het model levert, laat ze buiten beschouwing.
+    const taxonomy = buildTaxonomy(currentTickets);
 
     const daySummaries: FandeskDaySummary[] = storedDays
       .filter((entry) => entry.stored !== null)
@@ -169,12 +209,12 @@ export async function GET(req: NextRequest) {
       from,
       to,
       buckets: now.buckets,
-      totals: { total: now.total, byCategory: now.byCategory },
+      totals: { total: now.total, bySoort: now.bySoort },
       previous: {
         from: prevFrom,
         to: prevTo,
         total: before.total,
-        byCategory: before.byCategory,
+        bySoort: before.bySoort,
       },
       lastTicketAt: currentTickets.length ? currentTickets[currentTickets.length - 1].at : null,
       generatedAt: new Date().toISOString(),
@@ -191,6 +231,12 @@ export async function GET(req: NextRequest) {
           : null,
       periodSummaryStale: daySummaries.length > 0 && !periodCurrent,
       hasTopics: currentTickets.some((t) => t.topic),
+      taxonomy,
+      soorten: taxonomy.map((node) => node.soort),
+      inferredCount: currentTickets.filter((t) => t.inferred).length,
+      soortColorOrder: Object.entries(countsBySoort(colorWindowTickets))
+        .sort((a, b) => b[1] - a[1])
+        .map(([soort]) => soort),
     };
 
     return NextResponse.json(data);
@@ -204,8 +250,8 @@ export async function GET(req: NextRequest) {
         from,
         to,
         buckets: [],
-        totals: { total: 0, byCategory: emptyCategoryCounts() },
-        previous: { from: prevFrom, to: prevTo, total: 0, byCategory: emptyCategoryCounts() },
+        totals: { total: 0, bySoort: {} },
+        previous: { from: prevFrom, to: prevTo, total: 0, bySoort: {} },
         lastTicketAt: null,
         generatedAt: new Date().toISOString(),
       } satisfies FandeskData);

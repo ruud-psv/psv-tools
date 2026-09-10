@@ -1,4 +1,4 @@
-import { amsterdamDayBounds, shiftDayKey, type FandeskCategory } from "@/lib/fandesk";
+import { amsterdamDayBounds, shiftDayKey } from "@/lib/fandesk";
 import { readRange } from "@/lib/fandesk-store";
 import {
   aggregateThemes,
@@ -121,10 +121,10 @@ export async function refreshPeriodSummary(args: {
   from: string;
   to: string;
   total: number;
-  byCategory: Record<FandeskCategory, number>;
+  bySoort: Record<string, number>;
   previousTotal: number;
 }): Promise<StoredFandeskSummary | null> {
-  const { from, to, total, byCategory, previousTotal } = args;
+  const { from, to, total, bySoort, previousTotal } = args;
 
   const stored = await getDaySummaries(dayKeysInRange(from, to));
   const days = stored
@@ -145,7 +145,7 @@ export async function refreshPeriodSummary(args: {
     from,
     to,
     total,
-    byCategory,
+    bySoort,
     previousTotal,
     days,
   });

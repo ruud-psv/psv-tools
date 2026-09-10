@@ -1,4 +1,4 @@
-import { FANDESK_CATEGORIES, FandeskCategory, FandeskTicket } from "@/lib/fandesk";
+import { buildTaxonomy, countsBySoort, FandeskTicket } from "@/lib/fandesk";
 
 /**
  * Contextbouwers voor de FANdesk-analyse. Zelfde conventie als
@@ -20,10 +20,28 @@ export interface DayHistoryEntry {
   themes: FandeskTheme[];
 }
 
-function categoryCounts(tickets: FandeskTicket[]): Record<FandeskCategory, number> {
-  const counts = { Tickets: 0, FANstore: 0, Wedstrijdinformatie: 0, Overig: 0 };
-  for (const t of tickets) counts[t.category]++;
-  return counts;
+/** Regels als "Thuiswedstrijden 42" — de verdeling over de bovenste laag. */
+function soortLines(tickets: FandeskTicket[]): string {
+  const counts = countsBySoort(tickets);
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([soort, count]) => `${soort} ${count}`)
+    .join(", ");
+}
+
+/** De volledige boom als inspringende regels, voor in de prompt. */
+function taxonomyLines(tickets: FandeskTicket[]): string[] {
+  const lines: string[] = [];
+  for (const soort of buildTaxonomy(tickets)) {
+    lines.push(`${soort.soort} (${soort.count})`);
+    for (const type of soort.types) {
+      lines.push(`  ${type.type} (${type.count})`);
+      for (const sub of type.subtypes) {
+        lines.push(`    ${sub.subtype} (${sub.count})`);
+      }
+    }
+  }
+  return lines;
 }
 
 function dutchDay(day: string): string {
@@ -39,7 +57,7 @@ function dutchDay(day: string): string {
 }
 
 /**
- * Context voor de dagsamenvatting: de onderwerpregels van die dag per categorie,
+ * Context voor de dagsamenvatting: de onderwerpregels van die dag per soort,
  * plus de themalabels van de voorgaande dagen zodat het model kan zien of iets
  * afwijkt. Alleen labels uit de historie, geen ruwe tekst — dat houdt de prompt
  * compact en de vergelijking scherp.
@@ -50,26 +68,34 @@ export function buildDayContext(args: {
   history: DayHistoryEntry[];
 }): string {
   const { day, tickets, history } = args;
-  const counts = categoryCounts(tickets);
   const withTopic = tickets.filter((t) => t.topic);
 
   const lines: string[] = [];
   lines.push(`— DAG: ${dutchDay(day)} (${day})`);
   lines.push(`Totaal tickets: ${tickets.length}`);
-  lines.push(
-    `Per categorie: ${FANDESK_CATEGORIES.map((c) => `${c} ${counts[c]}`).join(", ")}`
-  );
+  lines.push(`Per soort: ${soortLines(tickets)}`);
   lines.push(
     `Onderwerpregels beschikbaar: ${withTopic.length} van ${tickets.length}`
   );
 
   lines.push("");
-  lines.push("— ONDERWERPREGELS VAN DEZE DAG (per categorie)");
-  for (const category of FANDESK_CATEGORIES) {
-    const inCategory = withTopic.filter((t) => t.category === category);
-    if (!inCategory.length) continue;
-    lines.push(`${category} (${inCategory.length}):`);
-    for (const ticket of inCategory) lines.push(`  - ${ticket.topic}`);
+  lines.push("— INDELING VAN DEZE DAG (soort → type → subtype, uit Freshdesk)");
+  for (const line of taxonomyLines(tickets)) lines.push(line);
+
+  lines.push("");
+  lines.push("— ONDERWERPREGELS VAN DEZE DAG (gegroepeerd per soort)");
+  const bySoortGroups = new Map<string, string[]>();
+  for (const ticket of withTopic) {
+    const key = ticket.soort ?? "Niet ingevuld";
+    const bucket = bySoortGroups.get(key);
+    if (bucket) bucket.push(ticket.topic!);
+    else bySoortGroups.set(key, [ticket.topic!]);
+  }
+  for (const [soort, topics] of [...bySoortGroups.entries()].sort(
+    (a, b) => b[1].length - a[1].length
+  )) {
+    lines.push(`${soort} (${topics.length}):`);
+    for (const topic of topics) lines.push(`  - ${topic}`);
   }
   if (!withTopic.length) {
     lines.push("(geen onderwerpregels aangeleverd voor deze dag)");
@@ -104,17 +130,20 @@ export function buildPeriodContext(args: {
   from: string;
   to: string;
   total: number;
-  byCategory: Record<FandeskCategory, number>;
+  bySoort: Record<string, number>;
   previousTotal: number;
   days: Array<{ day: string; total: number; summary: string; themes: FandeskTheme[] }>;
 }): string {
-  const { from, to, total, byCategory, previousTotal, days } = args;
+  const { from, to, total, bySoort, previousTotal, days } = args;
 
   const lines: string[] = [];
   lines.push(`— PERIODE: ${from} t/m ${to} (${days.length} dagen met data)`);
   lines.push(`Totaal tickets: ${total}`);
   lines.push(
-    `Per categorie: ${FANDESK_CATEGORIES.map((c) => `${c} ${byCategory[c]}`).join(", ")}`
+    `Per soort: ${Object.entries(bySoort)
+      .sort((a, b) => b[1] - a[1])
+      .map(([soort, count]) => `${soort} ${count}`)
+      .join(", ")}`
   );
   lines.push(`Vorige, even lange periode: ${previousTotal} tickets`);
 

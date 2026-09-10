@@ -1,12 +1,5 @@
 import { put, get, list } from "@vercel/blob";
-import {
-  FANDESK_CATEGORIES,
-  FandeskCategory,
-  FandeskTicket,
-  RawFandeskItem,
-  emptyCategoryCounts,
-  normalizeCategory,
-} from "@/lib/fandesk";
+import { FandeskTicket, RawFandeskItem, UNSET_LABEL } from "@/lib/fandesk";
 
 /**
  * FANdesk-opslag op Vercel Blob: één ledger per maand op
@@ -27,9 +20,12 @@ interface MonthLedger {
 export interface AppendResult {
   added: number;
   duplicates: number;
-  /** Categoriewaarden die niet te matchen waren; geteld als Overig. */
-  unknownCategories: string[];
-  byCategory: Record<FandeskCategory, number>;
+  /** Aantal toegevoegde tickets per soort, met ontbrekende onder "Niet ingevuld". */
+  bySoort: Record<string, number>;
+  /** Hoeveel van de toegevoegde tickets hun taxonomie van het model kregen. */
+  inferred: number;
+  /** Hoeveel toegevoegde tickets helemaal geen soort hadden. */
+  withoutSoort: number;
 }
 
 function monthOf(iso: string): string {
@@ -52,10 +48,13 @@ function isTicket(value: unknown): value is FandeskTicket {
   return (
     typeof t.id === "string" &&
     typeof t.at === "string" &&
-    typeof t.category === "string" &&
-    (FANDESK_CATEGORIES as readonly string[]).includes(t.category) &&
-    // `topic` is optioneel — alleen afkeuren als hij aanwezig is met de verkeerde vorm.
-    (t.topic === undefined || typeof t.topic === "string")
+    // Alle overige velden zijn optioneel — alleen afkeuren als ze aanwezig zijn
+    // met de verkeerde vorm. Zo blijven tickets van vóór de Freshdesk-taxonomie
+    // geldig, inclusief hun oude `category`.
+    (t.topic === undefined || typeof t.topic === "string") &&
+    (t.soort === undefined || typeof t.soort === "string") &&
+    (t.type === undefined || typeof t.type === "string") &&
+    (t.subtype === undefined || typeof t.subtype === "string")
   );
 }
 
@@ -94,16 +93,20 @@ export async function appendTickets(
   items: RawFandeskItem[],
   batchAt: string
 ): Promise<AppendResult> {
-  const byCategory = emptyCategoryCounts();
-  const unknown = new Set<string>();
+  const bySoort: Record<string, number> = {};
+  let inferred = 0;
+  let withoutSoort = 0;
 
   const perMonth = new Map<string, FandeskTicket[]>();
   for (const item of items) {
-    const { category, matched } = normalizeCategory(item.rawCategory);
-    if (!matched && item.rawCategory.trim()) unknown.add(item.rawCategory.trim());
     const at = item.at ?? batchAt;
-    const ticket: FandeskTicket = { id: item.id, category, at };
+    const ticket: FandeskTicket = { id: item.id, at };
     if (item.topic) ticket.topic = item.topic;
+    if (item.soort) ticket.soort = item.soort;
+    if (item.type) ticket.type = item.type;
+    if (item.subtype) ticket.subtype = item.subtype;
+    // Alleen vastleggen als het model daadwerkelijk iets heeft ingevuld.
+    if (item.inferred && (item.soort || item.type || item.subtype)) ticket.inferred = true;
     const bucket = perMonth.get(monthOf(at));
     if (bucket) bucket.push(ticket);
     else perMonth.set(monthOf(at), [ticket]);
@@ -132,7 +135,10 @@ export async function appendTickets(
       }
       seen.add(ticket.id);
       fresh.push(ticket);
-      byCategory[ticket.category]++;
+      const soort = ticket.soort ?? UNSET_LABEL;
+      bySoort[soort] = (bySoort[soort] ?? 0) + 1;
+      if (ticket.inferred) inferred++;
+      if (!ticket.soort) withoutSoort++;
     }
 
     if (!fresh.length) continue;
@@ -143,7 +149,7 @@ export async function appendTickets(
     added += fresh.length;
   }
 
-  return { added, duplicates, unknownCategories: [...unknown].sort(), byCategory };
+  return { added, duplicates, bySoort, inferred, withoutSoort };
 }
 
 /** Alle maanden waarvoor een ledger bestaat, oplopend gesorteerd. */
