@@ -1032,10 +1032,22 @@ function TreemapCell(props: TreemapNodeProps) {
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke={SURFACE} strokeWidth={2} />
       {fits && (
         <>
-          <text x={x + 6} y={y + 16} fill="#09101d" fontSize={11}>
+          {/*
+           * `stroke="none"` is hier geen detail. De <Treemap> krijgt
+           * stroke={SURFACE} mee voor de tussenruimte tussen de vlakken, en
+           * recharts zet die op de omhullende <g>. Stroke erft in SVG, dus de
+           * labels kregen een witte lijn van 1px over hun eigen vulling heen —
+           * bij 11px is dat breder dan de stok van de letter zelf, waardoor de
+           * tekst wit en vet werd in plaats van donker en gewoon.
+           *
+           * Beide regels dragen dezelfde inkt: #333333 haalde op de donkerste
+           * tinten maar 3,3:1, terwijl #09101d overal minstens 4,95:1 haalt. De
+           * hiërarchie zit in de tekstgrootte, niet in de kleur.
+           */}
+          <text x={x + 6} y={y + 16} fill="#09101d" stroke="none" fontSize={11}>
             {name}
           </text>
-          <text x={x + 6} y={y + 29} fill="#333333" fontSize={10} className="tabular-nums">
+          <text x={x + 6} y={y + 29} fill="#09101d" stroke="none" fontSize={10}>
             {formatNumber(value)}
           </text>
         </>
