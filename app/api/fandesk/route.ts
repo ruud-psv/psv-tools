@@ -95,6 +95,14 @@ export interface FandeskData {
   /** Hoeveel tickets in de periode hun taxonomie van het model kregen. */
   inferredCount?: number;
   /**
+   * Aantal tickets mét soort. Dit is de noemer voor de percentages in de treemap
+   * en de tabel: die tonen alleen ingedeelde tickets, dus afzetten tegen het
+   * totaal zou de aandelen structureel te laag maken.
+   */
+  classifiedTotal?: number;
+  /** Tickets zonder soort — wel in de totalen en de tijdgrafiek, niet in de boom. */
+  unclassifiedCount?: number;
+  /**
    * Soorten op aantal over een vast venster van 180 dagen. Hieruit kiest de
    * client zijn kleuren, zodat een periodewissel ze niet omgooit.
    */
@@ -174,10 +182,13 @@ export async function GET(req: NextRequest) {
     const now = aggregate(currentTickets);
     const before = aggregate(previousTickets);
 
-    // De boom telt door het model ingevulde waarden wél mee: het gaat hier om
-    // wat er binnenkwam. Alleen het taxonomy-endpoint, dat de woordenlijst voor
-    // het model levert, laat ze buiten beschouwing.
-    const taxonomy = buildTaxonomy(currentTickets);
+    // Alleen tickets met een soort komen in de boom. Zonder die filtering
+    // verdringt één grote "Niet ingevuld"-groep de rest van de treemap en zijn de
+    // percentages in de tabel scheef. Tickets die het model heeft ingedeeld tellen
+    // wél mee: het gaat hier om wat er binnenkwam. Alleen het taxonomy-endpoint,
+    // dat de woordenlijst voor het model levert, laat die buiten beschouwing.
+    const classified = currentTickets.filter((ticket) => ticket.soort);
+    const taxonomy = buildTaxonomy(classified);
 
     const daySummaries: FandeskDaySummary[] = storedDays
       .filter((entry) => entry.stored !== null)
@@ -232,8 +243,14 @@ export async function GET(req: NextRequest) {
       periodSummaryStale: daySummaries.length > 0 && !periodCurrent,
       hasTopics: currentTickets.some((t) => t.topic),
       taxonomy,
-      soorten: taxonomy.map((node) => node.soort),
+      // De tijdgrafiek stapelt wél op alle soorten, inclusief "Niet ingevuld":
+      // een ticket zonder indeling is nog steeds een ticket in het volume.
+      soorten: Object.keys(now.bySoort).sort(
+        (a, b) => now.bySoort[b] - now.bySoort[a] || a.localeCompare(b, "nl")
+      ),
       inferredCount: currentTickets.filter((t) => t.inferred).length,
+      classifiedTotal: classified.length,
+      unclassifiedCount: currentTickets.length - classified.length,
       soortColorOrder: Object.entries(countsBySoort(colorWindowTickets))
         .sort((a, b) => b[1] - a[1])
         .map(([soort]) => soort),

@@ -296,6 +296,24 @@ export function FANdeskDashboard() {
   const taxonomy = useMemo<SoortNode[]>(() => data?.taxonomy ?? [], [data]);
 
   /**
+   * De treemap en de tabel tonen alleen ingedeelde tickets, dus hun percentages
+   * moeten tegen dát aantal afgezet worden. Tegen het totaal zouden alle aandelen
+   * structureel te laag uitvallen en nooit optellen tot 100%.
+   */
+  const classifiedTotal = useMemo(
+    () => data?.classifiedTotal ?? taxonomy.reduce((sum, node) => sum + node.count, 0),
+    [data, taxonomy]
+  );
+
+  /**
+   * De legenda boven de treemap leest de boom zelf uit in plaats van `soorten`.
+   * Dat laatste bevat ook "Niet ingevuld" voor de tijdgrafiek, en een vakje in de
+   * legenda dat nergens in de treemap terugkomt laat de kijker zoeken naar iets
+   * wat er niet is.
+   */
+  const taxonomySoorten = useMemo(() => taxonomy.map((node) => node.soort), [taxonomy]);
+
+  /**
    * De boom in de vorm die recharts verwacht. `soort` en `typeName` reizen mee op
    * elk knooppunt, zodat de renderer de kleur kan bepalen en de tooltip het hele
    * pad kan tonen. `tint` maakt opeenvolgende subtypes binnen één soort iets
@@ -429,13 +447,18 @@ export function FANdeskDashboard() {
         soort,
         count,
         before,
-        share: total > 0 ? (count / total) * 100 : 0,
+        // Afzetten tegen het ingedeelde totaal, net als de treemap en de tabel.
+        // Tegen het totaal zou dezelfde soort op één pagina twee percentages
+        // krijgen — 45,8% in de KPI en 48,3% in de tabel.
+        share: classifiedTotal > 0 ? (count / classifiedTotal) * 100 : 0,
         delta: count - before,
       };
     });
-  }, [data, soorten, total]);
+  }, [data, soorten, classifiedTotal]);
 
-  const largest = soortRows[0] ?? null;
+  // "Niet ingevuld" is geen soort maar het ontbreken ervan; als grootste categorie
+  // aankondigen zegt niets over waar de vragen over gaan.
+  const largest = soortRows.find((row) => row.soort !== UNSET_LABEL) ?? null;
   const totalDelta = data ? formatDelta(total, data.previous.total) : { text: "", up: null };
   const perDay = total / Math.max(1, spanDays);
 
@@ -772,6 +795,13 @@ export function FANdeskDashboard() {
                         Soort, type en subtype zoals Freshdesk de tickets indeelt. De grootte van
                         een vlak is het aantal tickets.
                       </p>
+                      {(data.unclassifiedCount ?? 0) > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatNumber(data.unclassifiedCount ?? 0)} tickets zonder indeling zijn
+                          hier niet meegeteld; ze staan wel in de totalen en in de grafiek over
+                          tijd.
+                        </p>
+                      )}
                     </div>
                     {(data.inferredCount ?? 0) > 0 && (
                       <span className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -781,7 +811,7 @@ export function FANdeskDashboard() {
                     )}
                   </CardHeader>
                   <CardContent>
-                    <SoortLegend soorten={soorten} colors={soortColors} />
+                    <SoortLegend soorten={taxonomySoorten} colors={soortColors} />
                     <div className="h-96 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <Treemap
@@ -791,7 +821,7 @@ export function FANdeskDashboard() {
                           stroke={SURFACE}
                           content={<TreemapCell colors={soortColors} />}
                         >
-                          <Tooltip content={<TreemapTooltip total={total} />} />
+                          <Tooltip content={<TreemapTooltip total={classifiedTotal} />} />
                         </Treemap>
                       </ResponsiveContainer>
                     </div>
@@ -802,7 +832,7 @@ export function FANdeskDashboard() {
                         <TaxonomyTable
                           taxonomy={taxonomy}
                           colors={soortColors}
-                          total={total}
+                          total={classifiedTotal}
                           soortRows={soortRows}
                           previousLabel={formatDayRange(data.previous.from, data.previous.to)}
                         />

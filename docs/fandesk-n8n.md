@@ -402,13 +402,23 @@ return [{ json: { items: $input.all().map(i => ({
   dubbel. De uurlijkse schedule is dus niet kritisch: een gemiste run haal je met de volgende in.
 - **Backfill kan, maar verrijkt niet.** Stuur oudere tickets met hun eigen `created_at` en ze
   landen op de juiste dag. Een ticket dat al is opgeslagen wordt echter overgeslagen als
-  duplicaat, dus opnieuw sturen voegt géén indeling toe aan wat er al staat. Tickets van vóór
-  deze wijziging blijven daarom onder "Niet ingevuld" vallen.
+  duplicaat, dus opnieuw sturen voegt géén indeling toe aan wat er al staat. Tickets van vóór de
+  omschakeling blijven daarom zonder indeling — het dashboard laat ze buiten beschouwing, zie de
+  startdatum hieronder.
 - **Lege batch is geldig** en levert `added: 0`. Een IF-node voor "geen tickets dit uur" is niet
   nodig.
+- **Het dashboard telt vanaf 10 september 2026 14:00** (Nederlandse tijd), het moment waarop de
+  Freshdesk-taxonomie live ging. Alles daarvóór mist een indeling en zou het beeld vertekenen.
+  Die streep staat als `FANDESK_DATA_START` in `lib/fandesk.ts` en wordt afgedwongen in
+  `readRange` (`lib/fandesk-store.ts`), zodat het dashboard, de dagsamenvattingen en het
+  taxonomy-endpoint dezelfde afbakening hanteren. De oudere tickets staan nog gewoon in de
+  opslag: die ene regel verschuiven brengt ze terug.
 - **Tickets zonder soort** vallen onder "Niet ingevuld" en worden teruggemeld in `withoutSoort`.
   Loopt dat aantal op, dan laat Freshdesk het veld vaak leeg én slaagt het model er niet in bij
-  te springen — meestal omdat de woordenlijst nog te mager is.
+  te springen — meestal omdat de woordenlijst nog te mager is. Ze tellen mee in de totalen en in
+  de tijdgrafiek — een ticket zonder indeling is nog steeds een ticket — maar niet in de treemap
+  en de tabel: daar zou één grote restgroep de verhoudingen wegdrukken. De treemapkaart meldt
+  hoeveel tickets zo buiten beeld blijven.
 - **Door AI ingedeeld** telt apart mee in `inferred`, en het dashboard laat het aantal zien op de
   treemapkaart. Zo lees je een modelgok niet als Freshdesk-waarheid.
 - **Maximaal 5000 items** per request; daarboven volgt een `413`.

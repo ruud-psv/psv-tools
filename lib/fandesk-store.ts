@@ -1,5 +1,10 @@
 import { put, get, list } from "@vercel/blob";
-import { FandeskTicket, RawFandeskItem, UNSET_LABEL } from "@/lib/fandesk";
+import {
+  FANDESK_DATA_START,
+  FandeskTicket,
+  RawFandeskItem,
+  UNSET_LABEL,
+} from "@/lib/fandesk";
 
 /**
  * FANdesk-opslag op Vercel Blob: één ledger per maand op
@@ -175,20 +180,30 @@ function monthsBetween(fromInstant: number, toInstant: number): string[] {
   return months;
 }
 
-/** Tickets binnen [fromInstant, toInstant), oplopend op tijdstip. */
+/**
+ * Tickets binnen [fromInstant, toInstant), oplopend op tijdstip.
+ *
+ * De ondergrens wordt hier opgetrokken tot `FANDESK_DATA_START`. Dat is bewust
+ * het enige knooppunt: het dashboard, de dagsamenvattingen en het
+ * taxonomy-endpoint lezen allemaal via deze functie, dus ze hanteren vanzelf
+ * dezelfde afbakening.
+ */
 export async function readRange(
   fromInstant: number,
   toInstant: number
 ): Promise<FandeskTicket[]> {
+  const start = Math.max(fromInstant, FANDESK_DATA_START);
+  if (start >= toInstant) return [];
+
   const ledgers = await Promise.all(
-    monthsBetween(fromInstant, toInstant).map((month) => readMonth(month))
+    monthsBetween(start, toInstant).map((month) => readMonth(month))
   );
   const tickets: FandeskTicket[] = [];
   for (const ledger of ledgers) {
     if (!ledger) continue;
     for (const ticket of ledger.items) {
       const time = new Date(ticket.at).getTime();
-      if (isNaN(time) || time < fromInstant || time >= toInstant) continue;
+      if (isNaN(time) || time < start || time >= toInstant) continue;
       tickets.push(ticket);
     }
   }

@@ -34,6 +34,16 @@ export type FandeskCategory = (typeof FANDESK_CATEGORIES)[number];
  */
 export const UNSET_LABEL = "Niet ingevuld";
 
+/**
+ * Vanaf wanneer het dashboard telt. Op 10 september 2026 om 14:00 Nederlandse
+ * tijd ging de Freshdesk-taxonomie live; tickets van daarvóór missen een
+ * indeling en vertekenen het beeld. Ze blijven wel in de opslag staan, dus deze
+ * ene regel verschuiven brengt ze weer terug.
+ *
+ * September valt in de zomertijd, dus 14:00 Amsterdam is 12:00 UTC.
+ */
+export const FANDESK_DATA_START = Date.UTC(2026, 8, 10, 12, 0, 0);
+
 /** Eén support ticket. `at` is ISO-8601 in UTC. */
 export interface FandeskTicket {
   id: string;
