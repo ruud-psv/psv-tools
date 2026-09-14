@@ -92,6 +92,12 @@ const insights = [
     badge: null as string | null,
   },
   {
+    name: "Ticket Inzichten",
+    href: "/dashboard/ticket-inzichten-new",
+    icon: Ticket,
+    badge: "Ringside" as string | null,
+  },
+  {
     name: "DM Performance",
     href: "/dashboard/dm-performance",
     icon: Mail,

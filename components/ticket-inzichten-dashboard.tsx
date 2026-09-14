@@ -60,6 +60,12 @@ interface FeedData {
   events: TicketEvent[];
   count: number;
   fetchedAt: string;
+  /**
+   * Alleen de Ringside-feed geeft dit mee: die leest een begrensd aantal
+   * pagina's en zegt erbij hoe ver hij kwam. De XML-feed kent het niet, dus
+   * blijft de melding daar vanzelf weg.
+   */
+  coverage?: { complete: boolean; note?: string };
 }
 
 const CATEGORIES = ["Alle", "Wedstrijden", "Tours", "Museum", "Jeugd", "Evenementen", "Abonnementen", "Overig"];
@@ -1111,7 +1117,12 @@ function CategoryOverview({ events }: { events: TicketEvent[] }) {
   );
 }
 
-export function TicketInzichtenDashboard() {
+export function TicketInzichtenDashboard({
+  feedUrl = "/api/ticket-feed",
+}: {
+  /** Welke feed de pagina leest. Standaard de XML-feed, zodat de bestaande pagina ongewijzigd blijft. */
+  feedUrl?: string;
+} = {}) {
   const [data, setData] = useState<FeedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1125,7 +1136,7 @@ export function TicketInzichtenDashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/ticket-feed", { cache: "no-store" });
+      const res = await fetch(feedUrl, { cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -1141,7 +1152,7 @@ export function TicketInzichtenDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [feedUrl]);
 
   const fetchInsights = useCallback(async () => {
     const events = data?.events;
@@ -1263,6 +1274,16 @@ export function TicketInzichtenDashboard() {
 
   return (
     <div className="space-y-6">
+      {data?.coverage && !data.coverage.complete && (
+        <div className="alert alert--warning flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-heading uppercase tracking-wide text-xs">Onvolledige meting</p>
+            <p className="text-sm mt-1">{data.coverage.note}</p>
+          </div>
+        </div>
+      )}
+
       {/* KPI kaarten */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
