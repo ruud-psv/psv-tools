@@ -26,6 +26,30 @@ import { buildRingsideUrl, getRingsideBaseUrl, ringsideFetch } from "@/lib/rings
 /** Bovengrens op wat we teruggeven, zodat een grote lijst de browser niet plat legt. */
 const MAX_BODY_CHARS = 20_000;
 
+/**
+ * Vat een Ringside-pagina samen: hoeveel rijen, of er meer is, en welke
+ * kolommen de tabel heeft. Bij het verkennen is dat meestal het enige wat je
+ * wil weten — de rijen zelf staan eronder in `body`.
+ */
+function summarizeRingsidePage(body: unknown): Record<string, unknown> | null {
+  if (typeof body !== "object" || body === null) return null;
+  const page = body as {
+    data?: unknown;
+    has_more?: unknown;
+    cursor?: unknown;
+    metadata?: { table_definition?: { column?: string; postgres_type?: string }[] };
+  };
+  if (!Array.isArray(page.data)) return null;
+
+  return {
+    rows: page.data.length,
+    hasMore: page.has_more ?? null,
+    cursor: page.cursor ?? null,
+    columns:
+      page.metadata?.table_definition?.map((c) => `${c.column}: ${c.postgres_type}`) ?? null,
+  };
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
@@ -91,6 +115,7 @@ export async function GET(req: NextRequest) {
       ok: res.ok,
       contentType: res.headers.get("content-type"),
       truncated,
+      ringside: summarizeRingsidePage(body),
       body,
     });
   } catch (error) {

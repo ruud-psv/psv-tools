@@ -95,3 +95,83 @@ export async function ringsideJson<T>(
 
   return (await res.json()) as T;
 }
+
+/* ---------- Paginatie ---------- */
+
+/**
+ * Ringside levert geen kant-en-klare resources maar een change-feed over de
+ * databasetabellen van SeatGeek: elke rij draagt `_ringside_sequence` en
+ * `_ringside_operation` (de soort mutatie), en `metadata.table_definition`
+ * beschrijft de kolommen met hun Postgres-type.
+ *
+ * Een antwoord is daarom altijd een pagina, niet een volledige set: `has_more`
+ * zegt of er nog meer is en `cursor` wijst naar het vervolg.
+ */
+export interface RingsideColumn {
+  column: string;
+  postgres_type: string;
+}
+
+export interface RingsidePage<T> {
+  data: T[];
+  has_more: boolean;
+  cursor: string | null;
+  metadata?: {
+    version?: string;
+    table_definition?: RingsideColumn[];
+  };
+}
+
+export interface RingsidePageOptions extends RingsideFetchOptions {
+  /** Vervolgpunt uit een eerdere pagina. Weglaten voor de eerste pagina. */
+  cursor?: string;
+}
+
+/** Haalt één pagina op. */
+export async function ringsidePage<T>(
+  path: string,
+  options: RingsidePageOptions = {}
+): Promise<RingsidePage<T>> {
+  const { cursor, searchParams, ...rest } = options;
+  return ringsideJson<RingsidePage<T>>(path, {
+    ...rest,
+    searchParams: { ...searchParams, ...(cursor ? { cursor } : {}) },
+  });
+}
+
+export interface RingsidePagesOptions extends RingsideFetchOptions {
+  cursor?: string;
+  /**
+   * Harde bovengrens op het aantal pagina's. Een change-feed over een tabel van
+   * SeatGeek-formaat is in principe eindeloos; zonder grens loopt een route in
+   * zijn timeout in plaats van met een bruikbaar antwoord terug te komen.
+   */
+  maxPages?: number;
+}
+
+const DEFAULT_MAX_PAGES = 50;
+
+/**
+ * Loopt de pagina's af tot `has_more` false is of `maxPages` bereikt is.
+ *
+ * Een generator, zodat de aanroeper zelf kan stoppen — bijvoorbeeld zodra hij
+ * ver genoeg terug in de tijd is — en we nooit een hele tabel in het geheugen
+ * trekken.
+ */
+export async function* ringsidePages<T>(
+  path: string,
+  options: RingsidePagesOptions = {}
+): AsyncGenerator<RingsidePage<T>> {
+  const { cursor: startCursor, maxPages = DEFAULT_MAX_PAGES, ...fetchOptions } = options;
+
+  let cursor = startCursor;
+  for (let page = 0; page < maxPages; page++) {
+    const result = await ringsidePage<T>(path, { ...fetchOptions, cursor });
+    yield result;
+
+    // Een gelijkgebleven cursor zou ons dezelfde pagina laten herhalen tot
+    // `maxPages` op is; dan is het einde bereikt, wat `has_more` ook zegt.
+    if (!result.has_more || !result.cursor || result.cursor === cursor) return;
+    cursor = result.cursor;
+  }
+}

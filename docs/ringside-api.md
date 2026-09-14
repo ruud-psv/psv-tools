@@ -66,7 +66,60 @@ Het antwoord bevat een `access_token` (JWT), `token_type: Bearer` en een
 `expires_in` van 2.592.000 seconden — 30 dagen. Tokens zijn dus lang geldig,
 wat de cache in `auth.ts` des te nuttiger maakt.
 
-## 3. Controleren of het werkt
+## 3. Wat voor API Ringside is
+
+Belangrijk om te weten voordat je de migratie plant: **Ringside is geen gewone
+REST-API die je per wedstrijd de actuele beschikbaarheid geeft.** Het is een
+change-feed over de databasetabellen van SeatGeek. Elk antwoord ziet er zo uit:
+
+```json
+{
+  "has_more": true,
+  "cursor": "MDAxOWExYzM6MDAwMm...LTJlMGM2MGQzZTk0MA==",
+  "data": [
+    {
+      "_ringside_sequence": "0019a1c3:0002a20d:0004/0019a1c3:0002a20d:0003",
+      "_ringside_operation": "U",
+      "id": "00000009-2800-4eac-8099-ea31fc74980c",
+      "datetime_utc": "2022-02-23T17:18:40.917000",
+      "operation_kind": "Transaction"
+    }
+  ],
+  "metadata": {
+    "version": "0.0.1",
+    "table_definition": [
+      { "column": "id", "postgres_type": "uuid" }
+    ]
+  }
+}
+```
+
+Drie dingen vallen op:
+
+- `_ringside_operation` is de soort mutatie op de rij (`U` voor update), en
+  `_ringside_sequence` de plaats in de stroom. Je krijgt dus wijzigingen, geen
+  momentopname.
+- `metadata.table_definition` beschrijft de kolommen met hun Postgres-type —
+  het is letterlijk een tabel die naar buiten wordt gerepliceerd.
+- `has_more` en `cursor` maken elk antwoord een pagina. `ringsidePages()` in
+  `lib/ringside/client.ts` loopt die af.
+
+Endpoints staan onder `/v1/`, bijvoorbeeld `/v1/payments`. De basis-URL is
+gelijk aan de audience: `https://ringside.seatgeek.com`.
+
+### Wat dat betekent voor Ticket Inzichten
+
+De XML-feed kon je bij elke pageview opnieuw ophalen. Een change-feed niet: je
+leest hem één keer door, houdt de laatste cursor vast, en haalt daarna alleen
+nog de mutaties op. De actuele stand leeft dan bij ons, niet bij SeatGeek.
+
+Precies dát lost het oorspronkelijke probleem op — een gespeelde wedstrijd
+verdwijnt niet meer, want wij bewaren de rijen zelf. Maar het maakt de migratie
+groter dan het vervangen van de bron achter `/api/ticket-feed`: er moet opslag
+bij. Dit project gebruikt Vercel Blob (`lib/blob-snapshots.ts`); Postgres is er
+ooit uit gehaald en `lib/db.ts` is nog een lege stub.
+
+## 4. Controleren of het werkt
 
 Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
 
@@ -82,7 +135,10 @@ Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
 ```
 
 Alle querystring-parameters behalve `path` en `refresh` gaan door naar Ringside,
-dus filters en paginatie zijn direct te proberen. Alleen GET, alleen paden
+dus filters en paginatie (`?cursor=…`) zijn direct te proberen. Herkent de probe
+een Ringside-pagina, dan zet hij er een `ringside`-samenvatting boven met het
+aantal rijen, `hasMore`, de `cursor` en de kolommen met hun Postgres-type — bij
+het verkennen is dat meestal het enige wat je hoeft te lezen. Alleen GET, alleen paden
 binnen `RINGSIDE_BASE_URL`, en het antwoord wordt op 20.000 tekens afgekapt.
 
 De probe geeft nooit het access token terug, en het client secret wordt uit
@@ -97,7 +153,7 @@ Wat de probe teruggeeft:
 | `502` + `authenticated: false` | Locksmith wees de credentials af of was onbereikbaar |
 | `200` + `authenticated: true` | Token opgehaald; `status` is dan die van Ringside zelf |
 
-## 4. Vervolg: van XML-feed naar Ringside
+## 5. Vervolg: van XML-feed naar Ringside
 
 `/api/ticket-feed` is het enige punt waar de XML-feed de applicatie binnenkomt.
 Alle vijf de consumenten (het Ticket Inzichten-dashboard, de rapportagewizard,
@@ -107,11 +163,22 @@ het dashboard-overzicht en twee share-pagina's) lezen dezelfde vorm:
 { events: TicketEvent[], count: number, fetchedAt: string }
 ```
 
-De migratie kan daardoor achter die ene route blijven: zodra we via de probe
-weten welke Ringside-endpoints en veldnamen er zijn, mappen we die naar
-`TicketEvent` en blijft de rest van de applicatie ongemoeid. Hetzelfde geldt
-voor de dagelijkse cron `/api/ticket-history/snapshot`, die nu dezelfde XML
-ophaalt via `lib/ticket-snapshot-feed.ts`.
+Die vorm kan blijven staan: `/api/ticket-feed` gaat straks niet meer naar
+SeatGeek maar naar onze eigen opslag, en de rest van de applicatie merkt er
+niets van. Hetzelfde geldt voor de cron `/api/ticket-history/snapshot`, die nu
+dezelfde XML ophaalt via `lib/ticket-snapshot-feed.ts`.
 
-Dat mappen kan pas als we de echte respons hebben gezien — daarvoor is stap 3
-de eerste stap.
+De stappen, in volgorde:
+
+1. **Verkennen** — met de probe uitzoeken welke tabellen onder `/v1/` staan en
+   welke de events, capaciteit en verkochte tickets bevatten. Zonder dat weten
+   we niet wat we moeten repliceren.
+2. **Opslag kiezen** — de change-feed moet ergens landen. Vercel Blob is wat we
+   hebben, maar is per-key georiënteerd en minder geschikt om op te queryen dan
+   Postgres; welke van de twee past hangt af van hoeveel rijen stap 1 oplevert.
+3. **Repliceren** — een cron die vanaf de laatste cursor de mutaties ophaalt en
+   verwerkt. De cursor moet bewaard blijven, anders begint elke run opnieuw.
+4. **Omzetten** — de opgeslagen rijen mappen naar `TicketEvent` en
+   `/api/ticket-feed` omzetten. Pas daarna kan de XML-feed eruit.
+
+Stap 1 is de enige die nu kan; de rest hangt ervan af wat daar uitkomt.
