@@ -6,7 +6,30 @@ export const metadata = {
   title: "Ticket Inzichten (Ringside) | PSV Tools",
 };
 
-export default function TicketInzichtenNewPage() {
+/**
+ * Ringside kan niet filteren op event, dus de feed leest een begrensd aantal
+ * pagina's. Met `?pages=` en `?limit=` in de adresbalk is dat vanaf de pagina
+ * zelf op te rekken — nodig zolang we nog uitzoeken hoe groot de tabellen zijn
+ * en of de capaciteit klopt met de werkelijke venue.
+ */
+function buildFeedUrl(params: Record<string, string | string[] | undefined>): string {
+  const query = new URLSearchParams();
+  for (const key of ["pages", "limit"]) {
+    const value = params[key];
+    const single = Array.isArray(value) ? value[0] : value;
+    if (single) query.set(key, single);
+  }
+  const suffix = query.toString();
+  return suffix ? `/api/ringside/ticket-feed?${suffix}` : "/api/ringside/ticket-feed";
+}
+
+export default async function TicketInzichtenNewPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const feedUrl = buildFeedUrl(await searchParams);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
@@ -21,6 +44,11 @@ export default function TicketInzichtenNewPage() {
             uit de verkoopregels, dus de aantallen worden hier berekend en niet kant-en-klaar
             aangeleverd. Leg beide pagina&apos;s naast elkaar om te zien of ze overeenkomen.
           </p>
+          <p className="text-muted-foreground text-sm mt-2 max-w-3xl">
+            Staat er een melding dat de meting onvolledig is, zet dan{" "}
+            <code className="text-xs">?pages=20</code> achter de URL om verder te laten lezen.
+            Dat duurt langer maar levert hogere aantallen op.
+          </p>
         </div>
         <Link
           href="/dashboard/ticket-inzichten"
@@ -30,7 +58,7 @@ export default function TicketInzichtenNewPage() {
           Huidige pagina
         </Link>
       </div>
-      <TicketInzichtenDashboard feedUrl="/api/ringside/ticket-feed" />
+      <TicketInzichtenDashboard feedUrl={feedUrl} />
     </div>
   );
 }
