@@ -205,6 +205,59 @@ Ringside geeft het type gewoon mee.
 **`products.event_sales_status`** kent vijf waarden: `Open` (4571), `null` (370),
 `Closed` (50), `Closing` (7) en `Canceled` (2). Dat wordt `saleStatus`.
 
+**In `sales` is een rij niet hetzelfde als een verkocht ticket.** Drie kolommen
+bepalen samen wat meetelt:
+
+| Kolom | Waarden |
+|---|---|
+| `item_type` | `Ticket` (4678), `Membership` (266), `Subscription` (42), `Merchandise` (8), `Delivery` (6) |
+| `sale_type` | `Sale` (3853), `Reservation` (475), `Reservation Cancellation` (278), `Reservation Confirmation` (196), `Return` (190), `Confirmed Reservation Return` (8) |
+| `current_status` | `true` (4122), `false` (878) |
+
+`item_type = 'Ticket'` is het eerste filter — abonnementen en merchandise horen
+niet in een ticketteller. Daarna is de vraag wat `sale_type` en `current_status`
+samen betekenen: een `Return` is een teruggave en een `Reservation` een
+optie die nog geen verkoop is. Opvallend: 190 + 278 + 8 = 476 rijen met een
+annulerings- of retour-achtig type, tegenover 878 rijen met
+`current_status: false`. Die getallen lopen niet gelijk, dus `current_status`
+is niet simpelweg "niet teruggegeven".
+
+De kruistabel legt dat bloot:
+
+```
+/api/ringside/probe?path=/v1/sales&rows=0&distinct=sale_type+current_status
+```
+
+### Een SQL-interface, en wat dat betekent
+
+De sample queries in de portal zijn geen REST-aanroepen maar **SQL**:
+
+```sql
+SELECT DATE_TRUNC('week', l.created_at) AS period,
+       SUM(CASE WHEN l.type = 'sale' THEN l.ticket_count END) AS tickets_sold
+FROM sgiq_ledger l
+JOIN catalog c ON c.id = l.catalog_id
+WHERE l.expired_at IS NULL
+GROUP BY 1
+```
+
+Dat is een andere wereld dan `/v1/…` paginagewijs doorlopen. Kunnen we die
+queries zelf uitvoeren, dan **vervalt het hele replicatievraagstuk**: dan vragen
+we `SUM(capacity) GROUP BY product_id` rechtstreeks op en bewaren we niets. Het
+zou stap 2 en 3 van het migratieplan hieronder overbodig maken.
+
+De tabelnamen in die SQL (`catalog`, `sgiq_ledger`) sluiten aan op de
+REST-paden, dus het gaat om dezelfde gegevens langs een andere weg. Hoe je zo'n
+query indient is nog niet bekend — een endpoint, een console in de portal, of
+een databaseverbinding. **Dat uitzoeken gaat voor al het andere.**
+
+Let op één ding voordat we op `sgiq_ledger` leunen: de bijbehorende uitleg gaat
+over *managed inventory* en vergelijkt opbrengst met nominale waarde ("lift of
+sold", "spoilage"). Dat klinkt naar de tickets die SeatGeek zelf beheert of
+doorverkoopt, niet naar de volledige stadioncapaciteit. Of die ledger álles
+dekt of alleen dat deel, moet blijken — anders tellen we straks een fractie van
+de verkoop.
+
 #### Wat nog open staat
 
 1. **Kan Ringside filteren?** De belangrijkste vraag voor het ontwerp. Accepteert
@@ -217,7 +270,8 @@ Ringside geeft het type gewoon mee.
    zit de actuele stand dáár, en is `is_counted_as_available` statisch.
 3. **Hoe verhouden `products` en `Catalog` zich?** Beide hebben `product_id`,
    maar `Catalog` heeft ook een eigen numerieke `id`.
-4. **Wat telt in `sales` als verkocht ticket?** Nog niet gemeten.
+4. **Wat telt in `sales` als verkocht ticket?** `item_type = 'Ticket'` staat
+   vast; de samenhang tussen `sale_type` en `current_status` nog niet.
 
 ### Persoonsgegevens
 
@@ -281,7 +335,7 @@ Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
 | `path` | het Ringside-pad, bijvoorbeeld `/v1/sales` |
 | `rows` | aantal voorbeeldrijen, standaard 3, maximaal 50, `0` voor geen |
 | `unmasked=1` | toon persoonsvelden onbewerkt — zie **Persoonsgegevens** |
-| `distinct` | kolommen (komma-gescheiden) waarvan je de voorkomende waarden wil tellen |
+| `distinct` | kolommen (komma-gescheiden) waarvan je de voorkomende waarden wil tellen; `a+b` kruist twee kolommen |
 | `refresh=1` | negeer het gecachete token |
 
 `distinct` telt per kolom welke waarden er in deze pagina voorkomen. Dat

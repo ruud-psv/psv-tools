@@ -112,34 +112,54 @@ function maskRow(row: Record<string, unknown>): Record<string, unknown> {
 const MAX_DISTINCT = 25;
 
 /**
- * Telt per gevraagde kolom welke waarden erin voorkomen, over de rijen van deze
+ * Telt per gevraagde term welke waarden erin voorkomen, over de rijen van deze
  * pagina. Daarmee beantwoord je vragen die uit een schema niet te halen zijn:
  * welke waarden `event_sales_status` aanneemt, of `capacity` altijd 1 is, of
- * `is_counted_as_available` varieert. Aggregaten, dus geen rijen met
- * persoonsgegevens — maar een kolom die gemaskeerd wordt, tellen we alsnog niet.
+ * `is_counted_as_available` varieert.
+ *
+ * Een term mag kolommen kruisen met `+`, bijvoorbeeld
+ * `sale_type+current_status`: dan tellen we de combinaties in plaats van elke
+ * kolom apart.
+ *
+ * Aggregaten, dus geen rijen met persoonsgegevens — maar een kolom die
+ * gemaskeerd wordt, tellen we alsnog niet.
  */
 function distinctValues(
   rows: Record<string, unknown>[],
-  columns: string[],
+  terms: string[],
   unmasked: boolean
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
-  for (const column of columns) {
-    if (!unmasked && isPersonalColumn(column)) {
-      result[column] = "«gemaskeerd — gebruik unmasked=1»";
+  for (const term of terms) {
+    // Een term met `+` kruist kolommen: `sale_type+current_status` telt de
+    // combinaties. Losse tellingen zeggen namelijk niet of de retouren in de
+    // rijen met current_status=false zitten of er juist buiten vallen.
+    //
+    // In een querystring betekent `+` een spatie, dus dat is precies wat hier
+    // binnenkomt. Kolomnamen bevatten geen spaties, dus we splitsen op allebei
+    // — dan werkt zowel `a+b` als `a%2Bb` als `a%20b`.
+    const columns = term.split(/[\s+]+/).filter(Boolean);
+
+    const personal = columns.find((c) => isPersonalColumn(c));
+    if (!unmasked && personal) {
+      result[columns.join(" + ")] = `«${personal} is gemaskeerd — gebruik unmasked=1»`;
       continue;
     }
 
     const counts = new Map<string, number>();
     for (const row of rows) {
-      const value = row[column];
-      const key = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+      const key = columns
+        .map((column) => {
+          const value = row[column];
+          return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+        })
+        .join(" | ");
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
 
     const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-    result[column] = {
+    result[columns.join(" + ")] = {
       distinct: sorted.length,
       values: Object.fromEntries(sorted.slice(0, MAX_DISTINCT)),
       ...(sorted.length > MAX_DISTINCT ? { truncated: true } : {}),
