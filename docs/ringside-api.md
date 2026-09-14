@@ -107,6 +107,59 @@ Drie dingen vallen op:
 Endpoints staan onder `/v1/`, bijvoorbeeld `/v1/payments`. De basis-URL is
 gelijk aan de audience: `https://ringside.seatgeek.com`.
 
+### Beschikbare tabellen
+
+Ringside biedt deze categorieën:
+
+`attendance` · `attribution` · `behaviors` · `Catalog` · `clients` ·
+`installments` · `manifests` · `payments` · `pricing` · `products` · `sales` ·
+`SeatGeekIQ Deal Terms` · `SeatGeekIQ Ledger`
+
+Voor Ticket Inzichten zijn drie daarvan kansrijk, af te leiden uit wat een
+`payments`-rij prijsgeeft:
+
+| Tabel | Verwachting | Levert |
+|---|---|---|
+| `products` / `Catalog` | events en per-stoel producten | eventnaam, datum |
+| `manifests` | de stoelindeling van het stadion | totale capaciteit |
+| `sales` | verkochte items | verkochte tickets |
+| `attendance` | scans bij de poortjes | werkelijke opkomst |
+
+`attendance` is geen vervanging voor de verkoopcijfers maar wel een tabel die de
+XML-feed nooit had: per scan `scan_date`, `scan_succeeded`,
+`scan_failure_reason_code`, `gate_id`, `turnstile_name` en de plek
+(`section_name`, `row_name`, `seat`). Daarmee is het verschil tussen verkocht en
+daadwerkelijk aanwezig te zien — een inzicht dat nu volledig ontbreekt.
+
+Een `payments`-rij bevat namelijk al `product_name` in de vorm
+`2022-11-12 20:00:00 PSV - AZ 22/23 Seat:31 Row:38 Sector:UU`, plus losse
+`manifest_sector_name`, `manifest_row_name` en `manifest_seat_name`. De
+administratie is dus per stoel, niet per event — `soldTickets` en
+`totalCapacity` uit de oude XML-feed worden hier aggregaties.
+
+### Persoonsgegevens
+
+**De tabellen bevatten persoonsgegevens.** Een `payments`-rij draagt voor- en
+achternaam, `crm_id`, `client_id`, de laatste cijfers en provider van de
+creditcard en een betalingsreferentie. Dat is AVG-materiaal, en SeatGeek wijst
+er in de credentials-mail expliciet op: "principle of least privilege".
+
+Twee gevolgen:
+
+- De probe maskeert persoonsvelden standaard (zie `PERSONAL_COLUMN_PATTERN` in
+  de route). `?unmasked=1` zet dat uit — gebruik dat alleen als het echt moet,
+  en plak de uitkomst nergens waar hij blijft staan.
+- Let bij het uitbreiden van dat patroon op de naamgeving per tabel: in
+  `payments` heten de velden `fname` en `crm_id`, in `attendance`
+  `primary_first_name` en `primary_crm_id`. Het patroon ankert daarom op het
+  achtervoegsel. Komt er een tabel bij, controleer dan of de persoonsvelden
+  daarvan ook echt geraakt worden — `?rows=1` laat het direct zien.
+- Ook een `barcode` wordt gemaskeerd: dat is geen persoonsgegeven maar wel een
+  toegangsbewijs.
+- Ticket Inzichten werkt op aantallen, niet op personen. Wat we straks
+  repliceren moet dus zo min mogelijk van deze velden bevatten. `payments` is
+  waarschijnlijk helemaal niet de tabel die we nodig hebben.
+
 ### Wat dat betekent voor Ticket Inzichten
 
 De XML-feed kon je bij elke pageview opnieuw ophalen. Een change-feed niet: je
@@ -130,15 +183,30 @@ Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
 # Forceer een vers token in plaats van het gecachete.
 /api/ringside/probe?refresh=1
 
-# Roep een Ringside-endpoint aan en bekijk het antwoord.
-/api/ringside/probe?path=/events&limit=1
+# Roep een Ringside-tabel aan: samenvatting plus een paar voorbeeldrijen.
+/api/ringside/probe?path=/v1/payments
+
+# Alleen de kolommen, geen enkele rij — de veiligste manier om een tabel te leren kennen.
+/api/ringside/probe?path=/v1/payments&rows=0
+
+# Meer rijen (max 50), of de volgende pagina.
+/api/ringside/probe?path=/v1/payments&rows=25
+/api/ringside/probe?path=/v1/payments&cursor=cGF5bWVudHMv…
 ```
 
-Alle querystring-parameters behalve `path` en `refresh` gaan door naar Ringside,
-dus filters en paginatie (`?cursor=…`) zijn direct te proberen. Herkent de probe
-een Ringside-pagina, dan zet hij er een `ringside`-samenvatting boven met het
-aantal rijen, `hasMore`, de `cursor` en de kolommen met hun Postgres-type — bij
-het verkennen is dat meestal het enige wat je hoeft te lezen. Alleen GET, alleen paden
+| Parameter | Betekenis |
+|---|---|
+| `path` | het Ringside-pad, bijvoorbeeld `/v1/sales` |
+| `rows` | aantal voorbeeldrijen, standaard 3, maximaal 50, `0` voor geen |
+| `unmasked=1` | toon persoonsvelden onbewerkt — zie **Persoonsgegevens** |
+| `refresh=1` | negeer het gecachete token |
+
+Alle andere querystring-parameters gaan door naar Ringside, dus filters en
+paginatie zijn direct te proberen. Herkent de probe een Ringside-pagina, dan
+geeft hij een `ringside`-samenvatting (aantal rijen, `hasMore`, `cursor`, en de
+kolommen met hun Postgres-type) plus een `sample` met de eerste rijen. De volle
+pagina komt nooit terug: bij tabellen van dit formaat is dat megabytes aan
+persoonsgegevens in je browser. Alleen GET, alleen paden
 binnen `RINGSIDE_BASE_URL`, en het antwoord wordt op 20.000 tekens afgekapt.
 
 De probe geeft nooit het access token terug, en het client secret wordt uit
@@ -170,14 +238,19 @@ dezelfde XML ophaalt via `lib/ticket-snapshot-feed.ts`.
 
 De stappen, in volgorde:
 
-1. **Verkennen** — met de probe uitzoeken welke tabellen onder `/v1/` staan en
-   welke de events, capaciteit en verkochte tickets bevatten. Zonder dat weten
-   we niet wat we moeten repliceren.
+1. **Verkennen** — met `?rows=0` de kolommen van `products`, `manifests` en
+   `sales` opvragen en vaststellen welke daarvan events, capaciteit en
+   verkochte tickets dragen. Zonder dat weten we niet wat we moeten
+   repliceren.
 2. **Opslag kiezen** — de change-feed moet ergens landen. Vercel Blob is wat we
    hebben, maar is per-key georiënteerd en minder geschikt om op te queryen dan
    Postgres; welke van de twee past hangt af van hoeveel rijen stap 1 oplevert.
 3. **Repliceren** — een cron die vanaf de laatste cursor de mutaties ophaalt en
    verwerkt. De cursor moet bewaard blijven, anders begint elke run opnieuw.
+   Houd er rekening mee dat de eerste run de hele tabel is: de proefrespons van
+   `payments` bevatte rijen uit 2018. Neem daarbij alleen de kolommen over die
+   we echt nodig hebben, zodat er geen persoonsgegevens in onze opslag belanden
+   die Ticket Inzichten toch niet gebruikt.
 4. **Omzetten** — de opgeslagen rijen mappen naar `TicketEvent` en
    `/api/ticket-feed` omzetten. Pas daarna kan de XML-feed eruit.
 
