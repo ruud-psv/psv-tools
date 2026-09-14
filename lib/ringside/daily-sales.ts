@@ -139,3 +139,106 @@ export function buildDailySalesFromTransactions(
 
   return points;
 }
+
+/* ---------- Vergelijken tussen wedstrijden ---------- */
+
+/**
+ * Verkoop per *dagen tot de wedstrijd* in plaats van per kalenderdag.
+ *
+ * Dit is de as waarop wedstrijden vergelijkbaar worden: een thuiswedstrijd in
+ * november en dezelfde wedstrijd vorig seizoen overlappen nooit op de
+ * kalender, maar wel op "veertien dagen voor de aftrap". Positief is ervóór,
+ * 0 is de wedstrijddag zelf, negatief erna — dezelfde conventie als
+ * `daysUntilEvent` in `lib/ticket-daily-sales.ts`, zodat
+ * `lib/ticket-sales-comparison.ts` het direct kan tekenen.
+ */
+export function buildOffsetSales(
+  rows: DatedSalesRow[],
+  eventDate: string
+): Map<number, number> {
+  const eventDay = toDayKey(eventDate);
+  const perOffset = new Map<number, number>();
+  if (!eventDay) return perOffset;
+
+  const eventStart = dayStart(eventDay);
+  const seenPerOffset = new Map<number, Set<string>>();
+
+  for (const row of rows) {
+    if (!isSoldTicket(row)) continue;
+    const day = toDayKey(row.transaction_date);
+    if (!day) continue;
+
+    const offset = Math.round((eventStart - dayStart(day)) / DAY_MS);
+
+    // Ontdubbelen binnen een offset, net als bij de dagreeks: twee regels voor
+    // hetzelfde ticket op dezelfde dag zijn één verkoop.
+    const itemId = typeof row.product_item_id === "string" ? row.product_item_id : null;
+    if (itemId) {
+      let seen = seenPerOffset.get(offset);
+      if (!seen) {
+        seen = new Set();
+        seenPerOffset.set(offset, seen);
+      }
+      if (seen.has(itemId)) continue;
+      seen.add(itemId);
+    }
+
+    perOffset.set(offset, (perOffset.get(offset) ?? 0) + 1);
+  }
+
+  return perOffset;
+}
+
+export interface ComparisonSource {
+  /** Het product waar deze wedstrijd bij hoort. */
+  id: string;
+  name: string;
+  eventDate: string;
+  rows: DatedSalesRow[];
+}
+
+/**
+ * Zet één wedstrijd om naar de vorm die `buildComparisonRows` verwacht.
+ *
+ * `unfilteredTotal` telt álle verkochte regels van dit product, ook
+ * lidmaatschappen en abonnementen. De grafiek gebruikt het verschil met `total`
+ * om te laten zien dát er gefilterd wordt.
+ */
+export function buildComparisonInput(source: ComparisonSource): {
+  id: string;
+  name: string;
+  season: string;
+  eventDate: string;
+  perOffset: Map<number, number>;
+  total: number;
+  unfilteredTotal: number;
+} {
+  const perOffset = buildOffsetSales(source.rows, source.eventDate);
+  let total = 0;
+  for (const count of perOffset.values()) total += count;
+
+  return {
+    id: source.id,
+    name: source.name,
+    season: seasonOf(source.eventDate),
+    eventDate: source.eventDate,
+    perOffset,
+    total,
+    unfilteredTotal: source.rows.length,
+  };
+}
+
+/**
+ * Het seizoen waarin een datum valt, als `25/26`.
+ *
+ * Een voetbalseizoen loopt van zomer tot zomer, dus juli is de grens: alles
+ * vanaf juli hoort bij het seizoen dat dat jaar begint.
+ */
+export function seasonOf(eventDate: string): string {
+  const day = toDayKey(eventDate);
+  if (!day) return "";
+  const [year, month] = day.split("-").map(Number);
+  const startYear = month >= 7 ? year : year - 1;
+  const short = (y: number) => String(y).slice(-2);
+  return `${short(startYear)}/${short(startYear + 1)}`;
+}

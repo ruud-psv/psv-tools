@@ -311,6 +311,35 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
   vak. Net als `attendance` geen vervanging van wat er nu is, wel iets dat er
   nu helemaal niet is.
 
+#### Wat er werkelijk nodig is
+
+De vraag is niet "een dashboard met alle 212 events en hun actuele
+beschikbaarheid", maar: **zoek een wedstrijd op, zie de verkoop per dag
+afgezet tegen de wedstrijddag, en vergelijk met andere wedstrijden.**
+
+Dat scheelt de zwaarste tabel. Voor die vraag is nodig:
+
+| Tabel | Waarvoor | Omvang |
+|---|---|---|
+| `sales` | verkoop per dag per wedstrijd | één rij per verkocht item |
+| `products` | naam, datum, type | één rij per product |
+
+**`manifests` valt daarmee buiten scope.** Die tabel is stoelniveau en daarmee
+de enige die in de tientallen miljoenen rijen loopt. Hij is alleen nodig voor
+capaciteit en bezettingspercentage — en dat is niet waar de vraag om draait.
+Wil je dat later toch, dan is het te beperken tot de lopende wedstrijden in
+plaats van de hele historie.
+
+Ook de opslag wordt daarmee klein. Per wedstrijd bewaren we niet de
+verkoopregels maar het aggregaat: verkocht per dagen-tot-de-wedstrijd. Dat is
+een paar honderd getallen per wedstrijd, oftewel enkele kilobytes — ruim binnen
+wat Vercel Blob comfortabel aankan, zonder database.
+
+`lib/ticket-sales-comparison.ts` kan die vergelijking al tekenen: de x-as is
+daar `D-14` / `EVENT` / `D+2` en meerdere series naast elkaar zijn voorzien.
+Wat ontbrak was de data. `buildOffsetSales()` en `buildComparisonInput()` in
+`lib/ringside/daily-sales.ts` vullen dat gat.
+
 #### Historie is geen bijvangst maar de reden
 
 De feed doorlopen vanaf het begin kost tijd, maar levert precies op wat de
