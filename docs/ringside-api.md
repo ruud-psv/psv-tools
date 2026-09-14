@@ -311,6 +311,34 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
   vak. Net als `attendance` geen vervanging van wat er nu is, wel iets dat er
   nu helemaal niet is.
 
+#### De ingest
+
+`/api/ringside/ingest` leest de verkoop in stappen in en draait als cron elk
+uur. Elke run werkt binnen een tijdsbudget, onthoudt met een cursor waar hij
+gebleven is, en telt de verkoop op bij wat er al lag.
+
+De meting gaf 2.366 rijen per seconde. Bij een run van vier minuten is dat ruim
+een half miljoen rijen; hoeveel runs de eerste vulling kost hangt af van de
+omvang van de tabel, maar het is eenmalig. Daarna staat de cursor aan het eind
+en leest elke run alleen nog de nieuwe mutaties — dan kan het uurschema omlaag.
+
+Bijzonderheden:
+
+- **Producten gaan eerst.** Zonder wedstrijddatum is er geen "dagen tot de
+  wedstrijd" om verkoop op te boeken, en verkoop van een onbekend product zou
+  stilletjes wegvallen.
+- **Optellen, niet vervangen.** Een run leest maar een deel, en de rijen van één
+  wedstrijd liggen verspreid over de hele tabel. Pas na een volledige doorloop
+  klopt een totaal; tot die tijd zijn het ondergrenzen, en dat staat als melding
+  op de pagina.
+- **Ontdubbelen kan alleen binnen een pagina.** Over pagina's heen zou dat alle
+  ticket-ids in het geheugen vragen. De filters op `sale_type`,
+  `current_status` en `forward_item_id` horen dat overbodig te maken; wijkt een
+  totaal straks af van wat je verwacht, dan is dit de eerste plek om te kijken.
+- **Handmatig te starten.** De route accepteert naast het cron-geheim ook een
+  ingelogde sessie, zodat de eerste vulling op gang geholpen kan worden.
+  `?restart=1` begint opnieuw vanaf nul.
+
 #### Wat er werkelijk nodig is
 
 De vraag is niet "een dashboard met alle 212 events en hun actuele

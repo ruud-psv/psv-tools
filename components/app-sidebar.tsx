@@ -92,7 +92,7 @@ const insights = [
     badge: null as string | null,
   },
   {
-    name: "Ticket Inzichten",
+    name: "Wedstrijdverkoop",
     href: "/dashboard/ticket-inzichten-new",
     icon: Ticket,
     badge: "Ringside" as string | null,

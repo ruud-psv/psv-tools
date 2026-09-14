@@ -242,3 +242,56 @@ export function seasonOf(eventDate: string): string {
   const short = (y: number) => String(y).slice(-2);
   return `${short(startYear)}/${short(startYear + 1)}`;
 }
+
+/**
+ * Zet opgeslagen `dagen tot het event → aantal` terug om naar een dagreeks.
+ *
+ * De ingest bewaart per wedstrijd alleen die offsets, want dat is klein genoeg
+ * om te bewaren. De grafiek wil kalenderdagen, en die zijn eruit te herleiden
+ * zolang de wedstrijddatum bekend is.
+ *
+ * `available` blijft `null`: capaciteit komt uit `manifests` en die tabel valt
+ * buiten scope. Null en niet nul, zodat de tooltip er niet "0 beschikbaar" van
+ * maakt.
+ */
+export function offsetsToDailyPoints(
+  perOffset: Record<string, number>,
+  eventDate: string
+): DailySalesPoint[] {
+  const eventDay = toDayKey(eventDate);
+  if (!eventDay) return [];
+
+  const offsets = Object.keys(perOffset)
+    .map(Number)
+    .filter((offset) => Number.isFinite(offset))
+    .sort((a, b) => b - a); // Van ver vóór de wedstrijd naar erna.
+  if (offsets.length === 0) return [];
+
+  const eventStart = dayStart(eventDay);
+  const points: DailySalesPoint[] = [];
+  let cumulative = 0;
+
+  for (let offset = offsets[0]; offset >= offsets[offsets.length - 1]; offset--) {
+    const sold = perOffset[String(offset)] ?? 0;
+    cumulative += sold;
+    const day = new Date(eventStart - offset * DAY_MS);
+    const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(
+      day.getDate()
+    ).padStart(2, "0")}`;
+
+    points.push({
+      date: dayKey,
+      label: dayLabel(dayKey),
+      sold,
+      cumulativeSold: cumulative,
+      available: null,
+      measuredAt: null,
+      hasData: true,
+      isBaseline: false,
+      spanDays: 1,
+      daysUntilEvent: offset,
+    });
+  }
+
+  return points;
+}

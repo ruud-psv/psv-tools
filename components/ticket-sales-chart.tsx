@@ -611,6 +611,15 @@ interface TicketSalesChartProps {
   eventDate?: string;
   /** Al opgehaalde snapshots; laat weg om de component zelf te laten fetchen. */
   history?: SnapshotPoint[];
+  /**
+   * Kant-en-klare dagpunten, als alternatief voor `history`.
+   *
+   * Snapshots zijn metingen van een stand, waaruit de verkoop per dag wordt
+   * afgeleid. De Ringside-bron telt de verkoop per dag rechtstreeks uit de
+   * transacties en heeft dus niets om uit af te leiden. Is dit gezet, dan slaat
+   * de grafiek die omrekening over.
+   */
+  points?: DailySalesPoint[];
   variant?: "compact" | "full";
   /**
    * Historische wedstrijden om tegen af te zetten. Leeg of weggelaten laat de
@@ -631,13 +640,14 @@ export function TicketSalesChart({
   eventId,
   eventDate,
   history: providedHistory,
+  points: providedPoints,
   variant = "full",
   comparisons,
   liveName = "Deze wedstrijd",
   comparisonMode = "perDag",
   comparisonWindow = "live",
 }: TicketSalesChartProps) {
-  const isControlled = providedHistory !== undefined;
+  const isControlled = providedHistory !== undefined || providedPoints !== undefined;
   const [fetched, setFetched] = useState<SnapshotPoint[]>([]);
   const [loading, setLoading] = useState(!isControlled);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -674,7 +684,10 @@ export function TicketSalesChart({
   }, [eventId, isControlled]);
 
   const history = providedHistory ?? fetched;
-  const points = useMemo(() => buildDailySales(history, eventDate), [history, eventDate]);
+  const points = useMemo(
+    () => providedPoints ?? buildDailySales(history, eventDate),
+    [providedPoints, history, eventDate]
+  );
 
   const compact = variant === "compact";
   const stateHeight = compact ? "h-24" : "h-28";

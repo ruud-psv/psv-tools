@@ -3,6 +3,10 @@
     {
       "path": "/api/ticket-history/snapshot",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/ringside/ingest",
+      "schedule": "0 * * * *"
     }
   ]
 }
