@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Loader2, AlertTriangle, X } from "lucide-react";
+import { Search, Loader2, AlertTriangle, X, ArrowUpDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TicketSalesChart } from "@/components/ticket-sales-chart";
 import { offsetsToDailyPoints } from "@/lib/ringside/daily-sales";
+import { filterMatches, seasonsOf } from "@/lib/ringside/match-filter";
 import type { ComparisonInput, ComparisonMode } from "@/lib/ticket-sales-comparison";
 
 interface MatchSummary {
@@ -33,6 +34,9 @@ interface IngestStatus {
 /** Hoeveel wedstrijden er tegelijk naast elkaar mogen; meer wordt onleesbaar. */
 const MAX_COMPARISONS = 3;
 
+/** Hoeveel rijen de lijst toont. Verder filteren of zoeken brengt de rest in beeld. */
+const VISIBLE_MATCHES = 60;
+
 function formatDate(value: string): string {
   const parsed = new Date(value);
   if (isNaN(parsed.getTime())) return value;
@@ -55,6 +59,8 @@ export function RingsideMatchSales() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [season, setSeason] = useState<string>("alle");
+  const [newestFirst, setNewestFirst] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [details, setDetails] = useState<Record<string, MatchDetail>>({});
   const [mode, setMode] = useState<ComparisonMode>("perDag");
@@ -92,11 +98,12 @@ export function RingsideMatchSales() {
       });
   }, [selected, details]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return matches.slice(0, 40);
-    return matches.filter((m) => `${m.name} ${m.season}`.toLowerCase().includes(q)).slice(0, 40);
-  }, [matches, query]);
+  const seasons = useMemo(() => seasonsOf(matches), [matches]);
+
+  const filtered = useMemo(
+    () => filterMatches(matches, { season, query, newestFirst, limit: VISIBLE_MATCHES }),
+    [matches, query, season, newestFirst]
+  );
 
   const primary = selected[0] ? details[selected[0]] : undefined;
 
@@ -193,6 +200,33 @@ export function RingsideMatchSales() {
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setSeason("alle")}
+              className={`tag ${season === "alle" ? "" : "tag--outlined"}`}
+            >
+              Alle seizoenen
+            </button>
+            {seasons.map((option) => (
+              <button
+                key={option}
+                onClick={() => setSeason(option)}
+                className={`tag ${season === option ? "" : "tag--outlined"}`}
+              >
+                {option}
+              </button>
+            ))}
+            <span className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setNewestFirst((current) => !current)}
+                className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowUpDown className="h-3.5 w-3.5" />
+                {newestFirst ? "Nieuwste eerst" : "Oudste eerst"}
+              </button>
+            </span>
+          </div>
+
           {selected.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {selected.map((id, index) => {
@@ -212,7 +246,7 @@ export function RingsideMatchSales() {
           )}
 
           <div className="grid gap-2 max-h-72 overflow-y-auto pr-1">
-            {filtered.map((match) => {
+            {filtered.rows.map((match) => {
               const active = selected.includes(match.productId);
               return (
                 <button
@@ -234,10 +268,19 @@ export function RingsideMatchSales() {
                 </button>
               );
             })}
-            {filtered.length === 0 && (
-              <p className="text-sm text-muted-foreground">Geen wedstrijd gevonden.</p>
+            {filtered.rows.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Geen wedstrijd gevonden{season !== "alle" ? ` in seizoen ${season}` : ""}.
+              </p>
             )}
           </div>
+
+          {filtered.total > filtered.rows.length && (
+            <p className="text-xs text-muted-foreground">
+              {filtered.rows.length} van {filtered.total} wedstrijden getoond — filter op seizoen
+              of zoek om de rest in beeld te krijgen.
+            </p>
+          )}
 
           {primary && (
             <>
