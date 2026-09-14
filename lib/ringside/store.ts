@@ -65,6 +65,14 @@ export interface IngestState {
    * boel niet blokkeert.
    */
   runningUntil: string | null;
+  /**
+   * Vroegste en laatste `transaction_date` die we tegenkwamen.
+   *
+   * De tabel is geordend op sleutel, niet op datum, maar in de praktijk lopen
+   * die grotendeels gelijk op: de verkoop van het lopende seizoen komt pas aan
+   * het eind in beeld. Dit bereik laat zien tot waar we zijn.
+   */
+  salesDateSeen: { earliest: string | null; latest: string | null };
 }
 
 export const EMPTY_STATE: IngestState = {
@@ -78,6 +86,7 @@ export const EMPTY_STATE: IngestState = {
   updatedAt: "",
   lastError: null,
   runningUntil: null,
+  salesDateSeen: { earliest: null, latest: null },
 };
 
 /** Of er op dit moment een andere run bezig is. */

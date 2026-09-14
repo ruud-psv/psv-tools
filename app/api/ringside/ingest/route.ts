@@ -177,6 +177,11 @@ async function ingestSales(
       if (!event) continue; // Geen product bekend: geen wedstrijddatum, geen offset.
 
       const transaction = text(row.transaction_date);
+      if (transaction) {
+        const seen = state.salesDateSeen;
+        if (!seen.earliest || transaction < seen.earliest) seen.earliest = transaction;
+        if (!seen.latest || transaction > seen.latest) seen.latest = transaction;
+      }
       const eventStart = dayStart(event.eventDate);
       const transactionStart = transaction ? dayStart(transaction) : null;
       if (eventStart === null || transactionStart === null) continue;
@@ -357,8 +362,10 @@ export async function GET(req: NextRequest) {
         productsRead: state.productsRead,
         salesRowsRead: state.rowsRead,
         events: Object.keys(events).length,
+        eventsWithSales: Object.values(events).filter((event) => event.total > 0).length,
         runs: state.runs,
       },
+      salesDateSeen: state.salesDateSeen,
       lastError: state.lastError,
       note: done
         ? "Alles ingelezen. Vanaf nu houdt de cron alleen nieuwe mutaties bij."

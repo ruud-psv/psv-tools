@@ -16,6 +16,7 @@ interface MatchSummary {
   season: string;
   category: string;
   total: number;
+  hasSales: boolean;
 }
 
 interface MatchDetail extends MatchSummary {
@@ -24,11 +25,17 @@ interface MatchDetail extends MatchSummary {
 
 interface IngestStatus {
   complete: boolean;
+  productsComplete: boolean;
+  salesComplete: boolean;
   phase: string;
   salesRowsRead: number;
+  salesDateSeen: { earliest: string | null; latest: string | null };
+  running: boolean;
   runs: number;
   updatedAt: string;
   lastError: string | null;
+  matches: number;
+  matchesWithSales: number;
 }
 
 /** Hoeveel wedstrijden er tegelijk naast elkaar mogen; meer wordt onleesbaar. */
@@ -154,16 +161,45 @@ export function RingsideMatchSales() {
       {status && !status.complete && (
         <div className="alert alert--warning flex items-start gap-3">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-heading uppercase tracking-wide text-xs">Nog aan het inlezen</p>
-            <p className="text-sm mt-1">
-              {status.salesRowsRead.toLocaleString("nl-NL")} verkoopregels verwerkt in{" "}
-              {status.runs} {status.runs === 1 ? "ronde" : "rondes"}. De verkooptabel is niet op
-              datum geordend, dus de regels van één wedstrijd liggen verspreid — pas als alles
-              doorlopen is, kloppen de totalen. Tot die tijd zijn het ondergrenzen.
+          <div className="min-w-0">
+            <p className="font-heading uppercase tracking-wide text-xs">
+              Nog aan het inlezen{status.running ? " — er loopt nu een ronde" : ""}
             </p>
+            <p className="text-sm mt-1">
+              <strong>
+                {status.matchesWithSales} van de {status.matches} wedstrijden
+              </strong>{" "}
+              heeft verkoopdata, na {status.salesRowsRead.toLocaleString("nl-NL")} verkoopregels in{" "}
+              {status.runs} {status.runs === 1 ? "ronde" : "rondes"}.
+              {status.salesDateSeen?.latest && (
+                <> Gelezen transacties lopen tot {formatDate(status.salesDateSeen.latest)}.</>
+              )}
+            </p>
+            <p className="text-sm mt-1 text-muted-foreground">
+              Wedstrijden zonder data staan er wel bij, maar grijs. De verkoop van het lopende
+              seizoen komt als laatste binnen, dus die blijven het langst leeg. Totalen die er al
+              staan zijn ondergrenzen.
+            </p>
+            {!status.running && (
+              <p className="text-sm mt-2">
+                Er loopt nu niets.{" "}
+                <a
+                  href="/api/ringside/ingest?chain=100"
+                  className="font-heading uppercase tracking-wide text-xs text-primary hover:underline"
+                >
+                  Volgende ronde starten
+                </a>
+              </p>
+            )}
           </div>
         </div>
+      )}
+
+      {status?.complete && (
+        <p className="text-xs text-muted-foreground">
+          Volledig ingelezen: {status.matches} wedstrijden uit{" "}
+          {status.salesRowsRead.toLocaleString("nl-NL")} verkoopregels. De cron houdt het bij.
+        </p>
       )}
 
       {error && (
@@ -251,9 +287,15 @@ export function RingsideMatchSales() {
               return (
                 <button
                   key={match.productId}
-                  onClick={() => toggle(match.productId)}
+                  onClick={() => match.hasSales && toggle(match.productId)}
+                  disabled={!match.hasSales}
+                  title={match.hasSales ? undefined : "Nog geen verkoopdata ingelezen"}
                   className={`flex items-center justify-between gap-4 rounded-md border px-3 py-2 text-left transition-colors ${
-                    active ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                    active
+                      ? "border-primary bg-primary/5"
+                      : match.hasSales
+                        ? "border-border hover:bg-muted/50"
+                        : "border-border/50 opacity-50 cursor-not-allowed"
                   }`}
                 >
                   <span className="min-w-0">
@@ -263,7 +305,11 @@ export function RingsideMatchSales() {
                     </span>
                   </span>
                   <span className="shrink-0 font-heading text-sm">
-                    {match.total.toLocaleString("nl-NL")}
+                    {match.hasSales ? (
+                      match.total.toLocaleString("nl-NL")
+                    ) : (
+                      <span className="text-xs font-normal text-muted-foreground">nog geen data</span>
+                    )}
                   </span>
                 </button>
               );

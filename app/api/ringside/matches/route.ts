@@ -25,6 +25,8 @@ interface MatchSummary {
   season: string;
   category: string;
   total: number;
+  /** `false` zolang er van deze wedstrijd nog geen verkoopregel gelezen is. */
+  hasSales: boolean;
 }
 
 function summarize(event: EventSales): MatchSummary {
@@ -35,6 +37,7 @@ function summarize(event: EventSales): MatchSummary {
     season: event.season,
     category: event.category,
     total: event.total,
+    hasSales: event.total > 0,
   };
 }
 
@@ -48,8 +51,12 @@ export async function GET(req: NextRequest) {
 
     const status = {
       complete: state.productsComplete && state.salesComplete,
+      productsComplete: state.productsComplete,
+      salesComplete: state.salesComplete,
       phase: state.productsComplete ? "sales" : "products",
       salesRowsRead: state.rowsRead,
+      salesDateSeen: state.salesDateSeen,
+      running: Boolean(state.runningUntil && new Date(state.runningUntil).getTime() > Date.now()),
       runs: state.runs,
       updatedAt: state.updatedAt,
       lastError: state.lastError,
@@ -75,13 +82,20 @@ export async function GET(req: NextRequest) {
     const onlyMatches = searchParams.get("all") !== "1";
     const matches = Object.values(events)
       .filter((event) => (onlyMatches ? event.category === "Wedstrijden" : true))
-      .filter((event) => event.total > 0)
+      // Bewust géén filter op verkoop. Zolang de ingest loopt heeft een deel
+      // van de wedstrijden nog geen regels; die weglaten zou de lijst laten
+      // liegen — dan lijkt een seizoen één wedstrijd te hebben in plaats van
+      // dertig waarvan er nog geen data is.
       .map(summarize)
       // Nieuwste eerst: daar begint de vraag meestal.
       .sort((a, b) => b.eventDate.localeCompare(a.eventDate));
 
     return NextResponse.json(
-      { status, count: matches.length, matches },
+      {
+        status: { ...status, matches: matches.length, matchesWithSales: matches.filter((m) => m.hasSales).length },
+        count: matches.length,
+        matches,
+      },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
   } catch (error) {
