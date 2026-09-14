@@ -148,7 +148,7 @@ vertaling naar de bestaande `TicketEvent` grotendeels af te leiden:
 | `eventName` | `Catalog.display_name`, anders `manifests.event_name` | `Catalog` is de publieksnaam |
 | `eventDate` | `Catalog.event_datetime_local` | `products.event_date` is een string, `manifests.event_date` een timestamp |
 | `saleStatus` | `products.event_sales_status` | |
-| `totalCapacity` | som van `manifests.capacity` | exclusief `is_excluded_from_reported_capacity` |
+| `totalCapacity` | **som** van `manifests.capacity` | exclusief `is_excluded_from_reported_capacity`; een staanvak is één rij met capaciteit 703 |
 | `soldTickets` | aantal rijen in `sales` per product | filteren op `current_status` |
 | `availableCapacity` | `totalCapacity − soldTickets` | of direct uit `is_counted_as_available` |
 | `lastUpdate` | `last_touched_at` | |
@@ -163,20 +163,61 @@ verbetering: de verkoop per dag hoeft niet langer gereconstrueerd te worden uit
 metingen om de twee uur, maar komt rechtstreeks uit de transacties — met
 terugwerkende kracht, ook voor wedstrijden die al gespeeld zijn.
 
-#### Wat de schema's niet vertellen
+#### Wat de echte data liet zien
 
-Drie vragen die alleen echte data kan beantwoorden. Gebruik `?distinct=` (zie
-hieronder) — dat geeft aggregaten, geen rijen:
+Gemeten met `?distinct=` op de eerste pagina van elke tabel. **Let op de
+strekking:** zo'n pagina is een willekeurige snede van 5000 rijen uit de
+change-feed, geen doorsnede van één event. De verhoudingen zeggen dus niets
+over de bezetting van een wedstrijd — wel welke waarden een kolom aanneemt.
 
-1. **Is `manifests.capacity` per stoel altijd 1?** Als een GA-vak één rij met
-   een hogere capaciteit is, moet `totalCapacity` een som zijn en geen telling.
-   `?path=/v1/manifests&rows=0&distinct=capacity,is_ga`
+**`manifests.capacity` is niet altijd 1.** Van de 5000 rijen hadden er 4999 een
+capaciteit van 1 en één rij 703 — dezelfde rij die als enige `is_ga: true` had.
+Een staanvak is dus één rij met de capaciteit van het hele vak.
+
+> `totalCapacity` is daarmee een **som** van `capacity`, geen telling van rijen.
+> Rijen tellen zou een vak van 703 plaatsen als één plek meerekenen.
+
+**`is_counted_as_available` heeft drie waarden, niet twee:** 3675 × `false`,
+1324 × `true` en één keer `null`. Die `null` moet een expliciete keuze krijgen —
+in JavaScript is `null` falsy, dus zonder aandacht verdwijnt zo'n stoel stil uit
+de telling.
+
+**`products.product_type` vervangt het raden op namen.** Negen waarden:
+
+| Waarde | Aantal |
+|---|---|
+| `Event` | 4630 |
+| `Merchandise` | 179 |
+| `Price Modifier` | 69 |
+| `Memberships` | 38 |
+| `Gift Voucher` | 33 |
+| `Delivery` | 19 |
+| `Series` | 16 |
+| `Fund` | 8 |
+| `Deposit Category` | 8 |
+
+Dit is een wezenlijke verbetering. `categorizeEvent()` in `/api/ticket-feed`
+raadt de categorie nu uit de Nederlandse eventnaam, met regels als
+`n.includes("stadiontour")` en `n.includes("minivoetbal")`. Elk nieuw producttype
+vraagt daar een nieuwe regel, en een naam die niet past valt in "Overig".
+Ringside geeft het type gewoon mee.
+
+**`products.event_sales_status`** kent vijf waarden: `Open` (4571), `null` (370),
+`Closed` (50), `Closing` (7) en `Canceled` (2). Dat wordt `saleStatus`.
+
+#### Wat nog open staat
+
+1. **Kan Ringside filteren?** De belangrijkste vraag voor het ontwerp. Accepteert
+   `/v1/manifests` een `event_id` of `product_id` als query-parameter, of moeten
+   we altijd de hele stroom door? Het antwoord bepaalt of we per event kunnen
+   opvragen of alles moeten repliceren.
 2. **Wat betekent `is_counted_as_available` precies?** Actuele beschikbaarheid,
-   of een vaste instelling van de stoel? Het verschil bepaalt of
-   `availableCapacity` een aftreksom is of rechtstreeks af te lezen.
+   of een vaste instelling van de stoel? `manifests` heeft daarnaast
+   `locks`, `ga_locks`, `allocations` en `ga_allocations` als `jsonb` — mogelijk
+   zit de actuele stand dáár, en is `is_counted_as_available` statisch.
 3. **Hoe verhouden `products` en `Catalog` zich?** Beide hebben `product_id`,
-   maar `Catalog` heeft ook een eigen numerieke `id`. Welke is de sleutel waar
-   `manifests` en `sales` op aansluiten?
+   maar `Catalog` heeft ook een eigen numerieke `id`.
+4. **Wat telt in `sales` als verkocht ticket?** Nog niet gemeten.
 
 ### Persoonsgegevens
 
@@ -290,12 +331,22 @@ dezelfde XML ophaalt via `lib/ticket-snapshot-feed.ts`.
 
 De stappen, in volgorde:
 
-1. **Verkennen** — de drie open vragen onder **De mapping naar `TicketEvent`**
-   beantwoorden met `?distinct=`. Daarmee ligt vast hoe capaciteit, verkoop en
-   de sleutel tussen de tabellen berekend worden.
-2. **Opslag kiezen** — de change-feed moet ergens landen. Vercel Blob is wat we
-   hebben, maar is per-key georiënteerd en minder geschikt om op te queryen dan
-   Postgres; welke van de twee past hangt af van hoeveel rijen stap 1 oplevert.
+1. **Verkennen** — de open vragen onder **Wat nog open staat** beantwoorden.
+   De belangrijkste is of Ringside filtering op `event_id` of `product_id`
+   ondersteunt: kan dat, dan halen we per event op en vervalt het grootste deel
+   van stap 2 en 3.
+2. **Opslag kiezen** — de change-feed moet ergens landen, maar niet rij voor
+   rij. `manifests` is stoelniveau: één rij per stoel per event. Met 4630
+   `Event`-producten en een stadion van tienduizenden plaatsen loopt dat in de
+   tientallen miljoenen rijen. Dat is geen Blob-vraagstuk en geen
+   Postgres-vraagstuk — dat is een reden om het niet op te slaan.
+
+   De uitweg is aggregeren tijdens het inlezen: per event de som van `capacity`
+   en het aantal beschikbare plaatsen bijhouden, en de stoelrijen weggooien. Wat
+   overblijft is één regel per event — precies de vorm van de huidige
+   `TicketEvent`, en klein genoeg voor wat we al hebben. Alleen als we later
+   willen uitsplitsen naar vak of prijsniveau, wordt het een rij per
+   event-en-vak; ook dat blijft overzichtelijk.
 3. **Repliceren** — een cron die vanaf de laatste cursor de mutaties ophaalt en
    verwerkt. De cursor moet bewaard blijven, anders begint elke run opnieuw.
    Houd er rekening mee dat de eerste run de hele tabel is: de proefrespons van

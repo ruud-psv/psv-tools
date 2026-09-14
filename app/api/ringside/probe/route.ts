@@ -163,16 +163,28 @@ function asRingsidePage(body: unknown): RingsideEnvelope | null {
   return Array.isArray(page.data) ? page : null;
 }
 
+/**
+ * Een diagnose-antwoord mag nooit uit een cache komen: dan kijk je naar de
+ * uitkomst van een vorige vraag zonder dat te merken. `force-dynamic` regelt de
+ * rendering, deze header het doorgeven onderweg.
+ */
+function json(body: unknown, init?: { status?: number }): NextResponse {
+  return NextResponse.json(body, {
+    status: init?.status,
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const authError = authorize(req.cookies.get("psv_session")?.value);
-  if (authError) return NextResponse.json({ error: authError }, { status: 401 });
+  if (authError) return json({ error: authError }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
 
   if (!isRingsideConfigured()) {
-    return NextResponse.json(
+    return json(
       {
         configured: false,
         error:
@@ -191,7 +203,7 @@ export async function GET(req: NextRequest) {
     const path = searchParams.get("path");
 
     if (!path) {
-      return NextResponse.json({
+      return json({
         configured: true,
         authenticated: true,
         baseUrl: getRingsideBaseUrl(),
@@ -238,7 +250,7 @@ export async function GET(req: NextRequest) {
 
     if (page) {
       const rows = page.data as Record<string, unknown>[];
-      return NextResponse.json({
+      return json({
         configured: true,
         authenticated: true,
         request: { url: buildRingsideUrl(path, forwarded) },
@@ -265,7 +277,7 @@ export async function GET(req: NextRequest) {
     }
 
     const truncated = text.length > MAX_BODY_CHARS;
-    return NextResponse.json({
+    return json({
       configured: true,
       authenticated: true,
       request: { url: buildRingsideUrl(path, forwarded) },
@@ -277,16 +289,16 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     if (error instanceof RingsideConfigError) {
-      return NextResponse.json({ configured: false, error: error.message }, { status: 400 });
+      return json({ configured: false, error: error.message }, { status: 400 });
     }
     if (error instanceof RingsideAuthError) {
       console.error("[ringside/probe]", error.message);
-      return NextResponse.json(
+      return json(
         { configured: true, authenticated: false, error: error.message },
         { status: 502 }
       );
     }
-    return NextResponse.json(
+    return json(
       { error: error instanceof Error ? error.message : "Ringside-aanroep mislukt." },
       { status: 502 }
     );
