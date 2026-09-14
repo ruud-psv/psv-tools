@@ -260,10 +260,13 @@ de verkoop.
 
 #### Wat nog open staat
 
-1. **Kan Ringside filteren?** De belangrijkste vraag voor het ontwerp. Accepteert
-   `/v1/manifests` een `event_id` of `product_id` als query-parameter, of moeten
-   we altijd de hele stroom door? Het antwoord bepaalt of we per event kunnen
-   opvragen of alles moeten repliceren.
+1. **Kan Ringside filteren?** Waarschijnlijk niet. Het code-voorbeeld van
+   `/v1/catalog` in de portal kent twee parameters — `cursor` en `limit` — en
+   geen enkele filter op event of product. Is dat bij `manifests` en `sales`
+   net zo, dan is de REST-kant puur "de hele stroom doorlopen" en blijft
+   aggregeren tijdens het inlezen nodig, tenzij de SQL-weg hierboven begaanbaar
+   is. `limit` is wel meteen bruikbaar: de standaardpagina is 5000 rijen, en met
+   `&limit=100` verken je een tabel een stuk sneller.
 2. **Wat betekent `is_counted_as_available` precies?** Actuele beschikbaarheid,
    of een vaste instelling van de stoel? `manifests` heeft daarnaast
    `locks`, `ga_locks`, `allocations` en `ga_allocations` als `jsonb` — mogelijk
