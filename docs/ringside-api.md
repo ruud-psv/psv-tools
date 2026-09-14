@@ -145,11 +145,11 @@ vertaling naar de bestaande `TicketEvent` grotendeels af te leiden:
 | `TicketEvent` | Ringside | Opmerking |
 |---|---|---|
 | `eventId` | `manifests.event_id` / `products.product_id` | welke van de twee stabiel is, moet blijken |
-| `eventName` | `Catalog.display_name`, anders `manifests.event_name` | `Catalog` is de publieksnaam |
+| `eventName` | `getProductDisplayName()` uit `lib/ringside/products.ts` | `Display_Name` uit `product_details`, anders `product_description` |
 | `eventDate` | `Catalog.event_datetime_local` | `products.event_date` is een string, `manifests.event_date` een timestamp |
 | `saleStatus` | `products.event_sales_status` | |
 | `totalCapacity` | **som** van `manifests.capacity` | exclusief `is_excluded_from_reported_capacity`; een staanvak is één rij met capaciteit 703 |
-| `soldTickets` | aantal rijen in `sales` per product | filteren op `current_status` |
+| `soldTickets` | `countSoldTickets()` uit `lib/ringside/sales.ts` | officiële definitie uit de sample queries |
 | `availableCapacity` | `totalCapacity − soldTickets` | of direct uit `is_counted_as_available` |
 | `lastUpdate` | `last_touched_at` | |
 
@@ -228,35 +228,88 @@ De kruistabel legt dat bloot:
 /api/ringside/probe?path=/v1/sales&rows=0&distinct=sale_type+current_status
 ```
 
-### Een SQL-interface, en wat dat betekent
+### De SQL draait in je eigen warehouse
 
-De sample queries in de portal zijn geen REST-aanroepen maar **SQL**:
+De sample queries in de portal zagen er even uit als een uitweg: kun je SQL
+sturen, dan vraag je de aggregatie rechtstreeks op en hoef je niets te bewaren.
+Dat gaat niet op. De documentatie zegt het zelf:
+
+> All sample queries are written using postgresql syntax and functions. You may
+> need to translate them to syntax native to **your data warehouse provider**.
+
+En de bijbehorende tabel koppelt elke dataset aan zowel een endpoint als een
+tabelnaam:
+
+| Dataset | Endpoint | Tabelnaam |
+|---|---|---|
+| SeatGeekIQ Deal Terms | `/v1/sgiq/deal_terms` | `sgiq_deal_terms` |
+| SeatGeekIQ Ledger | `/v1/sgiq/ledger` | `sgiq_ledger` |
+| Catalog | `/v1/catalog` | `catalog` |
+
+Die tabelnamen — `ringside_sales`, `ringside_products`, `ringside_attribution`,
+`ringside_clients` — zijn dus hoe de data heet *nadat je hem zelf hebt
+binnengehaald*. SeatGeek biedt geen query-endpoint. **Repliceren is nodig**, en
+het migratieplan onderaan blijft staan zoals het is.
+
+### Wat de sample queries wél opleveren
+
+Ze zijn de officiële definitie van begrippen die je anders zou moeten raden.
+
+#### Wat telt als verkocht ticket
+
+In drie afzonderlijke rapportages staat woordelijk dezelfde voorwaarde:
 
 ```sql
-SELECT DATE_TRUNC('week', l.created_at) AS period,
-       SUM(CASE WHEN l.type = 'sale' THEN l.ticket_count END) AS tickets_sold
-FROM sgiq_ledger l
-JOIN catalog c ON c.id = l.catalog_id
-WHERE l.expired_at IS NULL
-GROUP BY 1
+WHERE RS.current_status = 'True'
+  AND RS.sale_type IN ('Sale', 'Reservation Confirmation', 'Update - New')
+  AND RS.forward_item_id IS NULL
+  AND RS.item_type = 'Ticket'
 ```
 
-Dat is een andere wereld dan `/v1/…` paginagewijs doorlopen. Kunnen we die
-queries zelf uitvoeren, dan **vervalt het hele replicatievraagstuk**: dan vragen
-we `SUM(capacity) GROUP BY product_id` rechtstreeks op en bewaren we niets. Het
-zou stap 2 en 3 van het migratieplan hieronder overbodig maken.
+en geteld wordt `COUNT(DISTINCT product_item_id)`, niet het aantal rijen.
 
-De tabelnamen in die SQL (`catalog`, `sgiq_ledger`) sluiten aan op de
-REST-paden, dus het gaat om dezelfde gegevens langs een andere weg. Hoe je zo'n
-query indient is nog niet bekend — een endpoint, een console in de portal, of
-een databaseverbinding. **Dat uitzoeken gaat voor al het andere.**
+Dit staat in `lib/ringside/sales.ts` als `isSoldTicket()` en
+`countSoldTickets()`. Drie dingen die je zonder deze queries mis zou hebben:
 
-Let op één ding voordat we op `sgiq_ledger` leunen: de bijbehorende uitleg gaat
-over *managed inventory* en vergelijkt opbrengst met nominale waarde ("lift of
-sold", "spoilage"). Dat klinkt naar de tickets die SeatGeek zelf beheert of
-doorverkoopt, niet naar de volledige stadioncapaciteit. Of die ledger álles
-dekt of alleen dat deel, moet blijken — anders tellen we straks een fractie van
-de verkoop.
+- **`forward_item_id IS NULL`.** Zonder die regel telt een doorgezet ticket
+  twee keer.
+- **`Update - New`** hoort bij de verkopen, maar zat niet in de eerste pagina
+  die we maten. Alleen naar de data kijken had die waarde niet opgeleverd.
+- **Ontdubbelen op `product_item_id`**: één ticket kan meerdere verkoopregels
+  hebben.
+
+Let op wat je **niet** moet overnemen: die queries hebben ook
+`AND RS.application_channel = 'eSRO'`. Dat filtert op het online verkoopkanaal
+en hoort bij die specifieke marketingrapportage, niet bij de definitie van een
+verkocht ticket.
+
+#### De eventnaam zit in JSON
+
+```sql
+COALESCE(PROD.product_details::json->'Display_Name'->>0, PROD.product_description)
+```
+
+`products.product_details` is tekst met JSON erin, en `Display_Name` is daarin
+een array. Een `Series`-product heeft daarnaast `Event_Id` met de events die
+erbij horen. Beide zitten in `lib/ringside/products.ts`.
+
+#### SeatGeekIQ is niet onze bron
+
+Het eerdere vermoeden klopt: `sgiq_ledger` gaat over deals, marketplaces,
+commissie en revenue share — de tickets die SeatGeek zelf beheert en
+doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
+`manifests` en `sales` nodig.
+
+#### Twee tabellen voor later
+
+- **`attribution`** koppelt via `transaction_id` een verkoop aan
+  `sales_channel`, `affiliate_id` en `placement_id`. Verkoop per kanaal, dus —
+  en daarmee te koppelen aan wat er in Paid Ads en de campagnetools gebeurt.
+- **`behaviors`** bevat `checkout:start` en `checkout:success` met de winkelwagen
+  erin (`product_id`, `section`, `row`, `seat`, prijs) en een `expires_at`. Het
+  verschil tussen die twee is een verlaten winkelwagen, uit te splitsen naar
+  vak. Net als `attendance` geen vervanging van wat er nu is, wel iets dat er
+  nu helemaal niet is.
 
 #### Wat nog open staat
 
@@ -273,8 +326,8 @@ de verkoop.
    zit de actuele stand dáár, en is `is_counted_as_available` statisch.
 3. **Hoe verhouden `products` en `Catalog` zich?** Beide hebben `product_id`,
    maar `Catalog` heeft ook een eigen numerieke `id`.
-4. **Wat telt in `sales` als verkocht ticket?** `item_type = 'Ticket'` staat
-   vast; de samenhang tussen `sale_type` en `current_status` nog niet.
+4. ~~Wat telt in `sales` als verkocht ticket?~~ Beantwoord door de sample
+   queries; vastgelegd in `lib/ringside/sales.ts`.
 
 ### Persoonsgegevens
 
