@@ -243,15 +243,27 @@ export function RingsideMatchSales() {
             >
               Alle seizoenen
             </button>
-            {seasons.map((option) => (
-              <button
-                key={option}
-                onClick={() => setSeason(option)}
-                className={`tag ${season === option ? "" : "tag--outlined"}`}
-              >
-                {option}
-              </button>
-            ))}
+            {seasons.map((option) => {
+              const partial = option.withData < option.total;
+              return (
+                <button
+                  key={option.season}
+                  onClick={() => setSeason(option.season)}
+                  className={`tag ${season === option.season ? "" : "tag--outlined"}`}
+                  title={
+                    partial
+                      ? `${option.withData} van ${option.total} wedstrijden heeft verkoopdata`
+                      : `Alle ${option.total} wedstrijden compleet`
+                  }
+                >
+                  {option.season}
+                  <span className={partial ? "opacity-60" : "opacity-40"}>
+                    {" "}
+                    {partial ? `${option.withData}/${option.total}` : option.total}
+                  </span>
+                </button>
+              );
+            })}
             <span className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => setNewestFirst((current) => !current)}
@@ -289,7 +301,13 @@ export function RingsideMatchSales() {
                   key={match.productId}
                   onClick={() => match.hasSales && toggle(match.productId)}
                   disabled={!match.hasSales}
-                  title={match.hasSales ? undefined : "Nog geen verkoopdata ingelezen"}
+                  title={
+                    match.hasSales
+                      ? undefined
+                      : status?.complete
+                        ? "Deze wedstrijd heeft geen verkoopregels in Ringside"
+                        : "Nog niet ingelezen — dit vult zich tijdens de volgende rondes"
+                  }
                   className={`flex items-center justify-between gap-4 rounded-md border px-3 py-2 text-left transition-colors ${
                     active
                       ? "border-primary bg-primary/5"
@@ -308,7 +326,9 @@ export function RingsideMatchSales() {
                     {match.hasSales ? (
                       match.total.toLocaleString("nl-NL")
                     ) : (
-                      <span className="text-xs font-normal text-muted-foreground">nog geen data</span>
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {status?.complete ? "geen verkoopdata" : "nog geen data"}
+                      </span>
                     )}
                   </span>
                 </button>

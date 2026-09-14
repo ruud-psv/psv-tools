@@ -31,11 +31,37 @@ export interface FilteredMatches<T> {
   total: number;
 }
 
-/** De seizoenen die in deze verzameling voorkomen, nieuwste eerst. */
-export function seasonsOf(matches: FilterableMatch[]): string[] {
-  const found = new Set<string>();
-  for (const match of matches) if (match.season) found.add(match.season);
-  return [...found].sort((a, b) => b.localeCompare(a));
+export interface SeasonProgress {
+  season: string;
+  /** Alle wedstrijden in dit seizoen. */
+  total: number;
+  /** Hoeveel daarvan al verkoopdata hebben. */
+  withData: number;
+}
+
+/**
+ * De seizoenen die voorkomen, nieuwste eerst, met per seizoen hoeveel
+ * wedstrijden al verkoopdata hebben.
+ *
+ * Die verhouding is het antwoord op "komt dit nog?": zolang de ingest loopt
+ * kruipt hij omhoog, en de recente seizoenen blijven het langst achter omdat de
+ * verkooptabel op sleutel geordend is en dat meeloopt met de tijd.
+ */
+export function seasonsOf(matches: (FilterableMatch & { hasSales?: boolean })[]): SeasonProgress[] {
+  const perSeason = new Map<string, SeasonProgress>();
+
+  for (const match of matches) {
+    if (!match.season) continue;
+    let entry = perSeason.get(match.season);
+    if (!entry) {
+      entry = { season: match.season, total: 0, withData: 0 };
+      perSeason.set(match.season, entry);
+    }
+    entry.total++;
+    if (match.hasSales) entry.withData++;
+  }
+
+  return [...perSeason.values()].sort((a, b) => b.season.localeCompare(a.season));
 }
 
 export function filterMatches<T extends FilterableMatch>(
