@@ -43,27 +43,40 @@ interface TableCoverage {
   rows: number;
   /** `false` zodra Ringside zegt dat er meer is dan we gelezen hebben. */
   complete: boolean;
+  /**
+   * Waar we gebleven zijn. Geef die bij een volgende aanroep mee als
+   * `?cursor<tabel>=` om verder te lezen in plaats van weer bij het begin van
+   * de historie te starten.
+   */
+  nextCursor: string | null;
 }
 
 async function readTable<T>(
   path: string,
   maxPages: number,
-  limit: number | undefined
+  limit: number | undefined,
+  startCursor: string | undefined
 ): Promise<{ rows: T[]; coverage: TableCoverage }> {
   const rows: T[] = [];
   let pages = 0;
   let hasMore = false;
+  let cursor: string | null = null;
 
   for await (const page of ringsidePages<T>(path, {
     maxPages,
+    cursor: startCursor,
     searchParams: limit ? { limit } : undefined,
   })) {
     rows.push(...page.data);
     pages++;
     hasMore = Boolean(page.has_more);
+    cursor = page.cursor ?? null;
   }
 
-  return { rows, coverage: { pages, rows: rows.length, complete: !hasMore } };
+  return {
+    rows,
+    coverage: { pages, rows: rows.length, complete: !hasMore, nextCursor: hasMore ? cursor : null },
+  };
 }
 
 function positiveInt(value: string | null, fallback: number, max: number): number {
@@ -92,9 +105,9 @@ export async function GET(req: NextRequest) {
     // De drie tabellen staan los van elkaar, dus tegelijk ophalen scheelt het
     // grootste deel van de wachttijd.
     const [manifests, sales, products] = await Promise.all([
-      readTable<ManifestRow>("/v1/manifests", maxPages, limit),
-      readTable<SalesAggregateRow>("/v1/sales", maxPages, limit),
-      readTable<ProductInfo>("/v1/products", maxPages, limit),
+      readTable<ManifestRow>("/v1/manifests", maxPages, limit, searchParams.get("cursorManifests") ?? undefined),
+      readTable<SalesAggregateRow>("/v1/sales", maxPages, limit, searchParams.get("cursorSales") ?? undefined),
+      readTable<ProductInfo>("/v1/products", maxPages, limit, searchParams.get("cursorProducts") ?? undefined),
     ]);
 
     const productsById = new Map<string, ProductInfo>();
@@ -124,7 +137,7 @@ export async function GET(req: NextRequest) {
           products: products.coverage,
           note: complete
             ? "Alle pagina's gelezen."
-            : `Alleen de eerste ${maxPages} pagina's per tabel gelezen — de aantallen zijn ondergrenzen. Gebruik ?pages= om verder te kijken.`,
+            : `Slechts ${maxPages} pagina's per tabel gelezen. De change-feed begint bij het begin van de historie, dus dit zijn de oudste events — niet de huidige. De aantallen zijn ondergrenzen. Gebruik de cursors uit dit antwoord om verder te lezen.`,
           unknownAvailability: [...capacityByEvent.values()].reduce(
             (total, event) => total + event.unknownAvailability,
             0

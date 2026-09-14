@@ -311,6 +311,40 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
   vak. Net als `attendance` geen vervanging van wat er nu is, wel iets dat er
   nu helemaal niet is.
 
+#### De feed begint bij het begin van de historie
+
+De eerste meting op de nieuwe pagina liet zes wedstrijden zien: Bayern
+München 2016, Roda JC 2017, AZ 2017, Haugesund 2019, Real Sociedad 2021. Geen
+enkele uit het lopende seizoen.
+
+Dat is geen fout maar de aard van een change-feed: je begint bij de oudste
+mutatie en werkt vooruit. De eerste pagina's zijn dus het verleden. Wat Ticket
+Inzichten nodig heeft — de huidige verkoop — staat aan het *eind*.
+
+Twee gevolgen:
+
+- **Een begrensde leesactie vanaf het begin is nutteloos voor de dagelijkse
+  pagina.** Je moet ofwel helemaal doorlopen, ofwel een manier vinden om
+  verderop te beginnen.
+- **`is_counted_as_available` is hieraan niet te beoordelen.** Roda JC 2017 gaf
+  27.181 beschikbaar bij 226 verkocht. Dat kan betekenen dat de kolom statisch
+  is, maar net zo goed dat de verkoopregels van die wedstrijd verderop in de
+  feed staan en wij alleen het begin lazen. Zolang we niet bij een actueel
+  event zijn, zegt dat getal niets.
+
+`/api/ringside/scan` meet daarom hoe diep een tabel gaat: hij loopt binnen een
+tijdsbudget zo ver mogelijk en geeft terug hoeveel rijen hij zag, hoe snel, tot
+welke datum hij gekomen is en met welke cursor je verder kunt.
+
+```
+/api/ringside/scan?path=/v1/manifests&seconds=45
+/api/ringside/scan?path=/v1/manifests&seconds=45&cursor=<nextCursor uit het vorige antwoord>
+```
+
+`dateRange.latest` is daarbij de meter: zodra die in het lopende seizoen komt,
+zijn we bij bruikbare data. Ook `/api/ringside/ticket-feed` accepteert nu
+`cursorManifests`, `cursorSales` en `cursorProducts` om verderop te beginnen.
+
 #### Wat nog open staat
 
 1. **Kan Ringside filteren?** Waarschijnlijk niet. Het code-voorbeeld van
@@ -320,10 +354,16 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
    aggregeren tijdens het inlezen nodig, tenzij de SQL-weg hierboven begaanbaar
    is. `limit` is wel meteen bruikbaar: de standaardpagina is 5000 rijen, en met
    `&limit=100` verken je een tabel een stuk sneller.
-2. **Wat betekent `is_counted_as_available` precies?** Actuele beschikbaarheid,
-   of een vaste instelling van de stoel? `manifests` heeft daarnaast
-   `locks`, `ga_locks`, `allocations` en `ga_allocations` als `jsonb` — mogelijk
-   zit de actuele stand dáár, en is `is_counted_as_available` statisch.
+2. **Wat betekent `is_counted_as_available` precies?** Nog niet te beoordelen:
+   daarvoor moeten we eerst bij een actueel event zijn. `manifests` heeft
+   daarnaast `locks`, `ga_locks`, `allocations` en `ga_allocations` als `jsonb`
+   — mogelijk zit de actuele stand dáár.
+5. **Hoe groot zijn de tabellen?** Bepaalt of doorlopen tot het heden een kwestie
+   van minuten of van dagen is, en daarmee of deze aanpak houdbaar is. Meet met
+   `/api/ringside/scan`.
+6. **Kunnen we verderop beginnen?** Als SeatGeek een manier heeft om vanaf een
+   datum of vanaf "nu" te lezen in plaats van vanaf het begin van de historie,
+   vervalt het grootste deel van het probleem. Waard om te vragen.
 3. **Hoe verhouden `products` en `Catalog` zich?** Beide hebben `product_id`,
    maar `Catalog` heeft ook een eigen numerieke `id`.
 4. ~~Wat telt in `sales` als verkocht ticket?~~ Beantwoord door de sample
