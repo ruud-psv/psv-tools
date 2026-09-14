@@ -55,6 +55,16 @@ export interface IngestState {
   runs: number;
   updatedAt: string;
   lastError: string | null;
+  /**
+   * Tot wanneer een run bezig is, als ISO-tijd.
+   *
+   * Zonder dit slot kan de cron afgaan terwijl een ketting nog loopt. Beide
+   * runs lezen dan dezelfde cursor, lezen dezelfde rijen, en tellen die
+   * allebei op bij de aggregaten — dubbeltellen dus, wat aan de cijfers niet
+   * te zien is. Een verlopen slot wordt genegeerd, zodat een gecrashte run de
+   * boel niet blokkeert.
+   */
+  runningUntil: string | null;
 }
 
 export const EMPTY_STATE: IngestState = {
@@ -67,7 +77,15 @@ export const EMPTY_STATE: IngestState = {
   runs: 0,
   updatedAt: "",
   lastError: null,
+  runningUntil: null,
 };
+
+/** Of er op dit moment een andere run bezig is. */
+export function isLocked(state: IngestState, now = Date.now()): boolean {
+  if (!state.runningUntil) return false;
+  const until = new Date(state.runningUntil).getTime();
+  return Number.isFinite(until) && until > now;
+}
 
 async function readJson<T>(path: string): Promise<T | null> {
   const result = await get(path, { access: "private", useCache: false });

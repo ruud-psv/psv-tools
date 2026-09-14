@@ -9,6 +9,7 @@ import { seasonOf } from "@/lib/ringside/daily-sales";
 import {
   mergeOffsets,
   readEventSales,
+  isLocked,
   readState,
   totalOf,
   writeEventSales,
@@ -38,6 +39,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const DEFAULT_BUDGET_SECONDS = 240;
+
+/** Bovengrens op de ketting. Bij vier minuten per run is dit ruim een dag werk. */
+const MAX_CHAIN = 400;
+
+/** Hoeveel runs een aanroep standaard achter elkaar zet: ruim een uur werk. */
+const DEFAULT_CHAIN = 20;
 
 /**
  * Toegang: de cron met het gedeelde geheim, of een ingelogde gebruiker. Dat
@@ -217,6 +224,44 @@ async function ingestSales(
   return read;
 }
 
+/**
+ * Start de volgende run.
+ *
+ * Een serverless functie mag maximaal 300 seconden draaien, dus één aanroep
+ * kan de tabel nooit afmaken. In plaats van dat handmatig te herhalen laat een
+ * run de volgende zichzelf aanroepen. `remaining` telt af, zodat een fout in de
+ * afbreekconditie niet tot een eindeloze ketting leidt.
+ *
+ * Bewust niet op het antwoord wachten: die run duurt minuten en deze is dan al
+ * lang afgesloten. We wachten alleen tot het verzoek de deur uit is.
+ */
+async function startNextRun(req: NextRequest, remaining: number): Promise<boolean> {
+  const url = new URL(req.url);
+  url.searchParams.set("chain", String(remaining));
+  url.searchParams.delete("restart");
+
+  const headers: Record<string, string> = {};
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) headers.authorization = `Bearer ${cronSecret}`;
+  // Zonder cron-geheim loopt de ketting op dezelfde sessie verder.
+  const cookie = req.headers.get("cookie");
+  if (cookie) headers.cookie = cookie;
+
+  try {
+    await fetch(url.toString(), {
+      headers,
+      // Het antwoord interesseert ons niet; afbreken zodra het verzoek staat.
+      signal: AbortSignal.timeout(2000),
+      cache: "no-store",
+    });
+    return true;
+  } catch (error) {
+    // Een timeout is hier het verwachte geval en betekent dat de volgende run
+    // is begonnen. Alleen een echte verbindingsfout is een probleem.
+    return error instanceof Error && error.name === "TimeoutError";
+  }
+}
+
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -235,6 +280,24 @@ export async function GET(req: NextRequest) {
 
   const state = searchParams.get("restart") === "1" ? { ...(await readState()), salesCursor: null, productsCursor: null, salesComplete: false, productsComplete: false, rowsRead: 0, productsRead: 0 } : await readState();
   const events = searchParams.get("restart") === "1" ? {} : await readEventSales();
+
+  if (isLocked(state) && searchParams.get("force") !== "1") {
+    return NextResponse.json(
+      {
+        skipped: true,
+        reason: "Er loopt al een run.",
+        runningUntil: state.runningUntil,
+        note: "Twee runs tegelijk zouden dezelfde rijen lezen en dubbel optellen. Gebruik ?force=1 als je zeker weet dat de vorige run vastligt.",
+      },
+      { status: 409, headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
+  }
+
+  // Slot meteen zetten, vóór het eerste leeswerk: anders glipt een gelijktijdige
+  // run er alsnog tussendoor. Iets ruimer dan het budget, zodat het opslaan aan
+  // het eind er nog binnen valt.
+  state.runningUntil = new Date(deadline + 30_000).toISOString();
+  await writeState(state);
 
   let productsRead = 0;
   let salesRead = 0;
@@ -255,6 +318,8 @@ export async function GET(req: NextRequest) {
   }
 
   state.runs += 1;
+  // Slot vrijgeven: de volgende run mag meteen door.
+  state.runningUntil = null;
 
   // Ook na een fout opslaan: de voortgang tot dat punt is bruikbaar en scheelt
   // een volgende run het werk opnieuw te doen.
@@ -263,9 +328,25 @@ export async function GET(req: NextRequest) {
 
   const done = state.productsComplete && state.salesComplete;
 
+  // Alleen doorpakken zolang er vooruitgang is: een run die niets las en geen
+  // fout gaf, zou de ketting anders laten doorlopen zonder iets te bereiken.
+  const progressed = productsRead > 0 || salesRead > 0;
+  // Standaard doorpakken: één aanroep hoort het karwei af te maken. `chain=0`
+  // zet dat uit — niet op falsy testen, anders valt juist die stand terug op de
+  // standaard.
+  const rawChain = searchParams.get("chain");
+  const requestedChain = rawChain === null ? DEFAULT_CHAIN : Number(rawChain);
+  const chainRemaining = Number.isFinite(requestedChain)
+    ? Math.min(Math.max(requestedChain, 0), MAX_CHAIN)
+    : DEFAULT_CHAIN;
+  const chainNext = !done && chainRemaining > 0 && progressed && !state.lastError;
+  const chained = chainNext ? await startNextRun(req, chainRemaining - 1) : false;
+
   return NextResponse.json(
     {
       done,
+      chained,
+      chainRemaining: chained ? chainRemaining - 1 : 0,
       phase: state.productsComplete ? "sales" : "products",
       thisRun: {
         seconds: Math.round(((Date.now() - startedAt) / 1000) * 10) / 10,
@@ -281,7 +362,9 @@ export async function GET(req: NextRequest) {
       lastError: state.lastError,
       note: done
         ? "Alles ingelezen. Vanaf nu houdt de cron alleen nieuwe mutaties bij."
-        : "Nog niet klaar — roep deze route opnieuw aan om verder te gaan.",
+        : chained
+          ? `Nog niet klaar, maar de volgende run is gestart. Nog ${chainRemaining - 1} in de ketting.`
+          : "Nog niet klaar — roep deze route opnieuw aan, of geef ?chain=50 mee om hem zichzelf te laten doorzetten.",
     },
     { headers: { "Cache-Control": "no-store, max-age=0" } }
   );

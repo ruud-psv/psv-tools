@@ -335,6 +335,17 @@ Bijzonderheden:
   ticket-ids in het geheugen vragen. De filters op `sale_type`,
   `current_status` en `forward_item_id` horen dat overbodig te maken; wijkt een
   totaal straks af van wat je verwacht, dan is dit de eerste plek om te kijken.
+- **Eén aanroep maakt het af.** Een serverless functie mag maximaal 300
+  seconden draaien, dus één run kan de tabel nooit uitlezen. In plaats van dat
+  handmatig te herhalen start een run aan het eind zijn eigen opvolger, tot
+  twintig keer. `?chain=50` maakt die ketting langer, `?chain=0` zet hem uit.
+  De ketting stopt vanzelf bij een fout, bij een run zonder vooruitgang, en als
+  alles binnen is.
+- **Eén run tegelijk.** Zonder slot kan de cron afgaan terwijl een ketting nog
+  loopt. Beide runs lezen dan dezelfde cursor en tellen dezelfde rijen op bij de
+  aggregaten — dubbeltellen, en aan de cijfers niet te zien. Een tweede run
+  krijgt daarom een 409 en doet niets. Het slot verloopt vanzelf, zodat een
+  gecrashte run niets blokkeert; `?force=1` negeert het.
 - **Handmatig te starten.** De route accepteert naast het cron-geheim ook een
   ingelogde sessie, zodat de eerste vulling op gang geholpen kan worden.
   `?restart=1` begint opnieuw vanaf nul.

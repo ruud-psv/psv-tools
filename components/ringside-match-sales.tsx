@@ -169,8 +169,9 @@ export function RingsideMatchSales() {
       {matches.length === 0 && !error && (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
-            Nog geen wedstrijden ingelezen. Start de ingest via{" "}
-            <code className="text-xs">/api/ringside/ingest</code> en kom hier terug.
+            Nog geen wedstrijden ingelezen. Open eenmalig{" "}
+            <code className="text-xs">/api/ringside/ingest</code> — die leest de verkoop in en
+            zet zichzelf door tot alles binnen is. Daarna houdt de cron het bij.
           </CardContent>
         </Card>
       )}
