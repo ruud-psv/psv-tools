@@ -311,6 +311,32 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
   vak. Net als `attendance` geen vervanging van wat er nu is, wel iets dat er
   nu helemaal niet is.
 
+#### Historie is geen bijvangst maar de reden
+
+De feed doorlopen vanaf het begin kost tijd, maar levert precies op wat de
+XML-feed nooit kon: het verleden. Twee dingen worden daarmee mogelijk die nu
+buiten bereik liggen.
+
+**Verkoop per dag wordt exact in plaats van benaderd.** De huidige pagina leidt
+het af uit snapshots om de twee uur, met drie beperkingen: geen historie vóór
+de eerste meting, gaten wanneer de cron niet draaide, en niets meer zodra een
+event uit de feed verdween. `sales.transaction_date` staat per verkocht ticket
+vast, dus het verloop is exact te tellen — met terugwerkende kracht, ook voor
+wedstrijden die al gespeeld zijn. Dat zit in
+`lib/ringside/daily-sales.ts`, met dezelfde uitvoervorm als
+`lib/ticket-daily-sales.ts` zodat de bestaande grafiek het kan tekenen.
+
+**Seizoenen worden vergelijkbaar.** Zodra de historie binnen is, is het verloop
+van deze wedstrijd naast dezelfde wedstrijd vorig seizoen te leggen, of naast
+het gemiddelde van alle thuiswedstrijden. De vergelijkingsfunctie in
+`lib/ticket-sales-comparison.ts` bestaat al; wat ontbreekt is de data.
+
+Een gevolg voor het ontwerp: **een gespeeld event verandert niet meer.** Zodra
+het voorbij is staat het aggregaat vast en hoeft het nooit meer bijgewerkt.
+Alleen de lopende en toekomstige events — enkele tientallen tegelijk — hebben
+doorlopend actuele standen nodig. Dat maakt het bijhouden na de eerste
+inleesronde een stuk kleiner dan die ronde zelf.
+
 #### De feed begint bij het begin van de historie
 
 De eerste meting op de nieuwe pagina liet zes wedstrijden zien: Bayern
