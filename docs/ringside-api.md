@@ -123,7 +123,7 @@ Voor Ticket Inzichten zijn drie daarvan kansrijk, af te leiden uit wat een
 | `products` / `Catalog` | events en per-stoel producten | eventnaam, datum |
 | `manifests` | de stoelindeling van het stadion | totale capaciteit |
 | `sales` | verkochte items | verkochte tickets |
-| `attendance` | scans bij de poortjes | werkelijke opkomst |
+| `attendance` | scans bij de poortjes | werkelijke opkomst (later) |
 
 `attendance` is geen vervanging voor de verkoopcijfers maar wel een tabel die de
 XML-feed nooit had: per scan `scan_date`, `scan_succeeded`,
@@ -136,6 +136,47 @@ Een `payments`-rij bevat namelijk al `product_name` in de vorm
 `manifest_sector_name`, `manifest_row_name` en `manifest_seat_name`. De
 administratie is dus per stoel, niet per event — `soldTickets` en
 `totalCapacity` uit de oude XML-feed worden hier aggregaties.
+
+### De mapping naar `TicketEvent`
+
+Uit de schema's van `products`, `Catalog`, `manifests` en `sales` valt de
+vertaling naar de bestaande `TicketEvent` grotendeels af te leiden:
+
+| `TicketEvent` | Ringside | Opmerking |
+|---|---|---|
+| `eventId` | `manifests.event_id` / `products.product_id` | welke van de twee stabiel is, moet blijken |
+| `eventName` | `Catalog.display_name`, anders `manifests.event_name` | `Catalog` is de publieksnaam |
+| `eventDate` | `Catalog.event_datetime_local` | `products.event_date` is een string, `manifests.event_date` een timestamp |
+| `saleStatus` | `products.event_sales_status` | |
+| `totalCapacity` | som van `manifests.capacity` | exclusief `is_excluded_from_reported_capacity` |
+| `soldTickets` | aantal rijen in `sales` per product | filteren op `current_status` |
+| `availableCapacity` | `totalCapacity − soldTickets` | of direct uit `is_counted_as_available` |
+| `lastUpdate` | `last_touched_at` | |
+
+Twee dingen die `manifests` biedt en de XML-feed niet had: de capaciteit is
+uit te splitsen naar vak, rij en prijsniveau (`section`, `stand`, `price_level`,
+`seat_type`), en de flags `is_held_for_subscriber`, `is_hospitality` en `is_ga`
+maken onderscheid tussen wat écht vrij verkoopbaar is en wat vastzit.
+
+En `sales` heeft `transaction_date` per verkocht item. Dat is een wezenlijke
+verbetering: de verkoop per dag hoeft niet langer gereconstrueerd te worden uit
+metingen om de twee uur, maar komt rechtstreeks uit de transacties — met
+terugwerkende kracht, ook voor wedstrijden die al gespeeld zijn.
+
+#### Wat de schema's niet vertellen
+
+Drie vragen die alleen echte data kan beantwoorden. Gebruik `?distinct=` (zie
+hieronder) — dat geeft aggregaten, geen rijen:
+
+1. **Is `manifests.capacity` per stoel altijd 1?** Als een GA-vak één rij met
+   een hogere capaciteit is, moet `totalCapacity` een som zijn en geen telling.
+   `?path=/v1/manifests&rows=0&distinct=capacity,is_ga`
+2. **Wat betekent `is_counted_as_available` precies?** Actuele beschikbaarheid,
+   of een vaste instelling van de stoel? Het verschil bepaalt of
+   `availableCapacity` een aftreksom is of rechtstreeks af te lezen.
+3. **Hoe verhouden `products` en `Catalog` zich?** Beide hebben `product_id`,
+   maar `Catalog` heeft ook een eigen numerieke `id`. Welke is de sleutel waar
+   `manifests` en `sales` op aansluiten?
 
 ### Persoonsgegevens
 
@@ -199,7 +240,18 @@ Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
 | `path` | het Ringside-pad, bijvoorbeeld `/v1/sales` |
 | `rows` | aantal voorbeeldrijen, standaard 3, maximaal 50, `0` voor geen |
 | `unmasked=1` | toon persoonsvelden onbewerkt — zie **Persoonsgegevens** |
+| `distinct` | kolommen (komma-gescheiden) waarvan je de voorkomende waarden wil tellen |
 | `refresh=1` | negeer het gecachete token |
+
+`distinct` telt per kolom welke waarden er in deze pagina voorkomen. Dat
+beantwoordt vragen die een schema openlaat — of `capacity` altijd 1 is, welke
+waarden `event_sales_status` aanneemt — zonder rijen met persoonsgegevens op te
+hoeven halen. Gemaskeerde kolommen telt hij niet mee, tenzij je `unmasked=1`
+meegeeft. Combineer met `rows=0`:
+
+```
+/api/ringside/probe?path=/v1/manifests&rows=0&distinct=capacity,is_ga,is_counted_as_available
+```
 
 Alle andere querystring-parameters gaan door naar Ringside, dus filters en
 paginatie zijn direct te proberen. Herkent de probe een Ringside-pagina, dan
@@ -238,10 +290,9 @@ dezelfde XML ophaalt via `lib/ticket-snapshot-feed.ts`.
 
 De stappen, in volgorde:
 
-1. **Verkennen** — met `?rows=0` de kolommen van `products`, `manifests` en
-   `sales` opvragen en vaststellen welke daarvan events, capaciteit en
-   verkochte tickets dragen. Zonder dat weten we niet wat we moeten
-   repliceren.
+1. **Verkennen** — de drie open vragen onder **De mapping naar `TicketEvent`**
+   beantwoorden met `?distinct=`. Daarmee ligt vast hoe capaciteit, verkoop en
+   de sleutel tussen de tabellen berekend worden.
 2. **Opslag kiezen** — de change-feed moet ergens landen. Vercel Blob is wat we
    hebben, maar is per-key georiënteerd en minder geschikt om op te queryen dan
    Postgres; welke van de twee past hangt af van hoeveel rijen stap 1 oplevert.

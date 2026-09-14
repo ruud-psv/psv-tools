@@ -42,37 +42,111 @@ const MAX_ROWS = 50;
  */
 const PERSONAL_COLUMN_PATTERN = new RegExp(
   [
-    // Persoonsnamen. Anker op het achtervoegsel, niet op het begin: in
-    // `attendance` heten ze `primary_first_name` en `primary_last_name`.
-    // Bewust niet elk veld dat op `_name` eindigt — `product_name` draagt de
-    // wedstrijdnaam, `section_name` en `venue_name` de plek in het stadion, en
-    // dat is juist waar Ticket Inzichten op draait.
-    "(^|_)(first_name|last_name|middle_name|full_name|fname|lname)$",
+    // Persoonsnamen. Anker op het achtervoegsel, niet op het begin: dezelfde
+    // gegevens heten per tabel anders — `fname` in payments,
+    // `primary_first_name` in attendance, `own_lname_or_accnt_name` in sales.
+    // Bewust niet elk veld dat op `_name` eindigt: `product_name` draagt de
+    // wedstrijd en `section_name` het vak, en daar draait Ticket Inzichten op.
+    "(^|_)(first_name|last_name|middle_name|full_name)$",
+    "(^|_)(fname|lname)($|_)",
     "^name$",
     // Contact- en adresgegevens.
     "(^|_)(email|phone|mobile|address|street|city|zip|postcode|country|birth|iban|bsn)($|_)",
-    // Pseudonieme klantidentificatie: onder de AVG nog steeds persoonsgegeven,
-    // en ook hier met een prefix (`primary_crm_id`).
-    "(^|_)(crm_id|client_id)$",
+    // Pseudonieme klantidentificatie: onder de AVG nog steeds persoonsgegeven.
+    // Zowel `_id` als `_guid`, met en zonder prefix.
+    "(^|_)(crm|client)_(id|guid)$",
+    // Medewerkers zijn ook personen: wie de verkoop deed of bevestigde.
+    "(^|_)(sales_rep|confirmed_by)$",
+    "^user$",
     // Betaalgegevens.
     "credit_card",
     "payment_item_ref",
     "gateway_transaction",
-    // Een barcode is een toegangsbewijs: wie hem heeft, komt binnen.
+    // Codes die toegang of korting geven — geen persoonsgegeven, wel iets dat
+    // je niet in een browser of chat wil laten rondslingeren.
     "(^|_)barcode",
+    "(^|_)(coupon_code|presale_access_code|access_code)$",
+    // Vrije tekstvelden: daar kan van alles in staan, inclusief wat een
+    // medewerker over een klant noteerde.
+    "^(notes|extra_data|sales_details|user_acknowledgements)$",
   ].join("|"),
   "i"
 );
 
+/**
+ * Kolommen die het patroon hierboven ten onrechte zou raken. De adresregel
+ * reageert op `city` en `country`, maar in `Catalog` gaan die over het stadion
+ * en niet over een persoon.
+ */
+const NON_PERSONAL_COLUMNS = new Set([
+  "venue",
+  "venue_city",
+  "venue_country",
+  "venue_marquee_city",
+  "venue_state",
+  "venue_timezone",
+]);
+
+/**
+ * Toetst een kolomnaam aan het patroon. `sales` heeft een kolom die letterlijk
+ * `"user"` heet — inclusief aanhalingstekens — dus die strippen we eerst.
+ */
+function isPersonalColumn(column: string): boolean {
+  const name = column.replace(/^"+|"+$/g, "").toLowerCase();
+  if (NON_PERSONAL_COLUMNS.has(name)) return false;
+  return PERSONAL_COLUMN_PATTERN.test(name);
+}
+
 function maskRow(row: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
-    const isPersonal = PERSONAL_COLUMN_PATTERN.test(key);
+    const isPersonal = isPersonalColumn(key);
     // `null` blijft staan: dat een veld leeg is, is zelf geen persoonsgegeven
     // en juist nuttig om te zien bij het in kaart brengen van een tabel.
     masked[key] = isPersonal && value !== null ? "«gemaskeerd»" : value;
   }
   return masked;
+}
+
+/** Hoeveel verschillende waarden we per kolom tonen. */
+const MAX_DISTINCT = 25;
+
+/**
+ * Telt per gevraagde kolom welke waarden erin voorkomen, over de rijen van deze
+ * pagina. Daarmee beantwoord je vragen die uit een schema niet te halen zijn:
+ * welke waarden `event_sales_status` aanneemt, of `capacity` altijd 1 is, of
+ * `is_counted_as_available` varieert. Aggregaten, dus geen rijen met
+ * persoonsgegevens — maar een kolom die gemaskeerd wordt, tellen we alsnog niet.
+ */
+function distinctValues(
+  rows: Record<string, unknown>[],
+  columns: string[],
+  unmasked: boolean
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const column of columns) {
+    if (!unmasked && isPersonalColumn(column)) {
+      result[column] = "«gemaskeerd — gebruik unmasked=1»";
+      continue;
+    }
+
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const value = row[column];
+      const key = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    result[column] = {
+      distinct: sorted.length,
+      values: Object.fromEntries(sorted.slice(0, MAX_DISTINCT)),
+      ...(sorted.length > MAX_DISTINCT ? { truncated: true } : {}),
+    };
+  }
+
+  return result;
 }
 
 interface RingsideEnvelope {
@@ -137,7 +211,12 @@ export async function GET(req: NextRequest) {
 
     // Alles behalve onze eigen parameters gaat als querystring mee naar
     // Ringside, zodat filters en paginatie direct uitgeprobeerd kunnen worden.
-    const ours = new Set(["path", "refresh", "rows", "unmasked"]);
+    const distinctColumns = (searchParams.get("distinct") ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    const ours = new Set(["path", "refresh", "rows", "unmasked", "distinct"]);
     const forwarded: Record<string, string> = {};
     for (const [key, value] of searchParams.entries()) {
       if (!ours.has(key)) forwarded[key] = value;
@@ -172,6 +251,9 @@ export async function GET(req: NextRequest) {
           columns:
             page.metadata?.table_definition?.map((c) => `${c.column}: ${c.postgres_type}`) ?? null,
         },
+        ...(distinctColumns.length
+          ? { distinct: distinctValues(rows, distinctColumns, unmasked) }
+          : {}),
         sample: {
           shown: Math.min(rowLimit, rows.length),
           masked: !unmasked,
