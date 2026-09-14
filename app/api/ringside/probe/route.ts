@@ -39,9 +39,9 @@ export async function GET(req: NextRequest) {
       {
         configured: false,
         error:
-          "Ringside is nog niet geconfigureerd. Zet RINGSIDE_CLIENT_ID, RINGSIDE_CLIENT_SECRET en RINGSIDE_TOKEN_URL in Vercel.",
-        required: ["RINGSIDE_CLIENT_ID", "RINGSIDE_CLIENT_SECRET", "RINGSIDE_TOKEN_URL"],
-        optional: ["RINGSIDE_AUDIENCE", "RINGSIDE_BASE_URL"],
+          "Ringside is nog niet geconfigureerd. Zet RINGSIDE_CLIENT_ID en RINGSIDE_CLIENT_SECRET in Vercel.",
+        required: ["RINGSIDE_CLIENT_ID", "RINGSIDE_CLIENT_SECRET"],
+        optional: ["RINGSIDE_TOKEN_URL", "RINGSIDE_AUDIENCE", "RINGSIDE_BASE_URL"],
       },
       { status: 503 }
     );

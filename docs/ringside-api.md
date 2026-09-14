@@ -34,29 +34,37 @@ Preview én Development), en lokaal in `.env.local`. `.env*` staat in
 |---|---|---|
 | `RINGSIDE_CLIENT_ID` | ja | Client ID uit de mail van SeatGeek |
 | `RINGSIDE_CLIENT_SECRET` | ja | Client Secret uit de mail van SeatGeek |
-| `RINGSIDE_TOKEN_URL` | ja | Token-endpoint van Locksmith — zie hieronder |
+| `RINGSIDE_TOKEN_URL` | nee | Standaard `https://auth.seatgeek.com/oauth/token` |
 | `RINGSIDE_AUDIENCE` | nee | Standaard `https://ringside.seatgeek.com` |
 | `RINGSIDE_BASE_URL` | nee | Standaard `https://ringside.seatgeek.com` |
 
 Markeer `RINGSIDE_CLIENT_SECRET` in Vercel als **Sensitive**, dan is de waarde
 na opslaan ook in het dashboard niet meer terug te lezen.
 
-> **`RINGSIDE_TOKEN_URL` moeten we nog invullen.** De credentials-mail noemt wel
-> het client ID, het secret en de audience, maar niet de URL waar de tokenaanvraag
-> naartoe moet. Die staat in de Locksmith-documentatie op
-> <https://developer.seatgeek.com/>. Zoek daar naar de token-endpoint (bij een
-> Auth0-gebaseerde opzet is dat een URL die eindigt op `/oauth/token`) en zet die
-> volledige URL in deze variabele. Lukt dat niet: `ringside-feedback@seatgeek.com`.
-
-De code bepaalt de token-endpoint bewust niet zelf — verhuist SeatGeek hem, dan
-is dat een wijziging in Vercel en niet in de codebase.
+In de praktijk zijn alleen het client ID en het secret nodig; de andere drie
+hebben de juiste standaardwaarde. `RINGSIDE_TOKEN_URL` bestaat als ontsnapping
+voor het geval SeatGeek de endpoint verplaatst — dat is dan een wijziging in
+Vercel en niet in de codebase.
 
 ### Body-formaat van de tokenaanvraag
 
-RFC 6749 schrijft een form-encoded body voor, maar Auth0-gebaseerde servers
-accepteren vaak alleen JSON. `requestToken()` probeert daarom eerst
-form-encoded en valt bij een 400 of 415 automatisch terug op JSON. Blijkt één
-variant structureel de juiste, dan kan de andere eruit.
+De Authentication API van SeatGeek schrijft een JSON-body voor, afwijkend van
+RFC 6749 dat form-encoded voorschrijft. `requestToken()` stuurt daarom JSON:
+
+```
+curl --location 'https://auth.seatgeek.com/oauth/token' \
+--header 'Content-Type: application/json' \
+--data '{
+    "client_id": "$CLIENT_ID",
+    "client_secret": "$CLIENT_SECRET",
+    "audience": "https://ringside.seatgeek.com",
+    "grant_type": "client_credentials"
+}'
+```
+
+Het antwoord bevat een `access_token` (JWT), `token_type: Bearer` en een
+`expires_in` van 2.592.000 seconden — 30 dagen. Tokens zijn dus lang geldig,
+wat de cache in `auth.ts` des te nuttiger maakt.
 
 ## 3. Controleren of het werkt
 

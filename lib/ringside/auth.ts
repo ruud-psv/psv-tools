@@ -23,6 +23,13 @@ export class RingsideAuthError extends Error {}
 const DEFAULT_AUDIENCE = "https://ringside.seatgeek.com";
 
 /**
+ * Token-endpoint van Locksmith, zoals gedocumenteerd in de SeatGeek
+ * Authentication API. Overschrijfbaar via `RINGSIDE_TOKEN_URL`, zodat een
+ * verhuizing aan SeatGeek-kant geen code-wijziging vraagt.
+ */
+const DEFAULT_TOKEN_URL = "https://auth.seatgeek.com/oauth/token";
+
+/**
  * Marge waarmee we een token als verlopen beschouwen. Voorkomt dat een token
  * onderweg naar Ringside alsnog over de datum gaat.
  */
@@ -71,12 +78,10 @@ export interface LocksmithConfig {
 export function getLocksmithConfig(): LocksmithConfig {
   const clientId = readEnv("RINGSIDE_CLIENT_ID");
   const clientSecret = readEnv("RINGSIDE_CLIENT_SECRET");
-  const tokenUrl = readEnv("RINGSIDE_TOKEN_URL");
 
   const missing = [
     !clientId && "RINGSIDE_CLIENT_ID",
     !clientSecret && "RINGSIDE_CLIENT_SECRET",
-    !tokenUrl && "RINGSIDE_TOKEN_URL",
   ].filter((name): name is string => Boolean(name));
 
   if (missing.length) {
@@ -86,7 +91,7 @@ export function getLocksmithConfig(): LocksmithConfig {
   }
 
   return {
-    tokenUrl: tokenUrl!,
+    tokenUrl: readEnv("RINGSIDE_TOKEN_URL") ?? DEFAULT_TOKEN_URL,
     clientId: clientId!,
     clientSecret: clientSecret!,
     audience: readEnv("RINGSIDE_AUDIENCE") ?? DEFAULT_AUDIENCE,
@@ -113,59 +118,37 @@ function redactSecret(text: string, secret: string): string {
 }
 
 /**
- * Doet één tokenaanvraag. RFC 6749 schrijft een form-encoded body voor, maar
- * Auth0-gebaseerde servers — en Locksmith lijkt er zo een — accepteren vaak
- * alleen JSON. We proberen daarom de standaard eerst en vallen bij een
- * body-gerelateerde afwijzing (400/415) terug op JSON, zodat de integratie
- * werkt zonder dat we vooraf weten welke variant Locksmith verwacht.
+ * Doet één tokenaanvraag bij Locksmith. De Authentication API van SeatGeek
+ * schrijft een JSON-body voor — afwijkend van RFC 6749, dat form-encoded
+ * voorschrijft — dus sturen we JSON.
  */
 async function requestToken(config: LocksmithConfig): Promise<TokenResponse> {
-  const payload = {
-    grant_type: "client_credentials",
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    audience: config.audience,
-  };
+  const res = await fetch(config.tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      audience: config.audience,
+      grant_type: "client_credentials",
+    }),
+    cache: "no-store",
+  });
 
-  const attempts: { contentType: string; body: string }[] = [
-    { contentType: "application/x-www-form-urlencoded", body: new URLSearchParams(payload).toString() },
-    { contentType: "application/json", body: JSON.stringify(payload) },
-  ];
-
-  const failures: string[] = [];
-
-  for (const [index, attempt] of attempts.entries()) {
-    const res = await fetch(config.tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": attempt.contentType, Accept: "application/json" },
-      body: attempt.body,
-      cache: "no-store",
-    });
-
-    if (res.ok) {
-      const data = (await res.json()) as TokenResponse;
-      if (!data.access_token) {
-        throw new RingsideAuthError("Locksmith gaf een antwoord zonder access_token terug.");
-      }
-      return data;
-    }
-
+  if (!res.ok) {
     // Afgeknipt en ontdaan van het secret: deze tekst gaat naar de log en naar
     // de diagnose-endpoint.
     const detail = redactSecret((await res.text()).slice(0, 300), config.clientSecret);
-    failures.push(`${attempt.contentType}: ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`);
-
-    const bodyFormatRejected = res.status === 400 || res.status === 415;
-    if (!bodyFormatRejected || index === attempts.length - 1) break;
+    throw new RingsideAuthError(
+      `Locksmith authenticatie mislukt — ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`
+    );
   }
 
-  // Bewust de láátste mislukking voorop: viel de fallback aan, dan is die
-  // poging de inhoudelijke ("invalid_client" bij een fout secret) en zegt de
-  // eerste alleen iets over het body-formaat.
-  throw new RingsideAuthError(
-    `Locksmith authenticatie mislukt — ${failures[failures.length - 1]}` +
-      (failures.length > 1 ? ` [eerdere poging — ${failures[0]}]` : "")
-  );
+  const data = (await res.json()) as TokenResponse;
+  if (!data.access_token) {
+    throw new RingsideAuthError("Locksmith gaf een antwoord zonder access_token terug.");
+  }
+  return data;
 }
 
 async function fetchAndCacheToken(): Promise<CachedToken> {
