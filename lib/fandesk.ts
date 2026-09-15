@@ -53,12 +53,12 @@ export interface FandeskTicket {
    * Optioneel: tickets van vóór deze functie hebben hem niet.
    */
   topic?: string;
-  /** Freshdesk `cf_soort` — het bovenste niveau van de indeling. */
-  soort?: string;
-  /** Freshdesk `cf_type`. */
+  /** Freshdesk `cf_type` — de breedste laag. Zie TAXONOMY_LEVELS. */
   type?: string;
   /** Freshdesk `cf_subtype`. */
   subtype?: string;
+  /** Freshdesk `cf_soort` — de fijnste laag. */
+  soort?: string;
   /** true als het model de taxonomie invulde omdat Freshdesk hem leeg liet. */
   inferred?: boolean;
   /**
@@ -373,24 +373,38 @@ export function isBatchTooLarge(count: number): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Taxonomie: soort → type → subtype
+// Taxonomie: type → subtype → soort
 // ---------------------------------------------------------------------------
 
-export interface SubtypeNode {
-  subtype: string;
-  count: number;
-}
+/**
+ * De volgorde waarin Freshdesk zijn keuzevelden nest: `type` is de breedste laag,
+ * `soort` de fijnste. Dit is de enige plek waar die volgorde staat — de boom, de
+ * treemap, de tabel, de kleuren en de prompts lezen hem hieruit. Klopt de nesting
+ * ooit weer niet, dan is dit de regel die je aanpast.
+ */
+export const TAXONOMY_LEVELS = ["type", "subtype", "soort"] as const;
 
-export interface TypeNode {
-  type: string;
-  count: number;
-  subtypes: SubtypeNode[];
-}
+export type TaxonomyLevel = (typeof TAXONOMY_LEVELS)[number];
 
-export interface SoortNode {
-  soort: string;
+/** Weergavenaam per niveau, voor koppen, tooltips en promptteksten. */
+export const TAXONOMY_LABELS: Record<TaxonomyLevel, string> = {
+  type: "Type",
+  subtype: "Subtype",
+  soort: "Soort",
+};
+
+/**
+ * Het bovenste niveau. Hierop kleurt en stapelt het dashboard, en hierop bepalen
+ * we of een ticket ingedeeld is: zonder deze waarde heeft het geen plek in de boom.
+ */
+export const TOP_LEVEL: TaxonomyLevel = TAXONOMY_LEVELS[0];
+
+/** Eén knoop in de boom. `children` is leeg op het diepste niveau. */
+export interface TaxonomyNode {
+  /** De waarde zelf, bijv. "Kaartverkoop". */
+  label: string;
   count: number;
-  types: TypeNode[];
+  children: TaxonomyNode[];
 }
 
 /**
@@ -398,85 +412,81 @@ export interface SoortNode {
  * league" één vakje worden. De eerst gevonden schrijfwijze is de weergavevorm;
  * omdat tickets op tijd gesorteerd binnenkomen is dat een stabiele keuze.
  */
-class LabelCounter<T> {
-  private readonly entries = new Map<string, { label: string; count: number; child: T }>();
+class LabelCounter {
+  private readonly entries = new Map<string, { label: string; count: number; child: LabelCounter }>();
 
-  constructor(private readonly makeChild: () => T) {}
-
-  add(label: string): T {
+  add(label: string): LabelCounter {
     const key = label.toLowerCase();
     const existing = this.entries.get(key);
     if (existing) {
       existing.count++;
       return existing.child;
     }
-    const fresh = { label, count: 1, child: this.makeChild() };
+    const fresh = { label, count: 1, child: new LabelCounter() };
     this.entries.set(key, fresh);
     return fresh.child;
   }
 
-  list(): Array<{ label: string; count: number; child: T }> {
-    return [...this.entries.values()].sort(
-      (a, b) => b.count - a.count || a.label.localeCompare(b.label, "nl")
-    );
+  /** Op aantal aflopend, bij gelijk spel alfabetisch — stabiel tussen renders. */
+  toNodes(): TaxonomyNode[] {
+    return [...this.entries.values()]
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "nl"))
+      .map(({ label, count, child }) => ({ label, count, children: child.toNodes() }));
   }
 }
 
 type TaxonomyTicket = Pick<FandeskTicket, "soort" | "type" | "subtype">;
 
-/**
- * Bouwt de geneste boom uit een lijst tickets. Een ontbrekend niveau telt mee
- * onder `UNSET_LABEL`, zodat elk ticket precies één plek in de boom heeft en de
- * aantallen per niveau optellen tot het totaal.
- */
-export function buildTaxonomy(tickets: TaxonomyTicket[]): SoortNode[] {
-  const root = new LabelCounter(() => new LabelCounter(() => new LabelCounter(() => null)));
+/** De waarde van één niveau, met ontbrekende waarden onder `UNSET_LABEL`. */
+export function levelValue(ticket: TaxonomyTicket, level: TaxonomyLevel): string {
+  return ticket[level] ?? UNSET_LABEL;
+}
 
-  for (const ticket of tickets) {
-    const types = root.add(ticket.soort ?? UNSET_LABEL);
-    const subtypes = types.add(ticket.type ?? UNSET_LABEL);
-    subtypes.add(ticket.subtype ?? UNSET_LABEL);
-  }
-
-  return root.list().map(({ label, count, child }) => ({
-    soort: label,
-    count,
-    types: child.list().map((typeEntry) => ({
-      type: typeEntry.label,
-      count: typeEntry.count,
-      subtypes: typeEntry.child.list().map((sub) => ({
-        subtype: sub.label,
-        count: sub.count,
-      })),
-    })),
-  }));
+/** Heeft dit ticket het bovenste niveau ingevuld? Zo niet, dan is het niet ingedeeld. */
+export function hasGroup(ticket: TaxonomyTicket): boolean {
+  return Boolean(ticket[TOP_LEVEL]);
 }
 
 /**
- * Bepaalt per soort de weergavevorm, hoofdletterongevoelig. Dit is dezelfde
- * regel die `buildTaxonomy` hanteert, en dat moet ook: als de tijdgrafiek
- * "thuiswedstrijden" apart zou tellen terwijl de treemap hem samenvoegt, staan er
- * twee verschillende cijfers voor hetzelfde op één pagina.
+ * Bouwt de geneste boom uit een lijst tickets, in de volgorde van
+ * `TAXONOMY_LEVELS`. Een ontbrekend niveau telt mee onder `UNSET_LABEL`, zodat elk
+ * ticket precies één plek in de boom heeft en de aantallen per niveau optellen tot
+ * het totaal.
  */
-export function buildSoortResolver(tickets: TaxonomyTicket[]): (soort?: string) => string {
+export function buildTaxonomy(tickets: TaxonomyTicket[]): TaxonomyNode[] {
+  const root = new LabelCounter();
+  for (const ticket of tickets) {
+    let node = root;
+    for (const level of TAXONOMY_LEVELS) node = node.add(levelValue(ticket, level));
+  }
+  return root.toNodes();
+}
+
+/**
+ * Bepaalt per groep de weergavevorm, hoofdletterongevoelig. Dit is dezelfde regel
+ * die `buildTaxonomy` hanteert, en dat moet ook: als de tijdgrafiek "kaartverkoop"
+ * apart zou tellen terwijl de treemap hem samenvoegt, staan er twee verschillende
+ * cijfers voor hetzelfde op één pagina.
+ */
+export function buildGroupResolver(tickets: TaxonomyTicket[]): (group?: string) => string {
   const canonical = new Map<string, string>();
   for (const ticket of tickets) {
-    const raw = ticket.soort ?? UNSET_LABEL;
+    const raw = levelValue(ticket, TOP_LEVEL);
     const key = raw.toLowerCase();
     if (!canonical.has(key)) canonical.set(key, raw);
   }
-  return (soort?: string) => {
-    const raw = soort ?? UNSET_LABEL;
+  return (group?: string) => {
+    const raw = group ?? UNSET_LABEL;
     return canonical.get(raw.toLowerCase()) ?? raw;
   };
 }
 
-/** Aantal tickets per soort, met ontbrekende waarden onder `UNSET_LABEL`. */
-export function countsBySoort(tickets: TaxonomyTicket[]): Record<string, number> {
-  const resolve = buildSoortResolver(tickets);
+/** Aantal tickets per groep, met ontbrekende waarden onder `UNSET_LABEL`. */
+export function countsByGroup(tickets: TaxonomyTicket[]): Record<string, number> {
+  const resolve = buildGroupResolver(tickets);
   const counts: Record<string, number> = {};
   for (const ticket of tickets) {
-    const key = resolve(ticket.soort);
+    const key = resolve(ticket[TOP_LEVEL]);
     counts[key] = (counts[key] ?? 0) + 1;
   }
   return counts;

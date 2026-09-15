@@ -1,4 +1,13 @@
-import { buildTaxonomy, countsBySoort, FandeskTicket } from "@/lib/fandesk";
+import {
+  buildTaxonomy,
+  countsByGroup,
+  FandeskTicket,
+  levelValue,
+  TAXONOMY_LABELS,
+  TAXONOMY_LEVELS,
+  TaxonomyNode,
+  TOP_LEVEL,
+} from "@/lib/fandesk";
 
 /**
  * Contextbouwers voor de FANdesk-analyse. Zelfde conventie als
@@ -20,29 +29,32 @@ export interface DayHistoryEntry {
   themes: FandeskTheme[];
 }
 
-/** Regels als "Thuiswedstrijden 42" — de verdeling over de bovenste laag. */
-function soortLines(tickets: FandeskTicket[]): string {
-  const counts = countsBySoort(tickets);
+/** Regels als "Kaartverkoop 42" — de verdeling over de bovenste laag. */
+function groupLines(tickets: FandeskTicket[]): string {
+  const counts = countsByGroup(tickets);
   return Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
-    .map(([soort, count]) => `${soort} ${count}`)
+    .map(([group, count]) => `${group} ${count}`)
     .join(", ");
 }
 
 /** De volledige boom als inspringende regels, voor in de prompt. */
 function taxonomyLines(tickets: FandeskTicket[]): string[] {
   const lines: string[] = [];
-  for (const soort of buildTaxonomy(tickets)) {
-    lines.push(`${soort.soort} (${soort.count})`);
-    for (const type of soort.types) {
-      lines.push(`  ${type.type} (${type.count})`);
-      for (const sub of type.subtypes) {
-        lines.push(`    ${sub.subtype} (${sub.count})`);
-      }
+  const walk = (nodes: TaxonomyNode[], depth: number) => {
+    for (const node of nodes) {
+      lines.push(`${"  ".repeat(depth)}${node.label} (${node.count})`);
+      walk(node.children, depth + 1);
     }
-  }
+  };
+  walk(buildTaxonomy(tickets), 0);
   return lines;
 }
+
+/** "type → subtype → soort", uit de gedeclareerde volgorde. */
+const LEVEL_PATH = TAXONOMY_LEVELS.map((level) => TAXONOMY_LABELS[level].toLowerCase()).join(
+  " → "
+);
 
 function dutchDay(day: string): string {
   const date = new Date(`${day}T12:00:00Z`);
@@ -73,28 +85,32 @@ export function buildDayContext(args: {
   const lines: string[] = [];
   lines.push(`— DAG: ${dutchDay(day)} (${day})`);
   lines.push(`Totaal tickets: ${tickets.length}`);
-  lines.push(`Per soort: ${soortLines(tickets)}`);
+  lines.push(`Per ${TAXONOMY_LABELS[TOP_LEVEL].toLowerCase()}: ${groupLines(tickets)}`);
   lines.push(
     `Onderwerpregels beschikbaar: ${withTopic.length} van ${tickets.length}`
   );
 
   lines.push("");
-  lines.push("— INDELING VAN DEZE DAG (soort → type → subtype, uit Freshdesk)");
+  lines.push(`— INDELING VAN DEZE DAG (${LEVEL_PATH}, uit Freshdesk)`);
   for (const line of taxonomyLines(tickets)) lines.push(line);
 
   lines.push("");
-  lines.push("— ONDERWERPREGELS VAN DEZE DAG (gegroepeerd per soort)");
-  const bySoortGroups = new Map<string, string[]>();
+  lines.push(
+    `— ONDERWERPREGELS VAN DEZE DAG (gegroepeerd per ${TAXONOMY_LABELS[
+      TOP_LEVEL
+    ].toLowerCase()})`
+  );
+  const groups = new Map<string, string[]>();
   for (const ticket of withTopic) {
-    const key = ticket.soort ?? "Niet ingevuld";
-    const bucket = bySoortGroups.get(key);
+    const key = levelValue(ticket, TOP_LEVEL);
+    const bucket = groups.get(key);
     if (bucket) bucket.push(ticket.topic!);
-    else bySoortGroups.set(key, [ticket.topic!]);
+    else groups.set(key, [ticket.topic!]);
   }
-  for (const [soort, topics] of [...bySoortGroups.entries()].sort(
+  for (const [group, topics] of [...groups.entries()].sort(
     (a, b) => b[1].length - a[1].length
   )) {
-    lines.push(`${soort} (${topics.length}):`);
+    lines.push(`${group} (${topics.length}):`);
     for (const topic of topics) lines.push(`  - ${topic}`);
   }
   if (!withTopic.length) {
@@ -130,19 +146,19 @@ export function buildPeriodContext(args: {
   from: string;
   to: string;
   total: number;
-  bySoort: Record<string, number>;
+  byGroup: Record<string, number>;
   previousTotal: number;
   days: Array<{ day: string; total: number; summary: string; themes: FandeskTheme[] }>;
 }): string {
-  const { from, to, total, bySoort, previousTotal, days } = args;
+  const { from, to, total, byGroup, previousTotal, days } = args;
 
   const lines: string[] = [];
   lines.push(`— PERIODE: ${from} t/m ${to} (${days.length} dagen met data)`);
   lines.push(`Totaal tickets: ${total}`);
   lines.push(
-    `Per soort: ${Object.entries(bySoort)
+    `Per ${TAXONOMY_LABELS[TOP_LEVEL].toLowerCase()}: ${Object.entries(byGroup)
       .sort((a, b) => b[1] - a[1])
-      .map(([soort, count]) => `${soort} ${count}`)
+      .map(([group, count]) => `${group} ${count}`)
       .join(", ")}`
   );
   lines.push(`Vorige, even lange periode: ${previousTotal} tickets`);

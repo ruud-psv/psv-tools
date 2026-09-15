@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import {
   amsterdamDayBounds,
-  buildSoortResolver,
+  buildGroupResolver,
   buildTaxonomy,
-  countsBySoort,
+  countsByGroup,
   dayCount,
   FandeskTicket,
+  hasGroup,
   isValidDayKey,
   shiftDayKey,
-  SoortNode,
+  TaxonomyNode,
   toAmsterdamParts,
+  TOP_LEVEL,
 } from "@/lib/fandesk";
 import { readRange } from "@/lib/fandesk-store";
 import { aggregateThemes, type FandeskTheme } from "@/lib/fandesk-analysis";
@@ -29,10 +31,10 @@ export const dynamic = "force-dynamic";
 const DEFAULT_DAYS = 30;
 
 /**
- * Over hoeveel dagen de kleurvolgorde van de soorten wordt bepaald. Bewust een
+ * Over hoeveel dagen de kleurvolgorde van de groepen wordt bepaald. Bewust een
  * vast venster en niet de gekozen periode: kleur hoort bij de categorie, niet bij
  * zijn positie in de ranglijst van dit moment. Zou je op de gekozen periode
- * sorteren, dan wisselen rood en blauw van soort zodra iemand van 30 naar 7 dagen
+ * sorteren, dan wisselen rood en blauw van groep zodra iemand van 30 naar 7 dagen
  * gaat.
  */
 const COLOR_ORDER_DAYS = 180;
@@ -40,7 +42,7 @@ const COLOR_ORDER_DAYS = 180;
 export interface FandeskBucket {
   /** Begin van het uur, ISO-8601 in UTC. */
   ts: string;
-  /** Aantallen per soort. Dynamische sleutels: de indeling komt uit Freshdesk. */
+  /** Aantallen per groep. Dynamische sleutels: de indeling komt uit Freshdesk. */
   counts: Record<string, number>;
 }
 
@@ -57,12 +59,12 @@ export interface FandeskData {
   from: string;
   to: string;
   buckets: FandeskBucket[];
-  totals: { total: number; bySoort: Record<string, number> };
+  totals: { total: number; byGroup: Record<string, number> };
   previous: {
     from: string;
     to: string;
     total: number;
-    bySoort: Record<string, number>;
+    byGroup: Record<string, number>;
   };
   lastTicketAt: string | null;
   generatedAt: string;
@@ -85,28 +87,29 @@ export interface FandeskData {
   periodSummaryStale?: boolean;
   /** True zodra er ergens in het bereik onderwerpregels zijn aangeleverd. */
   hasTopics?: boolean;
-  /** De volledige boom soort → type → subtype over de gekozen periode. */
-  taxonomy?: SoortNode[];
+  /** De volledige boom type → subtype → soort over de gekozen periode. */
+  taxonomy?: TaxonomyNode[];
   /**
-   * Soorten op aantal gesorteerd. De client neemt hier de stapelvolgorde en de
-   * kleurtoekenning uit over, zodat die niet per render opnieuw wordt bepaald.
+   * Groepen (het bovenste niveau) op aantal gesorteerd. De client neemt hier de
+   * stapelvolgorde en de kleurtoekenning uit over, zodat die niet per render
+   * opnieuw wordt bepaald.
    */
-  soorten?: string[];
+  groups?: string[];
   /** Hoeveel tickets in de periode hun taxonomie van het model kregen. */
   inferredCount?: number;
   /**
-   * Aantal tickets mét soort. Dit is de noemer voor de percentages in de treemap
+   * Aantal ingedeelde tickets. Dit is de noemer voor de percentages in de treemap
    * en de tabel: die tonen alleen ingedeelde tickets, dus afzetten tegen het
    * totaal zou de aandelen structureel te laag maken.
    */
   classifiedTotal?: number;
-  /** Tickets zonder soort — wel in de totalen en de tijdgrafiek, niet in de boom. */
+  /** Niet-ingedeelde tickets — wel in de totalen en de tijdgrafiek, niet in de boom. */
   unclassifiedCount?: number;
   /**
-   * Soorten op aantal over een vast venster van 180 dagen. Hieruit kiest de
+   * Groepen op aantal over een vast venster van 180 dagen. Hieruit kiest de
    * client zijn kleuren, zodat een periodewissel ze niet omgooit.
    */
-  soortColorOrder?: string[];
+  groupColorOrder?: string[];
 }
 
 function todayKey(): string {
@@ -115,13 +118,13 @@ function todayKey(): string {
 
 function aggregate(tickets: FandeskTicket[]): {
   buckets: FandeskBucket[];
-  bySoort: Record<string, number>;
+  byGroup: Record<string, number>;
   total: number;
 } {
   const byHour = new Map<string, Record<string, number>>();
   // Zelfde canonicalisatie als de treemap, anders splitst de tijdgrafiek een
-  // soort die de treemap samenvoegt.
-  const resolveSoort = buildSoortResolver(tickets);
+  // groep die de treemap samenvoegt.
+  const resolveGroup = buildGroupResolver(tickets);
 
   for (const ticket of tickets) {
     // Uur-bucket in UTC; de client rekent voor weergave om naar Amsterdam.
@@ -131,15 +134,15 @@ function aggregate(tickets: FandeskTicket[]): {
       counts = {};
       byHour.set(ts, counts);
     }
-    const soort = resolveSoort(ticket.soort);
-    counts[soort] = (counts[soort] ?? 0) + 1;
+    const group = resolveGroup(ticket[TOP_LEVEL]);
+    counts[group] = (counts[group] ?? 0) + 1;
   }
 
   const buckets = [...byHour.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([ts, counts]) => ({ ts, counts }));
 
-  return { buckets, bySoort: countsBySoort(tickets), total: tickets.length };
+  return { buckets, byGroup: countsByGroup(tickets), total: tickets.length };
 }
 
 export async function GET(req: NextRequest) {
@@ -182,12 +185,13 @@ export async function GET(req: NextRequest) {
     const now = aggregate(currentTickets);
     const before = aggregate(previousTickets);
 
-    // Alleen tickets met een soort komen in de boom. Zonder die filtering
-    // verdringt één grote "Niet ingevuld"-groep de rest van de treemap en zijn de
-    // percentages in de tabel scheef. Tickets die het model heeft ingedeeld tellen
-    // wél mee: het gaat hier om wat er binnenkwam. Alleen het taxonomy-endpoint,
-    // dat de woordenlijst voor het model levert, laat die buiten beschouwing.
-    const classified = currentTickets.filter((ticket) => ticket.soort);
+    // Alleen tickets met een groep (het bovenste niveau) komen in de boom. Zonder
+    // die filtering verdringt één grote "Niet ingevuld"-groep de rest van de
+    // treemap en zijn de percentages in de tabel scheef. Tickets die het model
+    // heeft ingedeeld tellen wél mee: het gaat hier om wat er binnenkwam. Alleen
+    // het taxonomy-endpoint, dat de woordenlijst voor het model levert, laat die
+    // buiten beschouwing.
+    const classified = currentTickets.filter(hasGroup);
     const taxonomy = buildTaxonomy(classified);
 
     const daySummaries: FandeskDaySummary[] = storedDays
@@ -220,12 +224,12 @@ export async function GET(req: NextRequest) {
       from,
       to,
       buckets: now.buckets,
-      totals: { total: now.total, bySoort: now.bySoort },
+      totals: { total: now.total, byGroup: now.byGroup },
       previous: {
         from: prevFrom,
         to: prevTo,
         total: before.total,
-        bySoort: before.bySoort,
+        byGroup: before.byGroup,
       },
       lastTicketAt: currentTickets.length ? currentTickets[currentTickets.length - 1].at : null,
       generatedAt: new Date().toISOString(),
@@ -243,17 +247,17 @@ export async function GET(req: NextRequest) {
       periodSummaryStale: daySummaries.length > 0 && !periodCurrent,
       hasTopics: currentTickets.some((t) => t.topic),
       taxonomy,
-      // De tijdgrafiek stapelt wél op alle soorten, inclusief "Niet ingevuld":
+      // De tijdgrafiek stapelt wél op alle groepen, inclusief "Niet ingevuld":
       // een ticket zonder indeling is nog steeds een ticket in het volume.
-      soorten: Object.keys(now.bySoort).sort(
-        (a, b) => now.bySoort[b] - now.bySoort[a] || a.localeCompare(b, "nl")
+      groups: Object.keys(now.byGroup).sort(
+        (a, b) => now.byGroup[b] - now.byGroup[a] || a.localeCompare(b, "nl")
       ),
       inferredCount: currentTickets.filter((t) => t.inferred).length,
       classifiedTotal: classified.length,
       unclassifiedCount: currentTickets.length - classified.length,
-      soortColorOrder: Object.entries(countsBySoort(colorWindowTickets))
+      groupColorOrder: Object.entries(countsByGroup(colorWindowTickets))
         .sort((a, b) => b[1] - a[1])
-        .map(([soort]) => soort),
+        .map(([group]) => group),
     };
 
     return NextResponse.json(data);
@@ -267,8 +271,8 @@ export async function GET(req: NextRequest) {
         from,
         to,
         buckets: [],
-        totals: { total: 0, bySoort: {} },
-        previous: { from: prevFrom, to: prevTo, total: 0, bySoort: {} },
+        totals: { total: 0, byGroup: {} },
+        previous: { from: prevFrom, to: prevTo, total: 0, byGroup: {} },
         lastTicketAt: null,
         generatedAt: new Date().toISOString(),
       } satisfies FandeskData);

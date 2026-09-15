@@ -35,9 +35,12 @@ import { KpiCard, formatNumber } from "@/lib/dm-share";
 import {
   dayCount,
   shiftDayKey,
+  TAXONOMY_LABELS,
+  TAXONOMY_LEVELS,
   toAmsterdamParts,
+  TOP_LEVEL,
   UNSET_LABEL,
-  type SoortNode,
+  type TaxonomyNode,
 } from "@/lib/fandesk";
 import type { FandeskData, FandeskDaySummary } from "@/app/api/fandesk/route";
 import type { FandeskAlert } from "@/lib/insights/fandesk";
@@ -51,48 +54,48 @@ interface PeriodSummary {
 }
 
 /**
- * Kleuren per soort. Recharts heeft letterlijke waarden nodig, dus dit zijn de
- * PSV-tokens.
+ * Kleuren per groep — de bovenste laag van de taxonomie. Recharts heeft
+ * letterlijke waarden nodig, dus dit zijn de PSV-tokens.
  *
  * Waarom maar drie hues: in een treemap kan elk vlak aan elk ander grenzen, dus
  * geldt de strengere all-pairs kleurenblindheidstoets. Rood naast oranje zakt
  * daar naar ΔE 10,7 — onder de harde ondergrens van 15 — terwijl rood/blauw/groen
- * de toets wél haalt. Soorten daarbuiten krijgen grijs; in een treemap draagt het
+ * de toets wél haalt. Groepen daarbuiten krijgen grijs; in een treemap draagt het
  * label de identiteit, en de tabel eronder geeft de exacte aantallen.
  */
-const SOORT_HUES = [
+const GROUP_HUES = [
   "#e82026", // color.red.primary
   "#2e5aac", // color.info
   "#287d3c", // color.success
 ] as const;
 
 /**
- * Soorten buiten de eerste drie. Twee grijstinten in plaats van één, zodat twee
- * naast elkaar liggende restsoorten in de legenda niet hetzelfde vakje krijgen.
+ * Groepen buiten de eerste drie. Twee grijstinten in plaats van één, zodat twee
+ * naast elkaar liggende restgroepen in de legenda niet hetzelfde vakje krijgen.
  */
-const OTHER_SOORT_COLORS = ["#595959", "#8c8c8c"];
-const OTHER_SOORT_COLOR = OTHER_SOORT_COLORS[0];
+const OTHER_GROUP_COLORS = ["#595959", "#8c8c8c"];
+const OTHER_GROUP_COLOR = OTHER_GROUP_COLORS[0];
 /** Tickets waar Freshdesk niets invulde. */
 const UNSET_COLOR = "#cccccc"; // color.gray.08
 
 /**
- * Kleur per soort. De volgorde komt van de server, bepaald over een vast venster
- * van 180 dagen — niet over de gekozen periode. Zo krijgen de grootste soorten de
+ * Kleur per groep. De volgorde komt van de server, bepaald over een vast venster
+ * van 180 dagen — niet over de gekozen periode. Zo krijgen de grootste groepen de
  * onderscheidende kleuren, terwijl een wissel van 30 naar 7 dagen ze niet omgooit:
  * kleur hoort bij de categorie, niet bij zijn positie in de ranglijst van nu.
  */
-function buildSoortColors(colorOrder: string[], present: string[]): Record<string, string> {
+function buildGroupColors(colorOrder: string[], present: string[]): Record<string, string> {
   const colors: Record<string, string> = { [UNSET_LABEL]: UNSET_COLOR };
-  // Soorten die alleen in deze periode voorkomen achteraan toevoegen, zodat ze
+  // Groepen die alleen in deze periode voorkomen achteraan toevoegen, zodat ze
   // ook een kleur hebben.
   const ordered = [...colorOrder, ...present.filter((s) => !colorOrder.includes(s))].filter(
-    (soort) => soort !== UNSET_LABEL
+    (group) => group !== UNSET_LABEL
   );
-  ordered.forEach((soort, index) => {
-    colors[soort] =
-      index < SOORT_HUES.length
-        ? SOORT_HUES[index]
-        : OTHER_SOORT_COLORS[(index - SOORT_HUES.length) % OTHER_SOORT_COLORS.length];
+  ordered.forEach((group, index) => {
+    colors[group] =
+      index < GROUP_HUES.length
+        ? GROUP_HUES[index]
+        : OTHER_GROUP_COLORS[(index - GROUP_HUES.length) % OTHER_GROUP_COLORS.length];
   });
   return colors;
 }
@@ -111,6 +114,15 @@ function lighten(hex: string, amount: number): string {
 const SURFACE = "hsl(var(--card))";
 const AXIS_INK = "hsl(var(--muted-foreground))";
 const GRID_INK = "hsl(var(--border))";
+
+/**
+ * "Type · subtype · soort" — de niveaus in de volgorde waarin ze genest zijn.
+ * Staat hier één keer zodat de kaarttekst en de tabelkop niet uit de pas kunnen
+ * lopen met TAXONOMY_LEVELS.
+ */
+const LEVEL_HEADING = TAXONOMY_LEVELS.map((level, index) =>
+  index === 0 ? TAXONOMY_LABELS[level] : TAXONOMY_LABELS[level].toLowerCase()
+).join(" · ");
 
 type Period = "7d" | "30d" | "90d" | "custom";
 type Granularity = "hour" | "day" | "week";
@@ -202,8 +214,8 @@ function weekStart(dayKey: string): string {
 }
 
 /**
- * Eén rij in de tijdgrafiek. De aantallen per soort staan als losse sleutels op
- * het object omdat recharts op `dataKey` stapelt, en de soorten pas op
+ * Eén rij in de tijdgrafiek. De aantallen per groep staan als losse sleutels op
+ * het object omdat recharts op `dataKey` stapelt, en de groepen pas op
  * runtime bekend zijn — ze komen uit Freshdesk, niet uit een vaste lijst.
  */
 interface SeriesRow {
@@ -211,7 +223,7 @@ interface SeriesRow {
   label: string;
   fullLabel: string;
   total: number;
-  [soort: string]: number | string;
+  [group: string]: number | string;
 }
 
 export function FANdeskDashboard() {
@@ -287,13 +299,13 @@ export function FANdeskDashboard() {
   const activeGranularity: Granularity =
     granularity !== "auto" ? granularity : spanDays <= 2 ? "hour" : spanDays <= 62 ? "day" : "week";
 
-  /** Soorten in de volgorde die de server bepaalde: op aantal, hoogste eerst. */
-  const soorten = useMemo(() => data?.soorten ?? [], [data]);
-  const soortColors = useMemo(
-    () => buildSoortColors(data?.soortColorOrder ?? [], soorten),
-    [data, soorten]
+  /** Groepen in de volgorde die de server bepaalde: op aantal, hoogste eerst. */
+  const groups = useMemo(() => data?.groups ?? [], [data]);
+  const groupColors = useMemo(
+    () => buildGroupColors(data?.groupColorOrder ?? [], groups),
+    [data, groups]
   );
-  const taxonomy = useMemo<SoortNode[]>(() => data?.taxonomy ?? [], [data]);
+  const taxonomy = useMemo<TaxonomyNode[]>(() => data?.taxonomy ?? [], [data]);
 
   /**
    * De treemap en de tabel tonen alleen ingedeelde tickets, dus hun percentages
@@ -306,39 +318,39 @@ export function FANdeskDashboard() {
   );
 
   /**
-   * De legenda boven de treemap leest de boom zelf uit in plaats van `soorten`.
+   * De legenda boven de treemap leest de boom zelf uit in plaats van `groups`.
    * Dat laatste bevat ook "Niet ingevuld" voor de tijdgrafiek, en een vakje in de
    * legenda dat nergens in de treemap terugkomt laat de kijker zoeken naar iets
    * wat er niet is.
    */
-  const taxonomySoorten = useMemo(() => taxonomy.map((node) => node.soort), [taxonomy]);
+  const taxonomyGroups = useMemo(() => taxonomy.map((node) => node.label), [taxonomy]);
 
   /**
-   * De boom in de vorm die recharts verwacht. `soort` en `typeName` reizen mee op
-   * elk knooppunt, zodat de renderer de kleur kan bepalen en de tooltip het hele
-   * pad kan tonen. `tint` maakt opeenvolgende subtypes binnen één soort iets
-   * lichter, zodat aangrenzende vlakken van elkaar te onderscheiden zijn.
+   * De boom in de vorm die recharts verwacht, recursief opgebouwd zodat de
+   * nestvolgorde alleen in TAXONOMY_LEVELS staat. Elk knooppunt draagt `group`
+   * (de bovenste laag, voor de kleur) en `path` (de labels tot hier, voor de
+   * tooltip) mee. `tint` maakt opeenvolgende bladeren binnen één tak iets lichter,
+   * zodat aangrenzende vlakken van elkaar te onderscheiden zijn.
    */
-  const treemapData = useMemo(
-    () =>
-      taxonomy.map((soortNode) => ({
-        name: soortNode.soort,
-        soort: soortNode.soort,
-        children: soortNode.types.map((typeNode) => ({
-          name: typeNode.type,
-          soort: soortNode.soort,
-          typeName: typeNode.type,
-          children: typeNode.subtypes.map((sub, index) => ({
-            name: sub.subtype,
-            soort: soortNode.soort,
-            typeName: typeNode.type,
-            tint: index % 4,
-            size: sub.count,
-          })),
-        })),
-      })),
-    [taxonomy]
-  );
+  const treemapData = useMemo(() => {
+    const toCell = (
+      node: TaxonomyNode,
+      group: string,
+      path: string[],
+      index: number
+    ): Record<string, unknown> => {
+      const here = [...path, node.label];
+      const cell: Record<string, unknown> = { name: node.label, group, path: here };
+      if (node.children.length) {
+        cell.children = node.children.map((child, i) => toCell(child, group, here, i));
+      } else {
+        cell.tint = index % 4;
+        cell.size = node.count;
+      }
+      return cell;
+    };
+    return taxonomy.map((node) => toCell(node, node.label, [], 0));
+  }, [taxonomy]);
 
   /** Buckets herrekenen naar de gekozen granulariteit, in Amsterdamse tijd. */
   const series = useMemo<SeriesRow[]>(() => {
@@ -381,19 +393,19 @@ export function FANdeskDashboard() {
       let row = rows.get(key);
       if (!row) {
         row = { key, label, fullLabel, total: 0 };
-        // Elke soort krijgt een sleutel, ook als hij in dit bucket niet voorkomt:
+        // Elke groep krijgt een sleutel, ook als hij in dit bucket niet voorkomt:
         // recharts stapelt anders een gat in plaats van een nul.
-        for (const soort of soorten) row[soort] = 0;
+        for (const group of groups) row[group] = 0;
         rows.set(key, row);
       }
-      for (const [soort, count] of Object.entries(bucket.counts)) {
-        row[soort] = ((row[soort] as number) ?? 0) + count;
+      for (const [group, count] of Object.entries(bucket.counts)) {
+        row[group] = ((row[group] as number) ?? 0) + count;
         row.total += count;
       }
     }
 
     return [...rows.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }, [data, activeGranularity, soorten]);
+  }, [data, activeGranularity, groups]);
 
   /** Verdeling per weekdag en per uur van de dag, beide in Amsterdamse tijd. */
   const rhythm = useMemo(() => {
@@ -438,27 +450,27 @@ export function FANdeskDashboard() {
     return series.reduce((best, row) => (row.total > best.total ? row : best), series[0]);
   }, [series]);
 
-  const soortRows = useMemo(() => {
+  const groupRows = useMemo(() => {
     if (!data) return [];
-    return soorten.map((soort) => {
-      const count = data.totals.bySoort[soort] ?? 0;
-      const before = data.previous.bySoort[soort] ?? 0;
+    return groups.map((group) => {
+      const count = data.totals.byGroup[group] ?? 0;
+      const before = data.previous.byGroup[group] ?? 0;
       return {
-        soort,
+        group,
         count,
         before,
         // Afzetten tegen het ingedeelde totaal, net als de treemap en de tabel.
-        // Tegen het totaal zou dezelfde soort op één pagina twee percentages
+        // Tegen het totaal zou dezelfde groep op één pagina twee percentages
         // krijgen — 45,8% in de KPI en 48,3% in de tabel.
         share: classifiedTotal > 0 ? (count / classifiedTotal) * 100 : 0,
         delta: count - before,
       };
     });
-  }, [data, soorten, classifiedTotal]);
+  }, [data, groups, classifiedTotal]);
 
-  // "Niet ingevuld" is geen soort maar het ontbreken ervan; als grootste categorie
-  // aankondigen zegt niets over waar de vragen over gaan.
-  const largest = soortRows.find((row) => row.soort !== UNSET_LABEL) ?? null;
+  // "Niet ingevuld" is geen categorie maar het ontbreken ervan; als grootste
+  // categorie aankondigen zegt niets over waar de vragen over gaan.
+  const largest = groupRows.find((row) => row.group !== UNSET_LABEL) ?? null;
   const totalDelta = data ? formatDelta(total, data.previous.total) : { text: "", up: null };
   const perDay = total / Math.max(1, spanDays);
 
@@ -603,8 +615,8 @@ export function FANdeskDashboard() {
               icon={TrendingUp}
             />
             <KpiCard
-              label="Grootste soort"
-              value={largest && largest.count > 0 ? largest.soort : "—"}
+              label={`Grootste ${TAXONOMY_LABELS[TOP_LEVEL].toLowerCase()}`}
+              value={largest && largest.count > 0 ? largest.group : "—"}
               sub={
                 largest && largest.count > 0
                   ? `${formatNumber(largest.count)} tickets · ${formatPercent(largest.share)}`
@@ -649,11 +661,11 @@ export function FANdeskDashboard() {
                     onClick={() => setStacked((s) => !s)}
                     className="shrink-0 px-3 py-1.5 text-xs font-heading uppercase tracking-wide bg-card border border-border text-muted-foreground hover:text-foreground"
                   >
-                    {stacked ? "Alleen totaal" : "Per soort"}
+                    {stacked ? "Alleen totaal" : `Per ${TAXONOMY_LABELS[TOP_LEVEL].toLowerCase()}`}
                   </button>
                 </CardHeader>
                 <CardContent>
-                  {stacked && <SoortLegend soorten={soorten} colors={soortColors} />}
+                  {stacked && <GroupLegend groups={groups} colors={groupColors} />}
                   <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       {stacked ? (
@@ -676,20 +688,20 @@ export function FANdeskDashboard() {
                           />
                           <Tooltip
                             cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.4 }}
-                            content={<SeriesTooltip soorten={soorten} colors={soortColors} />}
+                            content={<SeriesTooltip groups={groups} colors={groupColors} />}
                           />
-                          {soorten.map((soort, index) => (
+                          {groups.map((group, index) => (
                             <Bar
-                              key={soort}
-                              dataKey={soort}
+                              key={group}
+                              dataKey={group}
                               stackId="tickets"
-                              fill={soortColors[soort]}
+                              fill={groupColors[group]}
                               maxBarSize={24}
                               // 2px in surface-kleur = de tussenruimte tussen segmenten
                               stroke={SURFACE}
                               strokeWidth={2}
                               radius={
-                                index === soorten.length - 1
+                                index === groups.length - 1
                                   ? ([4, 4, 0, 0] as [number, number, number, number])
                                   : undefined
                               }
@@ -722,7 +734,7 @@ export function FANdeskDashboard() {
                             type="monotone"
                             dataKey="total"
                             name="Totaal"
-                            stroke={SOORT_HUES[0]}
+                            stroke={GROUP_HUES[0]}
                             strokeWidth={2}
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -744,12 +756,12 @@ export function FANdeskDashboard() {
                               <th className="py-2 pr-4 font-heading text-xs uppercase tracking-wide text-muted-foreground">
                                 Periode
                               </th>
-                              {soorten.map((soort) => (
+                              {groups.map((group) => (
                                 <th
-                                  key={soort}
+                                  key={group}
                                   className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground"
                                 >
-                                  {soort}
+                                  {group}
                                 </th>
                               ))}
                               <th className="py-2 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
@@ -763,12 +775,12 @@ export function FANdeskDashboard() {
                                 <td className="py-1.5 pr-4 text-muted-foreground">
                                   {row.fullLabel}
                                 </td>
-                                {soorten.map((soort) => (
+                                {groups.map((group) => (
                                   <td
-                                    key={soort}
+                                    key={group}
                                     className="py-1.5 pr-4 text-right tabular-nums"
                                   >
-                                    {formatNumber((row[soort] as number) ?? 0)}
+                                    {formatNumber((row[group] as number) ?? 0)}
                                   </td>
                                 ))}
                                 <td className="py-1.5 text-right tabular-nums font-bold">
@@ -792,8 +804,8 @@ export function FANdeskDashboard() {
                         Waar gaan ze over?
                       </CardTitle>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Soort, type en subtype zoals Freshdesk de tickets indeelt. De grootte van
-                        een vlak is het aantal tickets.
+                        {LEVEL_HEADING} zoals Freshdesk de tickets indeelt, van breed naar fijn.
+                        De grootte van een vlak is het aantal tickets.
                       </p>
                       {(data.unclassifiedCount ?? 0) > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -811,7 +823,7 @@ export function FANdeskDashboard() {
                     )}
                   </CardHeader>
                   <CardContent>
-                    <SoortLegend soorten={taxonomySoorten} colors={soortColors} />
+                    <GroupLegend groups={taxonomyGroups} colors={groupColors} />
                     <div className="h-96 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <Treemap
@@ -819,7 +831,7 @@ export function FANdeskDashboard() {
                           dataKey="size"
                           isAnimationActive={false}
                           stroke={SURFACE}
-                          content={<TreemapCell colors={soortColors} />}
+                          content={<TreemapCell colors={groupColors} />}
                         >
                           <Tooltip content={<TreemapTooltip total={classifiedTotal} />} />
                         </Treemap>
@@ -831,9 +843,9 @@ export function FANdeskDashboard() {
                       <div className="accordion__content">
                         <TaxonomyTable
                           taxonomy={taxonomy}
-                          colors={soortColors}
+                          colors={groupColors}
                           total={classifiedTotal}
-                          soortRows={soortRows}
+                          groupRows={groupRows}
                           previousLabel={formatDayRange(data.previous.from, data.previous.to)}
                         />
                       </div>
@@ -891,24 +903,24 @@ export function FANdeskDashboard() {
 }
 
 /** Legenda — de betrouwbare identiteitslaag; kleur alleen is nooit genoeg. */
-function SoortLegend({
-  soorten,
+function GroupLegend({
+  groups,
   colors,
 }: {
-  soorten: string[];
+  groups: string[];
   colors: Record<string, string>;
 }) {
-  if (soorten.length < 2) return null;
+  if (groups.length < 2) return null;
   return (
     <div className="flex flex-wrap items-center gap-4 mb-4">
-      {soorten.map((soort) => (
-        <span key={soort} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {groups.map((group) => (
+        <span key={group} className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span
             aria-hidden
             className="inline-block h-2.5 w-2.5"
-            style={{ backgroundColor: colors[soort] ?? OTHER_SOORT_COLOR }}
+            style={{ backgroundColor: colors[group] ?? OTHER_GROUP_COLOR }}
           />
-          {soort}
+          {group}
         </span>
       ))}
     </div>
@@ -923,13 +935,13 @@ function SeriesTooltip({
   active,
   payload,
   totalOnly = false,
-  soorten = [],
+  groups = [],
   colors = {},
 }: {
   active?: boolean;
   payload?: TooltipPayloadEntry[];
   totalOnly?: boolean;
-  soorten?: string[];
+  groups?: string[];
   colors?: Record<string, string>;
 }) {
   const row = active && payload?.length ? payload[0].payload : null;
@@ -938,19 +950,19 @@ function SeriesTooltip({
     <div className="border border-border bg-card px-3 py-2 shadow-card">
       <p className="text-xs text-muted-foreground mb-1.5">{row.fullLabel}</p>
       {!totalOnly &&
-        soorten
-          .filter((soort) => ((row[soort] as number) ?? 0) > 0)
-          .map((soort) => (
-          <p key={soort} className="flex items-center gap-2 text-sm">
+        groups
+          .filter((group) => ((row[group] as number) ?? 0) > 0)
+          .map((group) => (
+          <p key={group} className="flex items-center gap-2 text-sm">
             <span
               aria-hidden
               className="inline-block h-0.5 w-3 shrink-0"
-              style={{ backgroundColor: colors[soort] ?? OTHER_SOORT_COLOR }}
+              style={{ backgroundColor: colors[group] ?? OTHER_GROUP_COLOR }}
             />
             <span className="font-bold tabular-nums">
-              {formatNumber((row[soort] as number) ?? 0)}
+              {formatNumber((row[group] as number) ?? 0)}
             </span>
-            <span className="text-xs text-muted-foreground">{soort}</span>
+            <span className="text-xs text-muted-foreground">{group}</span>
           </p>
         ))}
       <p className="mt-1.5 pt-1.5 border-t border-border text-sm">
@@ -970,15 +982,19 @@ interface TreemapNodeProps {
   height?: number;
   name?: string;
   value?: number;
-  soort?: string;
+  /** De bovenste laag waar dit vlak onder valt — bepaalt de kleurfamilie. */
+  group?: string;
+  /** De labels van boven naar beneden, voor de tooltip. */
+  path?: string[];
   tint?: number;
   colors?: Record<string, string>;
 }
 
 /**
- * Eigen renderer voor de treemap. De diepte bepaalt de rol: een soort krijgt
- * alleen een omlijsting en zijn naam, een subtype is het gevulde vlak. Zo zie je
- * de drie lagen zonder dat de kleuren gaan schreeuwen.
+ * Eigen renderer voor de treemap. De diepte bepaalt de rol: de bovenste laag
+ * krijgt alleen een omlijsting, de middelste een fijne scheiding, en het diepste
+ * niveau is het gevulde vlak. Zo zie je de drie lagen zonder dat de kleuren gaan
+ * schreeuwen.
  */
 function TreemapCell(props: TreemapNodeProps) {
   const {
@@ -989,25 +1005,26 @@ function TreemapCell(props: TreemapNodeProps) {
     height = 0,
     name = "",
     value = 0,
-    soort,
+    group,
+    path = [],
     tint = 0,
     colors = {},
   } = props;
 
   if (width <= 0 || height <= 0) return null;
 
-  const base = colors[soort ?? name] ?? OTHER_SOORT_COLOR;
+  const base = colors[group ?? name] ?? OTHER_GROUP_COLOR;
 
-  // Diepte 1 is de soort. Alleen een kader: de kinderen vullen de ouder volledig,
-  // dus een label hier zou er altijd achter verdwijnen. De groepering leest af aan
-  // de kleurfamilie van de vlakken, met de legenda als naamgeving.
+  // Diepte 1 is de bovenste laag. Alleen een kader: de kinderen vullen de ouder
+  // volledig, dus een label hier zou er altijd achter verdwijnen. De groepering
+  // leest af aan de kleurfamilie van de vlakken, met de legenda als naamgeving.
   if (depth === 1) {
     return (
       <rect x={x} y={y} width={width} height={height} fill="none" stroke={base} strokeWidth={2} />
     );
   }
 
-  // Diepte 2 is het type: geen vulling, alleen een fijne scheiding.
+  // Diepte 2 is de middelste laag: geen vulling, alleen een fijne scheiding.
   if (depth === 2) {
     return (
       <rect
@@ -1022,32 +1039,51 @@ function TreemapCell(props: TreemapNodeProps) {
     );
   }
 
-  // Diepte 3 is het subtype: het gevulde vlak dat het aantal draagt.
+  // Diepte 3 is de diepste laag: het gevulde vlak dat het aantal draagt.
   const fill = lighten(base, 0.25 + Math.min(tint, 3) * 0.15);
+
+  /*
+   * Het diepste niveau herhaalt zich: dezelfde soort komt onder meerdere
+   * subtypes voor, dus vijf vakjes met "Thuiswedstrijden" zeggen los van elkaar
+   * niets. Daarom staat de tak waar dit vlak onder hangt erboven, klein. Past die
+   * regel er niet bij, dan valt hij weg en blijft het vlak leesbaar.
+   */
+  const branch = path.length > 1 ? path[path.length - 2] : "";
+
   // Alleen labelen als het past. Een afgekapt label is slechter dan geen label;
   // de waarde blijft bereikbaar via de tooltip en de tabel.
   const fits = width > name.length * 6.2 + 12 && height > 30;
+  // Alleen samen met het blad zelf: een vlak dat wél zijn tak toont maar niet zijn
+  // eigen naam, laat de lezer met de verkeerde helft achter.
+  const branchFits = fits && Boolean(branch) && width > branch.length * 5.4 + 12 && height > 48;
+  const top = branchFits ? y + 14 : y;
+
   return (
     <g>
       <rect x={x} y={y} width={width} height={height} fill={fill} stroke={SURFACE} strokeWidth={2} />
+      {/*
+       * `stroke="none"` is hier geen detail. De <Treemap> krijgt stroke={SURFACE}
+       * mee voor de tussenruimte tussen de vlakken, en recharts zet die op de
+       * omhullende <g>. Stroke erft in SVG, dus de labels kregen een witte lijn
+       * van 1px over hun eigen vulling heen — bij 11px is dat breder dan de stok
+       * van de letter zelf, waardoor de tekst wit en vet werd in plaats van donker
+       * en gewoon.
+       *
+       * Alle regels dragen dezelfde inkt: #333333 haalde op de donkerste tinten
+       * maar 3,3:1, terwijl #09101d overal minstens 4,95:1 haalt. De hiërarchie
+       * zit in de tekstgrootte, niet in de kleur.
+       */}
+      {branchFits && (
+        <text x={x + 6} y={y + 13} fill="#09101d" stroke="none" fontSize={9}>
+          {branch}
+        </text>
+      )}
       {fits && (
         <>
-          {/*
-           * `stroke="none"` is hier geen detail. De <Treemap> krijgt
-           * stroke={SURFACE} mee voor de tussenruimte tussen de vlakken, en
-           * recharts zet die op de omhullende <g>. Stroke erft in SVG, dus de
-           * labels kregen een witte lijn van 1px over hun eigen vulling heen —
-           * bij 11px is dat breder dan de stok van de letter zelf, waardoor de
-           * tekst wit en vet werd in plaats van donker en gewoon.
-           *
-           * Beide regels dragen dezelfde inkt: #333333 haalde op de donkerste
-           * tinten maar 3,3:1, terwijl #09101d overal minstens 4,95:1 haalt. De
-           * hiërarchie zit in de tekstgrootte, niet in de kleur.
-           */}
-          <text x={x + 6} y={y + 16} fill="#09101d" stroke="none" fontSize={11}>
+          <text x={x + 6} y={top + 16} fill="#09101d" stroke="none" fontSize={11}>
             {name}
           </text>
-          <text x={x + 6} y={y + 29} fill="#09101d" stroke="none" fontSize={10}>
+          <text x={x + 6} y={top + 29} fill="#09101d" stroke="none" fontSize={10}>
             {formatNumber(value)}
           </text>
         </>
@@ -1068,9 +1104,11 @@ function TreemapTooltip({
   const node = active && payload?.length ? payload[0].payload : null;
   if (!node) return null;
   const count = Number(node.value) || 0;
-  const path = [node.soort, node.typeName, node.name]
-    .filter((part): part is string => typeof part === "string" && part.length > 0)
-    .filter((part, index, all) => all.indexOf(part) === index);
+  // Het pad reist mee op het knooppunt, dus de tooltip hoeft niets te raden over
+  // welk niveau hij in handen heeft.
+  const path = (Array.isArray(node.path) ? node.path : []).filter(
+    (part): part is string => typeof part === "string" && part.length > 0
+  );
   return (
     <div className="border border-border bg-card px-3 py-2 shadow-card">
       <p className="text-sm">
@@ -1096,16 +1134,16 @@ function TaxonomyTable({
   taxonomy,
   colors,
   total,
-  soortRows,
+  groupRows,
   previousLabel,
 }: {
-  taxonomy: SoortNode[];
+  taxonomy: TaxonomyNode[];
   colors: Record<string, string>;
   total: number;
-  soortRows: Array<{ soort: string; count: number; before: number; delta: number }>;
+  groupRows: Array<{ group: string; count: number; before: number; delta: number }>;
   previousLabel: string;
 }) {
-  const deltaFor = (soort: string) => soortRows.find((row) => row.soort === soort);
+  const deltaFor = (group: string) => groupRows.find((row) => row.group === group);
 
   return (
     <div className="overflow-x-auto">
@@ -1113,7 +1151,7 @@ function TaxonomyTable({
         <thead>
           <tr className="border-b border-border text-left">
             <th className="py-2 pr-4 font-heading text-xs uppercase tracking-wide text-muted-foreground">
-              Soort · type · subtype
+              {LEVEL_HEADING}
             </th>
             <th className="py-2 pr-4 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
               Aantal
@@ -1128,83 +1166,107 @@ function TaxonomyTable({
           </tr>
         </thead>
         <tbody>
-          {taxonomy.map((soortNode) => {
-            const row = deltaFor(soortNode.soort);
-            return (
-              <Fragment key={soortNode.soort}>
-                <tr className="border-b border-border/50">
-                  <td className="py-2 pr-4">
-                    <span className="flex items-center gap-2 font-bold">
-                      <span
-                        aria-hidden
-                        className="inline-block h-2.5 w-2.5 shrink-0"
-                        style={{ backgroundColor: colors[soortNode.soort] ?? OTHER_SOORT_COLOR }}
-                      />
-                      {soortNode.soort}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums font-bold">
-                    {formatNumber(soortNode.count)}
-                  </td>
-                  <td className="py-2 pr-4 text-right tabular-nums">
-                    {formatPercent(total > 0 ? (soortNode.count / total) * 100 : 0)}
-                  </td>
-                  <td className="py-2 text-right">
-                    {row && (
-                      <span className="inline-flex items-center gap-1.5 tabular-nums">
-                        {formatNumber(row.before)}
-                        {row.delta !== 0 && (
-                          <Badge variant={row.delta > 0 ? "warning" : "success"} className="gap-1">
-                            {row.delta > 0 ? (
-                              <TrendingUp className="h-3 w-3" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3" />
-                            )}
-                            {row.delta > 0 ? "+" : "−"}
-                            {formatNumber(Math.abs(row.delta))}
-                          </Badge>
-                        )}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-                {soortNode.types.map((typeNode) => (
-                  <Fragment key={`${soortNode.soort}/${typeNode.type}`}>
-                    <tr className="border-b border-border/30">
-                      <td className="py-1.5 pr-4 pl-6 text-muted-foreground">{typeNode.type}</td>
-                      <td className="py-1.5 pr-4 text-right tabular-nums">
-                        {formatNumber(typeNode.count)}
-                      </td>
-                      <td className="py-1.5 pr-4 text-right tabular-nums text-muted-foreground">
-                        {formatPercent(total > 0 ? (typeNode.count / total) * 100 : 0)}
-                      </td>
-                      <td />
-                    </tr>
-                    {typeNode.subtypes.map((sub) => (
-                      <tr
-                        key={`${soortNode.soort}/${typeNode.type}/${sub.subtype}`}
-                        className="border-b border-border/20"
-                      >
-                        <td className="py-1 pr-4 pl-12 text-xs text-muted-foreground">
-                          {sub.subtype}
-                        </td>
-                        <td className="py-1 pr-4 text-right text-xs tabular-nums text-muted-foreground">
-                          {formatNumber(sub.count)}
-                        </td>
-                        <td className="py-1 pr-4 text-right text-xs tabular-nums text-muted-foreground">
-                          {formatPercent(total > 0 ? (sub.count / total) * 100 : 0)}
-                        </td>
-                        <td />
-                      </tr>
-                    ))}
-                  </Fragment>
-                ))}
-              </Fragment>
-            );
-          })}
+          {taxonomy.map((node) => (
+            <TaxonomyRows
+              key={node.label}
+              node={node}
+              path={[]}
+              depth={0}
+              colors={colors}
+              total={total}
+              delta={deltaFor(node.label)}
+            />
+          ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Opmaak per diepte: inspringing, tekstgrootte en hoe zwaar de scheidingslijn is. */
+const ROW_STYLES = [
+  { cell: "py-2 pr-4", indent: "", text: "", border: "border-b border-border/50" },
+  { cell: "py-1.5 pr-4", indent: "pl-6", text: "text-muted-foreground", border: "border-b border-border/30" },
+  { cell: "py-1 pr-4", indent: "pl-12", text: "text-xs text-muted-foreground", border: "border-b border-border/20" },
+] as const;
+
+/**
+ * Eén knoop plus alles eronder. Recursief in plaats van drie uitgeschreven lagen,
+ * zodat de tabel meebeweegt met TAXONOMY_LEVELS in plaats van de nestvolgorde nog
+ * eens vast te leggen.
+ */
+function TaxonomyRows({
+  node,
+  path,
+  depth,
+  colors,
+  total,
+  delta,
+}: {
+  node: TaxonomyNode;
+  path: string[];
+  depth: number;
+  colors: Record<string, string>;
+  total: number;
+  delta?: { count: number; before: number; delta: number };
+}) {
+  const style = ROW_STYLES[Math.min(depth, ROW_STYLES.length - 1)];
+  const isTop = depth === 0;
+  const key = [...path, node.label].join("/");
+
+  return (
+    <Fragment key={key}>
+      <tr className={style.border}>
+        <td className={cn(style.cell, style.indent, style.text)}>
+          {isTop ? (
+            <span className="flex items-center gap-2 font-bold">
+              <span
+                aria-hidden
+                className="inline-block h-2.5 w-2.5 shrink-0"
+                style={{ backgroundColor: colors[node.label] ?? OTHER_GROUP_COLOR }}
+              />
+              {node.label}
+            </span>
+          ) : (
+            node.label
+          )}
+        </td>
+        <td className={cn(style.cell, "text-right tabular-nums", style.text, isTop && "font-bold")}>
+          {formatNumber(node.count)}
+        </td>
+        <td className={cn(style.cell, "text-right tabular-nums", !isTop && style.text)}>
+          {formatPercent(total > 0 ? (node.count / total) * 100 : 0)}
+        </td>
+        <td className={isTop ? "py-2 text-right" : undefined}>
+          {isTop && delta && (
+            <span className="inline-flex items-center gap-1.5 tabular-nums">
+              {formatNumber(delta.before)}
+              {delta.delta !== 0 && (
+                <Badge variant={delta.delta > 0 ? "warning" : "success"} className="gap-1">
+                  {delta.delta > 0 ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {delta.delta > 0 ? "+" : "−"}
+                  {formatNumber(Math.abs(delta.delta))}
+                </Badge>
+              )}
+            </span>
+          )}
+        </td>
+      </tr>
+      {node.children.map((child) => (
+        <TaxonomyRows
+          key={`${key}/${child.label}`}
+          node={child}
+          path={[...path, node.label]}
+          depth={depth + 1}
+          colors={colors}
+          total={total}
+        />
+      ))}
+    </Fragment>
   );
 }
 
@@ -1267,7 +1329,7 @@ function RhythmChart({
             />
             <Bar
               dataKey="total"
-              fill={SOORT_HUES[0]}
+              fill={GROUP_HUES[0]}
               maxBarSize={24}
               radius={[4, 4, 0, 0]}
             />

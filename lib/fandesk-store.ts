@@ -2,8 +2,10 @@ import { put, get, list } from "@vercel/blob";
 import {
   FANDESK_DATA_START,
   FandeskTicket,
+  hasGroup,
+  levelValue,
   RawFandeskItem,
-  UNSET_LABEL,
+  TOP_LEVEL,
 } from "@/lib/fandesk";
 
 /**
@@ -25,12 +27,12 @@ interface MonthLedger {
 export interface AppendResult {
   added: number;
   duplicates: number;
-  /** Aantal toegevoegde tickets per soort, met ontbrekende onder "Niet ingevuld". */
-  bySoort: Record<string, number>;
+  /** Aantal toegevoegde tickets per groep, met ontbrekende onder "Niet ingevuld". */
+  byGroup: Record<string, number>;
   /** Hoeveel van de toegevoegde tickets hun taxonomie van het model kregen. */
   inferred: number;
-  /** Hoeveel toegevoegde tickets helemaal geen soort hadden. */
-  withoutSoort: number;
+  /** Hoeveel toegevoegde tickets het bovenste niveau misten. */
+  withoutGroup: number;
 }
 
 function monthOf(iso: string): string {
@@ -98,9 +100,9 @@ export async function appendTickets(
   items: RawFandeskItem[],
   batchAt: string
 ): Promise<AppendResult> {
-  const bySoort: Record<string, number> = {};
+  const byGroup: Record<string, number> = {};
   let inferred = 0;
-  let withoutSoort = 0;
+  let withoutGroup = 0;
 
   const perMonth = new Map<string, FandeskTicket[]>();
   for (const item of items) {
@@ -140,10 +142,10 @@ export async function appendTickets(
       }
       seen.add(ticket.id);
       fresh.push(ticket);
-      const soort = ticket.soort ?? UNSET_LABEL;
-      bySoort[soort] = (bySoort[soort] ?? 0) + 1;
+      const group = levelValue(ticket, TOP_LEVEL);
+      byGroup[group] = (byGroup[group] ?? 0) + 1;
       if (ticket.inferred) inferred++;
-      if (!ticket.soort) withoutSoort++;
+      if (!hasGroup(ticket)) withoutGroup++;
     }
 
     if (!fresh.length) continue;
@@ -154,7 +156,7 @@ export async function appendTickets(
     added += fresh.length;
   }
 
-  return { added, duplicates, bySoort, inferred, withoutSoort };
+  return { added, duplicates, byGroup, inferred, withoutGroup };
 }
 
 /** Alle maanden waarvoor een ledger bestaat, oplopend gesorteerd. */

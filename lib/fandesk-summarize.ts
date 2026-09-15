@@ -121,10 +121,10 @@ export async function refreshPeriodSummary(args: {
   from: string;
   to: string;
   total: number;
-  bySoort: Record<string, number>;
+  byGroup: Record<string, number>;
   previousTotal: number;
 }): Promise<StoredFandeskSummary | null> {
-  const { from, to, total, bySoort, previousTotal } = args;
+  const { from, to, total, byGroup, previousTotal } = args;
 
   const stored = await getDaySummaries(dayKeysInRange(from, to));
   const days = stored
@@ -145,7 +145,7 @@ export async function refreshPeriodSummary(args: {
     from,
     to,
     total,
-    bySoort,
+    byGroup,
     previousTotal,
     days,
   });

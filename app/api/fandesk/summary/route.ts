@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorize } from "@/lib/auth";
 import {
   amsterdamDayBounds,
-  countsBySoort,
+  countsByGroup,
   dayCount,
   isValidDayKey,
   shiftDayKey,
@@ -49,13 +49,13 @@ export async function POST(req: NextRequest) {
       readRange(previous.fromInstant, previous.toInstant),
     ]);
 
-    const bySoort = countsBySoort(tickets);
+    const byGroup = countsByGroup(tickets);
 
     const stored = await refreshPeriodSummary({
       from,
       to,
       total: tickets.length,
-      bySoort,
+      byGroup,
       previousTotal: previousTickets.length,
     });
 

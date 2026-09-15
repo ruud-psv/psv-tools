@@ -12,7 +12,7 @@ import { refreshDaySummaries } from "@/lib/fandesk-summarize";
 /**
  * Ingest-endpoint voor de n8n workflow die support tickets ophaalt en
  * categoriseert. Verwacht elk uur een batch items met `id`, `created_at`, de
- * Freshdesk-taxonomie (`soort`/`type`/`subtype`) en een onderwerpregel. Beveiligd met FANDESK_INGEST_SECRET — middleware.ts laat alle
+ * Freshdesk-taxonomie (`type`/`subtype`/`soort`) en een onderwerpregel. Beveiligd met FANDESK_INGEST_SECRET — middleware.ts laat alle
  * /api/* routes ongeauthenticeerd door, dus de check zit hier.
  */
 
@@ -55,9 +55,9 @@ export async function POST(request: Request) {
 
   try {
     const result = await appendTickets(parsed.items, batchAt);
-    if (result.withoutSoort) {
+    if (result.withoutGroup) {
       console.warn(
-        `[fandesk/ingest] ${result.withoutSoort} van ${result.added} toegevoegde tickets zonder soort — Freshdesk liet het veld leeg en het model vulde niets in.`
+        `[fandesk/ingest] ${result.withoutGroup} van ${result.added} toegevoegde tickets zonder type — Freshdesk liet het veld leeg en het model vulde niets in.`
       );
     }
 
@@ -86,9 +86,9 @@ export async function POST(request: Request) {
       skipped: parsed.skipped,
       added: result.added,
       duplicates: result.duplicates,
-      bySoort: result.bySoort,
+      byGroup: result.byGroup,
       inferred: result.inferred,
-      withoutSoort: result.withoutSoort,
+      withoutGroup: result.withoutGroup,
       batchAt,
     });
   } catch (err) {

@@ -18,18 +18,22 @@ Body: een object met een `items` array (een kale array mag ook). Per ticket:
 |---|---|---|
 | `id` | ja | Unieke ticket-id. String of getal. Wordt gebruikt om te ontdubbelen. |
 | `created_at` | nee | ISO-8601 in UTC, bijv. `2026-09-10T12:55:41Z`. Ontbreekt hij, dan geldt het moment van binnenkomst. |
-| `soort` | nee | Freshdesk `cf_soort`, het bovenste niveau. Bijv. `Thuiswedstrijden`. |
-| `type` | nee | Freshdesk `cf_type`. Bijv. `Kaartverkoop`. |
+| `type` | nee | Freshdesk `cf_type`, het bovenste niveau. Bijv. `Kaartverkoop`. |
 | `subtype` | nee | Freshdesk `cf_subtype`. Bijv. `Champions League`. |
+| `soort` | nee | Freshdesk `cf_soort`, het diepste niveau. Bijv. `Thuiswedstrijden`. |
 | `inferred` | nee | `true` als het model de indeling heeft ingevuld omdat Freshdesk hem leeg liet. |
 | `topic` | nee | Korte geanonimiseerde onderwerpregel; hierop draait de samenvatting. |
+
+De indeling nest van breed naar fijn: **type → subtype → soort**. Die volgorde staat in de code
+op één plek, `TAXONOMY_LEVELS` in `lib/fandesk.ts`; de treemap, de tabel, de kleuren en de prompts
+lezen hem daaruit.
 
 De drie taxonomievelden mogen op drie manieren binnenkomen, dus je hoeft in n8n niets te mappen
 als je het Freshdesk-ticket ongewijzigd doorgeeft:
 
-- plat: `soort`, `type`, `subtype`
-- met Freshdesk-prefix: `cf_soort`, `cf_type`, `cf_subtype`
-- genest: `custom_fields: { cf_soort, cf_type, cf_subtype }`
+- plat: `type`, `subtype`, `soort`
+- met Freshdesk-prefix: `cf_type`, `cf_subtype`, `cf_soort`
+- genest: `custom_fields: { cf_type, cf_subtype, cf_soort }`
 
 Een leeg veld mag `null`, `""`, `"-"` of de letterlijke string `"null"` zijn; dat wordt allemaal
 als "niet ingevuld" gelezen.
@@ -40,17 +44,17 @@ als "niet ingevuld" gelezen.
     {
       "id": "48211",
       "created_at": "2026-09-10T12:55:41Z",
-      "soort": "Thuiswedstrijden",
       "type": "Kaartverkoop",
       "subtype": "Champions League",
+      "soort": "Thuiswedstrijden",
       "topic": "terugbetaling na afgelasting"
     },
     {
       "id": "48212",
       "created_at": "2026-09-10T13:04:02Z",
-      "soort": "Uitwedstrijden",
       "type": "Vervoer",
       "subtype": "Bus",
+      "soort": "Uitwedstrijden",
       "inferred": true,
       "topic": "vertrektijd supportersbus"
     }
@@ -84,9 +88,9 @@ Response:
   "skipped": 0,
   "added": 2,
   "duplicates": 0,
-  "bySoort": { "Thuiswedstrijden": 1, "Uitwedstrijden": 1 },
+  "byGroup": { "Kaartverkoop": 1, "Vervoer": 1 },
   "inferred": 1,
-  "withoutSoort": 0,
+  "withoutGroup": 0,
   "batchAt": "2026-07-30T13:05:00.000Z"
 }
 ```
@@ -106,14 +110,15 @@ Schedule Trigger → [Taxonomie] → Code → Get many tickets → Filter
 | Code | Alleen als hij uit `items` of `$json` leest — zie hieronder. |
 | **Code in Batches** | De drie Freshdesk-velden plat meegeven, plus een vlag of het ticket ingedeeld moet worden. |
 | **Taxonomie (nieuw)** | HTTP GET die de woordenlijst ophaalt waaruit het model mag kiezen. |
-| **Message a model** | Schrijft altijd `topic`; vult soort/type/subtype alléén in als Freshdesk ze leeg liet. |
+| **Message a model** | Schrijft altijd `topic`; vult type/subtype/soort alléén in als Freshdesk ze leeg liet. |
 | **Code Parse** | Freshdesk-waarden winnen; modelwaarden alleen als vangnet, met `inferred: true`. |
 | Aggregate | Geen — neemt alle velden van een item mee. |
 | HTTP Request | Geen — stuurt `$json.items` in z'n geheel door. |
 
 **De indeling komt uit Freshdesk, niet uit het model.** Dat is betrouwbaarder, gratis en het is de
 indeling die de organisatie zelf hanteert. Het model doet nog twee dingen: het schrijft de
-onderwerpregel, en het springt bij wanneer `cf_soort` leeg is.
+onderwerpregel, en het springt bij wanneer `cf_type` leeg is — het bovenste niveau, en dus het
+veld dat bepaalt of een ticket überhaupt een plek in de boom heeft.
 
 ### Code in Batches
 
@@ -134,17 +139,18 @@ const clean = (value) => {
 
 const allTickets = items.map(item => {
   const cf = item.json.custom_fields || {};
-  const soort = clean(cf.cf_soort);
+  // type is het bovenste niveau; ontbreekt dat, dan heeft het ticket geen plek
+  // in de boom en mag het model bijspringen.
+  const type = clean(cf.cf_type);
   return {
     id: item.json.id,
     subject: item.json.subject,
     description_text: item.json.description_text || '',
     created_at: item.json.created_at,
-    soort,
-    type: clean(cf.cf_type),
+    type,
     subtype: clean(cf.cf_subtype),
-    // Alleen tickets zonder soort hoeft het model in te delen.
-    needs_classification: soort === null
+    soort: clean(cf.cf_soort),
+    needs_classification: type === null
   };
 });
 
@@ -196,15 +202,16 @@ Let op bij lineaire plaatsing: de node vervangt het item dat doorstroomt. Leest 
 `Code`-node uit `items` of `$json` van de trigger, pas die dan aan; rekent hij alleen met `$now`
 of een vaste datum, dan verandert er niets.
 
-Het endpoint geeft terug welke soort/type/subtype-combinaties de afgelopen 180 dagen echt uit
-Freshdesk zijn binnengekomen:
+Het endpoint geeft terug welke type/subtype/soort-combinaties de afgelopen 180 dagen echt uit
+Freshdesk zijn binnengekomen. Elk niveau heeft dezelfde vorm — `label`, `count`, `children` —
+zodat de boom niet van vorm verandert als de nestvolgorde ooit weer verschuift:
 
 ```json
 {
-  "soorten": [
-    { "soort": "Thuiswedstrijden", "count": 812,
-      "types": [ { "type": "Kaartverkoop", "count": 540,
-        "subtypes": [ { "subtype": "Champions League", "count": 210 } ] } ] }
+  "taxonomy": [
+    { "label": "Kaartverkoop", "count": 812, "children": [
+      { "label": "Champions League", "count": 540, "children": [
+        { "label": "Thuiswedstrijden", "count": 210, "children": [] } ] } ] }
   ],
   "basedOnTickets": 1240,
   "windowDays": 180,
@@ -229,7 +236,7 @@ vangnet. De `id` mee-echoën is geen overbodige luxe — zie de waarschuwing bij
 [
   { "id": "48211", "topic": "terugbetaling na afgelasting" },
   { "id": "48212", "topic": "vertrektijd supportersbus",
-    "soort": "Uitwedstrijden", "type": "Vervoer", "subtype": "Bus" }
+    "type": "Vervoer", "subtype": "Bus", "soort": "Uitwedstrijden" }
 ]
 ```
 
@@ -245,15 +252,15 @@ Onderaan de System Message de woordenlijst, als expressie:
 
 ```
 BESCHIKBARE INDELING (kies uitsluitend hieruit):
-{{ $('Taxonomie').first().json.soorten.map(s => s.soort + ' > ' + s.types.map(t => t.type + ' (' + t.subtypes.map(x => x.subtype).join(', ') + ')').join(' | ')).join('\n') }}
+{{ $('Taxonomie').first().json.taxonomy.map(t => t.label + ' > ' + t.children.map(s => s.label + ' (' + s.children.map(x => x.label).join(', ') + ')').join(' | ')).join('\n') }}
 ```
 
 Dat rendert leesbare regels in plaats van ruwe JSON met tellingen, die voor een keuzetaak alleen
 ruis zijn:
 
 ```
-Thuiswedstrijden > Kaartverkoop (Champions League, Eredivisie) | Vervoer (Bus)
-FANstore > Bestelling (Retour, Maat)
+Kaartverkoop > Champions League (Thuiswedstrijden, Uitwedstrijden) | Eredivisie (Thuiswedstrijden)
+Bestelling > Retour (FANstore) | Maat (FANstore)
 ```
 
 `$('Taxonomie')` werkt alleen als de HTTP-node exact **Taxonomie** heet. Bij de allereerste run
@@ -269,10 +276,10 @@ dat het model niets invult, wat het gewenste gedrag is.
 > het over gaat, inclusief de wedstrijd of het product als dat de kern is.
 > Voorbeeld: `vervoer en parkeren rond uitwedstrijd Ajax`.
 >
-> **soort, type en subtype** — Vul deze **alleen** in wanneer het ticket geen `cf_soort` heeft.
+> **type, subtype en soort** — Vul deze **alleen** in wanneer het ticket geen `cf_type` heeft.
 > Heeft het ticket die wel, laat de velden dan weg: de indeling van Freshdesk is leidend.
-> Kies uitsluitend uit de meegegeven woordenlijst en houd de combinatie geldig: een `type` moet
-> bij de gekozen `soort` horen, een `subtype` bij het gekozen `type`. Verzin nooit een nieuwe
+> Kies uitsluitend uit de meegegeven woordenlijst en houd de combinatie geldig: een `subtype` moet
+> bij het gekozen `type` horen, een `soort` bij het gekozen `subtype`. Verzin nooit een nieuwe
 > waarde. Twijfel je, laat de velden dan leeg — niets invullen is beter dan gokken.
 
 ### Code Parse
@@ -317,20 +324,21 @@ for (const [batchIndex, item] of items.entries()) {
         continue;
       }
 
-      // Freshdesk wint altijd. Het model springt alleen bij waar soort leeg is,
-      // en dan gaat inferred mee zodat het dashboard dat kan laten zien.
+      // Freshdesk wint altijd. Het model springt alleen bij waar type leeg is —
+      // hetzelfde veld als de vlag in Code in Batches — en dan gaat inferred mee
+      // zodat het dashboard dat kan laten zien.
       const bron = batch.get(id) || {};
-      const heeftFreshdesk = Boolean(bron.soort);
+      const heeftFreshdesk = Boolean(bron.type);
 
       results.push({
         json: {
           id,
           created_at,
           topic: typeof ticket.topic === 'string' ? ticket.topic.trim() : undefined,
-          soort: heeftFreshdesk ? bron.soort : ticket.soort,
           type: heeftFreshdesk ? bron.type : ticket.type,
           subtype: heeftFreshdesk ? bron.subtype : ticket.subtype,
-          inferred: !heeftFreshdesk && Boolean(ticket.soort)
+          soort: heeftFreshdesk ? bron.soort : ticket.soort,
+          inferred: !heeftFreshdesk && Boolean(ticket.type)
         }
       });
     }
@@ -413,7 +421,7 @@ return [{ json: { items: $input.all().map(i => ({
   `readRange` (`lib/fandesk-store.ts`), zodat het dashboard, de dagsamenvattingen en het
   taxonomy-endpoint dezelfde afbakening hanteren. De oudere tickets staan nog gewoon in de
   opslag: die ene regel verschuiven brengt ze terug.
-- **Tickets zonder soort** vallen onder "Niet ingevuld" en worden teruggemeld in `withoutSoort`.
+- **Tickets zonder type** vallen onder "Niet ingevuld" en worden teruggemeld in `withoutGroup`.
   Loopt dat aantal op, dan laat Freshdesk het veld vaak leeg én slaagt het model er niet in bij
   te springen — meestal omdat de woordenlijst nog te mager is. Ze tellen mee in de totalen en in
   de tijdgrafiek — een ticket zonder indeling is nog steeds een ticket — maar niet in de treemap

@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { isFandeskRequestAuthorized } from "@/lib/fandesk-auth";
-import { buildTaxonomy, shiftDayKey, amsterdamDayBounds, toAmsterdamParts } from "@/lib/fandesk";
+import {
+  amsterdamDayBounds,
+  buildTaxonomy,
+  hasGroup,
+  shiftDayKey,
+  toAmsterdamParts,
+} from "@/lib/fandesk";
 import { readRange } from "@/lib/fandesk-store";
 
 /**
- * De woordenlijst voor de n8n-workflow. Wanneer Freshdesk `cf_soort` leeg laat,
+ * De woordenlijst voor de n8n-workflow. Wanneer Freshdesk `cf_type` leeg laat,
  * mag het model het ticket alsnog indelen — maar alleen in waarden die echt
  * bestaan. Dit endpoint levert die waarden, afgeleid uit wat er is binnengekomen,
  * zodat de lijst vanzelf meegroeit met Freshdesk en niemand hem hoeft bij te
@@ -37,10 +43,10 @@ export async function GET(request: Request) {
     // Alleen wat Freshdesk zelf heeft ingevuld telt mee. Zou het model zijn
     // eigen invullingen terugzien in deze lijst, dan bevestigt het zijn eigen
     // gokken en groeit de taxonomie met waarden die Freshdesk nooit gebruikt.
-    const fromFreshdesk = tickets.filter((ticket) => !ticket.inferred && ticket.soort);
+    const fromFreshdesk = tickets.filter((ticket) => !ticket.inferred && hasGroup(ticket));
 
     return NextResponse.json({
-      soorten: buildTaxonomy(fromFreshdesk),
+      taxonomy: buildTaxonomy(fromFreshdesk),
       basedOnTickets: fromFreshdesk.length,
       windowDays: WINDOW_DAYS,
       generatedAt: new Date().toISOString(),
@@ -52,7 +58,7 @@ export async function GET(request: Request) {
     // laat de workflow doordraaien; het model vult dan niets in, wat correct is.
     if (message.includes("BLOB_READ_WRITE_TOKEN")) {
       return NextResponse.json({
-        soorten: [],
+        taxonomy: [],
         basedOnTickets: 0,
         windowDays: WINDOW_DAYS,
         generatedAt: new Date().toISOString(),
