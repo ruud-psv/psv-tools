@@ -371,7 +371,7 @@ const PREMATCH_DEFAULTS = {
     newPrematchBlock({ bg: "lichtgrijs", titel: "Titel van dit blok", tekst: "Schrijf hier de tekst bij dit blok.", ctaLabel: "LEES MEER" }),
     newPrematchBlock({ type: "banmail", bg: "grijs", titel: "", tekst: "", heeftCta: false }),
   ],
-  prematchFooterPreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvwInQHJ4sAwpQ/media/footer_2.png`,
+  prematchFooterPreviewUrl: `${PREVIEW_CDN_HOST}/c/gd48p9aNQOyBRuLxyzbWbA/media/0000%20Pre-Match%20-%2045%20AJAPSV%207.jpg`,
   prematchFooterAlt: "Every moment counts",
 };
 
