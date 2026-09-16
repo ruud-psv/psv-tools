@@ -40,7 +40,7 @@ import { PsvPlayBlock } from "@/components/mail-builder/blocks/PsvPlayBlock";
 import { BusinessSponsorBlock } from "@/components/mail-builder/blocks/BusinessSponsorBlock";
 import { EnqueteCtaBlock } from "@/components/mail-builder/blocks/EnqueteCtaBlock";
 import { PhoxyCtaBlock } from "@/components/mail-builder/blocks/PhoxyCtaBlock";
-import { PrematchImagesBlock } from "@/components/mail-builder/blocks/PrematchImagesBlock";
+import { PrematchBlocksBlock } from "@/components/mail-builder/blocks/PrematchBlocksBlock";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,14 +92,44 @@ export function newPsvPlayItem(partial: Partial<PsvPlayItem> = {}): PsvPlayItem 
   };
 }
 
-export interface PrematchImage {
+export type PrematchBg = "wit" | "lichtgrijs" | "grijs" | "zwart";
+
+export const PREMATCH_BG_CONFIG: Record<PrematchBg, { bg: string; text: string; label: string }> = {
+  wit:        { bg: "#FFFFFF", text: "#444444", label: "Wit" },
+  lichtgrijs: { bg: "#E7E7E7", text: "#444444", label: "Lichtgrijs" },
+  grijs:      { bg: "#DFDFDF", text: "#444444", label: "Grijs" },
+  zwart:      { bg: "#000000", text: "#FFFFFF", label: "Zwart" },
+};
+
+export interface PrematchBlock {
   id: string;
-  previewUrl: string;
-  alt: string;
+  type: "content" | "banmail";
+  bg: PrematchBg;
+  imageUrl: string;
+  imageAlt: string;
+  imageLink: string;
+  titel: string;
+  tekst: string;
+  heeftCta: boolean;
+  ctaLabel: string;
+  ctaUrl: string;
 }
 
-export function newPrematchImage(partial: Partial<PrematchImage> = {}): PrematchImage {
-  return { id: Math.random().toString(36).slice(2), previewUrl: "", alt: "", ...partial };
+export function newPrematchBlock(partial: Partial<PrematchBlock> = {}): PrematchBlock {
+  return {
+    id: Math.random().toString(36).slice(2),
+    type: "content",
+    bg: "wit",
+    imageUrl: "",
+    imageAlt: "",
+    imageLink: "",
+    titel: "Titel van dit blok",
+    tekst: "Schrijf hier de tekst bij dit blok.",
+    heeftCta: true,
+    ctaLabel: "LEES MEER",
+    ctaUrl: "https://www.psv.nl",
+    ...partial,
+  };
 }
 
 export function newBlock(partial: Partial<BodyBlock> = {}): BodyBlock {
@@ -135,8 +165,11 @@ export interface MailBuilderState {
   fanstoreNavTrainingUrl: string;
   fanstoreNavNieuwUrl: string;
   fanstoreNavSaleUrl: string;
-  // Prematch images (1–7 + footer)
-  prematchImages: PrematchImage[];
+  // Pre-match: header-knop + vrij te ordenen content/banmail-blokken
+  prematchBlocks: PrematchBlock[];
+  prematchHeeftCta: boolean;
+  prematchCtaLabel: string;
+  prematchCtaUrl: string;
   prematchFooterPreviewUrl: string; prematchFooterAlt: string;
   // PSV Play
   psvplayIntroText: string;
@@ -329,14 +362,14 @@ const FANSTORE_NAV_DEFAULTS = {
 };
 
 const PREMATCH_DEFAULTS = {
-  prematchImages: [
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvyzHFKlbtg4dg/media/1.png`, alt: "Volendam - PSV" }),
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvPxd_VPjsG0A/media/2.png`, alt: "PSV reist af naar het hoge noorden" }),
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvxRWGlR6utS8w/media/3.png`, alt: "De huidige stand in de Vriendenlóterij Eredivisie" }),
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvx0tCT39eCPwg/media/4.png`, alt: "Nieuw Record - PSV Wint 16 uitduels op rij" }),
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvxjK0h13rCkEA/media/5.png`, alt: "Laatste 3 edities Groningen - PSV" }),
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvzZGj_3pHotQw/media/6.png`, alt: "Team stats" }),
-    newPrematchImage({ previewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvy-X8qFW1DCUw/media/7.png`, alt: "Breng een bezoek aan het Philips Stadion" }),
+  prematchHeeftCta: true,
+  prematchCtaLabel: "ALLES OVER DE WEDSTRIJD",
+  prematchCtaUrl: "https://www.psv.nl",
+  prematchBlocks: [
+    newPrematchBlock({ bg: "wit", titel: "Bosz blikt vooruit", tekst: "Schrijf hier de tekst bij dit blok.", ctaLabel: "VOORBESCHOUWING" }),
+    newPrematchBlock({ type: "banmail", bg: "grijs", titel: "", tekst: "", heeftCta: false }),
+    newPrematchBlock({ bg: "lichtgrijs", titel: "Titel van dit blok", tekst: "Schrijf hier de tekst bij dit blok.", ctaLabel: "LEES MEER" }),
+    newPrematchBlock({ type: "banmail", bg: "grijs", titel: "", tekst: "", heeftCta: false }),
   ],
   prematchFooterPreviewUrl: `${PREVIEW_CDN_HOST}/c/XUUZKeOycvwInQHJ4sAwpQ/media/footer_2.png`,
   prematchFooterAlt: "Every moment counts",
@@ -466,7 +499,8 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     blocks: [],
     heeftAfsluitRegel: false,
     afsluitRegel: "",
-    disclaimerTekst: "",
+    disclaimerTekst:
+      "Je ontvangt deze e-mail omdat je bent ingeschreven voor e-mails over PSV 1. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
     misNiksEmail: "email@newsletter.psv.nl",
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
@@ -652,7 +686,25 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
     fanstoreNavTrainingUrl: (base.fanstoreNavTrainingUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavTrainingUrl,
     fanstoreNavNieuwUrl: (base.fanstoreNavNieuwUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavNieuwUrl,
     fanstoreNavSaleUrl: (base.fanstoreNavSaleUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavSaleUrl,
-    prematchImages: Array.isArray(raw.prematchImages) ? raw.prematchImages as PrematchImage[] : PREMATCH_DEFAULTS.prematchImages,
+    prematchBlocks: (() => {
+      if (Array.isArray(raw.prematchBlocks) && raw.prematchBlocks.length > 0) {
+        return (raw.prematchBlocks as Partial<PrematchBlock>[]).map(b => newPrematchBlock(b));
+      }
+      // Oude opzet: zeven losse afbeeldingen op zwart worden banmail-blokken
+      if (Array.isArray(raw.prematchImages) && raw.prematchImages.length > 0) {
+        return (raw.prematchImages as { previewUrl?: string; alt?: string }[]).map(img =>
+          newPrematchBlock({
+            type: "banmail",
+            bg: "zwart",
+            imageUrl: img.previewUrl ?? "",
+            imageAlt: img.alt ?? "",
+            titel: "",
+            tekst: "",
+            heeftCta: false,
+          }));
+      }
+      return DEFAULTS[template].prematchBlocks;
+    })(),
     psvplayItems: Array.isArray(raw.psvplayItems) ? raw.psvplayItems as PsvPlayItem[] : PSVPLAY_DEFAULTS.psvplayItems,
     businessSponsorPreviewUrl: (base.businessSponsorPreviewUrl as string | undefined) ?? DEFAULTS[template].businessSponsorPreviewUrl,
   };
@@ -689,17 +741,85 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   const imgSrc = (previewUrl: string) =>
     forExport ? toExportSrc(previewUrl) : previewUrl;
 
-  const imgs = state.prematchImages.map(img => ({ src: imgSrc(img.previewUrl), alt: img.alt }));
+  const link = (url: string) => (url ? (forExport ? wrapLink(utm(url)) : url) : "");
 
-  const contentRows = imgs
-    .map(
-      ({ src, alt }) => `
+  const imageRow = (src: string, alt: string, href: string, bg: string) => {
+    if (!src) return "";
+    const img = `<img src="${src}" width="600" alt="${alt}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">`;
+    return `
           <tr>
-            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              <img src="${src}" width="600" alt="${alt}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            <td bgcolor="${bg}" style="background-color:${bg};padding:0;">
+              ${href ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">${img}</a>` : img}
+            </td>
+          </tr>`;
+  };
+
+  // Knop over de volle breedte, zoals in de verstuurde pre-match mails.
+  const ctaRow = (label: string, href: string, bg: string) => `
+          <tr>
+            <td bgcolor="${bg}" style="background-color:${bg};padding:20px 40px;">
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                href="${href}" style="height:44px;v-text-anchor:middle;width:520px;" arcsize="0%" stroke="f" fillcolor="#E30613">
+                <w:anchorlock/>
+                <center style="color:#ffffff;font-family:Verdana,sans-serif;font-size:16px;font-weight:bold;">${label}</center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-->
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" role="presentation" style="width:100%;">
+                <tr>
+                  <td bgcolor="#E30613" align="center" style="background-color:#E30613;">
+                    <a href="${href}" target="_blank" rel="noopener noreferrer"
+                       style="display:block;padding:12px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:1px;text-align:center;"
+                    >${label}</a>
+                  </td>
+                </tr>
+              </table>
+              <!--<![endif]-->
+            </td>
+          </tr>`;
+
+  // Header: beeld uit het hero-blok, met de knop eronder op zwart.
+  const heroPreview = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
+  const heroRow = imageRow(imgSrc(heroPreview), state.heroAlt || "", link(state.heroLink), "#000000");
+  const headerCtaRow =
+    state.prematchHeeftCta && state.prematchCtaLabel
+      ? ctaRow(state.prematchCtaLabel, link(state.prematchCtaUrl) || "#", "#000000") +
+        `
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;height:10px;font-size:10px;line-height:10px;">&nbsp;</td>
+          </tr>`
+      : "";
+
+  const contentRows = state.prematchBlocks
+    .map(block => {
+      const cfg = PREMATCH_BG_CONFIG[block.bg];
+      const rows = imageRow(imgSrc(block.imageUrl), block.imageAlt, link(block.imageLink), cfg.bg);
+      if (block.type === "banmail") return rows;
+
+      const titelRow = block.titel
+        ? `
+          <tr>
+            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:25px 40px 0;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:${cfg.text};line-height:180%;">${block.titel}</p>
             </td>
           </tr>`
-    )
+        : "";
+      const tekstRow = block.tekst
+        ? `
+          <tr>
+            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 40px 0;text-align:center;">
+              <div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:180%;text-align:center;">${richToInline(block.tekst)}</div>
+            </td>
+          </tr>`
+        : "";
+      const cta = block.heeftCta && block.ctaLabel ? ctaRow(block.ctaLabel, link(block.ctaUrl) || "#", cfg.bg) : "";
+      const spacer = `
+          <tr>
+            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td>
+          </tr>`;
+      return rows + titelRow + tekstRow + cta + spacer;
+    })
     .join("\n");
 
   const footerSrc = imgSrc(state.prematchFooterPreviewUrl);
@@ -777,6 +897,8 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
             </td>
           </tr>
 
+          ${heroRow}
+          ${headerCtaRow}
           ${contentRows}
 
           <!-- Footer image -->
@@ -2648,7 +2770,7 @@ export function MailBuilderForm() {
             case "business-sponsor": return <BusinessSponsorBlock key="business-sponsor" {...blockProps} />;
             case "enquete-cta":      return <EnqueteCtaBlock key="enquete-cta" {...blockProps} />;
             case "phoxy-cta":        return <PhoxyCtaBlock key="phoxy-cta" {...blockProps} />;
-            case "prematch-images":  return <PrematchImagesBlock key="prematch-images" {...blockProps} />;
+            case "prematch-blocks":  return <PrematchBlocksBlock key="prematch-blocks" {...blockProps} />;
             default:                 return null;
           }
         })}
