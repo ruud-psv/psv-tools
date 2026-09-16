@@ -26,7 +26,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
 };
 
 export const TEMPLATE_BLOCKS: Record<Template, BlockType[]> = {
-  fanstore:     ["hero", "greeting", "text-blocks", "footer"],
+  fanstore:     ["fanstore-nav", "hero", "greeting", "text-blocks", "footer"],
   kaartverkoop: ["hero", "greeting", "text-blocks", "footer"],
   soccerschool: ["hero", "greeting", "text-blocks", "footer"],
   tours:        ["hero", "greeting", "text-blocks", "footer"],

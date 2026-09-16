@@ -197,6 +197,48 @@ function wrapLink(url: string): string {
   return url ? `[[LINK|${url}]]` : "";
 }
 
+// Outlook (Word-engine) kent Titillium Web niet en valt door een bekende renderbug
+// terug op Times New Roman in plaats van op Verdana; het MSO-blok dwingt Verdana af.
+// De color-scheme-declaraties voorkomen dat clients de mail zelf herkleuren.
+const EMAIL_HEAD_EXTRAS = `
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <style type="text/css">:root{color-scheme:light dark;}</style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td, th, tr, p, a, span, div, h1, h2, h3, h4, li { font-family: Verdana, Arial, sans-serif !important; }
+  </style>
+  <![endif]-->`;
+
+// FANstore-mails verwijzen naar de webshop, de overige templates naar psv.nl.
+// psv.nl heeft geen disclaimer-pagina, daar blijven het er dus twee.
+const LEGAL_LINKS: Record<"fanstore" | "psv", { label: string; url: string }[]> = {
+  fanstore: [
+    { label: "Disclaimer", url: "https://www.psvfanstore.nl/disclaimer" },
+    { label: "Privacy", url: "https://www.psvfanstore.nl/privacybeleid" },
+    { label: "Algemene Voorwaarden", url: "https://www.psvfanstore.nl/algemene-voorwaarden" },
+  ],
+  psv: [
+    { label: "Privacy statement", url: "https://www.psv.nl/privacy-statement" },
+    { label: "Algemene voorwaarden", url: "https://www.psv.nl/algemene-voorwaarden" },
+  ],
+};
+
+function legalRow(template: Template, forExport: boolean, bg: string, color: string): string {
+  const links = LEGAL_LINKS[template === "fanstore" ? "fanstore" : "psv"]
+    .map(({ label, url }) =>
+      `<a href="${forExport ? wrapLink(url) : url}" target="_blank" rel="noopener noreferrer" style="color:${color};">${label}</a>`)
+    .join("&nbsp; &nbsp;");
+  return `
+          <!-- Juridische links -->
+          <tr>
+            <td bgcolor="${bg}" style="background-color:${bg};padding:0 20px 24px;text-align:center;">
+              <p style="margin:0;font-family:'Titillium Web',Verdana,sans-serif;font-size:12px;color:${color};line-height:140%;">${links}</p>
+            </td>
+          </tr>
+`;
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -711,7 +753,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
-  <title>${titleText}</title>
+  <title>${titleText}</title>${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;}
     table,tbody,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;}
@@ -750,8 +792,8 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
-                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Deze e-mail beviel me" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Deze e-mail beviel me niet" style="display:block;width:50px;height:50px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -763,12 +805,12 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Volg ons op Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Volg ons op Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="Volg ons op YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="Volg ons op X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="Volg ons op LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="Volg ons op TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -820,7 +862,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
           <tr>
             <td bgcolor="#000000" style="height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
           </tr>
-
+${legalRow(state.template, forExport, "#000000", "#ffffff")}
         </table>
       </td>
     </tr>
@@ -971,7 +1013,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;-webkit-text-size-adjust:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     img,a img{-ms-interpolation-mode:bicubic;outline:none;}
@@ -1033,7 +1075,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
           <!-- Pattern strip -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              <img src="${patternSrc}" width="600" alt="PSV Eindhoven" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+              <img src="${patternSrc}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
             </td>
           </tr>
 
@@ -1043,8 +1085,8 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
-                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Deze e-mail beviel me" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Deze e-mail beviel me niet" style="display:block;width:50px;height:50px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1056,12 +1098,12 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Volg ons op Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Volg ons op Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="Volg ons op YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="Volg ons op X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="Volg ons op LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="Volg ons op TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1110,7 +1152,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
             </td>
           </tr>
 
-          <tr><td bgcolor="#000000" style="background-color:#000000;height:40px;"></td></tr>
+          <tr><td bgcolor="#000000" style="background-color:#000000;height:40px;"></td></tr>${legalRow(state.template, forExport, "#000000", "#ffffff")}
         </table>
       </td>
     </tr>
@@ -1209,7 +1251,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
@@ -1270,7 +1312,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
           <!-- Pattern strip -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              <img src="${patternSrc}" width="600" alt="PSV Eindhoven" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+              <img src="${patternSrc}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
             </td>
           </tr>
 
@@ -1295,7 +1337,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
           </tr>
-
+${legalRow(state.template, forExport, "#000000", "#ffffff")}
         </table>
       </td>
     </tr>
@@ -1413,7 +1455,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
@@ -1464,8 +1506,8 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
-                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Deze e-mail beviel me" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Deze e-mail beviel me niet" style="display:block;width:50px;height:50px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1476,12 +1518,12 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.facebook.com/PSV/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/user/psveindhoven")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://twitter.com/PSV")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.linkedin.com/company/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@psv")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.facebook.com/PSV/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Volg ons op Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Volg ons op Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/user/psveindhoven")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="Volg ons op YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://twitter.com/PSV")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="Volg ons op X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.linkedin.com/company/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="Volg ons op LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@psv")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="Volg ons op TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1543,7 +1585,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
           </tr>
-
+${legalRow(state.template, forExport, "#000000", "#ffffff")}
         </table>
       </td>
     </tr>
@@ -1640,7 +1682,7 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
@@ -1699,8 +1741,8 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
-                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Deze e-mail beviel me" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Deze e-mail beviel me niet" style="display:block;width:50px;height:50px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1711,12 +1753,12 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.facebook.com/PSV/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/user/psveindhoven")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://twitter.com/PSV")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.linkedin.com/company/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@psv")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.facebook.com/PSV/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Volg ons op Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Volg ons op Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/user/psveindhoven")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="Volg ons op YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://twitter.com/PSV")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="Volg ons op X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.linkedin.com/company/psv/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="Volg ons op LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@psv")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="Volg ons op TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1771,7 +1813,7 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
           </tr>
-
+${legalRow(state.template, forExport, "#000000", "#ffffff")}
         </table>
       </td>
     </tr>
@@ -1854,7 +1896,7 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
@@ -1914,8 +1956,8 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#7F7F7F;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/ICONEN%20-%20WAT%20VIND%20JE%20VAN%20DEZE%20E-MAIL_feedback%20positief_20-21.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
-                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/ICONEN%20-%20WAT%20VIND%20JE%20VAN%20DEZE%20E-MAIL_feedback%20negatief_20-21.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/ICONEN%20-%20WAT%20VIND%20JE%20VAN%20DEZE%20E-MAIL_feedback%20positief_20-21.png" width="50" height="50" alt="Deze e-mail beviel me" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/ICONEN%20-%20WAT%20VIND%20JE%20VAN%20DEZE%20E-MAIL_feedback%20negatief_20-21.png" width="50" height="50" alt="Deze e-mail beviel me niet" style="display:block;width:50px;height:50px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1926,9 +1968,9 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#7F7F7F;line-height:140%;">Volg Phoxy op social media</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/phoxy99/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/IIiOqLXb0ScB-jNRMB5dKw/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/@Phoxy99")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/qAoSkyxRW4BFESwboqnjtA/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@phoxy99")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/RjcYOYw8KVosjRuDU2QAg/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_tiktok.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.instagram.com/phoxy99/")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/IIiOqLXb0ScB-jNRMB5dKw/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_instagram.png" width="30" height="30" alt="Volg ons op Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.youtube.com/@Phoxy99")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/qAoSkyxRW4BFESwboqnjtA/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_youtube.png" width="30" height="30" alt="Volg ons op YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${sl("https://www.tiktok.com/@phoxy99")}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/RjcYOYw8KVosjRuDU2QAg/media/SOCIAL%2520ICONEN%2520-%2520GRIJS_tiktok.png" width="30" height="30" alt="Volg ons op TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -1983,7 +2025,7 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
           <tr>
             <td bgcolor="#F1F1F1" style="background-color:#F1F1F1;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
           </tr>
-
+${legalRow(state.template, forExport, "#F1F1F1", "#6E6E6E")}
         </table>
       </td>
     </tr>
@@ -2165,7 +2207,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
@@ -2220,7 +2262,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
           <!-- Pattern strip -->
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              <img src="${cdn}/c/dF1ELngs71b8asmA4Jnn0Q/media/0000%20Pre-Match%20VR%20-%2013%20ADOPSV%2008.jpg" width="600" alt="Eendracht maakt macht" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+              <img src="${cdn}/c/dF1ELngs71b8asmA4Jnn0Q/media/0000%20Pre-Match%20VR%20-%2013%20ADOPSV%2008.jpg" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
             </td>
           </tr>
 
@@ -2230,8 +2272,8 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;line-height:140%;">Hoe scoorde deze e-mail bij jou?</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Positief" style="display:block;width:50px;height:50px;border:0;"></a></td>
-                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Negatief" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbPosHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/7P4UPmYQhoQ/media/feedback_positief.png" width="50" height="50" alt="Deze e-mail beviel me" style="display:block;width:50px;height:50px;border:0;"></a></td>
+                  <td style="padding:0 3px;"><a href="${fbNegHref}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/srpCZd3lN1M/media/feedback_negatief.png" width="50" height="50" alt="Deze e-mail beviel me niet" style="display:block;width:50px;height:50px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -2243,12 +2285,12 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
               <p style="margin:0 0 10px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;line-height:140%;">Volg ons ook via social media</p>
               <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;">
                 <tr>
-                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="X" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
-                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${fbUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/MPFMFIXazuI/media/SOCIAL%20ICONEN%20-%20Facebook.png" width="30" height="30" alt="Volg ons op Facebook" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/Cl9D51zXm2k/media/SOCIAL%20ICONEN%20-%20Instagram.png" width="30" height="30" alt="Volg ons op Instagram" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ytUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/osAm-N7-BI8/media/SOCIAL%20ICONEN%20-%20Youtube.png" width="30" height="30" alt="Volg ons op YouTube" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${xUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/HQ3giXVZxF0M_G5YVrvkXA/media/MicrosoftTeams-image%20(34).png" width="30" height="30" alt="Volg ons op X" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${liUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/dhHuvVyv91Y/media/SOCIAL%20ICONEN%20-%20Linkedin.png" width="30" height="30" alt="Volg ons op LinkedIn" style="display:block;width:30px;height:30px;border:0;"></a></td>
+                  <td style="padding:0 5px;"><a href="${ttUrl}" target="_blank" rel="noopener noreferrer"><img src="${cdn}/c/TfwTSJ01fKo/media/SOCIAL%20ICONEN%20-%20WIT_TIKTOK.png" width="30" height="30" alt="Volg ons op TikTok" style="display:block;width:30px;height:30px;border:0;"></a></td>
                 </tr>
               </table>
             </td>
@@ -2301,7 +2343,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
           <tr>
             <td bgcolor="#000000" style="background-color:#000000;height:40px;font-size:40px;line-height:40px;">&nbsp;</td>
           </tr>
-
+${legalRow(state.template, forExport, "#000000", "#ffffff")}
         </table>
       </td>
     </tr>
