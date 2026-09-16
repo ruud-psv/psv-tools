@@ -226,8 +226,19 @@ function applySimulations(html: string, sims: Set<Simulation>): string {
 const MAILEON_CDN_HOST = "[[MAILING|PROTOCOL|http]]://[[ACCOUNT|MAILING-DOMAIN]]";
 const PREVIEW_CDN_HOST = "https://images.maileon-static.com";
 
+// Een URL die zonder protocol wordt ingevuld ("psv.nl") werkt niet in de mail en
+// laat applyUtm stilletjes falen. Tokens, ankers, mailto en paden blijven met rust.
+function normalizeUrl(url: string): string {
+  const u = url.trim();
+  if (!u) return u;
+  if (/^(\[\[|#|\/|mailto:|tel:)/i.test(u)) return u;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+  return `https://${u}`;
+}
+
 function wrapLink(url: string): string {
-  return url ? `[[LINK|${url}]]` : "";
+  const u = normalizeUrl(url);
+  return u ? `[[LINK|${u}]]` : "";
 }
 
 // Outlook (Word-engine) kent Titillium Web niet en valt door een bekende renderbug
@@ -337,7 +348,8 @@ function richToInline(html: string): string {
     .trim();
 }
 
-function applyUtm(url: string, campaign: string): string {
+function applyUtm(rawUrl: string, campaign: string): string {
+  const url = normalizeUrl(rawUrl);
   if (!url) return url;
   try {
     const u = new URL(url);
@@ -681,6 +693,11 @@ function migrateState(raw: Record<string, unknown>): MailBuilderState {
       return `${prefix} ${token}`;
     })(),
     heroLink: stripLink(base.heroLink),
+    // Een leeg veld uit een oud concept overschreef de standaardtekst van de template
+    disclaimerTekst:
+      typeof base.disclaimerTekst === "string" && base.disclaimerTekst.trim()
+        ? base.disclaimerTekst
+        : DEFAULTS[template].disclaimerTekst,
     utmCampaign: (base.utmCampaign as string | undefined) ?? "",
     fanstoreNavWedstrijdUrl: (base.fanstoreNavWedstrijdUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavWedstrijdUrl,
     fanstoreNavTrainingUrl: (base.fanstoreNavTrainingUrl as string | undefined) ?? FANSTORE_NAV_DEFAULTS.fanstoreNavTrainingUrl,
@@ -741,7 +758,10 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   const imgSrc = (previewUrl: string) =>
     forExport ? toExportSrc(previewUrl) : previewUrl;
 
-  const link = (url: string) => (url ? (forExport ? wrapLink(utm(url)) : url) : "");
+  const link = (url: string) => {
+    const u = normalizeUrl(url);
+    return u ? (forExport ? wrapLink(utm(u)) : u) : "";
+  };
 
   const imageRow = (src: string, alt: string, href: string, bg: string) => {
     if (!src) return "";
