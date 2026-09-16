@@ -10,7 +10,7 @@ export type BlockType =
   | "business-sponsor"
   | "enquete-cta"
   | "phoxy-cta"
-  | "prematch-images";
+  | "prematch-blocks";
 
 export const BLOCK_LABELS: Record<BlockType, string> = {
   "hero":              "Hero",
@@ -22,7 +22,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   "business-sponsor":  "Sponsorbalk",
   "enquete-cta":       "Enquête CTA",
   "phoxy-cta":         "Phoxy CTA-afbeelding",
-  "prematch-images":   "Pre-match afbeeldingen",
+  "prematch-blocks":   "Pre-match blokken",
 };
 
 export const TEMPLATE_BLOCKS: Record<Template, BlockType[]> = {
@@ -37,5 +37,5 @@ export const TEMPLATE_BLOCKS: Record<Template, BlockType[]> = {
   fcpsvo16:     ["hero", "greeting", "text-blocks", "footer"],
   phoxy:        ["hero", "phoxy-cta", "text-blocks", "footer"],
   psvplay:      ["hero", "psvplay-video", "footer"],
-  prematch:     ["prematch-images"],
+  prematch:     ["hero", "prematch-blocks", "footer"],
 };

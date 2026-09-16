@@ -37,7 +37,7 @@ const TEMPLATES: TemplateSpec[] = [
   { id: "fcpsvo12",     name: "FC PSV O12",         category: "Youth",     variant: "secondary", description: "Kinderleden FC PSV. Aanhef via voornaam lid. Phoxy-handtekening." },
   { id: "fcpsvo16",     name: "FC PSV O16",         category: "Youth",     variant: "secondary", description: "Ouders van FC PSV-leden (16+). Zelfde layout als O12." },
   { id: "kaartverkoop", name: "PSV Kaartverkoop",   category: "Marketing", variant: "default",   description: "Ticketing-template met primaire knop én secundaire tekstlink per blok." },
-  { id: "prematch",     name: "PSV 1 Pre-match",    category: "Content",   variant: "outline",   description: "7 informatieve beelden + footer. Geen vrije blokken — puur beeldgedreven." },
+  { id: "prematch",     name: "PSV 1 Pre-match",    category: "Content",   variant: "outline",   description: "Header met knop, daarna vrij te ordenen content- en banmail-blokken." },
   { id: "partnerships", name: "PSV Partnerships",   category: "B2B",       variant: "gold",      description: "Generieke partner-template. Zelfde opbouw als fan-templates." },
   { id: "phoxy",        name: "Phoxy Club",         category: "Youth",     variant: "secondary", description: "Lichtgrijs thema. Phoxy-social media. Optioneel klikbaar CTA-beeld." },
   { id: "psvplay",      name: "PSV Play",           category: "Content",   variant: "outline",   description: "Video-carrousel met 3 items. Afwisselend links/rechts-layout. Zwart thema." },
@@ -178,16 +178,17 @@ const BLOCK_SPECS: BlockSpec[] = [
     ),
   },
   {
-    type: "prematch-images",
-    description: "7 informatieve beelden (600px breed, vrije hoogte) + 1 footer-afbeelding. Volledig beeld-gedreven template.",
-    hasColorVariants: false,
-    previewBg: "#000000",
+    type: "prematch-blocks",
+    description: "Vrij te ordenen blokken: CONTENT (beeld, titel, tekst, knop) en BANMAIL (alleen beeld). Achtergrond per blok: wit, lichtgrijs, grijs of zwart.",
+    hasColorVariants: true,
+    previewBg: "#ffffff",
     previewContent: (
-      <div className="space-y-0.5">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-3 w-full rounded-sm bg-gray-700" />
-        ))}
-        <div className="text-center text-gray-500 text-[8px] pt-0.5">+ 4 meer</div>
+      <div className="space-y-1">
+        <div className="h-4 w-full rounded-sm bg-gray-300" />
+        <div className="mx-auto h-1.5 w-20 rounded bg-gray-500" />
+        <div className="mx-auto h-1 w-28 rounded bg-gray-200" />
+        <div className="mx-auto h-2.5 w-full rounded-sm bg-[#E30613]" />
+        <div className="h-3 w-full rounded-sm bg-gray-400" />
       </div>
     ),
   },
