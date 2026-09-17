@@ -93,20 +93,45 @@ export interface UtmLinkRecord {
   generatedUrl: string;
   /** E-mailadres van de aanmaker (uniek, ook als de voornaam ontbreekt). */
   createdBy: string;
-  /** Voornaam uit de SAML-sessie; ontbreekt bij links van voor die uitbreiding. */
+  /** Volledige naam uit de SAML-sessie; ontbreekt bij links van voor die uitbreiding. */
   createdByName?: string;
   createdAt: string;
 }
 
 /**
- * Weergavenaam voor de kolom "Door": de voornaam uit de sessie, en anders het
- * deel van het e-mailadres voor de @ (oudere links en sessies zonder
- * voornaam-claim).
+ * Maak van het deel voor de @ een leesbare naam: "ruud.dankers" wordt
+ * "Ruud Dankers" en "r.dankers" wordt "R. Dankers". Terugvalpad voor links en
+ * sessies zonder naam-claim; de echte naam komt uit de SAML-assertion.
+ */
+const TUSSENVOEGSELS = new Set([
+  "van", "de", "der", "den", "het", "ten", "ter", "te", "op", "aan", "in", "'t",
+]);
+
+function nameFromEmail(email: string): string {
+  const local = email.split("@")[0];
+  if (!local) return email;
+  const parts = local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part, i) => {
+      if (part.length === 1) return `${part.toUpperCase()}.`;
+      // Tussenvoegsels blijven klein, behalve aan het begin: "jan.van.der.berg"
+      // wordt "Jan van der Berg".
+      if (i > 0 && TUSSENVOEGSELS.has(part.toLowerCase())) return part.toLowerCase();
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    });
+  return parts.length > 0 ? parts.join(" ") : local;
+}
+
+/**
+ * Weergavenaam voor de kolom "Door": de volledige naam uit de sessie, en
+ * anders een nette naam afgeleid van het e-mailadres (oudere links en sessies
+ * zonder naam-claim).
  */
 export function utmCreatorLabel(link: Pick<UtmLinkRecord, "createdBy" | "createdByName">): string {
   const name = link.createdByName?.trim();
   if (name) return name;
-  return link.createdBy.split("@")[0] || link.createdBy;
+  return nameFromEmail(link.createdBy);
 }
 
 export interface UtmLinkInput {

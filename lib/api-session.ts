@@ -3,7 +3,7 @@ import { verifySession } from "@/lib/auth";
 
 /**
  * Haalt de geverifieerde sessiegegevens uit de cookie van een API-request:
- * het e-mailadres en — als de SAML-assertion die gaf — de voornaam.
+ * het e-mailadres en — als de SAML-assertion die gaf — de volledige naam.
  * Retourneert een kant-en-klare 401-response wanneer er geen geldige sessie
  * is. Gedeeld door alle ingelogde API-routes.
  */
