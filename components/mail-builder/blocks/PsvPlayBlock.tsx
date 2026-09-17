@@ -113,17 +113,13 @@ export function PsvPlayBlock({ state, onChange, triggerUpload, uploadingField }:
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="shrink-0 h-8 px-2"
+                    className="shrink-0 h-8 gap-1.5 px-2.5 text-xs"
                     disabled={uploadingField !== null}
                     onClick={() =>
                       triggerUpload(`pp-item-${i}`, (url) => updateItem(i, "imagePreviewUrl", url))
                     }
                   >
-                    {uploadingField === `pp-item-${i}` ? (
-                      <span className="text-xs">…</span>
-                    ) : (
-                      <Upload className="h-3.5 w-3.5" />
-                    )}
+                    <Upload className="h-3.5 w-3.5" />{uploadingField === `pp-item-${i}` ? "Uploaden…" : "Upload"}
                   </Button>
                 </div>
                 <div className="flex gap-2">
