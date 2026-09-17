@@ -30,36 +30,30 @@ import {
 import { cn } from "@/lib/utils";
 import {
   AANBEVOLEN_MODELLEN,
-  labelUitId,
   parseerModelId,
   SCENES,
   STANDAARD_MODEL,
   vindScene,
+  type BewaardModel,
   type DetailNiveau,
   type GenereerResponse,
-  type Model,
   type ModelProfielInfo,
+  type Referentie,
   type StatusResponse,
   type Verhouding,
 } from "@/lib/kleurplaat";
 
 /* ------------------------------------------------------------------ */
-/* Referenties                                                         */
+/* Hulpjes                                                             */
 /* ------------------------------------------------------------------ */
 
-interface Referentie {
-  id: string;
-  naam: string;
-  dataUrl: string;
-}
-
-const OPSLAG_REFERENTIES = "kleurplaat:referenties";
-const OPSLAG_MODELLEN = "kleurplaat:modellen";
-const OPSLAG_GEKOZEN_MODEL = "kleurplaat:model";
-
-/** Groot genoeg voor het model, klein genoeg voor de request body. */
+/** Groot genoeg voor het model, klein genoeg om vlot te uploaden. */
 const MAX_ZIJDE = 1024;
-const MAX_REFERENTIES = 6;
+/** Zoveel referenties gaan er hoogstens mee, ook als het model meer aankan. */
+const MAX_MEE = 6;
+
+const POLL_INTERVAL = 1500;
+const MAX_WACHTTIJD = 180_000;
 
 function laadAfbeelding(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -72,10 +66,10 @@ function laadAfbeelding(src: string): Promise<HTMLImageElement> {
 
 /**
  * Schaalt een upload terug naar maximaal 1024px en zet hem op een witte
- * achtergrond. Dat houdt de request klein en voorkomt dat een transparante PNG
+ * achtergrond. Dat houdt de upload klein en voorkomt dat een transparante PNG
  * als zwart vlak bij het model aankomt.
  */
-async function verkleinNaarDataUrl(file: File): Promise<string> {
+async function verkleinNaarJpeg(file: File): Promise<Blob> {
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await laadAfbeelding(objectUrl);
@@ -93,15 +87,27 @@ async function verkleinNaarDataUrl(file: File): Promise<string> {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.85);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Verkleinen mislukt."))),
+        "image/jpeg",
+        0.85
+      );
+    });
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Resultaten                                                          */
-/* ------------------------------------------------------------------ */
+function voorbeeldUrl(pad: string): string {
+  return `/api/kleurplaat/referenties/bestand?pad=${encodeURIComponent(pad)}`;
+}
+
+/** De sleutel waaronder een model in de lijst staat. */
+function modelSleutel(m: { id: string; versie?: string }): string {
+  return m.versie ? `${m.id}:${m.versie}` : m.id;
+}
 
 interface Resultaat {
   id: string;
@@ -124,30 +130,26 @@ const VERHOUDING_OPTIES: { waarde: Verhouding; label: string }[] = [
   { waarde: "1:1", label: "Vierkant" },
 ];
 
-const POLL_INTERVAL = 1500;
-const MAX_WACHTTIJD = 180_000;
-
-/** De sleutel waaronder een model in de lijst en in de opslag staat. */
-function modelSleutel(m: Model): string {
-  return m.versie ? `${m.id}:${m.versie}` : m.id;
-}
-
 export function KleurplaatCreator() {
-  /* Referenties */
+  /* Gedeelde bibliotheek */
   const [referenties, setReferenties] = useState<Referentie[]>([]);
+  const [gekozenPaden, setGekozenPaden] = useState<string[]>([]);
+  const [bibliotheekBezig, setBibliotheekBezig] = useState(true);
+  const [uploadBezig, setUploadBezig] = useState(false);
   const [sleept, setSleept] = useState(false);
   const [uploadFout, setUploadFout] = useState("");
   const bestandRef = useRef<HTMLInputElement>(null);
 
   /* Modellen */
   const [model, setModel] = useState(STANDAARD_MODEL);
-  const [eigenModellen, setEigenModellen] = useState<Model[]>([]);
+  const [gedeeldeModellen, setGedeeldeModellen] = useState<BewaardModel[]>([]);
   const [profielen, setProfielen] = useState<Record<string, ModelProfielInfo>>({});
   const [toevoegenOpen, setToevoegenOpen] = useState(false);
   const [nieuwModel, setNieuwModel] = useState("");
   const [controleBezig, setControleBezig] = useState(false);
   const [controleFout, setControleFout] = useState("");
   const [controleInfo, setControleInfo] = useState<ModelProfielInfo | null>(null);
+  const [opslaanBezig, setOpslaanBezig] = useState(false);
 
   /* Instellingen */
   const [sceneId, setSceneId] = useState<string>(SCENES[0].id);
@@ -170,54 +172,60 @@ export function KleurplaatCreator() {
   const afbrekenRef = useRef(false);
 
   /* -------------------------------------------------------------- */
-  /* Opslag in de browser                                            */
+  /* Bibliotheek en modellen laden                                   */
   /* -------------------------------------------------------------- */
+
+  const profiel = profielen[model];
+  const modelMax = profiel ? Math.min(profiel.maxReferenties, MAX_MEE) : MAX_MEE;
 
   useEffect(() => {
+    // Alles staat nu gedeeld op de server; oude lokale kopieën mogen weg.
     try {
-      const refs = localStorage.getItem(OPSLAG_REFERENTIES);
-      if (refs) setReferenties(JSON.parse(refs) as Referentie[]);
-      const mods = localStorage.getItem(OPSLAG_MODELLEN);
-      if (mods) setEigenModellen(JSON.parse(mods) as Model[]);
-      const gekozen = localStorage.getItem(OPSLAG_GEKOZEN_MODEL);
-      if (gekozen) setModel(gekozen);
+      localStorage.removeItem("kleurplaat:referenties");
+      localStorage.removeItem("kleurplaat:modellen");
+      localStorage.removeItem("kleurplaat:model");
     } catch {
-      // stukke opslag is geen reden om de tool niet te tonen
+      // geen opslag, ook goed
     }
+
+    let afgebroken = false;
+
+    (async () => {
+      try {
+        const [refRes, modRes] = await Promise.all([
+          fetch("/api/kleurplaat/referenties"),
+          fetch("/api/kleurplaat/modellen"),
+        ]);
+
+        if (!afgebroken && refRes.ok) {
+          const body = (await refRes.json()) as { referenties: Referentie[] };
+          setReferenties(body.referenties);
+          setGekozenPaden(body.referenties.slice(0, MAX_MEE).map((r) => r.pad));
+        } else if (!afgebroken) {
+          const body = (await refRes.json()) as { error?: string };
+          setUploadFout(body.error ?? "De gedeelde bibliotheek is niet bereikbaar.");
+        }
+
+        if (!afgebroken && modRes.ok) {
+          const body = (await modRes.json()) as { modellen: BewaardModel[] };
+          setGedeeldeModellen(body.modellen);
+        }
+      } catch {
+        if (!afgebroken) setUploadFout("De gedeelde bibliotheek is niet bereikbaar.");
+      } finally {
+        if (!afgebroken) setBibliotheekBezig(false);
+      }
+    })();
+
+    return () => {
+      afgebroken = true;
+    };
   }, []);
 
-  const bewaarReferenties = useCallback((volgende: Referentie[]) => {
-    setReferenties(volgende);
-    try {
-      localStorage.setItem(OPSLAG_REFERENTIES, JSON.stringify(volgende));
-    } catch {
-      setUploadFout(
-        "De referenties passen niet in de browseropslag; ze gelden alleen voor deze sessie."
-      );
-    }
-  }, []);
-
-  const bewaarModellen = useCallback((volgende: Model[]) => {
-    setEigenModellen(volgende);
-    try {
-      localStorage.setItem(OPSLAG_MODELLEN, JSON.stringify(volgende));
-    } catch {
-      // niet kritiek — het model blijft deze sessie bruikbaar
-    }
-  }, []);
-
-  function kiesModel(sleutel: string) {
-    setModel(sleutel);
-    try {
-      localStorage.setItem(OPSLAG_GEKOZEN_MODEL, sleutel);
-    } catch {
-      // niet kritiek
-    }
-  }
-
-  /* -------------------------------------------------------------- */
-  /* Modelprofiel ophalen                                            */
-  /* -------------------------------------------------------------- */
+  /** Wisselen naar een model dat minder referenties aankan, snoeit de keuze. */
+  useEffect(() => {
+    setGekozenPaden((vorige) => (vorige.length > modelMax ? vorige.slice(0, modelMax) : vorige));
+  }, [modelMax]);
 
   useEffect(() => {
     if (profielen[model]) return;
@@ -240,7 +248,7 @@ export function KleurplaatCreator() {
   }, [model, profielen]);
 
   /* -------------------------------------------------------------- */
-  /* Referenties                                                     */
+  /* Referenties beheren                                             */
   /* -------------------------------------------------------------- */
 
   const voegBestandenToe = useCallback(
@@ -252,32 +260,68 @@ export function KleurplaatCreator() {
         return;
       }
 
-      const nieuwe: Referentie[] = [];
-      for (const bestand of lijst) {
-        try {
-          nieuwe.push({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            naam: bestand.name,
-            dataUrl: await verkleinNaarDataUrl(bestand),
-          });
-        } catch {
-          setUploadFout(`"${bestand.name}" kon niet worden ingelezen.`);
-        }
-      }
+      setUploadBezig(true);
+      try {
+        for (const bestand of lijst) {
+          let verkleind: Blob;
+          try {
+            verkleind = await verkleinNaarJpeg(bestand);
+          } catch {
+            setUploadFout(`"${bestand.name}" kon niet worden ingelezen.`);
+            continue;
+          }
 
-      if (nieuwe.length > 0) {
-        bewaarReferenties([...referenties, ...nieuwe].slice(0, MAX_REFERENTIES));
+          const formulier = new FormData();
+          formulier.append("bestand", verkleind, bestand.name);
+
+          const res = await fetch("/api/kleurplaat/referenties", {
+            method: "POST",
+            body: formulier,
+          });
+          const body = (await res.json()) as { referentie?: Referentie; error?: string };
+
+          if (!res.ok || !body.referentie) {
+            setUploadFout(body.error ?? `"${bestand.name}" kon niet worden opgeslagen.`);
+            break;
+          }
+
+          const nieuwe = body.referentie;
+          setReferenties((vorige) => [...vorige, nieuwe]);
+          setGekozenPaden((vorige) =>
+            vorige.length < modelMax ? [...vorige, nieuwe.pad] : vorige
+          );
+        }
+      } finally {
+        setUploadBezig(false);
       }
     },
-    [referenties, bewaarReferenties]
+    [modelMax]
   );
 
-  function verwijderReferentie(id: string) {
-    bewaarReferenties(referenties.filter((r) => r.id !== id));
+  async function verwijderReferentie(pad: string) {
+    setUploadFout("");
+    const res = await fetch(`/api/kleurplaat/referenties?pad=${encodeURIComponent(pad)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const body = (await res.json()) as { error?: string };
+      setUploadFout(body.error ?? "Verwijderen mislukt.");
+      return;
+    }
+    setReferenties((vorige) => vorige.filter((r) => r.pad !== pad));
+    setGekozenPaden((vorige) => vorige.filter((p) => p !== pad));
+  }
+
+  function wisselReferentie(pad: string) {
+    setGekozenPaden((vorige) => {
+      if (vorige.includes(pad)) return vorige.filter((p) => p !== pad);
+      if (vorige.length >= modelMax) return vorige;
+      return [...vorige, pad];
+    });
   }
 
   /* -------------------------------------------------------------- */
-  /* Model toevoegen                                                 */
+  /* Modellen beheren                                                */
   /* -------------------------------------------------------------- */
 
   async function controleerModel() {
@@ -292,10 +336,9 @@ export function KleurplaatCreator() {
       return;
     }
 
-    const sleutel = gekozen.versie ? `${gekozen.id}:${gekozen.versie}` : gekozen.id;
     setControleBezig(true);
     try {
-      const res = await fetch(`/api/kleurplaat/model?id=${encodeURIComponent(sleutel)}`);
+      const res = await fetch(`/api/kleurplaat/model?id=${encodeURIComponent(modelSleutel(gekozen))}`);
       const body = (await res.json()) as ModelProfielInfo & { error?: string };
       if (!res.ok) throw new Error(body.error || `Controle mislukt (HTTP ${res.status}).`);
       setControleInfo(body);
@@ -306,40 +349,54 @@ export function KleurplaatCreator() {
     }
   }
 
-  function voegModelToe() {
+  async function voegModelToe() {
     if (!controleInfo) return;
-    const toegevoegd: Model = {
-      id: controleInfo.id,
-      versie: controleInfo.versie,
-      label: labelUitId(controleInfo.id),
-    };
-    const sleutel = modelSleutel(toegevoegd);
+    setOpslaanBezig(true);
+    setControleFout("");
 
-    if (!eigenModellen.some((m) => modelSleutel(m) === sleutel)) {
-      bewaarModellen([...eigenModellen, toegevoegd]);
+    try {
+      const res = await fetch("/api/kleurplaat/modellen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: controleInfo.id, versie: controleInfo.versie }),
+      });
+      const body = (await res.json()) as { model?: BewaardModel; error?: string };
+      if (!res.ok || !body.model) throw new Error(body.error || "Model opslaan mislukt.");
+
+      const toegevoegd = body.model;
+      const sleutel = modelSleutel(toegevoegd);
+      setGedeeldeModellen((vorige) => [
+        ...vorige.filter((m) => modelSleutel(m) !== sleutel),
+        toegevoegd,
+      ]);
+      setProfielen((vorige) => ({ ...vorige, [sleutel]: controleInfo }));
+      setModel(sleutel);
+
+      setNieuwModel("");
+      setControleInfo(null);
+      setToevoegenOpen(false);
+    } catch (err) {
+      setControleFout(err instanceof Error ? err.message : "Model opslaan mislukt.");
+    } finally {
+      setOpslaanBezig(false);
     }
-    setProfielen((vorige) => ({ ...vorige, [sleutel]: controleInfo }));
-    kiesModel(sleutel);
-
-    setNieuwModel("");
-    setControleInfo(null);
-    setToevoegenOpen(false);
   }
 
-  function verwijderModel(sleutel: string) {
-    bewaarModellen(eigenModellen.filter((m) => modelSleutel(m) !== sleutel));
-    if (model === sleutel) kiesModel(STANDAARD_MODEL);
+  async function verwijderModel(sleutel: string) {
+    const res = await fetch(`/api/kleurplaat/modellen?id=${encodeURIComponent(sleutel)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) return;
+    setGedeeldeModellen((vorige) => vorige.filter((m) => modelSleutel(m) !== sleutel));
+    if (model === sleutel) setModel(STANDAARD_MODEL);
   }
 
   /* -------------------------------------------------------------- */
   /* Genereren                                                       */
   /* -------------------------------------------------------------- */
 
-  const profiel = profielen[model];
-  const eigenModel = eigenModellen.find((m) => modelSleutel(m) === model);
+  const gedeeldModel = gedeeldeModellen.find((m) => modelSleutel(m) === model);
   const aanbevolen = AANBEVOLEN_MODELLEN.find((m) => m.id === model);
-  const modelMax = profiel ? profiel.maxReferenties : MAX_REFERENTIES;
-  const meegenomen = Math.min(referenties.length, modelMax);
   const sceneOmschrijving =
     sceneId === "eigen" ? eigenScene.trim() : vindScene(sceneId)?.label ?? "";
   const magGenereren = !bezig && (sceneId !== "eigen" || eigenScene.trim().length >= 3);
@@ -375,7 +432,7 @@ export function KleurplaatCreator() {
           naam,
           rugnummer,
           extra,
-          referenties: referenties.slice(0, MAX_REFERENTIES).map((r) => r.dataUrl),
+          referenties: gekozenPaden.slice(0, modelMax),
         }),
       });
 
@@ -454,8 +511,8 @@ export function KleurplaatCreator() {
         <section className="rounded-lg border border-border bg-card p-4 shadow-card">
           <h2 className="text-lg">Referenties van Phoxy</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload een paar illustraties van Phoxy. Het model gebruikt ze om zijn kop, oren,
-            staart en tenue kloppend te houden. Ze blijven in deze browser bewaard.
+            De gedeelde bibliotheek van de tool: wat jij uploadt, ziet iedereen. Klik een
+            referentie aan of uit om te bepalen welke meegaan naar het model.
           </p>
 
           <div
@@ -475,10 +532,16 @@ export function KleurplaatCreator() {
               sleept ? "border-primary bg-primary/5" : "border-border hover:border-primary/60"
             )}
           >
-            <ImagePlus className="h-6 w-6 text-muted-foreground" />
-            <p className="text-sm font-medium">Sleep afbeeldingen hierheen of klik om te kiezen</p>
+            {uploadBezig ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <ImagePlus className="h-6 w-6 text-muted-foreground" />
+            )}
+            <p className="text-sm font-medium">
+              {uploadBezig ? "Bezig met uploaden…" : "Sleep afbeeldingen hierheen of klik om te kiezen"}
+            </p>
             <p className="text-xs text-muted-foreground">
-              Maximaal {MAX_REFERENTIES} stuks — png, jpg, webp of svg
+              png, jpg, webp of svg — ze worden verkleind en gedeeld opgeslagen
             </p>
           </div>
           <input
@@ -495,51 +558,65 @@ export function KleurplaatCreator() {
 
           {uploadFout && <p className="mt-2 text-sm text-destructive">{uploadFout}</p>}
 
-          {referenties.length > 0 && (
+          {bibliotheekBezig ? (
+            <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Bibliotheek laden…
+            </p>
+          ) : referenties.length > 0 ? (
             <>
               <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {referenties.map((ref, index) => (
-                  <div
-                    key={ref.id}
-                    className={cn(
-                      "group relative aspect-square overflow-hidden rounded-md border border-border bg-white",
-                      index >= modelMax && "opacity-40"
-                    )}
-                    title={ref.naam}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={ref.dataUrl} alt={ref.naam} className="h-full w-full object-contain" />
-                    <button
-                      type="button"
-                      onClick={() => verwijderReferentie(ref.id)}
-                      className="absolute right-1 top-1 rounded-full bg-psv-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label={`${ref.naam} verwijderen`}
+                {referenties.map((ref) => {
+                  const gekozen = gekozenPaden.includes(ref.pad);
+                  return (
+                    <div
+                      key={ref.pad}
+                      className={cn(
+                        "group relative aspect-square overflow-hidden rounded-md border-2 bg-white transition-colors",
+                        gekozen ? "border-primary" : "border-border opacity-60 hover:opacity-100"
+                      )}
+                      title={`${ref.naam}${gekozen ? " — gaat mee" : ""}`}
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => wisselReferentie(ref.pad)}
+                        className="h-full w-full"
+                        aria-pressed={gekozen}
+                        aria-label={`${ref.naam} ${gekozen ? "niet meesturen" : "meesturen"}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={voorbeeldUrl(ref.pad)}
+                          alt={ref.naam}
+                          className="h-full w-full object-contain"
+                        />
+                      </button>
+                      {gekozen && (
+                        <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-primary p-0.5 text-white">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void verwijderReferentie(ref.pad)}
+                        className="absolute right-1 top-1 rounded-full bg-psv-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label={`${ref.naam} uit de bibliotheek verwijderen`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {modelMax === 0
-                    ? "Dit model neemt geen referenties mee"
-                    : `${meegenomen} van ${referenties.length} gaan mee naar dit model`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => bewaarReferenties([])}
-                  className="inline-flex items-center gap-1 hover:text-destructive"
-                >
-                  <Trash2 className="h-3 w-3" /> Alles wissen
-                </button>
-              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {modelMax === 0
+                  ? "Dit model neemt geen referenties mee."
+                  : `${gekozenPaden.length} van ${referenties.length} gaan mee — dit model neemt er maximaal ${modelMax}.`}
+              </p>
             </>
-          )}
-
-          {referenties.length === 0 && (
+          ) : (
             <p className="mt-3 text-xs text-warning">
-              Zonder referentie tekent het model een willekeurige vos in plaats van Phoxy.
+              De bibliotheek is nog leeg. Zonder referentie tekent het model een willekeurige vos
+              in plaats van Phoxy.
             </p>
           )}
         </section>
@@ -661,7 +738,7 @@ export function KleurplaatCreator() {
           {/* Model */}
           <div className="space-y-2">
             <Label htmlFor="model">Model</Label>
-            <Select value={model} onValueChange={kiesModel}>
+            <Select value={model} onValueChange={setModel}>
               <SelectTrigger id="model">
                 <SelectValue />
               </SelectTrigger>
@@ -674,10 +751,10 @@ export function KleurplaatCreator() {
                     </SelectItem>
                   ))}
                 </SelectGroup>
-                {eigenModellen.length > 0 && (
+                {gedeeldeModellen.length > 0 && (
                   <SelectGroup>
-                    <SelectLabel>Zelf toegevoegd</SelectLabel>
-                    {eigenModellen.map((m) => (
+                    <SelectLabel>Toegevoegd door het team</SelectLabel>
+                    {gedeeldeModellen.map((m) => (
                       <SelectItem key={modelSleutel(m)} value={modelSleutel(m)}>
                         {m.label}
                       </SelectItem>
@@ -704,14 +781,17 @@ export function KleurplaatCreator() {
               </p>
             ))}
 
-            {eigenModel && (
-              <button
-                type="button"
-                onClick={() => verwijderModel(model)}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3 w-3" /> {eigenModel.id} uit de lijst halen
-              </button>
+            {gedeeldModel && (
+              <p className="text-xs text-muted-foreground">
+                Toegevoegd door {gedeeldModel.toegevoegdDoor}.{" "}
+                <button
+                  type="button"
+                  onClick={() => void verwijderModel(model)}
+                  className="underline hover:text-destructive"
+                >
+                  Voor iedereen verwijderen
+                </button>
+              </p>
             )}
           </div>
 
@@ -770,7 +850,8 @@ export function KleurplaatCreator() {
               <p className="text-xs text-muted-foreground">
                 De identifier of de URL van de modelpagina, bijvoorbeeld{" "}
                 <span className="font-mono">openai/gpt-image-1.5</span>. Een vastgezette versie
-                mag ook: <span className="font-mono">eigenaar/model:hash</span>.
+                mag ook: <span className="font-mono">eigenaar/model:hash</span>. Toegevoegde
+                modellen staan voor iedereen in de lijst.
               </p>
 
               {controleFout && <p className="text-sm text-destructive">{controleFout}</p>}
@@ -803,8 +884,9 @@ export function KleurplaatCreator() {
                       {w}
                     </p>
                   ))}
-                  <Button size="sm" onClick={voegModelToe}>
-                    <Plus /> Toevoegen en kiezen
+                  <Button size="sm" onClick={() => void voegModelToe()} disabled={opslaanBezig}>
+                    {opslaanBezig ? <Loader2 className="animate-spin" /> : <Plus />} Toevoegen voor
+                    iedereen
                   </Button>
                 </div>
               )}

@@ -12,6 +12,7 @@ te testen, nog niet om aan fans te tonen.
 | Variabele | Verplicht | Waarde |
 |---|---|---|
 | `REPLICATE_API_TOKEN` | ja | API-token van Replicate (`r8_…`), te maken op replicate.com/account/api-tokens |
+| `BLOB_READ_WRITE_TOKEN` | ja | Token van de Vercel Blob-store. In Vercel staat hij er automatisch zodra een Blob-store aan het project is gekoppeld; lokaal moet je hem zelf in `.env.local` zetten. |
 | `REPLICATE_API_BASE` | nee | Alleen om lokaal tegen een mock te draaien. Standaard `https://api.replicate.com/v1` |
 
 Zet het token lokaal in `.env.local` en in Vercel onder **Settings → Environment Variables**
@@ -23,22 +24,37 @@ Zonder token geeft de tool een nette melding in plaats van een generatie.
 ## 2. Hoe het werkt
 
 ```
-browser                          Next.js                         Replicate
-  │                                 │                                │
-  ├─ upload referenties ────────────┤ (verkleind naar max 1024px,    │
-  │  (blijven in localStorage)      │  data-URL, witte achtergrond)  │
-  │                                 │                                │
-  ├─ POST /api/kleurplaat ─────────▶│ ─ GET /models/{owner}/{name} ─▶│ (schema)
-  │                                 │ bouwt prompt en model-input    │
-  │                                 ├─ POST /models/…/predictions ──▶│
-  │◀─ { id, prompt, model } ────────┤                                │
-  │                                 │                                │
-  ├─ GET /api/kleurplaat/status/:id▶│ ─ GET /predictions/:id ───────▶│
-  │  (elke 1,5 s, max 3 min)        │                                │
-  │◀─ { status, imageUrl } ─────────┤                                │
-  │                                 │                                │
-  └─ GET /api/kleurplaat/download ─▶│ streamt de PNG met een nette bestandsnaam
+browser                          Next.js                    Blob        Replicate
+  │                                 │                         │             │
+  ├─ upload referentie ────────────▶│ ─ put (privé) ─────────▶│             │
+  │  (verkleind naar max 1024px)    │                         │             │
+  │◀─ pad in de bibliotheek ────────┤                         │             │
+  │                                 │                         │             │
+  ├─ POST /api/kleurplaat ─────────▶│ ─ get referenties ─────▶│             │
+  │  (paden, geen beelden)          │ ─ GET /models/{id} ───────────────────▶│ (schema)
+  │                                 │ ─ POST /predictions ─────────────────▶│
+  │◀─ { id, prompt, model } ────────┤                         │             │
+  │                                 │                         │             │
+  ├─ GET …/status/:id ─────────────▶│ ─ GET /predictions/:id ──────────────▶│
+  │  (elke 1,5 s, max 3 min)        │                         │             │
+  │◀─ { status, imageUrl } ─────────┤                         │             │
+  │                                 │                         │             │
+  └─ GET …/download ───────────────▶│ streamt de PNG met een nette bestandsnaam
 ```
+
+### Wat waar staat
+
+| Wat | Waar | Gedeeld? |
+|---|---|---|
+| Referentiebeelden van Phoxy | Vercel Blob, privé, `kleurplaat/referenties/` | ja, iedereen ziet dezelfde bibliotheek |
+| Toegevoegde modellen | Vercel Blob, privé, `kleurplaat/modellen/` | ja |
+| Welke referenties meegaan | alleen in het scherm | nee, dat is een keuze per generatie |
+| Gegenereerde kleurplaten | nergens — alleen de link van Replicate | nee, en die link verloopt na een uur |
+
+De blobs staan **privé**: het zijn clubillustraties die niet op een openbare URL horen. De
+browser krijgt ze via `/api/kleurplaat/referenties/bestand`, achter dezelfde login als de rest
+van de tool. Replicate kan een privé blob niet zelf ophalen, dus de server leest de referenties
+uit en stuurt ze als data-URL mee in de aanvraag; de browser stuurt alleen de paden mee.
 
 Waarom polling en geen enkele blokkerende call: een generatie duurt 10 tot 60 seconden en
 een serverless functie op Vercel wordt afgekapt. Met polling loopt geen enkele request lang.
@@ -48,7 +64,7 @@ maar dan is de bestandsnaam niet te sturen. Die route accepteert alleen URL's op
 `replicate.delivery`, zodat hij geen open proxy wordt.
 
 **Let op:** de links van Replicate verlopen na ongeveer een uur. Wat je wilt bewaren, moet je
-downloaden. Er wordt op dit moment niets opgeslagen — geen database, geen blob-opslag.
+downloaden — van de gegenereerde platen zelf wordt niets opgeslagen.
 
 ## 3. Modellen
 
@@ -63,9 +79,13 @@ van een Replicate-model (`openai/gpt-image-1.5`) of gewoon de URL van de modelpa
 hoeveel referenties het meeneemt en onder welke veldnaam, welke verhoudingen het kent, en of
 het wel een afbeelding oplevert. Klopt het, dan zet **Toevoegen** het model in de dropdown.
 
-Toegevoegde modellen staan in `localStorage` van je eigen browser — een collega ziet ze dus
-niet, en ze verdwijnen als je je browsergegevens wist. Bevalt een model, zet hem dan in
-`AANBEVOLEN_MODELLEN` in `lib/kleurplaat/index.ts`; daarmee staat hij voor iedereen in de lijst.
+Toegevoegde modellen staan in de gedeelde opslag, met de naam van degene die hem toevoegde
+erbij: een collega ziet hem dus meteen in de lijst onder "Toegevoegd door het team". Verwijderen
+haalt hem ook voor iedereen weg. De server controleert bij het toevoegen eerst of het model op
+Replicate bestaat, zodat er niets kapots in de gedeelde lijst belandt.
+
+Bevalt een model blijvend, zet hem dan in `AANBEVOLEN_MODELLEN` in `lib/kleurplaat/index.ts`;
+dan staat hij er ook zonder de gedeelde opslag.
 
 ### Hoe een willekeurig model toch goed wordt aangeroepen
 
@@ -130,12 +150,12 @@ het model. Een scène toevoegen is één item in die lijst.
 
 - **Namen op de plaat.** Beeldmodellen schrijven letters niet altijd foutloos. Bij korte namen
   gaat het meestal goed, bij lange namen niet. Altijd controleren voordat je hem verstuurt.
-- **Geen opslag.** Gegenereerde platen leven in de sessie en op de link van Replicate. De
-  historie onderaan verdwijnt bij een refresh.
+- **Gegenereerde platen worden niet bewaard.** Ze leven in de sessie en op de link van
+  Replicate. De historie onderaan verdwijnt bij een refresh.
 - **Geen PDF.** De download is PNG. Een printklare A4-PDF met snijmarges is de logische
   volgende stap.
-- **Eigen modellen zijn per browser.** Zie hierboven: `localStorage`, niet gedeeld met
-  collega's. Een gedeelde lijst zou in Vercel Blob kunnen, net als de ticket-snapshots.
+- **Geen versiebeheer op de bibliotheek.** Wie een referentie weggooit, gooit hem voor
+  iedereen weg; er is geen prullenbak. De bibliotheek is begrensd op 24 referenties.
 - **Geen publieke pagina.** De tool zit achter de login. Wil je hem aan ouders en kinderen
   geven, dan hoort hij onder `/share/…` (die routes laat `middleware.ts` ongeauthenticeerd
   door) mét een rem op het aantal generaties per bezoeker — elke generatie kost geld.

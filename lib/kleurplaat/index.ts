@@ -252,7 +252,7 @@ export interface GenereerRequest {
   naam?: string;
   rugnummer?: string;
   extra?: string;
-  /** Data-URL's van de (verkleinde) referentie-uploads. */
+  /** Paden van de gekozen referenties in de gedeelde bibliotheek. */
   referenties: string[];
 }
 
@@ -260,6 +260,24 @@ export interface GenereerResponse {
   id: string;
   prompt: string;
   model: string;
+}
+
+/** Een referentiebeeld in de gedeelde bibliotheek. */
+export interface Referentie {
+  /** Het pad in de opslag; tevens de sleutel in de UI. */
+  pad: string;
+  naam: string;
+  grootte: number;
+  toegevoegdOp: string;
+}
+
+/** Een model dat iemand aan de gedeelde lijst heeft toegevoegd. */
+export interface BewaardModel {
+  id: string;
+  versie?: string;
+  label: string;
+  toegevoegdDoor: string;
+  toegevoegdOp: string;
 }
 
 /** Wat `/api/kleurplaat/model` over een model terugmeldt. */
