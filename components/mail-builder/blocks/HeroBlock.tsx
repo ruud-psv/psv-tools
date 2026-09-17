@@ -4,16 +4,12 @@ import { AlertCircle, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import type { BlockProps } from "@/components/mail-builder/shared/block-props";
 
 export function HeroBlock({ state, onChange, triggerUpload, uploadingField, uploadError }: BlockProps) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Hero afbeelding</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard title="Hero afbeelding" contentClassName="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="heroPreviewUrl">Afbeelding</Label>
           <div className="flex gap-2">
@@ -64,7 +60,6 @@ export function HeroBlock({ state, onChange, triggerUpload, uploadingField, uplo
             onChange={(e) => onChange({ heroLink: e.target.value })}
           />
         </div>
-      </CardContent>
-    </Card>
+      </CollapsibleCard>
   );
 }

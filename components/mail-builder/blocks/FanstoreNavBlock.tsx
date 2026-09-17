@@ -2,16 +2,12 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import type { BlockProps } from "@/components/mail-builder/shared/block-props";
 
 export function FanstoreNavBlock({ state, onChange }: Pick<BlockProps, "state" | "onChange">) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>FANstore navigatie</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <CollapsibleCard title="FANstore navigatie" contentClassName="space-y-3">
         <p className="text-xs text-muted-foreground">
           URLs voor de vier navigatieknoppen in de FANstore-balk.
         </p>
@@ -51,7 +47,6 @@ export function FanstoreNavBlock({ state, onChange }: Pick<BlockProps, "state" |
             onChange={(e) => onChange({ fanstoreNavSaleUrl: e.target.value })}
           />
         </div>
-      </CardContent>
-    </Card>
+      </CollapsibleCard>
   );
 }

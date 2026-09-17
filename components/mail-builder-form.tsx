@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_BLOCKS } from "@/lib/mail-builder/blocks";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import { HeroBlock } from "@/components/mail-builder/blocks/HeroBlock";
 import { TextBlocksEditor } from "@/components/mail-builder/blocks/TextBlocksEditor";
 import { FooterBlock } from "@/components/mail-builder/blocks/FooterBlock";
@@ -410,9 +411,9 @@ const PSVBUSINESS_PATTERN_EXPORT  = `${MAILEON_CDN_HOST}/c/NBfAAJE6Xj7kME5C3wxeL
 
 const DEFAULTS: Record<Template, TemplateDefaults> = {
   business: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/WTP1JZY_QhF9whFgbPrljQ/media/0000%20Zilver%2027%20-%20MAILHEADER%20ALGEMEEN%20(1).jpg`,
+    heroUrl: "",
     heroAlt: "PSV Business",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/WTP1JZY_QhF9whFgbPrljQ/media/0000%20Zilver%2027%20-%20MAILHEADER%20ALGEMEEN%20(1).jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hi {VOORNAAM}",
     blocks: [newBlock({ heeftCta: true, ctaLabel: "AANMELDEN", ctaUrl: "" })],
@@ -427,9 +428,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     businessSponsorPreviewUrl: PSVBUSINESS_SPONSOR_PREVIEW,
   },
   kaartverkoop: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg`,
+    heroUrl: "",
     heroAlt: "Scoor nu je tickets",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3rYEJmzm3pkN4F9jYGV8Nw/media/4877%20Ticketing%20seizoenontknoping%202.jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
     aanhefText: "Hi {VOORNAAM}",
     blocks: [newBlock({ heeftCta: true, ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS", heeftSecLink: true, secLinkLabel: "Bekijk alle wedstrijden >" })],
@@ -461,9 +462,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
   },
   soccerschool: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/3zu9kpkvY_OjJKhxaO6BCA/media/4663%20Mailheaders%20Soccerschool3_1.jpg`,
+    heroUrl: "",
     heroAlt: "Soccer School",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/3zu9kpkvY_OjJKhxaO6BCA/media/4663%20Mailheaders%20Soccerschool3_1.jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hoi {VOORNAAM}",
     blocks: [
@@ -482,9 +483,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
   },
   tours: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/01cTNhJhAbMT2cYd5HJzRg/media/template-psv-tours-header.png`,
+    heroUrl: "",
     heroAlt: "PSV Kidstour",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/01cTNhJhAbMT2cYd5HJzRg/media/template-psv-tours-header.png`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hoi {VOORNAAM}",
     blocks: [
@@ -546,9 +547,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     businessSponsorPreviewUrl: "",
   },
   partnerships: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/R7sloben33Nl8ME6CC4qlA/media/4862%20Kracht%20van%20VDL%20-%20MAILING_Banenmarkt.jpg`,
+    heroUrl: "",
     heroAlt: "PSV Partnerships",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/R7sloben33Nl8ME6CC4qlA/media/4862%20Kracht%20van%20VDL%20-%20MAILING_Banenmarkt.jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hi {VOORNAAM}",
     blocks: [newBlock({ heeftCta: true, ctaLabel: "MEER INFORMATIE" })],
@@ -563,9 +564,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
   },
   enquete: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/JEupL7_mvVPIB3DkfavV5g/media/Header%20onderzoek%20Marktpotentie%20stadionuitbreiding%20(1).jpg`,
+    heroUrl: "",
     heroAlt: "Deel je mening",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/JEupL7_mvVPIB3DkfavV5g/media/Header%20onderzoek%20Marktpotentie%20stadionuitbreiding%20(1).jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hoi {VOORNAAM}",
     blocks: [newBlock()],
@@ -585,9 +586,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
   },
   fcpsvo12: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroUrl: "",
     heroAlt: "FC PSV",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hoi {VOORNAAM}",
     blocks: [
@@ -603,9 +604,9 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
   },
   fcpsvo16: {
-    heroUrl: `${MAILEON_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroUrl: "",
     heroAlt: "FC PSV",
-    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/pXCiE7G3Kg2EOWq5gxnwJw/media/5001%20Voetballen%20met%20spelers%20MAILING%20-%20aanmelden.jpg`,
+    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
     heroLink: "",
     aanhefText: "Hoi vader of moeder van {VOORNAAM}",
     blocks: [
@@ -2745,11 +2746,7 @@ export function MailBuilderForm() {
       <div className="w-full xl:w-[440px] xl:flex-shrink-0 space-y-4">
 
         {/* BASIS */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>Basis</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <CollapsibleCard title="Basis" defaultOpen>
             <div className="space-y-2">
               <Label>Template</Label>
               <Select value={state.template} onValueChange={(v) => handleTemplateChange(v as Template)}>
@@ -2786,8 +2783,7 @@ export function MailBuilderForm() {
                 </p>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
         {/* Block-gebaseerde secties via registry */}
         {TEMPLATE_BLOCKS[state.template].map((blockType) => {

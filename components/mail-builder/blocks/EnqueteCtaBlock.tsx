@@ -4,16 +4,12 @@ import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import type { BlockProps } from "@/components/mail-builder/shared/block-props";
 
 export function EnqueteCtaBlock({ state, onChange, triggerUpload, uploadingField }: BlockProps) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Enquête CTA</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard title="Enquête CTA" contentClassName="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="enqueteCtaLabel">Knoptekst</Label>
           <Input
@@ -86,7 +82,6 @@ export function EnqueteCtaBlock({ state, onChange, triggerUpload, uploadingField
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+      </CollapsibleCard>
   );
 }

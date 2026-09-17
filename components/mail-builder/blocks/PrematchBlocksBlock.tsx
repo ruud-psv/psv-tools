@@ -5,7 +5,7 @@ import { GripVertical, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import { cn } from "@/lib/utils";
 import {
   RichTextEditor,
@@ -49,11 +49,7 @@ export function PrematchBlocksBlock({ state, onChange, triggerUpload, uploadingF
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Pre-match blokken</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard title="Pre-match blokken" contentClassName="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>Knop onder de header</Label>
@@ -249,7 +245,6 @@ export function PrematchBlocksBlock({ state, onChange, triggerUpload, uploadingF
             className="h-8 text-xs"
           />
         </div>
-      </CardContent>
-    </Card>
+      </CollapsibleCard>
   );
 }
