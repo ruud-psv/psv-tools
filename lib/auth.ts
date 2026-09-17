@@ -18,8 +18,8 @@ function sign(payload: string, secret: Buffer): string {
   return base64url(createHmac(ALG, secret).update(payload).digest());
 }
 
-/** De gegevens die in de sessiecookie zitten. `name` (de voornaam uit de SAML
- *  assertion) ontbreekt bij sessies van voor die uitbreiding. */
+/** De gegevens die in de sessiecookie zitten. `name` (de volledige naam uit de
+ *  SAML-assertion) ontbreekt bij sessies van voor die uitbreiding. */
 export interface SessionProfile {
   email: string;
   name?: string;

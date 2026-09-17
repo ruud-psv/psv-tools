@@ -2,47 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SAML } from "@node-saml/node-saml";
 import { getSamlOptions } from "@/lib/saml-config";
 import { createSessionToken } from "@/lib/auth";
-
-/** Claim-namen waaronder Azure AD de voornaam kan meesturen. */
-const GIVEN_NAME_CLAIMS = [
-  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
-  "givenName",
-  "given_name",
-  "firstName",
-];
-
-/** Claim-namen met de volledige naam, als terugvalpad op de voornaam-claim. */
-const FULL_NAME_CLAIMS = [
-  "http://schemas.microsoft.com/identity/claims/displayname",
-  "displayName",
-  "cn",
-];
-
-function claim(profile: Record<string, unknown> | null | undefined, keys: string[]): string {
-  if (!profile) return "";
-  for (const key of keys) {
-    const value = profile[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-
-/**
- * De voornaam uit de SAML-assertion. Is er geen aparte voornaam-claim, dan
- * wordt hij uit de volledige naam afgeleid: "Ruud Dankers" en "Dankers, Ruud"
- * leveren allebei "Ruud" op.
- */
-function firstNameFromProfile(profile: Record<string, unknown> | null | undefined): string {
-  const given = claim(profile, GIVEN_NAME_CLAIMS);
-  if (given) return given.split(/\s+/)[0];
-
-  const full = claim(profile, FULL_NAME_CLAIMS);
-  if (!full) return "";
-  // "Achternaam, Voornaam" → alles na de komma.
-  const [last, first] = full.split(",");
-  const source = first?.trim() ? first.trim() : last.trim();
-  return source.split(/\s+/)[0] ?? "";
-}
+import { fullNameFromProfile } from "@/lib/saml-name";
 
 export async function POST(request: NextRequest) {
   let rawSamlResponse: string | null = null;
@@ -63,7 +23,7 @@ export async function POST(request: NextRequest) {
   const saml = new SAML(await getSamlOptions());
 
   let email: string;
-  let firstName = "";
+  let fullName = "";
   try {
     const { profile } = await saml.validatePostResponseAsync({
       SAMLResponse: samlResponse,
@@ -72,7 +32,15 @@ export async function POST(request: NextRequest) {
     const nameId = profile?.nameID;
     const profileEmail = (profile as Record<string, unknown>)?.email as string | undefined;
     email = profileEmail ?? nameId ?? "";
-    firstName = firstNameFromProfile(profile as Record<string, unknown> | null);
+    fullName = fullNameFromProfile(profile as Record<string, unknown> | null);
+    if (!fullName) {
+      // Zonder naam-claim valt de UI terug op het e-mailadres. Log welke
+      // claims er wél waren, zodat de Azure-app zo nodig aangepast kan worden.
+      console.warn(
+        "[SAML callback] Geen naam-claim gevonden. Beschikbare claims:",
+        Object.keys((profile as Record<string, unknown>) ?? {}).join(", ")
+      );
+    }
 
     if (!email || !email.includes("@")) {
       throw new Error(`Geen geldig e-mailadres in SAML assertion. nameID: ${nameId}`);
@@ -82,7 +50,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url), { status: 302 });
   }
 
-  const token = createSessionToken(email, firstName || undefined);
+  const token = createSessionToken(email, fullName || undefined);
   const response = NextResponse.redirect(new URL("/dashboard", request.url), { status: 302 });
   response.cookies.set("psv_session", token, {
     httpOnly: true,

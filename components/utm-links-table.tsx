@@ -24,6 +24,20 @@ const ACCESSORS: SortAccessors<UtmLinkRecord, SortKey> = {
   createdBy: (r) => utmCreatorLabel(r),
 };
 
+/** Datum zonder tijd; de volledige tijdstempel staat in de tooltip. */
+function formatDate(iso: string): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("nl-NL", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 /** Hele dagen tussen het aanmaken en vandaag; null bij een ongeldige datum. */
 function daysSince(iso: string): number | null {
   const created = new Date(iso);
@@ -175,8 +189,11 @@ export function UtmLinksTable({
             )}
             {rows.map((link) => (
               <tr key={link.id} className="border-b border-border last:border-0 align-top hover:bg-muted/40 transition-colors">
-                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                  {formatDateTime(link.createdAt)}
+                <td
+                  className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap"
+                  title={formatDateTime(link.createdAt)}
+                >
+                  {formatDate(link.createdAt)}
                 </td>
                 <td
                   className={cn(
@@ -203,7 +220,7 @@ export function UtmLinksTable({
                 <td className="px-4 py-3">
                   <Badge variant="outline" className="whitespace-nowrap">{link.medium}</Badge>
                 </td>
-                <td className="px-4 py-3 max-w-[200px]">
+                <td className="px-4 py-3 max-w-[170px]">
                   <a
                     href={link.generatedUrl}
                     target="_blank"
@@ -215,7 +232,7 @@ export function UtmLinksTable({
                     <ExternalLink className="h-3 w-3 flex-shrink-0" />
                   </a>
                 </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground max-w-[120px]">
+                <td className="px-4 py-3 text-xs text-muted-foreground max-w-[150px]">
                   <span className="block truncate" title={link.createdBy}>{utmCreatorLabel(link)}</span>
                 </td>
                 <td className="px-4 py-3">
@@ -224,17 +241,14 @@ export function UtmLinksTable({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="gap-1.5"
+                      title={copiedId === link.id ? "Gekopieerd" : "Kopieer link"}
+                      aria-label={`Kopieer link voor ${link.campaign}`}
                       onClick={() => copyLink(link)}
                     >
                       {copiedId === link.id ? (
-                        <>
-                          <Check className="h-3.5 w-3.5" /> Gekopieerd
-                        </>
+                        <Check className="h-3.5 w-3.5 text-success" />
                       ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" /> Kopieer
-                        </>
+                        <Copy className="h-3.5 w-3.5" />
                       )}
                     </Button>
                     {confirmDeleteId === link.id ? (
