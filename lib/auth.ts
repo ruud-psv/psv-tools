@@ -18,15 +18,33 @@ function sign(payload: string, secret: Buffer): string {
   return base64url(createHmac(ALG, secret).update(payload).digest());
 }
 
-export function createSessionToken(email: string, maxAgeSeconds = 28800): string {
+/** De gegevens die in de sessiecookie zitten. `name` (de voornaam uit de SAML
+ *  assertion) ontbreekt bij sessies van voor die uitbreiding. */
+export interface SessionProfile {
+  email: string;
+  name?: string;
+}
+
+export function createSessionToken(
+  email: string,
+  name?: string,
+  maxAgeSeconds = 28800
+): string {
   const payload = base64url(
-    Buffer.from(JSON.stringify({ email, exp: Math.floor(Date.now() / 1000) + maxAgeSeconds }))
+    Buffer.from(
+      JSON.stringify({
+        email,
+        ...(name && { name }),
+        exp: Math.floor(Date.now() / 1000) + maxAgeSeconds,
+      })
+    )
   );
   const sig = sign(payload, getSecret());
   return `${payload}${SEPARATOR}${sig}`;
 }
 
-export function verifySessionToken(token: string): string | null {
+/** Controleer de handtekening en geldigheid, en geef de sessiegegevens terug. */
+export function verifySession(token: string): SessionProfile | null {
   try {
     const parts = token.split(SEPARATOR);
     if (parts.length !== 2) return null;
@@ -35,12 +53,19 @@ export function verifySessionToken(token: string): string | null {
     const expected = Buffer.from(sign(payload, secret));
     const actual = Buffer.from(sig);
     if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
-    const { email, exp } = JSON.parse(Buffer.from(payload, "base64url").toString());
+    const { email, name, exp } = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (!email || !exp || Math.floor(Date.now() / 1000) > exp) return null;
-    return email as string;
+    return {
+      email: email as string,
+      ...(typeof name === "string" && name && { name }),
+    };
   } catch {
     return null;
   }
+}
+
+export function verifySessionToken(token: string): string | null {
+  return verifySession(token)?.email ?? null;
 }
 
 export function authorize(sessionCookie: string | undefined): string | null {

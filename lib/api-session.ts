@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/auth";
+import { verifySession } from "@/lib/auth";
 
 /**
- * Haalt het geverifieerde e-mailadres uit de sessiecookie van een API-request.
- * Retourneert het e-mailadres, of een kant-en-klare 401-response wanneer er
- * geen geldige sessie is. Gedeeld door alle ingelogde API-routes.
+ * Haalt de geverifieerde sessiegegevens uit de cookie van een API-request:
+ * het e-mailadres en — als de SAML-assertion die gaf — de voornaam.
+ * Retourneert een kant-en-klare 401-response wanneer er geen geldige sessie
+ * is. Gedeeld door alle ingelogde API-routes.
  */
-export function requireEmail(req: NextRequest): { email: string } | { error: NextResponse } {
+export function requireEmail(
+  req: NextRequest
+): { email: string; name?: string } | { error: NextResponse } {
   const cookie = req.cookies.get("psv_session")?.value;
-  const email = cookie ? verifySessionToken(cookie) : null;
-  if (!email) {
+  const session = cookie ? verifySession(cookie) : null;
+  if (!session) {
     return { error: NextResponse.json({ error: "Geen geldige sessie. Log opnieuw in." }, { status: 401 }) };
   }
-  return { email };
+  return session;
 }

@@ -1,14 +1,28 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { UtmTaxonomySelect } from "@/components/utm-taxonomy-select";
 import { cn } from "@/lib/utils";
+import type { UtmLinkRecord, UtmTaxonomy } from "@/lib/utm";
 
-export function UtmBuilderForm() {
+export function UtmBuilderForm({
+  taxonomy,
+  onAddTaxonomy,
+  onSaved,
+}: {
+  taxonomy: UtmTaxonomy;
+  onAddTaxonomy: (
+    kind: "source" | "medium",
+    value: string
+  ) => Promise<{ value: string } | { error: string }>;
+  /** Wordt aangeroepen zodra een link in het overzicht is opgeslagen. */
+  onSaved: (link: UtmLinkRecord) => void;
+}) {
   const [url, setUrl] = useState("");
   const [source, setSource] = useState("");
   const [medium, setMedium] = useState("");
@@ -16,6 +30,8 @@ export function UtmBuilderForm() {
   const [term, setTerm] = useState("");
   const [content, setContent] = useState("");
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const generatedUrl = useMemo(() => {
     if (!url) return "";
@@ -40,11 +56,45 @@ export function UtmBuilderForm() {
 
   const isValid = generatedUrl !== "" && source !== "" && medium !== "" && campaign !== "";
 
+  /** Kopieert de link én bewaart hem in het overzicht. */
   async function handleCopy() {
-    if (!isValid) return;
-    await navigator.clipboard.writeText(generatedUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!isValid || saving) return;
+
+    setSaveError("");
+    try {
+      await navigator.clipboard.writeText(generatedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setSaveError("Kopiëren naar het klembord lukte niet. Selecteer de link hierboven handmatig.");
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/utm-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: url.trim(),
+          source,
+          medium,
+          campaign: campaign.trim(),
+          term: term.trim(),
+          content: content.trim(),
+          generatedUrl,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(data.error ?? "Opslaan in het overzicht mislukt.");
+        return;
+      }
+      if (data.link) onSaved(data.link as UtmLinkRecord);
+    } catch {
+      setSaveError("Kon de server niet bereiken; de link is niet opgeslagen.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleReset() {
@@ -55,6 +105,7 @@ export function UtmBuilderForm() {
     setTerm("");
     setContent("");
     setCopied(false);
+    setSaveError("");
   }
 
   return (
@@ -85,11 +136,15 @@ export function UtmBuilderForm() {
           <Label htmlFor="source">
             Campagnebron (utm_source) <span className="text-destructive">*</span>
           </Label>
-          <Input
+          <UtmTaxonomySelect
             id="source"
-            placeholder="bijv. google, nieuwsbrief, facebook"
             value={source}
-            onChange={(e) => setSource(e.target.value)}
+            options={taxonomy.sources}
+            placeholder="Kies een bron"
+            addLabel="Nieuwe bron toevoegen"
+            addPlaceholder="Nieuwe bron, bijv. nieuwsbrief_b2b"
+            onChange={setSource}
+            onAdd={(value) => onAddTaxonomy("source", value)}
           />
           <p className="text-xs text-muted-foreground">
             Waar komt het verkeer vandaan?
@@ -100,11 +155,15 @@ export function UtmBuilderForm() {
           <Label htmlFor="medium">
             Campagnemedium (utm_medium) <span className="text-destructive">*</span>
           </Label>
-          <Input
+          <UtmTaxonomySelect
             id="medium"
-            placeholder="bijv. cpc, email, social, banner"
             value={medium}
-            onChange={(e) => setMedium(e.target.value)}
+            options={taxonomy.mediums}
+            placeholder="Kies een medium"
+            addLabel="Nieuw medium toevoegen"
+            addPlaceholder="Nieuw medium, bijv. banner_top"
+            onChange={setMedium}
+            onAdd={(value) => onAddTaxonomy("medium", value)}
           />
           <p className="text-xs text-muted-foreground">
             Via welk kanaal of medium?
@@ -187,23 +246,34 @@ export function UtmBuilderForm() {
         </>
       )}
 
+      {saveError && (
+        <p className="text-sm text-destructive rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2">
+          {saveError}
+        </p>
+      )}
+
       {/* Actions */}
       <div className="flex gap-3">
         <Button
           type="button"
           onClick={handleCopy}
-          disabled={!isValid}
+          disabled={!isValid || saving}
           className="flex-1 gap-2"
         >
-          {copied ? (
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Opslaan…
+            </>
+          ) : copied ? (
             <>
               <Check className="h-4 w-4" />
-              Gekopieerd!
+              Gekopieerd &amp; opgeslagen!
             </>
           ) : (
             <>
               <Copy className="h-4 w-4" />
-              Kopieer link
+              Kopieer &amp; bewaar link
             </>
           )}
         </Button>
@@ -211,6 +281,9 @@ export function UtmBuilderForm() {
           Wissen
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Elke gekopieerde link wordt bewaard in het overzicht hieronder.
+      </p>
     </div>
   );
 }
