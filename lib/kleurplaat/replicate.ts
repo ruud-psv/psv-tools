@@ -2,9 +2,11 @@
  * Dunne Replicate-client voor de Kleurplaat Creator.
  *
  * We praten rechtstreeks met de REST API in plaats van het npm-pakket: het gaat
- * om twee calls (voorspelling starten, status opvragen) en zo blijft de
- * dependency-lijst van het project ongemoeid.
+ * om drie calls (schema opvragen, voorspelling starten, status opvragen) en zo
+ * blijft de dependency-lijst van het project ongemoeid.
  */
+
+import { leesProfiel, type ModelProfiel } from "./schema";
 
 /** Overschrijfbaar zodat de flow lokaal tegen een mock te testen is. */
 const API = process.env.REPLICATE_API_BASE ?? "https://api.replicate.com/v1";
@@ -20,7 +22,7 @@ function token(): string {
 }
 
 async function replicateFetch(pad: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${API}${pad}`, {
+  return fetch(`${API}${pad}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token()}`,
@@ -29,7 +31,6 @@ async function replicateFetch(pad: string, init?: RequestInit): Promise<Response
     },
     cache: "no-store",
   });
-  return res;
 }
 
 /** Leest de foutmelding van Replicate zo leesbaar mogelijk uit. */
@@ -44,53 +45,53 @@ async function foutTekst(res: Response): Promise<string> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Input filteren op het schema van het model                          */
+/* Modelprofiel                                                        */
 /* ------------------------------------------------------------------ */
 
-const schemaCache = new Map<string, Set<string>>();
+const profielCache = new Map<string, ModelProfiel>();
 
-/**
- * Haalt de toegestane inputvelden van een model op. Replicate weigert een
- * voorspelling met een onbekend veld, en de schema's van deze modellen
- * veranderen af en toe — daarom filteren we onze input erop in plaats van te
- * gokken. Het schema wordt per proces gecachet.
- */
-async function toegestaneVelden(model: string): Promise<Set<string> | null> {
-  const gecacht = schemaCache.get(model);
-  if (gecacht) return gecacht;
-
-  const res = await replicateFetch(`/models/${model}`);
-  if (!res.ok) return null;
-
-  const body = (await res.json().catch(() => null)) as {
-    latest_version?: { openapi_schema?: { components?: { schemas?: { Input?: { properties?: Record<string, unknown> } } } } };
-  } | null;
-
-  const properties = body?.latest_version?.openapi_schema?.components?.schemas?.Input?.properties;
-  if (!properties) return null;
-
-  const velden = new Set(Object.keys(properties));
-  schemaCache.set(model, velden);
-  return velden;
+interface ModelBody {
+  description?: string;
+  latest_version?: { id?: string; openapi_schema?: unknown };
+  openapi_schema?: unknown;
 }
 
-async function filterInput(
-  model: string,
-  input: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  const velden = await toegestaneVelden(model);
-  if (!velden) return input; // schema onbekend: laat de API zelf oordelen
+/**
+ * Haalt op hoe dit model aangeroepen wil worden. Het resultaat wordt per proces
+ * gecachet; een model verandert zelden en het scheelt een call per generatie.
+ */
+export async function haalProfiel(
+  id: string,
+  versie?: string
+): Promise<{ profiel: ModelProfiel; omschrijving?: string }> {
+  const sleutel = versie ? `${id}:${versie}` : id;
+  const gecacht = profielCache.get(sleutel);
 
-  const uit: Record<string, unknown> = {};
-  for (const [sleutel, waarde] of Object.entries(input)) {
-    if (waarde === undefined || waarde === null) continue;
-    // Een lege lijst referenties laten we weg; sommige modellen weigeren hem.
-    if (Array.isArray(waarde) && waarde.length === 0) continue;
-    if (velden.has(sleutel)) uit[sleutel] = waarde;
+  const pad = versie
+    ? `/models/${id}/versions/${encodeURIComponent(versie)}`
+    : `/models/${id}`;
+  const res = await replicateFetch(pad);
+
+  if (res.status === 404) {
+    throw new Error(
+      `Model "${sleutel}" bestaat niet op Replicate, of je token heeft er geen toegang toe.`
+    );
   }
-  // prompt is voor elk van deze modellen verplicht; nooit wegfilteren
-  if (!("prompt" in uit) && "prompt" in input) uit.prompt = input.prompt;
-  return uit;
+  if (!res.ok) throw new Error(await foutTekst(res));
+
+  const body = (await res.json().catch(() => null)) as ModelBody | null;
+  const schema = versie ? body?.openapi_schema : body?.latest_version?.openapi_schema;
+
+  const profiel = leesProfiel(id, schema, versie);
+  if (!profiel) {
+    if (gecacht) return { profiel: gecacht };
+    throw new Error(
+      `Het schema van "${sleutel}" is niet te lezen. Draait dit model wel op Replicate?`
+    );
+  }
+
+  profielCache.set(sleutel, profiel);
+  return { profiel, omschrijving: body?.description };
 }
 
 /* ------------------------------------------------------------------ */
@@ -106,15 +107,20 @@ export interface Voorspelling {
 }
 
 export async function startVoorspelling(
-  model: string,
+  profiel: ModelProfiel,
   input: Record<string, unknown>
 ): Promise<Voorspelling> {
-  const schone = await filterInput(model, input);
-
-  const res = await replicateFetch(`/models/${model}/predictions`, {
-    method: "POST",
-    body: JSON.stringify({ input: schone }),
-  });
+  // Een gepind model draait via /predictions met een version; de nieuwste
+  // versie van een officieel model via de model-endpoint.
+  const res = profiel.versie
+    ? await replicateFetch("/predictions", {
+        method: "POST",
+        body: JSON.stringify({ version: profiel.versie, input }),
+      })
+    : await replicateFetch(`/models/${profiel.id}/predictions`, {
+        method: "POST",
+        body: JSON.stringify({ input }),
+      });
 
   if (!res.ok) throw new Error(await foutTekst(res));
   return (await res.json()) as Voorspelling;

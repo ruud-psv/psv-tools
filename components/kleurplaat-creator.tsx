@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Check,
   Download,
   ImagePlus,
   Loader2,
+  Plus,
   RotateCcw,
   Sparkles,
   Trash2,
@@ -19,19 +21,24 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  MODELLEN,
+  AANBEVOLEN_MODELLEN,
+  labelUitId,
+  parseerModelId,
   SCENES,
   STANDAARD_MODEL,
-  vindModel,
   vindScene,
   type DetailNiveau,
   type GenereerResponse,
+  type Model,
+  type ModelProfielInfo,
   type StatusResponse,
   type Verhouding,
 } from "@/lib/kleurplaat";
@@ -46,7 +53,10 @@ interface Referentie {
   dataUrl: string;
 }
 
-const OPSLAG_SLEUTEL = "kleurplaat:referenties";
+const OPSLAG_REFERENTIES = "kleurplaat:referenties";
+const OPSLAG_MODELLEN = "kleurplaat:modellen";
+const OPSLAG_GEKOZEN_MODEL = "kleurplaat:model";
+
 /** Groot genoeg voor het model, klein genoeg voor de request body. */
 const MAX_ZIJDE = 1024;
 const MAX_REFERENTIES = 6;
@@ -117,6 +127,11 @@ const VERHOUDING_OPTIES: { waarde: Verhouding; label: string }[] = [
 const POLL_INTERVAL = 1500;
 const MAX_WACHTTIJD = 180_000;
 
+/** De sleutel waaronder een model in de lijst en in de opslag staat. */
+function modelSleutel(m: Model): string {
+  return m.versie ? `${m.id}:${m.versie}` : m.id;
+}
+
 export function KleurplaatCreator() {
   /* Referenties */
   const [referenties, setReferenties] = useState<Referentie[]>([]);
@@ -124,8 +139,17 @@ export function KleurplaatCreator() {
   const [uploadFout, setUploadFout] = useState("");
   const bestandRef = useRef<HTMLInputElement>(null);
 
-  /* Instellingen */
+  /* Modellen */
   const [model, setModel] = useState(STANDAARD_MODEL);
+  const [eigenModellen, setEigenModellen] = useState<Model[]>([]);
+  const [profielen, setProfielen] = useState<Record<string, ModelProfielInfo>>({});
+  const [toevoegenOpen, setToevoegenOpen] = useState(false);
+  const [nieuwModel, setNieuwModel] = useState("");
+  const [controleBezig, setControleBezig] = useState(false);
+  const [controleFout, setControleFout] = useState("");
+  const [controleInfo, setControleInfo] = useState<ModelProfielInfo | null>(null);
+
+  /* Instellingen */
   const [sceneId, setSceneId] = useState<string>(SCENES[0].id);
   const [eigenScene, setEigenScene] = useState("");
   const [detail, setDetail] = useState<DetailNiveau>("gemiddeld");
@@ -146,13 +170,17 @@ export function KleurplaatCreator() {
   const afbrekenRef = useRef(false);
 
   /* -------------------------------------------------------------- */
-  /* Referenties bewaren tussen sessies                              */
+  /* Opslag in de browser                                            */
   /* -------------------------------------------------------------- */
 
   useEffect(() => {
     try {
-      const opgeslagen = localStorage.getItem(OPSLAG_SLEUTEL);
-      if (opgeslagen) setReferenties(JSON.parse(opgeslagen) as Referentie[]);
+      const refs = localStorage.getItem(OPSLAG_REFERENTIES);
+      if (refs) setReferenties(JSON.parse(refs) as Referentie[]);
+      const mods = localStorage.getItem(OPSLAG_MODELLEN);
+      if (mods) setEigenModellen(JSON.parse(mods) as Model[]);
+      const gekozen = localStorage.getItem(OPSLAG_GEKOZEN_MODEL);
+      if (gekozen) setModel(gekozen);
     } catch {
       // stukke opslag is geen reden om de tool niet te tonen
     }
@@ -161,13 +189,59 @@ export function KleurplaatCreator() {
   const bewaarReferenties = useCallback((volgende: Referentie[]) => {
     setReferenties(volgende);
     try {
-      localStorage.setItem(OPSLAG_SLEUTEL, JSON.stringify(volgende));
+      localStorage.setItem(OPSLAG_REFERENTIES, JSON.stringify(volgende));
     } catch {
       setUploadFout(
         "De referenties passen niet in de browseropslag; ze gelden alleen voor deze sessie."
       );
     }
   }, []);
+
+  const bewaarModellen = useCallback((volgende: Model[]) => {
+    setEigenModellen(volgende);
+    try {
+      localStorage.setItem(OPSLAG_MODELLEN, JSON.stringify(volgende));
+    } catch {
+      // niet kritiek — het model blijft deze sessie bruikbaar
+    }
+  }, []);
+
+  function kiesModel(sleutel: string) {
+    setModel(sleutel);
+    try {
+      localStorage.setItem(OPSLAG_GEKOZEN_MODEL, sleutel);
+    } catch {
+      // niet kritiek
+    }
+  }
+
+  /* -------------------------------------------------------------- */
+  /* Modelprofiel ophalen                                            */
+  /* -------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (profielen[model]) return;
+    let afgebroken = false;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/kleurplaat/model?id=${encodeURIComponent(model)}`);
+        if (!res.ok) return; // stil: de generatieknop meldt het probleem wel
+        const info = (await res.json()) as ModelProfielInfo;
+        if (!afgebroken) setProfielen((vorige) => ({ ...vorige, [model]: info }));
+      } catch {
+        // geen profiel is niet fataal; we tonen dan gewoon minder detail
+      }
+    })();
+
+    return () => {
+      afgebroken = true;
+    };
+  }, [model, profielen]);
+
+  /* -------------------------------------------------------------- */
+  /* Referenties                                                     */
+  /* -------------------------------------------------------------- */
 
   const voegBestandenToe = useCallback(
     async (bestanden: FileList | File[]) => {
@@ -203,17 +277,72 @@ export function KleurplaatCreator() {
   }
 
   /* -------------------------------------------------------------- */
+  /* Model toevoegen                                                 */
+  /* -------------------------------------------------------------- */
+
+  async function controleerModel() {
+    const gekozen = parseerModelId(nieuwModel);
+    setControleInfo(null);
+    setControleFout("");
+
+    if (!gekozen) {
+      setControleFout(
+        "Dat lijkt geen model-identifier. Gebruik eigenaar/modelnaam, of plak de URL van replicate.com."
+      );
+      return;
+    }
+
+    const sleutel = gekozen.versie ? `${gekozen.id}:${gekozen.versie}` : gekozen.id;
+    setControleBezig(true);
+    try {
+      const res = await fetch(`/api/kleurplaat/model?id=${encodeURIComponent(sleutel)}`);
+      const body = (await res.json()) as ModelProfielInfo & { error?: string };
+      if (!res.ok) throw new Error(body.error || `Controle mislukt (HTTP ${res.status}).`);
+      setControleInfo(body);
+    } catch (err) {
+      setControleFout(err instanceof Error ? err.message : "Controle mislukt.");
+    } finally {
+      setControleBezig(false);
+    }
+  }
+
+  function voegModelToe() {
+    if (!controleInfo) return;
+    const toegevoegd: Model = {
+      id: controleInfo.id,
+      versie: controleInfo.versie,
+      label: labelUitId(controleInfo.id),
+    };
+    const sleutel = modelSleutel(toegevoegd);
+
+    if (!eigenModellen.some((m) => modelSleutel(m) === sleutel)) {
+      bewaarModellen([...eigenModellen, toegevoegd]);
+    }
+    setProfielen((vorige) => ({ ...vorige, [sleutel]: controleInfo }));
+    kiesModel(sleutel);
+
+    setNieuwModel("");
+    setControleInfo(null);
+    setToevoegenOpen(false);
+  }
+
+  function verwijderModel(sleutel: string) {
+    bewaarModellen(eigenModellen.filter((m) => modelSleutel(m) !== sleutel));
+    if (model === sleutel) kiesModel(STANDAARD_MODEL);
+  }
+
+  /* -------------------------------------------------------------- */
   /* Genereren                                                       */
   /* -------------------------------------------------------------- */
 
-  const gekozenModel = vindModel(model);
-  const meegenomen = gekozenModel
-    ? Math.min(referenties.length, gekozenModel.maxReferenties)
-    : referenties.length;
+  const profiel = profielen[model];
+  const eigenModel = eigenModellen.find((m) => modelSleutel(m) === model);
+  const aanbevolen = AANBEVOLEN_MODELLEN.find((m) => m.id === model);
+  const modelMax = profiel ? profiel.maxReferenties : MAX_REFERENTIES;
+  const meegenomen = Math.min(referenties.length, modelMax);
   const sceneOmschrijving =
     sceneId === "eigen" ? eigenScene.trim() : vindScene(sceneId)?.label ?? "";
-  const magGenereren =
-    !bezig && (sceneId !== "eigen" || eigenScene.trim().length >= 3);
+  const magGenereren = !bezig && (sceneId !== "eigen" || eigenScene.trim().length >= 3);
 
   useEffect(() => {
     return () => {
@@ -230,12 +359,15 @@ export function KleurplaatCreator() {
     setStatusTekst("Aanvraag versturen…");
     afbrekenRef.current = false;
 
+    const gekozen = parseerModelId(model);
+
     try {
       const res = await fetch("/api/kleurplaat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: gekozen?.id ?? model,
+          versie: gekozen?.versie,
           sceneId,
           eigenScene,
           detail,
@@ -370,10 +502,8 @@ export function KleurplaatCreator() {
                   <div
                     key={ref.id}
                     className={cn(
-                      "group relative aspect-square overflow-hidden rounded-md border bg-white",
-                      gekozenModel && index >= gekozenModel.maxReferenties
-                        ? "border-border opacity-40"
-                        : "border-border"
+                      "group relative aspect-square overflow-hidden rounded-md border border-border bg-white",
+                      index >= modelMax && "opacity-40"
                     )}
                     title={ref.naam}
                   >
@@ -392,7 +522,9 @@ export function KleurplaatCreator() {
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  {meegenomen} van {referenties.length} gaan mee naar dit model
+                  {modelMax === 0
+                    ? "Dit model neemt geen referenties mee"
+                    : `${meegenomen} van ${referenties.length} gaan mee naar dit model`}
                 </span>
                 <button
                   type="button"
@@ -526,27 +658,158 @@ export function KleurplaatCreator() {
 
           <Separator />
 
+          {/* Model */}
           <div className="space-y-2">
             <Label htmlFor="model">Model</Label>
-            <Select value={model} onValueChange={setModel}>
+            <Select value={model} onValueChange={kiesModel}>
               <SelectTrigger id="model">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MODELLEN.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectLabel>Aanbevolen</SelectLabel>
+                  {AANBEVOLEN_MODELLEN.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                {eigenModellen.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Zelf toegevoegd</SelectLabel>
+                    {eigenModellen.map((m) => (
+                      <SelectItem key={modelSleutel(m)} value={modelSleutel(m)}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
-            {gekozenModel && (
-              <p className="text-xs text-muted-foreground">
-                {gekozenModel.hint} Neemt maximaal {gekozenModel.maxReferenties}{" "}
-                {gekozenModel.maxReferenties === 1 ? "referentie" : "referenties"} mee.
+
+            <p className="text-xs text-muted-foreground">
+              {aanbevolen?.hint ? `${aanbevolen.hint} ` : ""}
+              {profiel
+                ? profiel.maxReferenties > 0
+                  ? `Neemt maximaal ${profiel.maxReferenties} ${
+                      profiel.maxReferenties === 1 ? "referentie" : "referenties"
+                    } mee.`
+                  : "Neemt geen referenties mee."
+                : "Eigenschappen worden opgehaald…"}
+            </p>
+
+            {profiel?.waarschuwingen.map((w) => (
+              <p key={w} className="text-xs text-warning">
+                {w}
               </p>
+            ))}
+
+            {eigenModel && (
+              <button
+                type="button"
+                onClick={() => verwijderModel(model)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" /> {eigenModel.id} uit de lijst halen
+              </button>
             )}
           </div>
+
+          {/* Model toevoegen */}
+          {!toevoegenOpen ? (
+            <button
+              type="button"
+              onClick={() => setToevoegenOpen(true)}
+              className="inline-flex items-center gap-1 text-xs uppercase tracking-wide text-primary hover:underline"
+            >
+              <Plus className="h-3 w-3" /> Model toevoegen
+            </button>
+          ) : (
+            <div className="space-y-3 rounded-md border border-border bg-muted/40 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <Label htmlFor="nieuw-model">Model van Replicate</Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToevoegenOpen(false);
+                    setControleInfo(null);
+                    setControleFout("");
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Sluiten"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  id="nieuw-model"
+                  placeholder="openai/gpt-image-1.5"
+                  value={nieuwModel}
+                  onChange={(e) => {
+                    setNieuwModel(e.target.value);
+                    setControleInfo(null);
+                    setControleFout("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void controleerModel();
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => void controleerModel()}
+                  disabled={controleBezig || !nieuwModel.trim()}
+                >
+                  {controleBezig ? <Loader2 className="animate-spin" /> : "Controleren"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                De identifier of de URL van de modelpagina, bijvoorbeeld{" "}
+                <span className="font-mono">openai/gpt-image-1.5</span>. Een vastgezette versie
+                mag ook: <span className="font-mono">eigenaar/model:hash</span>.
+              </p>
+
+              {controleFout && <p className="text-sm text-destructive">{controleFout}</p>}
+
+              {controleInfo && (
+                <div className="space-y-2 rounded-md border border-border bg-card p-3">
+                  <p className="flex items-center gap-2 text-sm font-medium">
+                    <Check className="h-4 w-4 text-success" /> {controleInfo.id}
+                    {controleInfo.versie ? ` (versie ${controleInfo.versie.slice(0, 8)})` : ""}
+                  </p>
+                  {controleInfo.omschrijving && (
+                    <p className="text-xs text-muted-foreground">{controleInfo.omschrijving}</p>
+                  )}
+                  <ul className="space-y-1 text-xs text-muted-foreground">
+                    <li>
+                      Referenties:{" "}
+                      {controleInfo.maxReferenties > 0
+                        ? `maximaal ${controleInfo.maxReferenties} (veld ${controleInfo.referentieVeld})`
+                        : "worden niet meegenomen"}
+                    </li>
+                    <li>
+                      Formaat:{" "}
+                      {controleInfo.verhoudingOpties.length > 0
+                        ? controleInfo.verhoudingOpties.join(", ")
+                        : "niet instelbaar"}
+                    </li>
+                  </ul>
+                  {controleInfo.waarschuwingen.map((w) => (
+                    <p key={w} className="text-xs text-warning">
+                      {w}
+                    </p>
+                  ))}
+                  <Button size="sm" onClick={voegModelToe}>
+                    <Plus /> Toevoegen en kiezen
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <Button onClick={() => void genereer()} disabled={!magGenereren} className="w-full">
             {bezig ? (
@@ -654,7 +917,7 @@ export function KleurplaatCreator() {
                       ? "border-primary"
                       : "border-border hover:border-primary/60"
                   )}
-                  title={item.omschrijving}
+                  title={`${item.omschrijving} — ${item.model}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
