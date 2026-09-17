@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import { cn } from "@/lib/utils";
 import {
   RichTextEditor,
@@ -59,11 +59,7 @@ export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" |
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Inhoud</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard title="Inhoud" contentClassName="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="aanhefText">Aanhef</Label>
           <Input
@@ -238,7 +234,6 @@ export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" |
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </CollapsibleCard>
   );
 }

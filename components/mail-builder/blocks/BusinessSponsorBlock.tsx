@@ -4,16 +4,12 @@ import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import type { BlockProps } from "@/components/mail-builder/shared/block-props";
 
 export function BusinessSponsorBlock({ state, onChange, triggerUpload, uploadingField }: BlockProps) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Sponsor-balk</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard title="Sponsor-balk" contentClassName="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="businessSponsorUrl">Afbeelding</Label>
           <div className="flex gap-2">
@@ -39,7 +35,6 @@ export function BusinessSponsorBlock({ state, onChange, triggerUpload, uploading
             Seizoensgebonden sponsorbalk. Export-URL wordt automatisch afgeleid.
           </p>
         </div>
-      </CardContent>
-    </Card>
+      </CollapsibleCard>
   );
 }

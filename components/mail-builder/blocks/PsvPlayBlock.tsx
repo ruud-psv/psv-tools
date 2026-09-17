@@ -4,7 +4,7 @@ import { Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import { RichTextEditor } from "@/components/mail-builder-form";
 import { newPsvPlayItem } from "@/components/mail-builder-form";
 import type { BlockProps } from "@/components/mail-builder/shared/block-props";
@@ -23,11 +23,7 @@ export function PsvPlayBlock({ state, onChange, triggerUpload, uploadingField }:
   return (
     <>
       {/* Intro */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Intro</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard title="Intro" contentClassName="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="ppIntro">Tekst (rood blok)</Label>
             <RichTextEditor
@@ -75,15 +71,10 @@ export function PsvPlayBlock({ state, onChange, triggerUpload, uploadingField }:
               onChange={(e) => onChange({ psvplayCta2Url: e.target.value })}
             />
           </div>
-        </CardContent>
-      </Card>
+        </CollapsibleCard>
 
       {/* Video items */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Video items</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <CollapsibleCard title="Video items" contentClassName="space-y-3">
           {state.psvplayItems.map((item, i) => (
             <div key={item.id} className="rounded-md border border-input bg-card p-3 space-y-2">
               <div className="flex items-center gap-2">
@@ -179,8 +170,7 @@ export function PsvPlayBlock({ state, onChange, triggerUpload, uploadingField }:
             <Plus className="h-3.5 w-3.5" />
             Item toevoegen
           </button>
-        </CardContent>
-      </Card>
+        </CollapsibleCard>
     </>
   );
 }
