@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { toolGroups, type ToolEntry } from "@/lib/tools";
+import { makeTools, type ToolEntry } from "@/lib/tools";
 
 function ToolCard({ entry }: { entry: ToolEntry }) {
   const Icon = entry.icon;
@@ -41,33 +41,16 @@ function ToolCard({ entry }: { entry: ToolEntry }) {
   );
 }
 
-/** De ingangen van Tools als kaarten, gegroepeerd zoals in de sidebar. */
+/**
+ * De ingangen waarmee je iets máákt, als kaarten. De inzichten en de kennisbank
+ * staan bewust alleen in de sidebar — het dashboard is een startpunt, geen
+ * volledige inhoudsopgave.
+ */
 export function DashboardEntries() {
   return (
-    <div className="space-y-10">
-      {toolGroups.map((group) => (
-        <section key={group.label}>
-          <div className="mb-4 flex items-baseline gap-3">
-            <h2 className="font-heading text-xl uppercase tracking-wide">
-              {group.label}
-            </h2>
-            <span className="hidden text-sm text-muted-foreground sm:inline">
-              {group.intro}
-            </span>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {group.entries.map((entry) => (
-              <div
-                key={entry.href}
-                // Een groep met één ingang zou anders als los kaartje in een
-                // lege rij hangen; over twee kolommen oogt het bedoeld.
-                className={group.entries.length === 1 ? "sm:col-span-2" : undefined}
-              >
-                <ToolCard entry={entry} />
-              </div>
-            ))}
-          </div>
-        </section>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {makeTools.map((entry) => (
+        <ToolCard key={entry.href} entry={entry} />
       ))}
     </div>
   );

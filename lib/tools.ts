@@ -22,6 +22,9 @@ import {
  * naast een icoon), het dashboard gebruikt `title` + `description` (de vraag
  * "waar kan Tools je mee helpen?" beantwoord je met een handeling, niet met een
  * productnaam). Zo kan er geen ingang bijkomen die maar op één plek opduikt.
+ *
+ * Het dashboard toont alleen `makeTools`; de kennisbank en de inzichten zijn
+ * via de sidebar bereikbaar.
  */
 export interface ToolEntry {
   /** Label in de sidebar. */
@@ -33,14 +36,6 @@ export interface ToolEntry {
   href: string;
   icon: LucideIcon;
   badge?: string;
-}
-
-export interface ToolGroup {
-  /** Kop boven de kaarten op het dashboard én boven de sidebar-sectie. */
-  label: string;
-  /** Toelichting onder de groepskop op het dashboard. */
-  intro: string;
-  entries: ToolEntry[];
 }
 
 /** Navigatie-items die geen ingang zijn maar wel in de sidebar staan. */
@@ -181,25 +176,5 @@ export const insightTools: ToolEntry[] = [
       "Hoeveel tickets er binnenkomen, waar ze over gaan en op welke momenten.",
     href: "/dashboard/fandesk",
     icon: Headset,
-  },
-];
-
-
-/** De groepen zoals het dashboard ze toont, in volgorde. */
-export const toolGroups: ToolGroup[] = [
-  {
-    label: "Maken",
-    intro: "Schrijven, bouwen en controleren.",
-    entries: makeTools,
-  },
-  {
-    label: "Opzoeken",
-    intro: "Alles wat we hebben vastgelegd, doorzoekbaar.",
-    entries: knowledgeTools,
-  },
-  {
-    label: "Inzichten",
-    intro: "De cijfers achter onze campagnes, kanalen en verkoop.",
-    entries: insightTools,
   },
 ];
