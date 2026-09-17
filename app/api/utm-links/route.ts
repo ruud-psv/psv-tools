@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       id,
       ...input,
       createdBy: auth.email,
+      ...(auth.name && { createdByName: auth.name }),
       createdAt: new Date().toISOString(),
     };
     await saveUtmLink(link);

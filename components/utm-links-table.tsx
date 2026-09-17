@@ -8,18 +8,40 @@ import { Badge } from "@/components/ui/badge";
 import { SortHeader, sortRows, timeValue, useTableSort, type SortAccessors } from "@/lib/table-sort";
 import { formatDateTime } from "@/lib/dm-share";
 import { cn } from "@/lib/utils";
-import type { UtmLinkRecord } from "@/lib/utm";
+import { utmCreatorLabel, type UtmLinkRecord } from "@/lib/utm";
 
-type SortKey = "createdAt" | "campaign" | "source" | "medium" | "url" | "createdBy";
+type SortKey = "createdAt" | "age" | "campaign" | "source" | "medium" | "url" | "createdBy";
 
 const ACCESSORS: SortAccessors<UtmLinkRecord, SortKey> = {
   createdAt: (r) => timeValue(r.createdAt),
+  // Ouderdom is de omgekeerde volgorde van de aanmaakdatum; sorteer op dezelfde
+  // waarde zodat "laag naar hoog" de jongste link bovenaan zet.
+  age: (r) => timeValue(r.createdAt),
   campaign: (r) => r.campaign,
   source: (r) => r.source,
   medium: (r) => r.medium,
   url: (r) => r.url,
-  createdBy: (r) => r.createdBy,
+  createdBy: (r) => utmCreatorLabel(r),
 };
+
+/** Hele dagen tussen het aanmaken en vandaag; null bij een ongeldige datum. */
+function daysSince(iso: string): number | null {
+  const created = new Date(iso);
+  if (!Number.isFinite(created.getTime())) return null;
+  const createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((today.getTime() - createdDay.getTime()) / 86_400_000));
+}
+
+/** Leesbare ouderdom: "vandaag", "gisteren", "12 dagen". */
+function ageLabel(iso: string): string {
+  const days = daysSince(iso);
+  if (days === null) return "—";
+  if (days === 0) return "vandaag";
+  if (days === 1) return "gisteren";
+  return `${days} dagen`;
+}
 
 /** Overzicht van alle links die met deze tool zijn aangemaakt. */
 export function UtmLinksTable({
@@ -123,6 +145,7 @@ export function UtmLinksTable({
           <thead className="border-b border-border">
             <tr>
               <SortHeader label="Aangemaakt" sortKey="createdAt" sort={sort} onSort={toggle} align="left" firstDir="desc" className="text-muted-foreground whitespace-nowrap" />
+              <SortHeader label="Ouderdom" sortKey="age" sort={sort} onSort={toggle} align="left" firstDir="desc" className="text-muted-foreground whitespace-nowrap" />
               <SortHeader label="Campagne" sortKey="campaign" sort={sort} onSort={toggle} align="left" firstDir="asc" className="text-muted-foreground" />
               <SortHeader label="Bron" sortKey="source" sort={sort} onSort={toggle} align="left" firstDir="asc" className="text-muted-foreground" />
               <SortHeader label="Medium" sortKey="medium" sort={sort} onSort={toggle} align="left" firstDir="asc" className="text-muted-foreground" />
@@ -136,14 +159,14 @@ export function UtmLinksTable({
           <tbody>
             {loading && links.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   Links laden…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   {links.length === 0
                     ? "Nog geen UTM-links aangemaakt met deze tool."
                     : "Geen links gevonden voor deze zoekopdracht."}
@@ -155,7 +178,16 @@ export function UtmLinksTable({
                 <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                   {formatDateTime(link.createdAt)}
                 </td>
-                <td className="px-4 py-3 font-medium max-w-[220px]">
+                <td
+                  className={cn(
+                    "px-4 py-3 text-xs whitespace-nowrap",
+                    (daysSince(link.createdAt) ?? 0) >= 365 ? "text-warning" : "text-muted-foreground"
+                  )}
+                  title={`Aangemaakt op ${formatDateTime(link.createdAt)}`}
+                >
+                  {ageLabel(link.createdAt)}
+                </td>
+                <td className="px-4 py-3 font-medium max-w-[200px]">
                   <span className="block truncate" title={link.campaign}>{link.campaign}</span>
                   {(link.term || link.content) && (
                     <span className="mt-0.5 block text-xs text-muted-foreground truncate">
@@ -171,7 +203,7 @@ export function UtmLinksTable({
                 <td className="px-4 py-3">
                   <Badge variant="outline" className="whitespace-nowrap">{link.medium}</Badge>
                 </td>
-                <td className="px-4 py-3 max-w-[280px]">
+                <td className="px-4 py-3 max-w-[200px]">
                   <a
                     href={link.generatedUrl}
                     target="_blank"
@@ -183,8 +215,8 @@ export function UtmLinksTable({
                     <ExternalLink className="h-3 w-3 flex-shrink-0" />
                   </a>
                 </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px]">
-                  <span className="block truncate" title={link.createdBy}>{link.createdBy}</span>
+                <td className="px-4 py-3 text-xs text-muted-foreground max-w-[120px]">
+                  <span className="block truncate" title={link.createdBy}>{utmCreatorLabel(link)}</span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1.5">

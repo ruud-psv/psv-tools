@@ -91,8 +91,22 @@ export interface UtmLinkRecord {
   content?: string;
   /** De volledige link mét UTM-parameters, zoals gekopieerd. */
   generatedUrl: string;
+  /** E-mailadres van de aanmaker (uniek, ook als de voornaam ontbreekt). */
   createdBy: string;
+  /** Voornaam uit de SAML-sessie; ontbreekt bij links van voor die uitbreiding. */
+  createdByName?: string;
   createdAt: string;
+}
+
+/**
+ * Weergavenaam voor de kolom "Door": de voornaam uit de sessie, en anders het
+ * deel van het e-mailadres voor de @ (oudere links en sessies zonder
+ * voornaam-claim).
+ */
+export function utmCreatorLabel(link: Pick<UtmLinkRecord, "createdBy" | "createdByName">): string {
+  const name = link.createdByName?.trim();
+  if (name) return name;
+  return link.createdBy.split("@")[0] || link.createdBy;
 }
 
 export interface UtmLinkInput {
