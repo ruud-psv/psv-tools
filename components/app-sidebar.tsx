@@ -18,6 +18,7 @@ import {
   Mail,
   MailPlus,
   Megaphone,
+  Palette,
   ShoppingBag,
   Ticket,
   PanelLeftClose,
@@ -66,6 +67,12 @@ const tools = [
     href: "/dashboard/rapportage-generator",
     icon: BarChart2,
     badge: null as string | null,
+  },
+  {
+    name: "Kleurplaat Creator",
+    href: "/dashboard/kleurplaat",
+    icon: Palette,
+    badge: "Beta" as string | null,
   },
 ];
 
