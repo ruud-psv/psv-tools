@@ -790,7 +790,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
                 <tr>
                   <td bgcolor="#E30613" align="center" style="background-color:#E30613;">
                     <a href="${href}" target="_blank" rel="noopener noreferrer"
-                       style="display:block;padding:12px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:1px;text-align:center;"
+                       style="display:block;padding:12px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:1px;text-align:center;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
                     >${label}</a>
                   </td>
                 </tr>
@@ -1080,7 +1080,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
                 <tr>
                   <td bgcolor="#ffffff" style="background-color:#ffffff;border:2px solid #ED1B24;border-radius:0;">
                     <a href="${cta1Href}" target="_blank" rel="noopener noreferrer"
-                       style="display:inline-block;padding:8px 20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ED1B24;text-decoration:none;letter-spacing:0.5px;"
+                       style="display:inline-block;padding:8px 20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ED1B24;text-decoration:none;letter-spacing:0.5px;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
                     >${state.psvplayCta1Label}</a>
                   </td>
                 </tr>
@@ -1120,7 +1120,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
                 <tr>
                   <td bgcolor="#E30613" style="background-color:#E30613;">
                     <a href="${itemCtaHref}" target="_blank" rel="noopener noreferrer"
-                       style="display:inline-block;padding:8px 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;"
+                       style="display:inline-block;padding:8px 16px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
                     >${item.ctaLabel}</a>
                   </td>
                 </tr>
@@ -1341,7 +1341,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
           <tr>
             <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
               <a href="${href}" target="_blank" rel="noopener noreferrer"
-                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
               >${label}</a>
             </td>
           </tr>
@@ -1534,7 +1534,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
     const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;text-align:center;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;text-align:center;">${richToInline(block.content)}</div></td></tr>` : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
-    const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px 0;text-align:center;"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${bCtaHref}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="5%" stroke="f" fillcolor="#E30613"><w:anchorlock/><center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${block.ctaLabel}</center></v:roundrect><![endif]--><!--[if !mso]><!--><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:5px;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;">${block.ctaLabel}</a></td></tr></table><!--<![endif]--></td></tr>` : "";
+    const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px 0;text-align:center;"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${bCtaHref}" style="height:36px;v-text-anchor:middle;width:260px;" arcsize="5%" stroke="f" fillcolor="#E30613"><w:anchorlock/><center style="color:#ffffff;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;">${block.ctaLabel}</center></v:roundrect><![endif]--><!--[if !mso]><!--><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 auto;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:5px;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;">${block.ctaLabel}</a></td></tr></table><!--<![endif]--></td></tr>` : "";
     const secRow = block.heeftSecLink && block.secLinkLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;text-align:center;"><a href="${bSecHref}" target="_blank" rel="noopener noreferrer" style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.link};text-decoration:none;line-height:20px;">${block.secLinkLabel}</a></td></tr>` : "";
     const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td></tr>` : "";
     return contentRow + ctaRow + secRow + spacerRow;
@@ -1565,7 +1565,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
                 <tr>
                   <td bgcolor="#E30613" style="background-color:#E30613;border-radius:5px;">
                     <a href="${ctaHref}" target="_blank" rel="noopener noreferrer"
-                       style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+                       style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
                     >${ctaLabel}</a>
                   </td>
                 </tr>
@@ -1788,7 +1788,7 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
           <tr>
             <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
               <a href="${href}" target="_blank" rel="noopener noreferrer"
-                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
               >${label}</a>
             </td>
           </tr>
@@ -2004,7 +2004,7 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
     const contentRow = block.content ? `<tr><td bgcolor="${cfg.bg}" width="600" style="background-color:${cfg.bg};padding:0;width:100%;"><div style="padding:20px;font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:20px;">${richToInline(block.content)}</div></td></tr>` : "";
     const bCtaHref = block.heeftCta && block.ctaUrl ? (forExport ? wrapLink(utm(block.ctaUrl)) : block.ctaUrl) : "#";
     const bSecHref = block.heeftSecLink && block.secLinkUrl ? (forExport ? wrapLink(utm(block.secLinkUrl)) : block.secLinkUrl) : "#";
-    const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">${block.ctaLabel}</a></td></tr></table></td></tr>` : "";
+    const ctaRow = block.heeftCta && block.ctaLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 20px;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0;"><tr><td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;"><a href="${bCtaHref}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;">${block.ctaLabel}</a></td></tr></table></td></tr>` : "";
     const secRow = block.heeftSecLink && block.secLinkLabel ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:5px 20px 10px;"><a href="${bSecHref}" target="_blank" rel="noopener noreferrer" style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.link};text-decoration:none;">${block.secLinkLabel}</a></td></tr>` : "";
     const spacerRow = block.heeftCta && block.ctaLabel && !block.heeftSecLink ? `<tr><td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:10px;font-size:10px;line-height:10px;">&nbsp;</td></tr>` : "";
     return contentRow + ctaRow + secRow + spacerRow;
@@ -2292,7 +2292,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
           <tr>
             <td bgcolor="#E30613" style="background-color:#E30613;border-radius:0;">
               <a href="${href}" target="_blank" rel="noopener noreferrer"
-                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;"
+                 style="display:inline-block;padding:8px 14px;font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:0.5px;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
               >${label}</a>
             </td>
           </tr>
