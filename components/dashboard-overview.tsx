@@ -13,15 +13,6 @@ import {
   ArrowRight,
   Loader2,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 
 /* ---------- Types ---------- */
 
@@ -39,17 +30,7 @@ interface TicketEvent {
   eventName: string;
 }
 
-interface MailingSummary {
-  id: number;
-  name: string;
-  scheduleTime: string;
-  recipients: number;
-  openRate: number;
-  clickRate: number;
-}
-
 interface MaileonResponse {
-  mailings: MailingSummary[];
   totals: {
     mailings: number;
     recipients: number;
@@ -69,18 +50,6 @@ function formatNumber(n: number): string {
 
 function formatPct(n: number): string {
   return `${n.toFixed(1)}%`;
-}
-
-function formatDateShort(iso: string): string {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("nl-NL", {
-      day: "2-digit",
-      month: "short",
-    });
-  } catch {
-    return iso;
-  }
 }
 
 function occupancyPct(e: TicketEvent): number {
@@ -104,6 +73,11 @@ function statusBadge(pct: number) {
 
 /* ---------- Component ---------- */
 
+/**
+ * De korte stand van zaken onder de ingangen: de eerstvolgende wedstrijden en
+ * de mailcijfers van de afgelopen 30 dagen. Bewust compact — het volledige
+ * beeld staat op /dashboard/ticket-inzichten en /dashboard/dm-performance.
+ */
 export function DashboardOverview() {
   const [tickets, setTickets] = useState<TicketEvent[] | null>(null);
   const [maileon, setMaileon] = useState<MaileonResponse | null>(null);
@@ -149,24 +123,6 @@ export function DashboardOverview() {
       );
   }, [tickets]);
 
-  const chartData = useMemo(() => {
-    if (!maileon?.mailings) return [];
-    return [...maileon.mailings]
-      .filter((m) => m.scheduleTime)
-      .sort(
-        (a, b) =>
-          new Date(a.scheduleTime).getTime() -
-          new Date(b.scheduleTime).getTime()
-      )
-      .slice(-10)
-      .map((m) => ({
-        date: formatDateShort(m.scheduleTime),
-        name: m.name.replace(/^\d{4}\.\d{2}\.\d{2}\s*/, ""),
-        openRate: parseFloat(m.openRate.toFixed(1)),
-        clickRate: parseFloat(m.clickRate.toFixed(1)),
-      }));
-  }, [maileon]);
-
   return (
     <div className="space-y-8">
       {/* Ticket Inzichten */}
@@ -197,7 +153,7 @@ export function DashboardOverview() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {matches.slice(0, 6).map((m) => {
+            {matches.slice(0, 3).map((m) => {
               const pct = occupancyPct(m);
               return (
                 <Card key={m.eventId}>
@@ -266,150 +222,71 @@ export function DashboardOverview() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {/* KPI row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-heading uppercase tracking-wide">
-                    Mailings (30d)
-                  </CardTitle>
-                  <Mail className="h-4 w-4 text-psv-red-primary" />
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-heading uppercase">
-                    {formatNumber(maileon.totals.mailings)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatNumber(maileon.totals.recipients)} ontvangers
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-heading uppercase tracking-wide">
-                    Gem. Open Rate
-                  </CardTitle>
-                  <Eye className="h-4 w-4 text-psv-red-primary" />
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-heading uppercase">
-                    {formatPct(maileon.totals.avgOpenRate)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatNumber(maileon.totals.uniqueOpens)} unieke opens
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-heading uppercase tracking-wide">
-                    Gem. Click Rate
-                  </CardTitle>
-                  <MousePointerClick className="h-4 w-4 text-psv-red-primary" />
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-heading uppercase">
-                    {formatPct(maileon.totals.avgClickRate)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatNumber(maileon.totals.uniqueClicks)} unieke clicks
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-heading uppercase tracking-wide">
-                    Gem. CTOR
-                  </CardTitle>
-                  <Users className="h-4 w-4 text-psv-red-primary" />
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-heading uppercase">
-                    {formatPct(maileon.totals.avgCtor)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Click-to-open rate
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Chart */}
-            {chartData.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">
-                    Open & Click Rate — laatste 10 mailings
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} barGap={2}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="#333"
-                          opacity={0.2}
-                        />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 11 }}
-                          stroke="#999"
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11 }}
-                          stroke="#999"
-                          tickFormatter={(v: number) => `${v}%`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#1a1a2e",
-                            border: "1px solid #333",
-                            borderRadius: "6px",
-                            color: "#fff",
-                            fontSize: 12,
-                          }}
-                          formatter={(value: unknown, name: unknown) => [
-                            `${value}%`,
-                            name === "openRate" ? "Open rate" : "Click rate",
-                          ]}
-                          labelFormatter={(_label, payload) => {
-                            const item = (payload as unknown as { payload?: { name?: string } }[])?.[0]
-                              ?.payload;
-                            return item?.name ?? String(_label);
-                          }}
-                        />
-                        <Bar
-                          dataKey="openRate"
-                          name="openRate"
-                          fill="#e82026"
-                          radius={[3, 3, 0, 0]}
-                          maxBarSize={32}
-                        />
-                        <Bar
-                          dataKey="clickRate"
-                          name="clickRate"
-                          fill="#bb9753"
-                          radius={[3, 3, 0, 0]}
-                          maxBarSize={32}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex items-center gap-6 mt-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block w-3 h-3 rounded-sm bg-psv-red-primary" />
-                      Open rate
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="inline-block w-3 h-3 rounded-sm bg-psv-gold" />
-                      Click rate
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-heading uppercase tracking-wide">
+                  Mailings (30d)
+                </CardTitle>
+                <Mail className="h-4 w-4 text-psv-red-primary" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-heading uppercase">
+                  {formatNumber(maileon.totals.mailings)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatNumber(maileon.totals.recipients)} ontvangers
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-heading uppercase tracking-wide">
+                  Gem. Open Rate
+                </CardTitle>
+                <Eye className="h-4 w-4 text-psv-red-primary" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-heading uppercase">
+                  {formatPct(maileon.totals.avgOpenRate)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatNumber(maileon.totals.uniqueOpens)} unieke opens
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-heading uppercase tracking-wide">
+                  Gem. Click Rate
+                </CardTitle>
+                <MousePointerClick className="h-4 w-4 text-psv-red-primary" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-heading uppercase">
+                  {formatPct(maileon.totals.avgClickRate)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatNumber(maileon.totals.uniqueClicks)} unieke clicks
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-heading uppercase tracking-wide">
+                  Gem. CTOR
+                </CardTitle>
+                <Users className="h-4 w-4 text-psv-red-primary" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-heading uppercase">
+                  {formatPct(maileon.totals.avgCtor)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Click-to-open rate
+                </p>
+              </CardContent>
+            </Card>
           </div>
         )}
       </section>

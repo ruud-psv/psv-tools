@@ -4,137 +4,16 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import {
-  BarChart2,
-  BookOpen,
-  ClipboardCheck,
-  FileText,
-  Globe,
-  Headset,
-  LayoutDashboard,
-  LayoutTemplate,
-  Link2,
-  LogOut,
-  Mail,
-  MailPlus,
-  Megaphone,
-  Palette,
-  ShoppingBag,
-  Ticket,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-
-const navItems = [
-  {
-    name: "Overzicht",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    exact: true,
-  },
-];
-
-const tools = [
-  {
-    name: "Mail tekst generator",
-    href: "/dashboard/copy-generator",
-    icon: FileText,
-    badge: null as string | null,
-  },
-  {
-    name: "UTM Builder",
-    href: "/dashboard/utm-builder",
-    icon: Link2,
-    badge: null as string | null,
-  },
-  {
-    name: "Mail Builder",
-    href: "/dashboard/mail-builder",
-    icon: MailPlus,
-    badge: null as string | null,
-  },
-  {
-    name: "Huisstijl Checker",
-    href: "/dashboard/huisstijl-checker",
-    icon: ClipboardCheck,
-    badge: null as string | null,
-  },
-  {
-    name: "Rapportage generator",
-    href: "/dashboard/rapportage-generator",
-    icon: BarChart2,
-    badge: null as string | null,
-  },
-  {
-    name: "Kleurplaat Creator",
-    href: "/dashboard/kleurplaat",
-    icon: Palette,
-    badge: "Beta" as string | null,
-  },
-];
-
-const kennisbank = [
-  {
-    name: "Kennisbank",
-    href: "/dashboard/kennisbank",
-    icon: BookOpen,
-    badge: null as string | null,
-  },
-];
-
-const insights = [
-  {
-    name: "Paid Ads",
-    href: "/dashboard/paid-ads",
-    icon: Megaphone,
-    badge: null as string | null,
-  },
-  {
-    name: "Ticket Inzichten",
-    href: "/dashboard/ticket-inzichten",
-    icon: Ticket,
-    badge: null as string | null,
-  },
-  {
-    name: "Wedstrijdverkoop",
-    href: "/dashboard/ticket-inzichten-new",
-    icon: Ticket,
-    badge: "Ringside" as string | null,
-  },
-  {
-    name: "DM Performance",
-    href: "/dashboard/dm-performance",
-    icon: Mail,
-    badge: null as string | null,
-  },
-  {
-    name: "Web Verkeer",
-    href: "/dashboard/web-verkeer",
-    icon: Globe,
-    badge: null as string | null,
-  },
-  {
-    name: "Landingspagina's",
-    href: "/dashboard/landingspaginas",
-    icon: LayoutTemplate,
-    badge: null as string | null,
-  },
-  {
-    name: "FANstore",
-    href: "/dashboard/fanstore",
-    icon: ShoppingBag,
-    badge: null as string | null,
-  },
-  {
-    name: "FANdesk",
-    href: "/dashboard/fandesk",
-    icon: Headset,
-    badge: null as string | null,
-  },
-];
+import {
+  insightTools as insights,
+  knowledgeTools as kennisbank,
+  makeTools as tools,
+  navItems,
+} from "@/lib/tools";
 
 export function AppSidebar({ onMobileClose }: { onMobileClose?: () => void } = {}) {
   const pathname = usePathname();
