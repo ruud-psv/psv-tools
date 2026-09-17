@@ -11,19 +11,13 @@ import {
 } from "@/lib/kleurplaat";
 import { bouwInput, MAX_REFERENTIES } from "@/lib/kleurplaat/schema";
 import { haalProfiel, startVoorspelling } from "@/lib/kleurplaat/replicate";
+import { isReferentiePad, referentiesAlsDataUrls } from "@/lib/kleurplaat/opslag";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const DETAILS: DetailNiveau[] = ["eenvoudig", "gemiddeld", "gedetailleerd"];
 const VERHOUDINGEN: Verhouding[] = ["2:3", "3:2", "1:1"];
-
-/** Ruwe bovengrens per referentie (base64), zodat één upload de body niet opblaast. */
-const MAX_REFERENTIE_BYTES = 3_000_000;
-
-function isDataUrl(waarde: unknown): waarde is string {
-  return typeof waarde === "string" && /^data:image\/(png|jpe?g|webp);base64,/i.test(waarde);
-}
 
 export async function POST(req: NextRequest) {
   const sessie = requireEmail(req);
@@ -73,24 +67,23 @@ export async function POST(req: NextRequest) {
     scene = preset.prompt;
   }
 
-  // Referenties
+  // Referenties: paden in de gedeelde opslag, niet de beelden zelf.
   const ruweReferenties = Array.isArray(body.referenties) ? body.referenties : [];
-  if (ruweReferenties.some((r) => !isDataUrl(r))) {
+  if (ruweReferenties.some((r) => typeof r !== "string" || !isReferentiePad(r))) {
     return NextResponse.json(
-      { error: "Een van de referenties is geen geldige afbeelding (png, jpg of webp)." },
+      { error: "Een van de referenties staat niet in de gedeelde bibliotheek." },
       { status: 400 }
     );
   }
-  if (ruweReferenties.some((r) => (r as string).length > MAX_REFERENTIE_BYTES)) {
-    return NextResponse.json(
-      { error: "Een referentie is te groot. Upload hem kleiner of gebruik een andere afbeelding." },
-      { status: 400 }
-    );
-  }
-  const referenties = (ruweReferenties as string[]).slice(0, MAX_REFERENTIES);
+  const referentiePaden = (ruweReferenties as string[]).slice(0, MAX_REFERENTIES);
 
   try {
     const { profiel } = await haalProfiel(gekozen.id, gekozen.versie);
+
+    // Het model kan een privé blob niet zelf ophalen, dus we sturen de inhoud mee.
+    const referenties = profiel.referentieVeld
+      ? await referentiesAlsDataUrls(referentiePaden)
+      : [];
 
     const prompt = bouwPrompt({
       scene,
