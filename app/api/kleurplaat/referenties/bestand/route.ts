@@ -5,8 +5,10 @@ import { leesReferentieBestand, mimeVanPad } from "@/lib/kleurplaat/opslag";
 export const runtime = "nodejs";
 
 /**
- * Toont een referentie in de browser. De blobs staan privé, dus ze zijn alleen
- * via deze route te zien — achter dezelfde login als de rest van de tool.
+ * Toont een referentie of het logo in de browser. De blobs staan privé, dus ze
+ * zijn alleen via deze route te zien — achter dezelfde login als de rest van de
+ * tool. Het canvas dat de plaat samenstelt laadt ze ook hierlangs, want van een
+ * andere oorsprong zou er geen PNG meer uit te halen zijn.
  */
 export async function GET(req: NextRequest) {
   const sessie = requireEmail(req);

@@ -180,10 +180,11 @@ export interface PromptInput {
   /** Scène-omschrijving (Engels) — uit een preset of vertaald vrije tekst. */
   scene: string;
   detail: DetailNiveau;
-  naam?: string;
   rugnummer?: string;
   extra?: string;
   metReferenties: boolean;
+  /** De hoek waar het logo later komt; die houden we leeg. */
+  vrijeHoek?: "top left" | "top right" | "bottom left" | "bottom right";
 }
 
 /**
@@ -206,16 +207,16 @@ export function bouwPrompt(input: PromptInput): string {
 
   delen.push(`Scene: ${input.scene}.`);
 
-  const naam = input.naam?.trim();
   const rugnummer = input.rugnummer?.trim();
-  if (naam) {
-    delen.push(
-      `Write the name "${naam}" in large hollow outline bubble letters across the bottom of the page, so a child can colour the letters in. Spell it exactly as given, with no extra words.`
-    );
-  }
   if (rugnummer) {
     delen.push(
       `Phoxy's shirt shows the number ${rugnummer} in large hollow outline digits on the front, drawn as empty outlines so it can be coloured in.`
+    );
+  }
+
+  if (input.vrijeHoek) {
+    delen.push(
+      `Keep the ${input.vrijeHoek} corner of the image calm and free of important detail: a logo is placed there afterwards.`
     );
   }
 
@@ -225,7 +226,7 @@ export function bouwPrompt(input: PromptInput): string {
   delen.push(DETAIL_PROMPT[input.detail]);
 
   delen.push(
-    "Hard requirements: pure black outlines on a pure white background, no colour at all, no grey, no shading, no hatching, no cross-hatching, no gradients, no shadows, no filled black areas, no photo texture. Even line weight throughout, closed shapes, generous white space inside every shape. No watermark, no logo, no signature, no border frame, and no text other than what is explicitly asked for above."
+    "Hard requirements: pure black outlines on a pure white background, no colour at all, no grey, no shading, no hatching, no cross-hatching, no gradients, no shadows, no filled black areas, no photo texture. Even line weight throughout, closed shapes, generous white space inside every shape. No watermark, no logo, no signature, no border frame, and no words, letters or lettering anywhere in the image."
   );
 
   return delen.join(" ");
@@ -249,9 +250,12 @@ export interface GenereerRequest {
   eigenScene?: string;
   detail: DetailNiveau;
   verhouding: Verhouding;
+  /** Alleen voor de bestandsnaam; de naam wordt in de browser op de plaat gezet. */
   naam?: string;
   rugnummer?: string;
   extra?: string;
+  /** De hoek waar het logo komt; die vraagt de prompt leeg te houden. */
+  logoHoek?: string;
   /** Paden van de gekozen referenties in de gedeelde bibliotheek. */
   referenties: string[];
 }
@@ -268,6 +272,13 @@ export interface Referentie {
   pad: string;
   naam: string;
   grootte: number;
+  toegevoegdOp: string;
+}
+
+/** Het logo dat op elke kleurplaat komt. */
+export interface Logo {
+  pad: string;
+  naam: string;
   toegevoegdOp: string;
 }
 

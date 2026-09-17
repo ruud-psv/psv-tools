@@ -29,6 +29,13 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
+  canvasNaarBlob,
+  STANDAARD_LOGO,
+  steldeKleurplaatSamen,
+  type LogoHoek,
+  type LogoStijl,
+} from "@/lib/kleurplaat/compositie";
+import {
   AANBEVOLEN_MODELLEN,
   parseerModelId,
   SCENES,
@@ -37,6 +44,7 @@ import {
   type BewaardModel,
   type DetailNiveau,
   type GenereerResponse,
+  type Logo,
   type ModelProfielInfo,
   type Referentie,
   type StatusResponse,
@@ -100,6 +108,33 @@ async function verkleinNaarJpeg(file: File): Promise<Blob> {
   }
 }
 
+/** Zelfde verkleining, maar als png met doorzichtigheid — nodig voor een logo. */
+async function verkleinNaarPng(file: File, maxZijde = 640): Promise<Blob> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await laadAfbeelding(objectUrl);
+    const schaal = Math.min(1, maxZijde / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+    const w = Math.max(1, Math.round((img.naturalWidth || maxZijde) * schaal));
+    const h = Math.max(1, Math.round((img.naturalHeight || maxZijde) * schaal));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas is niet beschikbaar in deze browser.");
+    ctx.drawImage(img, 0, 0, w, h);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Verkleinen mislukt."))),
+        "image/png"
+      );
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function voorbeeldUrl(pad: string): string {
   return `/api/kleurplaat/referenties/bestand?pad=${encodeURIComponent(pad)}`;
 }
@@ -130,6 +165,35 @@ const VERHOUDING_OPTIES: { waarde: Verhouding; label: string }[] = [
   { waarde: "1:1", label: "Vierkant" },
 ];
 
+const LOGO_OPTIES: { waarde: LogoHoek; label: string }[] = [
+  { waarde: "linksboven", label: "Linksboven" },
+  { waarde: "rechtsboven", label: "Rechtsboven" },
+  { waarde: "linksonder", label: "Linksonder" },
+  { waarde: "rechtsonder", label: "Rechtsonder" },
+  { waarde: "geen", label: "Geen logo" },
+];
+
+const LOGO_STIJLEN: { waarde: LogoStijl; label: string }[] = [
+  { waarde: "lijn", label: "Lijntekening — in te kleuren" },
+  { waarde: "kleur", label: "Vol in kleur" },
+];
+
+/** De tekening via onze eigen route, zodat het canvas er een PNG uit kan halen. */
+function tekeningUrl(url: string): string {
+  return `/api/kleurplaat/download?url=${encodeURIComponent(url)}&inline=1`;
+}
+
+function bestandsnaam(label: string): string {
+  const schoon = label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    .slice(0, 50);
+  return `kleurplaat-phoxy${schoon ? `-${schoon}` : ""}.png`;
+}
+
 export function KleurplaatCreator() {
   /* Gedeelde bibliotheek */
   const [referenties, setReferenties] = useState<Referentie[]>([]);
@@ -159,6 +223,12 @@ export function KleurplaatCreator() {
   const [naam, setNaam] = useState("");
   const [rugnummer, setRugnummer] = useState("");
   const [extra, setExtra] = useState("");
+  const [logoHoek, setLogoHoek] = useState<LogoHoek>("linksboven");
+  const [logoStijl, setLogoStijl] = useState<LogoStijl>("lijn");
+  const [logo, setLogo] = useState<Logo | null>(null);
+  const [logoBezig, setLogoBezig] = useState(false);
+  const [logoFout, setLogoFout] = useState("");
+  const logoBestandRef = useRef<HTMLInputElement>(null);
 
   /* Generatie */
   const [bezig, setBezig] = useState(false);
@@ -168,6 +238,10 @@ export function KleurplaatCreator() {
   const [resultaat, setResultaat] = useState<Resultaat | null>(null);
   const [historie, setHistorie] = useState<Resultaat[]>([]);
   const [promptZichtbaar, setPromptZichtbaar] = useState(false);
+
+  /* De samengestelde plaat: tekening + logo + naam */
+  const [plaat, setPlaat] = useState<{ url: string; blob: Blob } | null>(null);
+  const [plaatFout, setPlaatFout] = useState("");
 
   const afbrekenRef = useRef(false);
 
@@ -192,9 +266,10 @@ export function KleurplaatCreator() {
 
     (async () => {
       try {
-        const [refRes, modRes] = await Promise.all([
+        const [refRes, modRes, logoRes] = await Promise.all([
           fetch("/api/kleurplaat/referenties"),
           fetch("/api/kleurplaat/modellen"),
+          fetch("/api/kleurplaat/logo"),
         ]);
 
         if (!afgebroken && refRes.ok) {
@@ -209,6 +284,11 @@ export function KleurplaatCreator() {
         if (!afgebroken && modRes.ok) {
           const body = (await modRes.json()) as { modellen: BewaardModel[] };
           setGedeeldeModellen(body.modellen);
+        }
+
+        if (!afgebroken && logoRes.ok) {
+          const body = (await logoRes.json()) as { logo: Logo | null };
+          setLogo(body.logo);
         }
       } catch {
         if (!afgebroken) setUploadFout("De gedeelde bibliotheek is niet bereikbaar.");
@@ -321,6 +401,55 @@ export function KleurplaatCreator() {
   }
 
   /* -------------------------------------------------------------- */
+  /* Logo beheren                                                    */
+  /* -------------------------------------------------------------- */
+
+  const logoUrl = logo ? voorbeeldUrl(logo.pad) : STANDAARD_LOGO;
+
+  async function vervangLogo(bestanden: FileList | File[]) {
+    const bestand = Array.from(bestanden)[0];
+    if (!bestand) return;
+
+    setLogoFout("");
+    if (bestand.type !== "image/png") {
+      setLogoFout("Het logo moet een png zijn, met een doorzichtige achtergrond.");
+      return;
+    }
+
+    setLogoBezig(true);
+    try {
+      const formulier = new FormData();
+      formulier.append("bestand", await verkleinNaarPng(bestand), bestand.name);
+
+      const res = await fetch("/api/kleurplaat/logo", { method: "POST", body: formulier });
+      const body = (await res.json()) as { logo?: Logo; error?: string };
+      if (!res.ok || !body.logo) throw new Error(body.error || "Logo opslaan mislukt.");
+      setLogo(body.logo);
+    } catch (err) {
+      setLogoFout(err instanceof Error ? err.message : "Logo opslaan mislukt.");
+    } finally {
+      setLogoBezig(false);
+    }
+  }
+
+  async function herstelStandaardLogo() {
+    setLogoFout("");
+    setLogoBezig(true);
+    try {
+      const res = await fetch("/api/kleurplaat/logo", { method: "DELETE" });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error || "Verwijderen mislukt.");
+      }
+      setLogo(null);
+    } catch (err) {
+      setLogoFout(err instanceof Error ? err.message : "Verwijderen mislukt.");
+    } finally {
+      setLogoBezig(false);
+    }
+  }
+
+  /* -------------------------------------------------------------- */
   /* Modellen beheren                                                */
   /* -------------------------------------------------------------- */
 
@@ -407,6 +536,49 @@ export function KleurplaatCreator() {
     };
   }, []);
 
+  /**
+   * Zet de plaat opnieuw in elkaar zodra de tekening er is of de naam of het
+   * logo verandert. Dat kost geen generatie: het gebeurt hier in de browser.
+   */
+  useEffect(() => {
+    if (!resultaat) {
+      setPlaat(null);
+      return;
+    }
+
+    let afgebroken = false;
+    let gemaakteUrl: string | null = null;
+
+    // Even wachten, anders stelt hij bij elke toetsaanslag opnieuw samen.
+    const wachten = setTimeout(() => {
+      void (async () => {
+        try {
+          const canvas = await steldeKleurplaatSamen(tekeningUrl(resultaat.url), {
+            naam,
+            logoHoek,
+            logoStijl,
+            logoUrl,
+          });
+          const blob = await canvasNaarBlob(canvas);
+          if (afgebroken) return;
+          gemaakteUrl = URL.createObjectURL(blob);
+          setPlaat({ url: gemaakteUrl, blob });
+          setPlaatFout("");
+        } catch {
+          if (afgebroken) return;
+          setPlaat(null);
+          setPlaatFout("Samenstellen lukte niet; je ziet de kale tekening van het model.");
+        }
+      })();
+    }, 200);
+
+    return () => {
+      afgebroken = true;
+      clearTimeout(wachten);
+      if (gemaakteUrl) URL.revokeObjectURL(gemaakteUrl);
+    };
+  }, [resultaat, naam, logoHoek, logoStijl, logoUrl]);
+
   async function genereer() {
     if (!magGenereren) return;
 
@@ -429,9 +601,9 @@ export function KleurplaatCreator() {
           eigenScene,
           detail,
           verhouding,
-          naam,
           rugnummer,
           extra,
+          logoHoek,
           referenties: gekozenPaden.slice(0, modelMax),
         }),
       });
@@ -492,7 +664,9 @@ export function KleurplaatCreator() {
     }
   }
 
-  function downloadUrl(item: Resultaat) {
+  function downloadUrl(item: Resultaat): string {
+    if (plaat) return plaat.url;
+    // Terugval: zonder samengestelde plaat haalt de server hem op bij Replicate.
     const params = new URLSearchParams({ url: item.url });
     const label = naam.trim() || item.omschrijving;
     if (label) params.set("naam", label);
@@ -719,9 +893,97 @@ export function KleurplaatCreator() {
             </div>
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">
-            Beeldmodellen schrijven letters niet altijd foutloos. Controleer de naam op de plaat
-            voordat je hem meegeeft.
+            De naam wordt na het genereren in DynaPuff op de plaat gezet — dus altijd goed
+            gespeld, en aanpassen kost geen nieuwe generatie. Het rugnummer tekent het model
+            zelf op het shirt; dat gaat niet altijd foutloos.
           </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="logo-hoek">Phoxy Club-logo</Label>
+              <Select value={logoHoek} onValueChange={(v) => setLogoHoek(v as LogoHoek)}>
+                <SelectTrigger id="logo-hoek">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOGO_OPTIES.map((o) => (
+                    <SelectItem key={o.waarde} value={o.waarde}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="logo-stijl">Logostijl</Label>
+              <Select
+                value={logoStijl}
+                onValueChange={(v) => setLogoStijl(v as LogoStijl)}
+                disabled={logoHoek === "geen"}
+              >
+                <SelectTrigger id="logo-stijl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOGO_STIJLEN.map((o) => (
+                    <SelectItem key={o.waarde} value={o.waarde}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Welk logo er op de plaat komt — gedeeld, net als de referenties */}
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/40 p-3">
+            <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded border border-border bg-white p-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoUrl} alt="Het logo dat op de kleurplaat komt" className="max-h-full max-w-full object-contain" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {logo ? logo.naam : "Standaardlogo uit de huisstijl"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {logo
+                  ? "Eigen logo — iedereen krijgt dit op de kleurplaat."
+                  : "Nog geen eigen logo geüpload."}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={() => logoBestandRef.current?.click()}
+                  disabled={logoBezig}
+                  className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                >
+                  {logoBezig ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
+                  {logo ? "Vervangen" : "Eigen logo uploaden"}
+                </button>
+                {logo && (
+                  <button
+                    type="button"
+                    onClick={() => void herstelStandaardLogo()}
+                    disabled={logoBezig}
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3 w-3" /> Terug naar het standaardlogo
+                  </button>
+                )}
+              </div>
+              {logoFout && <p className="mt-1 text-xs text-destructive">{logoFout}</p>}
+            </div>
+            <input
+              ref={logoBestandRef}
+              type="file"
+              accept="image/png"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void vervangLogo(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="extra">Extra wensen (optioneel)</Label>
@@ -926,7 +1188,10 @@ export function KleurplaatCreator() {
                   <RotateCcw /> Opnieuw
                 </Button>
                 <Button size="sm" asChild>
-                  <a href={downloadUrl(resultaat)} download>
+                  <a
+                    href={downloadUrl(resultaat)}
+                    download={bestandsnaam(naam.trim() || resultaat.omschrijving)}
+                  >
                     <Download /> PNG
                   </a>
                 </Button>
@@ -947,11 +1212,13 @@ export function KleurplaatCreator() {
             </div>
           )}
 
+          {plaatFout && <p className="mt-4 text-sm text-warning">{plaatFout}</p>}
+
           <div className="mt-4 flex min-h-[320px] items-center justify-center rounded-md border border-border bg-white p-3">
             {resultaat ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src={resultaat.url}
+                src={plaat?.url ?? resultaat.url}
                 alt={`Kleurplaat: ${resultaat.omschrijving}`}
                 className="max-h-[70vh] w-auto max-w-full"
               />

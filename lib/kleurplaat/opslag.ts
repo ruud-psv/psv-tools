@@ -11,10 +11,11 @@
 
 import { del, get, list, put } from "@vercel/blob";
 
-import type { BewaardModel, Referentie } from "./index";
+import type { BewaardModel, Logo, Referentie } from "./index";
 
 const REFERENTIE_PREFIX = "kleurplaat/referenties/";
 const MODEL_PREFIX = "kleurplaat/modellen/";
+const LOGO_PREFIX = "kleurplaat/logo/";
 
 /** Zoveel referenties mogen er in de gedeelde bibliotheek staan. */
 export const MAX_BIBLIOTHEEK = 24;
@@ -126,6 +127,11 @@ export function isReferentiePad(pad: string): boolean {
   return pad.startsWith(REFERENTIE_PREFIX) && !pad.includes("..");
 }
 
+/** Wat de bestandsroute mag uitleveren: referenties én het logo. */
+export function isOpslagPad(pad: string): boolean {
+  return isReferentiePad(pad) || isLogoPad(pad);
+}
+
 export async function verwijderReferentie(pad: string): Promise<void> {
   if (!isReferentiePad(pad)) throw new Error("Dat is geen referentie van deze tool.");
   try {
@@ -137,7 +143,7 @@ export async function verwijderReferentie(pad: string): Promise<void> {
 
 /** Haalt de inhoud op — voor de preview in de browser en voor het beeldmodel. */
 export async function leesReferentieBestand(pad: string): Promise<Buffer | null> {
-  if (!isReferentiePad(pad)) return null;
+  if (!isOpslagPad(pad)) return null;
   try {
     const resultaat = await get(pad, { access: "private", useCache: false });
     if (!resultaat?.stream) return null;
@@ -159,6 +165,74 @@ export async function referentiesAlsDataUrls(paden: string[]): Promise<string[]>
     })
   );
   return bestanden.filter((b): b is string => b !== null);
+}
+
+/* ------------------------------------------------------------------ */
+/* Logo                                                                */
+/* ------------------------------------------------------------------ */
+
+export function isLogoPad(pad: string): boolean {
+  return pad.startsWith(LOGO_PREFIX) && !pad.includes("..");
+}
+
+/**
+ * Er is er hoogstens één. Blijven er door een half mislukte upload toch meer
+ * staan, dan wint de nieuwste — en de volgende upload ruimt de rest op.
+ */
+export async function huidigLogo(): Promise<Logo | null> {
+  let blobs: { pathname: string; uploadedAt: Date | string }[];
+  try {
+    ({ blobs } = await list({ prefix: LOGO_PREFIX }));
+  } catch (err) {
+    meldOpslagfout(err);
+  }
+  if (blobs.length === 0) return null;
+
+  const nieuwste = blobs
+    .map((b) => ({
+      pad: b.pathname,
+      naam: b.pathname.slice(LOGO_PREFIX.length).replace(/^[^_]*__/, "").replace(/\.png$/i, ""),
+      toegevoegdOp:
+        b.uploadedAt instanceof Date ? b.uploadedAt.toISOString() : String(b.uploadedAt),
+    }))
+    .sort((a, b) => b.toegevoegdOp.localeCompare(a.toegevoegdOp))[0];
+
+  return nieuwste;
+}
+
+/**
+ * Vervangt het logo. Png dus: een logo hoort een doorzichtige achtergrond te
+ * hebben, en dat overleeft een jpeg niet.
+ */
+export async function bewaarLogo(naam: string, inhoud: ArrayBuffer): Promise<Logo> {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const pad = `${LOGO_PREFIX}${id}__${veiligeNaam(naam)}.png`;
+
+  try {
+    await put(pad, inhoud, {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "image/png",
+    });
+    // Oude logo's weg, zodat er altijd precies één geldt.
+    const { blobs } = await list({ prefix: LOGO_PREFIX });
+    await Promise.all(blobs.filter((b) => b.pathname !== pad).map((b) => del(b.pathname)));
+  } catch (err) {
+    meldOpslagfout(err);
+  }
+
+  return { pad, naam: veiligeNaam(naam), toegevoegdOp: new Date().toISOString() };
+}
+
+/** Haalt het eigen logo weg; de tool valt dan terug op het logo uit de repo. */
+export async function verwijderLogo(): Promise<void> {
+  try {
+    const { blobs } = await list({ prefix: LOGO_PREFIX });
+    await Promise.all(blobs.map((b) => del(b.pathname)));
+  } catch (err) {
+    meldOpslagfout(err);
+  }
 }
 
 /* ------------------------------------------------------------------ */
