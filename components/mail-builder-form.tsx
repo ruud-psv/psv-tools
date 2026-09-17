@@ -893,7 +893,8 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
-  <title>${titleText}</title>${EMAIL_HEAD_EXTRAS}
+  <title>${titleText}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;}
     table,tbody,tr,td{padding:0;border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;}

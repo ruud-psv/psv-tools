@@ -139,15 +139,11 @@ export function PrematchBlocksBlock({ state, onChange, triggerUpload, uploadingF
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="shrink-0 h-8 px-2"
+                    className="shrink-0 h-8 gap-1.5 px-2.5 text-xs"
                     disabled={uploadingField !== null}
                     onClick={() => triggerUpload(`pm-${block.id}`, (url) => updateBlock(i, "imageUrl", url))}
                   >
-                    {uploadingField === `pm-${block.id}` ? (
-                      <span className="text-xs">…</span>
-                    ) : (
-                      <Upload className="h-3.5 w-3.5" />
-                    )}
+                    <Upload className="h-3.5 w-3.5" />{uploadingField === `pm-${block.id}` ? "Uploaden…" : "Upload"}
                   </Button>
                 </div>
                 <Input
@@ -239,15 +235,11 @@ export function PrematchBlocksBlock({ state, onChange, triggerUpload, uploadingF
               type="button"
               variant="outline"
               size="sm"
-              className="shrink-0 h-8 px-2"
+              className="shrink-0 h-8 gap-1.5 px-2.5 text-xs"
               disabled={uploadingField !== null}
               onClick={() => triggerUpload("pm-footer", (url) => onChange({ prematchFooterPreviewUrl: url }))}
             >
-              {uploadingField === "pm-footer" ? (
-                <span className="text-xs">…</span>
-              ) : (
-                <Upload className="h-3.5 w-3.5" />
-              )}
+              <Upload className="h-3.5 w-3.5" />{uploadingField === "pm-footer" ? "Uploaden…" : "Upload"}
             </Button>
           </div>
           <Input

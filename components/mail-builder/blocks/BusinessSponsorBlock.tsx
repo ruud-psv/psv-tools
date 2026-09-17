@@ -32,7 +32,7 @@ export function BusinessSponsorBlock({ state, onChange, triggerUpload, uploading
               disabled={uploadingField !== null}
               onClick={() => triggerUpload("biz-sponsor", (url) => onChange({ businessSponsorPreviewUrl: url }))}
             >
-              {uploadingField === "biz-sponsor" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+              <Upload className="h-4 w-4" />{uploadingField === "biz-sponsor" ? "Uploaden…" : "Upload"}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">

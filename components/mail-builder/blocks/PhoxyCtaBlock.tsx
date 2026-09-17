@@ -32,7 +32,7 @@ export function PhoxyCtaBlock({ state, onChange, triggerUpload, uploadingField }
               disabled={uploadingField !== null}
               onClick={() => triggerUpload("phoxy-cta-img", (url) => onChange({ phoxyCtaImagePreviewUrl: url }))}
             >
-              {uploadingField === "phoxy-cta-img" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+              <Upload className="h-4 w-4" />{uploadingField === "phoxy-cta-img" ? "Uploaden…" : "Upload"}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">

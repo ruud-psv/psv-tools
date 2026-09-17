@@ -71,7 +71,7 @@ export function EnqueteCtaBlock({ state, onChange, triggerUpload, uploadingField
                   disabled={uploadingField !== null}
                   onClick={() => triggerUpload("enquete-sec", (url) => onChange({ enqueteSecImagePreviewUrl: url }))}
                 >
-                  {uploadingField === "enquete-sec" ? <span className="text-xs">…</span> : <Upload className="h-4 w-4" />}
+                  <Upload className="h-4 w-4" />{uploadingField === "enquete-sec" ? "Uploaden…" : "Upload"}
                 </Button>
               </div>
             </div>
