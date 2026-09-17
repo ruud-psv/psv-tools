@@ -42,14 +42,54 @@ browser                          Next.js                    Blob        Replicat
   └─ GET …/download ───────────────▶│ streamt de PNG met een nette bestandsnaam
 ```
 
+### Het logo en de naam komen er ná het genereren op
+
+Het Phoxy Club-logo en de naam zijn geen beeldopdracht maar een opmaakstap, in
+`lib/kleurplaat/compositie.ts`, in de browser op een canvas. De reden is simpel: een
+beeldmodel kan een merklogo niet natekenen zonder het te verminken, en het kan al helemaal
+geen lettertype gebruiken — het benadert letters, met spelfouten als gevolg.
+
+Wat dat oplevert:
+
+- Het logo is exact het logo, elke keer, in de hoek die je kiest.
+- De naam staat er foutloos in DynaPuff, ook bij een rare spelling.
+- Naam of logo veranderen kost **geen nieuwe generatie**: de plaat wordt opnieuw opgebouwd
+  zodra je typt.
+
+De prompt vraagt het model daarom om nergens letters te tekenen, en om de hoek waar het logo
+komt rustig te houden. Het **rugnummer** blijft wél een opdracht aan het model: dat moet op het
+shirt staan en met de houding meebuigen, en dat is niet los te stempelen.
+
+**Welk** logo erop komt, beheer je in de tool zelf: onder de logo-instellingen zit een eigen
+logo te uploaden (png, met doorzichtige achtergrond). Dat gaat naar dezelfde gedeelde opslag als
+de referenties, dus iedereen krijgt het meteen. Er geldt er altijd precies één; een nieuwe upload
+vervangt de vorige, en "terug naar het standaardlogo" valt terug op
+`public/images/phoxy-club-logo.png` uit de repo.
+
+Het logo kan als lijntekening of vol in kleur. De lijnversie wordt uit het kleurenlogo gerekend
+door alles wat donker is te bewaren en de rest doorzichtig te maken; het logo heeft overal een
+zwarte contourlijn, dus wat overblijft is precies de omtrek — in te kleuren, net als de rest.
+Onder het logo ligt een wit vlak, anders valt het weg in een drukke tekening. Staat er een naam,
+dan groeit het canvas met een witte strook onderaan; de tekening zelf wordt nooit overschreven.
+
+De tekening wordt voor die stap via `/api/kleurplaat/download?...&inline=1` geladen, dus van onze
+eigen oorsprong. Rechtstreeks van Replicate zou het canvas "besmet" raken en er geen PNG meer
+uit te halen zijn.
+
+**DynaPuff** staat zelf gehost in `public/fonts/` (SIL Open Font License 1.1) en is in
+`app/globals.css` als `@font-face` aangemeld. Het canvas wacht met tekenen tot het font er is,
+anders valt het stilletjes terug op een ander lettertype.
+
 ### Wat waar staat
 
 | Wat | Waar | Gedeeld? |
 |---|---|---|
 | Referentiebeelden van Phoxy | Vercel Blob, privé, `kleurplaat/referenties/` | ja, iedereen ziet dezelfde bibliotheek |
 | Toegevoegde modellen | Vercel Blob, privé, `kleurplaat/modellen/` | ja |
+| Het logo | Vercel Blob, privé, `kleurplaat/logo/` — of het logo uit de repo | ja |
 | Welke referenties meegaan | alleen in het scherm | nee, dat is een keuze per generatie |
 | Gegenereerde kleurplaten | nergens — alleen de link van Replicate | nee, en die link verloopt na een uur |
+| Standaardlogo en DynaPuff | in de repo: `public/images/phoxy-club-logo.png` en `public/fonts/` | ja, het zit in de build |
 
 De blobs staan **privé**: het zijn clubillustraties die niet op een openbare URL horen. De
 browser krijgt ze via `/api/kleurplaat/referenties/bestand`, achter dezelfde login als de rest
@@ -135,10 +175,12 @@ volgorde ligt vast, van breed naar specifiek:
 2. **Karakter** — Phoxy uit de referenties, met de opdracht kop, oren, snuit, staart en tenue
    over te nemen. Zonder referenties valt hij terug op "een vriendelijke cartoonvos".
 3. **Scène** — uit `SCENES` of de vrije tekst van de gebruiker.
-4. **Personalisatie** — naam in holle bloklettercontour, rugnummer op het shirt.
-5. **Detailniveau** — hoe vol de plaat mag zijn, afhankelijk van de leeftijd.
-6. **Harde eisen** — zwarte contouren op wit, geen kleur, geen arcering, geen schaduw, geen
-   logo of watermerk. Die staan bewust achteraan, want daar wegen ze het zwaarst.
+4. **Rugnummer** — als holle cijfers op het shirt.
+5. **Vrije hoek** — de hoek waar de browser straks het logo plakt.
+6. **Detailniveau** — hoe vol de plaat mag zijn, afhankelijk van de leeftijd.
+7. **Harde eisen** — zwarte contouren op wit, geen kleur, geen arcering, geen schaduw, geen
+   logo of watermerk, en nergens letters. Die staan bewust achteraan, want daar wegen ze het
+   zwaarst.
 
 Valt het lijnwerk tegen (grijstinten, gevulde vlakken, arcering), dan is stap 6 de plek om te
 schaven, niet de scène-omschrijving.
@@ -148,8 +190,8 @@ het model. Een scène toevoegen is één item in die lijst.
 
 ## 5. Bekende beperkingen
 
-- **Namen op de plaat.** Beeldmodellen schrijven letters niet altijd foutloos. Bij korte namen
-  gaat het meestal goed, bij lange namen niet. Altijd controleren voordat je hem verstuurt.
+- **Het rugnummer komt van het model.** De naam staat er exact op, maar het nummer op het shirt
+  tekent het model zelf; controleer dat even.
 - **Gegenereerde platen worden niet bewaard.** Ze leven in de sessie en op de link van
   Replicate. De historie onderaan verdwijnt bij een refresh.
 - **Geen PDF.** De download is PNG. Een printklare A4-PDF met snijmarges is de logische

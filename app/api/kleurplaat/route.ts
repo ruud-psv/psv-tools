@@ -19,6 +19,14 @@ export const maxDuration = 60;
 const DETAILS: DetailNiveau[] = ["eenvoudig", "gemiddeld", "gedetailleerd"];
 const VERHOUDINGEN: Verhouding[] = ["2:3", "3:2", "1:1"];
 
+/** De hoek waar de browser het logo plakt, in de woorden van het model. */
+const HOEKEN: Record<string, "top left" | "top right" | "bottom left" | "bottom right"> = {
+  linksboven: "top left",
+  rechtsboven: "top right",
+  linksonder: "bottom left",
+  rechtsonder: "bottom right",
+};
+
 export async function POST(req: NextRequest) {
   const sessie = requireEmail(req);
   if ("error" in sessie) return sessie.error;
@@ -88,9 +96,9 @@ export async function POST(req: NextRequest) {
     const prompt = bouwPrompt({
       scene,
       detail,
-      naam: typeof body.naam === "string" ? body.naam.slice(0, 40) : undefined,
       rugnummer: typeof body.rugnummer === "string" ? body.rugnummer.slice(0, 3) : undefined,
       extra: typeof body.extra === "string" ? body.extra.slice(0, 400) : undefined,
+      vrijeHoek: HOEKEN[String(body.logoHoek ?? "")],
       // Het model kan alleen naar referenties kijken als het er een veld voor heeft.
       metReferenties: referenties.length > 0 && Boolean(profiel.referentieVeld),
     });

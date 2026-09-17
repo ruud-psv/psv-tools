@@ -24,9 +24,12 @@ function bestandsnaam(ruw: string | null): string {
 }
 
 /**
- * Haalt de gegenereerde afbeelding op bij Replicate en biedt hem aan als
- * download. Rechtstreeks downloaden vanaf de browser kan niet: de bestandsnaam
- * en de download-header zijn dan niet te sturen.
+ * Haalt de gegenereerde afbeelding op bij Replicate en geeft hem door.
+ *
+ * Twee redenen om dat niet rechtstreeks vanuit de browser te doen: bij een
+ * download zijn de bestandsnaam en de download-header niet te sturen, en bij
+ * `?inline=1` komt de tekening van onze eigen oorsprong — anders raakt het
+ * canvas dat de plaat samenstelt "besmet" en is er geen PNG meer uit te halen.
  */
 export async function GET(req: NextRequest) {
   const sessie = requireEmail(req);
@@ -58,11 +61,15 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return new NextResponse(res.body, {
-    headers: {
-      "Content-Type": res.headers.get("content-type") ?? "image/png",
-      "Content-Disposition": `attachment; filename="${bestandsnaam(req.nextUrl.searchParams.get("naam"))}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  const inline = req.nextUrl.searchParams.get("inline") === "1";
+  const headers: Record<string, string> = {
+    "Content-Type": res.headers.get("content-type") ?? "image/png",
+    "Cache-Control": "no-store",
+  };
+  if (!inline) {
+    headers["Content-Disposition"] =
+      `attachment; filename="${bestandsnaam(req.nextUrl.searchParams.get("naam"))}"`;
+  }
+
+  return new NextResponse(res.body, { headers });
 }
