@@ -28,7 +28,8 @@ browser                          Next.js                         Replicate
   ├─ upload referenties ────────────┤ (verkleind naar max 1024px,    │
   │  (blijven in localStorage)      │  data-URL, witte achtergrond)  │
   │                                 │                                │
-  ├─ POST /api/kleurplaat ─────────▶│ bouwt prompt, filtert input    │
+  ├─ POST /api/kleurplaat ─────────▶│ ─ GET /models/{owner}/{name} ─▶│ (schema)
+  │                                 │ bouwt prompt en model-input    │
   │                                 ├─ POST /models/…/predictions ──▶│
   │◀─ { id, prompt, model } ────────┤                                │
   │                                 │                                │
@@ -51,25 +52,59 @@ downloaden. Er wordt op dit moment niets opgeslagen — geen database, geen blob
 
 ## 3. Modellen
 
-De modellen staan in `lib/kleurplaat/index.ts` in `MODELLEN`:
+### Zelf een model toevoegen
 
-| Model | Referenties | Waarom |
-|---|---|---|
-| `google/nano-banana` | 4 | Gemini 2.5 Flash Image. Houdt een karakter over meerdere referenties het beste vast. Standaardkeuze. |
-| `bytedance/seedream-4` | 6 | Strak lijnwerk op 2K, neemt veel referenties mee. |
-| `black-forest-labs/flux-kontext-max` | 1 | Bewerkt één referentie en houdt de stijl strak vast. |
+In de tool zit onder het modelveld een knop **Model toevoegen**. Daar plak je de identifier
+van een Replicate-model (`openai/gpt-image-1.5`) of gewoon de URL van de modelpagina
+(`https://replicate.com/openai/gpt-image-1.5`). Een vastgezette versie mag ook:
+`eigenaar/model:<hash>`.
 
-Alle drie zijn officiële Replicate-modellen, dus ze draaien op `POST /v1/models/{owner}/{name}/predictions`
-zonder version hash.
+**Controleren** haalt het model op bij Replicate en meldt terug wat de tool ermee kan:
+hoeveel referenties het meeneemt en onder welke veldnaam, welke verhoudingen het kent, en of
+het wel een afbeelding oplevert. Klopt het, dan zet **Toevoegen** het model in de dropdown.
 
-Een model toevoegen is één item in `MODELLEN`, met een `buildInput` die de model-eigen
-veldnamen invult. De input wordt daarna automatisch gefilterd tegen het openapi-schema van
-het model (`lib/kleurplaat/replicate.ts`), zodat een veld dat dit model niet kent de aanvraag
-niet laat mislukken. Dat schema wordt per proces gecachet.
+Toegevoegde modellen staan in `localStorage` van je eigen browser — een collega ziet ze dus
+niet, en ze verdwijnen als je je browsergegevens wist. Bevalt een model, zet hem dan in
+`AANBEVOLEN_MODELLEN` in `lib/kleurplaat/index.ts`; daarmee staat hij voor iedereen in de lijst.
 
-Een andere aanbieder dan Replicate (bijvoorbeeld `gpt-image-1`) past in dezelfde opzet: die
-vraagt om een tweede client naast `replicate.ts` en een veld in `KleurplaatModel` dat zegt
-welke client hem moet uitvoeren.
+### Hoe een willekeurig model toch goed wordt aangeroepen
+
+Er staat geen regel code per model. `lib/kleurplaat/schema.ts` leest het openapi-schema dat
+Replicate per model publiceert en zoekt daarin op:
+
+| Wat we nodig hebben | Waar het naar zoekt |
+|---|---|
+| prompt | `prompt`, `text_prompt`, `text`, `description` |
+| referenties | `image_input`, `input_images`, `reference_images`, `image_prompt`, `input_image`, … |
+| verhouding | `aspect_ratio`, `ratio` |
+| bestandsformaat | `output_format`, `format` |
+| aantal beelden | `max_images`, `num_outputs`, `number_of_images` |
+
+Uit het type van het referentieveld volgt of het model één afbeelding of een lijst aanneemt —
+daarom neemt FLUX.1 Kontext er één mee en Nano Banana meer, zonder dat dat ergens is
+ingetypt. Velden die het model niet kent, sturen we niet mee; die zou Replicate weigeren.
+
+De verhouding wordt omgerekend naar wat het model aanbiedt. Staand (2:3) wordt bij Nano Banana
+letterlijk `2:3`, maar bij gpt-image-1.5 `1024x1536`, omdat dat de dichtstbijzijnde optie in
+zijn keuzelijst is. Kent een model geen bruikbare optie, dan sturen we het veld niet mee en
+houdt het model zijn eigen standaard aan.
+
+Het profiel wordt per proces gecachet, dus het kost één extra call bij de eerste generatie met
+een model.
+
+### Aanbevolen modellen
+
+`AANBEVOLEN_MODELLEN` in `lib/kleurplaat/index.ts` is puur een lijstje met een label en een
+tip erbij; er zit geen model-specifieke code onder.
+
+| Model | Waarom |
+|---|---|
+| `google/nano-banana` | Gemini 2.5 Flash Image. Houdt een karakter over meerdere referenties het beste vast. Standaardkeuze. |
+| `bytedance/seedream-4` | Strak lijnwerk op hoge resolutie, neemt veel referenties mee. |
+| `black-forest-labs/flux-kontext-max` | Bewerkt één referentie en houdt de stijl strak vast. |
+
+Een model zonder version hash draait op `POST /v1/models/{owner}/{name}/predictions` (de
+nieuwste versie); een gepind model op `POST /v1/predictions` met een `version`.
 
 ## 4. De prompt
 
@@ -99,6 +134,8 @@ het model. Een scène toevoegen is één item in die lijst.
   historie onderaan verdwijnt bij een refresh.
 - **Geen PDF.** De download is PNG. Een printklare A4-PDF met snijmarges is de logische
   volgende stap.
+- **Eigen modellen zijn per browser.** Zie hierboven: `localStorage`, niet gedeeld met
+  collega's. Een gedeelde lijst zou in Vercel Blob kunnen, net als de ticket-snapshots.
 - **Geen publieke pagina.** De tool zit achter de login. Wil je hem aan ouders en kinderen
   geven, dan hoort hij onder `/share/…` (die routes laat `middleware.ts` ongeauthenticeerd
   door) mét een rem op het aantal generaties per bezoeker — elke generatie kost geld.

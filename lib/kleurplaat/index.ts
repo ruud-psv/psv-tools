@@ -13,65 +13,63 @@ export type Verhouding = "2:3" | "3:2" | "1:1";
 /* Modellen                                                            */
 /* ------------------------------------------------------------------ */
 
-export interface KleurplaatModel {
-  /** Replicate model slug, `owner/name`. Officiële modellen — geen version hash nodig. */
+/**
+ * Een model is niet meer dan zijn Replicate-identifier. Hoe het aangeroepen
+ * moet worden, leest `lib/kleurplaat/schema.ts` uit het schema dat Replicate
+ * publiceert — zo werkt elk model dat iemand erin plakt, zonder code.
+ */
+export interface Model {
+  /** `owner/name`, zoals op replicate.com. */
   id: string;
   label: string;
-  /** Korte uitleg in de UI. */
-  hint: string;
-  /** Hoeveel referentiebeelden het model meeneemt. */
-  maxReferenties: number;
-  /** Bouwt de model-specifieke input. Onbekende velden worden later tegen het
-   *  schema van Replicate gefilterd, dus een extra veld is niet erg. */
-  buildInput(args: { prompt: string; referenties: string[]; verhouding: Verhouding }): Record<string, unknown>;
+  /** Korte uitleg in de UI; leeg bij zelf toegevoegde modellen. */
+  hint?: string;
+  /** Optionele version hash, als het model gepind is. */
+  versie?: string;
 }
 
-export const MODELLEN: KleurplaatModel[] = [
+/** Modellen die we zelf hebben uitgeprobeerd. Aanvullen kan in de tool zelf. */
+export const AANBEVOLEN_MODELLEN: Model[] = [
   {
     id: "google/nano-banana",
     label: "Nano Banana (Gemini 2.5 Flash Image)",
     hint: "Beste karakterconsistentie over meerdere referenties. Standaardkeuze.",
-    maxReferenties: 4,
-    buildInput: ({ prompt, referenties, verhouding }) => ({
-      prompt,
-      image_input: referenties,
-      aspect_ratio: verhouding,
-      output_format: "png",
-    }),
   },
   {
     id: "bytedance/seedream-4",
     label: "Seedream 4",
-    hint: "Strak, hoog opgelost lijnwerk (2K). Neemt veel referenties mee.",
-    maxReferenties: 6,
-    buildInput: ({ prompt, referenties, verhouding }) => ({
-      prompt,
-      image_input: referenties,
-      aspect_ratio: verhouding,
-      size: "2K",
-      max_images: 1,
-      sequential_image_generation: "disabled",
-    }),
+    hint: "Strak, hoog opgelost lijnwerk. Neemt veel referenties mee.",
   },
   {
     id: "black-forest-labs/flux-kontext-max",
     label: "FLUX.1 Kontext max",
     hint: "Bewerkt één referentie en houdt de stijl strak vast.",
-    maxReferenties: 1,
-    buildInput: ({ prompt, referenties, verhouding }) => ({
-      prompt,
-      input_image: referenties[0],
-      aspect_ratio: verhouding,
-      output_format: "png",
-      safety_tolerance: 2,
-    }),
   },
 ];
 
-export const STANDAARD_MODEL = MODELLEN[0].id;
+export const STANDAARD_MODEL = AANBEVOLEN_MODELLEN[0].id;
 
-export function vindModel(id: string): KleurplaatModel | undefined {
-  return MODELLEN.find((m) => m.id === id);
+/**
+ * Leest een model-identifier uit wat de gebruiker plakt. Toegestaan:
+ * `owner/name`, `owner/name:versionhash`, en een volledige replicate.com-URL.
+ */
+export function parseerModelId(invoer: string): { id: string; versie?: string } | null {
+  let tekst = invoer.trim();
+  if (!tekst) return null;
+
+  // Volledige URL: https://replicate.com/openai/gpt-image-1.5(/versions/<hash>)
+  const url = tekst.match(/^https?:\/\/(?:www\.)?replicate\.com\/([^/\s?#]+\/[^/\s?#]+)(?:\/versions\/([0-9a-f]{6,64}))?/i);
+  if (url) tekst = url[2] ? `${url[1]}:${url[2]}` : url[1];
+
+  const m = tekst.match(/^([a-z0-9][a-z0-9._-]*)\/([a-z0-9][a-z0-9._-]*)(?::([0-9a-f]{6,64}))?$/i);
+  if (!m) return null;
+
+  return { id: `${m[1]}/${m[2]}`, versie: m[3] };
+}
+
+/** Een net label voor een zelf toegevoegd model: `openai/gpt-image-1.5` → `gpt-image-1.5`. */
+export function labelUitId(id: string): string {
+  return id.split("/").pop() ?? id;
 }
 
 /* ------------------------------------------------------------------ */
@@ -243,7 +241,10 @@ export function eigenScenePrompt(tekst: string): string {
 /* ------------------------------------------------------------------ */
 
 export interface GenereerRequest {
+  /** Replicate-identifier `owner/name`. */
   model: string;
+  /** Optionele version hash; zonder deze draait de nieuwste versie. */
+  versie?: string;
   sceneId: string | "eigen";
   eigenScene?: string;
   detail: DetailNiveau;
@@ -259,6 +260,19 @@ export interface GenereerResponse {
   id: string;
   prompt: string;
   model: string;
+}
+
+/** Wat `/api/kleurplaat/model` over een model terugmeldt. */
+export interface ModelProfielInfo {
+  id: string;
+  versie?: string;
+  omschrijving?: string;
+  /** Hoeveel referenties dit model meeneemt; 0 = het kent er geen veld voor. */
+  maxReferenties: number;
+  referentieVeld?: string;
+  verhoudingOpties: string[];
+  levertBestand: boolean;
+  waarschuwingen: string[];
 }
 
 export interface StatusResponse {

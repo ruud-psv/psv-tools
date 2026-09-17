@@ -3,13 +3,14 @@ import { requireEmail } from "@/lib/api-session";
 import {
   bouwPrompt,
   eigenScenePrompt,
-  vindModel,
+  parseerModelId,
   vindScene,
   type DetailNiveau,
   type GenereerRequest,
   type Verhouding,
 } from "@/lib/kleurplaat";
-import { startVoorspelling } from "@/lib/kleurplaat/replicate";
+import { bouwInput, MAX_REFERENTIES } from "@/lib/kleurplaat/schema";
+import { haalProfiel, startVoorspelling } from "@/lib/kleurplaat/replicate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,8 +18,6 @@ export const maxDuration = 60;
 const DETAILS: DetailNiveau[] = ["eenvoudig", "gemiddeld", "gedetailleerd"];
 const VERHOUDINGEN: Verhouding[] = ["2:3", "3:2", "1:1"];
 
-/** Hoeveel referentiebeelden we hoe dan ook accepteren, ongeacht het model. */
-const MAX_REFERENTIES = 6;
 /** Ruwe bovengrens per referentie (base64), zodat één upload de body niet opblaast. */
 const MAX_REFERENTIE_BYTES = 3_000_000;
 
@@ -37,9 +36,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Kon de aanvraag niet lezen." }, { status: 400 });
   }
 
-  const model = vindModel(String(body.model ?? ""));
-  if (!model) {
-    return NextResponse.json({ error: "Onbekend model gekozen." }, { status: 400 });
+  // Elk Replicate-model mag; hoe het aangeroepen wordt, leest het schema uit.
+  const gekozen = parseerModelId(
+    body.versie ? `${body.model ?? ""}:${body.versie}` : String(body.model ?? "")
+  );
+  if (!gekozen) {
+    return NextResponse.json(
+      { error: "Ongeldige model-identifier. Gebruik de vorm eigenaar/modelnaam." },
+      { status: 400 }
+    );
   }
 
   const detail: DetailNiveau = DETAILS.includes(body.detail as DetailNiveau)
@@ -82,27 +87,27 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  // Meer dan het model aankan is geen fout; de rest valt af.
-  const referenties = (ruweReferenties as string[]).slice(
-    0,
-    Math.min(MAX_REFERENTIES, model.maxReferenties)
-  );
-
-  const prompt = bouwPrompt({
-    scene,
-    detail,
-    naam: typeof body.naam === "string" ? body.naam.slice(0, 40) : undefined,
-    rugnummer: typeof body.rugnummer === "string" ? body.rugnummer.slice(0, 3) : undefined,
-    extra: typeof body.extra === "string" ? body.extra.slice(0, 400) : undefined,
-    metReferenties: referenties.length > 0,
-  });
+  const referenties = (ruweReferenties as string[]).slice(0, MAX_REFERENTIES);
 
   try {
+    const { profiel } = await haalProfiel(gekozen.id, gekozen.versie);
+
+    const prompt = bouwPrompt({
+      scene,
+      detail,
+      naam: typeof body.naam === "string" ? body.naam.slice(0, 40) : undefined,
+      rugnummer: typeof body.rugnummer === "string" ? body.rugnummer.slice(0, 3) : undefined,
+      extra: typeof body.extra === "string" ? body.extra.slice(0, 400) : undefined,
+      // Het model kan alleen naar referenties kijken als het er een veld voor heeft.
+      metReferenties: referenties.length > 0 && Boolean(profiel.referentieVeld),
+    });
+
     const voorspelling = await startVoorspelling(
-      model.id,
-      model.buildInput({ prompt, referenties, verhouding })
+      profiel,
+      bouwInput(profiel, { prompt, referenties, verhouding })
     );
-    return NextResponse.json({ id: voorspelling.id, prompt, model: model.id });
+
+    return NextResponse.json({ id: voorspelling.id, prompt, model: gekozen.id });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Genereren mislukt." },
