@@ -188,6 +188,8 @@ export interface MailBuilderState {
   enqueteHeeftSecImage?: boolean;
   enqueteSecImagePreviewUrl?: string;
   enqueteSecImageAlt?: string;
+  // Preview-tekst naast het onderwerp in de inbox
+  preheaderTekst?: string;
   // Phoxy Club
   phoxyCtaImagePreviewUrl?: string;
   phoxyCtaUrl?: string;
@@ -229,6 +231,20 @@ const PREVIEW_CDN_HOST = "https://images.maileon-static.com";
 
 // Een URL die zonder protocol wordt ingevuld ("psv.nl") werkt niet in de mail en
 // laat applyUtm stilletjes falen. Tokens, ankers, mailto en paden blijven met rust.
+// De verborgen preheader is de tekst die in de inbox naast het onderwerp staat.
+// Blijft die leeg, dan bevat het blok alleen onzichtbare opvultekens en pakt de
+// inbox het eerstvolgende element — bij ons de open-pixel, en dus diens URL.
+// Zonder eigen tekst houden we het Maileon-token, zodat Basic settings het kan vullen.
+function preheaderHtml(state: MailBuilderState, forExport: boolean): string {
+  const eigen = (state.preheaderTekst ?? "")
+    .trim()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  if (!forExport) return eigen;
+  return `${eigen || "[[PREVIEW-TEXT|]]"}[[% unescape_html (repeat zwnjnbsp 180)]]`;
+}
+
 function normalizeUrl(url: string): string {
   const u = url.trim();
   if (!u) return u;
@@ -845,7 +861,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
 
   const footerSrc = imgSrc(state.prematchFooterPreviewUrl);
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "Pre-Match preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport
     ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">`
     : "";
@@ -913,8 +929,8 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -1046,7 +1062,7 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
   const patternSrc = forExport ? PSVPLAY_PATTERN_SRC_EXPORT : PSVPLAY_PATTERN_SRC_PREVIEW;
 
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "PSV Play preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
@@ -1179,8 +1195,8 @@ function generatePsvPlayHTML(state: MailBuilderState, forExport = false): string
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -1329,7 +1345,7 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   const patternSrc = forExport ? PSVBUSINESS_PATTERN_EXPORT : PSVBUSINESS_PATTERN_PREVIEW;
 
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "PSV Business preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const unsubHref = forExport ? "[[UNSUBSCRIBE]]" : "#";
@@ -1418,8 +1434,8 @@ function generatePsvBusinessHTML(state: MailBuilderState, forExport = false): st
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -1537,7 +1553,7 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
 
   const blocksHtml = state.blocks.map(block => {
@@ -1622,8 +1638,8 @@ function generateEnqueteHTML(state: MailBuilderState, forExport = false): string
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -1782,7 +1798,7 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
 
   const makeLeftCtaRow = (label: string, href: string, bg: string) => `<tr>
@@ -1849,8 +1865,8 @@ function generateFcPsvHTML(state: MailBuilderState, forExport = false): string {
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -2007,7 +2023,7 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
   const onlineVersion = forExport ? "[[ONLINE-VERSION]]" : "#";
   const changeLanguageHref = forExport ? `[[LINK|https://login.psv.nl/Dashboard/Profile]]` : "https://login.psv.nl/Dashboard/Profile";
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">` : "";
 
   const blocksHtml = state.blocks.map(block => {
@@ -2063,8 +2079,8 @@ function generatePhoxyHTML(state: MailBuilderState, forExport = false): string {
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#F1F1F1;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#F1F1F1" style="width:100%;background-color:#F1F1F1;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -2253,7 +2269,7 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
     : "https://www.psv.nl/psv/mis-niks-van-psv.htm";
 
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "E-mail preview";
-  const preheader = forExport ? `[[PREVIEW-TEXT|]][[% unescape_html (repeat zwnjnbsp 180)]]` : "";
+  const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport
     ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">`
     : "";
@@ -2374,8 +2390,8 @@ function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   </style>
 </head>
 <body id="maileon-body" style="margin:0;padding:0;background-color:#000000;">
-  ${openPixelHtml}
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;height:0;width:0;max-width:0;font-size:0;line-height:0;float:left;">${preheader}</div>
+  ${openPixelHtml}
   <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#000000" style="width:100%;background-color:#000000;" role="presentation">
     <tr>
       <td align="center" valign="top">
@@ -2768,6 +2784,20 @@ export function MailBuilderForm() {
                   <SelectItem value="tours">PSV Tours</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="preheaderTekst">Preview-tekst</Label>
+              <Input
+                id="preheaderTekst"
+                placeholder="Support jij woensdag PSV Vrouwen vanaf de tribune?"
+                value={state.preheaderTekst ?? ""}
+                onChange={(e) => set("preheaderTekst", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Staat in de inbox naast het onderwerp. Blijft dit leeg, dan gebruikt de export het
+                Maileon-token en moet je de tekst in Maileon bij Basic settings invullen.
+              </p>
             </div>
 
             {state.template !== "prematch" && state.template !== "psvplay" && (
