@@ -252,8 +252,11 @@ async function fetchInsights(
 
     if (!res.ok || body.error) {
       const detail = body.error?.message ?? text.slice(0, 300);
+      // Het account-ID staat er bewust bij: (#200) zegt niet wélk account
+      // geweigerd werd, en dat is precies wat je wil weten als de koppeling
+      // naar het verkeerde account wijst. Account-ID's zijn niet geheim.
       throw new ConnectorRequestError(
-        `Meta Marketing API — ${res.status} ${res.statusText}: ${redact(detail, config.token)}`,
+        `Meta Marketing API (${config.accountPath}) — ${res.status} ${res.statusText}: ${redact(detail, config.token)}`,
         res.status,
         redact(detail, config.token)
       );
