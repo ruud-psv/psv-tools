@@ -56,7 +56,12 @@ import {
 
 const ADS_HOST = "https://googleads.googleapis.com";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const DEFAULT_API_VERSION = "v18";
+/**
+ * Google ondersteunt een API-versie ongeveer een jaar. Een verlopen versie geeft
+ * geen nette foutmelding maar een HTML-404, wat verderop als een onleesbaar
+ * antwoord binnenkomt. Stel bij via `GOOGLE_ADS_API_VERSION`.
+ */
+const DEFAULT_API_VERSION = "v22";
 
 /** Bedragen komen in micro's binnen: 1 euro is 1.000.000. */
 const MICROS_PER_EURO = 1_000_000;

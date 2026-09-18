@@ -42,7 +42,8 @@ export const dynamic = "force-dynamic";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const ADS_HOST = "https://googleads.googleapis.com";
-const DEFAULT_API_VERSION = "v18";
+/** Zie de toelichting bij dezelfde constante in `lib/paid-ads/connectors/google.ts`. */
+const DEFAULT_API_VERSION = "v22";
 const SCOPE = "https://www.googleapis.com/auth/adwords";
 const REDIRECT_PATH = "/dashboard/auth/google/callback";
 
@@ -111,10 +112,18 @@ async function listAccessibleCustomers(
       cache: "no-store",
     });
 
-    const body = (await res.json()) as {
-      resourceNames?: string[];
-      error?: { message?: string };
-    };
+    const text = await res.text();
+    let body: { resourceNames?: string[]; error?: { message?: string } };
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // Een uitgefaseerde API-versie geeft geen JSON-fout maar een HTML-404.
+      return {
+        ok: false,
+        message: `Google Ads antwoordde onleesbaar (${res.status}). Bestaat versie ${apiVersion} nog?`,
+        customerIds: [],
+      };
+    }
 
     if (!res.ok) {
       return {
