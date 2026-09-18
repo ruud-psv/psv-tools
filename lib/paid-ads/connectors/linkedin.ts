@@ -22,7 +22,10 @@
  *                               `urn:li:sponsoredAccount:`-voorvoegsel.
  * Optioneel:
  *   LINKEDIN_ADS_API_VERSION    Waarde voor de verplichte `LinkedIn-Version`-
- *                               header (formaat JJJJMM), standaard 202401.
+ *                               header (formaat JJJJMM). LinkedIn ondersteunt
+ *                               een versie ongeveer een jaar en geeft daarna
+ *                               `426 NONEXISTENT_VERSION`; deze variabele zet
+ *                               een nieuwe versie zonder codewijziging.
  *
  * LinkedIn rapporteert geen uniek bereik op advertentieniveau; `reach` blijft
  * daarom 0, net als bij Google Ads. Als resultaat telt de eerste van
@@ -59,7 +62,8 @@ import {
 } from "./types";
 
 const API_HOST = "https://api.linkedin.com";
-const DEFAULT_API_VERSION = "202401";
+/** Verloopt na ongeveer een jaar; zie `LINKEDIN_ADS_API_VERSION` hierboven. */
+const DEFAULT_API_VERSION = "202606";
 
 /** Harde bovengrens op het doorbladeren, net als bij de andere koppelingen. */
 const MAX_PAGES = 25;
