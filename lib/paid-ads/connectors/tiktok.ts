@@ -202,8 +202,10 @@ async function runReport(
 
     if (!res.ok || body.code !== 0) {
       const detail = body.message ?? text.slice(0, 300);
+      // Het advertiser-ID staat er bewust bij: wijst de koppeling naar het
+      // verkeerde account, dan is dat uit TikToks melding niet af te leiden.
       throw new ConnectorRequestError(
-        `TikTok Marketing API — ${res.status} ${res.statusText}: ${redact(detail, config.token)}`,
+        `TikTok Marketing API (advertiser ${config.advertiserId}) — ${res.status} ${res.statusText}: ${redact(detail, config.token)}`,
         res.status,
         redact(detail, config.token)
       );
