@@ -324,8 +324,8 @@ export default async function GoogleCallbackPage({
             <>
               <p className="text-xs text-muted-foreground">
                 {check.customerIds.length === 1
-                  ? "Dit account is met dit token te lezen:"
-                  : "Deze accounts zijn met dit token te lezen. Neem het PSV-advertentieaccount over — niet het MCC-nummer, dat hoort in GOOGLE_ADS_LOGIN_CUSTOMER_ID."}
+                  ? "Dit account is direct toegankelijk met dit token. Let op: is dit jullie managersaccount (MCC), dan hoort dit nummer in GOOGLE_ADS_LOGIN_CUSTOMER_ID en moet GOOGLE_ADS_CUSTOMER_ID het advertentieaccount eronder zijn — die verschijnen hier niet."
+                  : "Deze accounts zijn direct toegankelijk met dit token. Neem het advertentieaccount over — niet het MCC-nummer, dat hoort in GOOGLE_ADS_LOGIN_CUSTOMER_ID."}
               </p>
               {check.customerIds.map((id) => (
                 <CopyField key={id} label="GOOGLE_ADS_CUSTOMER_ID" value={id} />
