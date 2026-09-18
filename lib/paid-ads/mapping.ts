@@ -123,7 +123,9 @@ export function resolvePhase(campaignName: string, objective: string): PaidPhase
  * plek waar de exploitatienamen staan.
  */
 const BUSINESS_UNITS: [string, string[]][] = [
-  ["Ticketing", ["ticket", "ticketing", "kaart", "kaarten", "seizoenkaart", "seizoenkaarten", "wedstrijd", "losse verkoop", "uitkaart"]],
+  // Competitienamen horen hier: bij PSV is een campagne rond een wedstrijd of
+  // toernooi vrijwel altijd kaartverkoop.
+  ["Ticketing", ["ticket", "ticketing", "kaart", "kaarten", "seizoenkaart", "seizoenkaarten", "wedstrijd", "losse verkoop", "uitkaart", "ucl", "champions league", "eredivisie"]],
   ["Merchandise", ["merch", "merchandise", "fanstore", "shirt", "thuisshirt", "uitshirt", "webshop", "kit"]],
   ["Mijn PSV+", ["psv+", "psv plus", "mijn psv", "plus", "fanclub", "abonnement", "membership"]],
   ["PSV Business", ["business", "hospitality", "seats", "sponsor", "sponsoring", "zakelijk", "b2b"]],
@@ -175,9 +177,12 @@ export function resolveCampaignGroup(campaignName: string): string | null {
 const AUDIENCE_BY_KEYWORD: [AudienceType, string[]][] = [
   ["lookalike", ["lookalike", "lal", "look a like", "similar"]],
   ["retargeting", ["retarget", "retargeting", "remarket", "remarketing", "rtg", "bezoekers", "visitors", "viewers", "engagers", "warm"]],
-  ["database", ["crm", "database", "klantenbestand", "customer list", "customer match", "bestand", "mailbestand", "eigen data"]],
+  ["database", ["crm", "database", "klantenbestand", "customer list", "customer match", "bestand", "mailbestand", "eigen data", "members", "lifecycle"]],
   ["interesse", ["interesse", "interest", "affinity", "in market", "in-market", "voetbal", "football fans"]],
-  ["broad", ["broad", "breed", "open", "prospecting", "cold", "koud", "advantage"]],
+  // "open" stond hier als los trefwoord, maar de vergelijking kijkt naar
+  // deelstrings: dat matchte middenin "afgelopen" en "aflopende" en zette
+  // CRM-segmenten als "Afgelopen members" ten onrechte op broad.
+  ["broad", ["broad", "breed", "open targeting", "prospecting", "cold", "koud", "advantage", "straal", "omliggende", "regio"]],
 ];
 
 /** Leidt het doelgroeptype af uit de naam van de advertentieset. */
