@@ -2,6 +2,7 @@ import {
   BarChart2,
   BookOpen,
   ClipboardCheck,
+  Database,
   FileText,
   Globe,
   Headset,
@@ -112,6 +113,14 @@ export const knowledgeTools: ToolEntry[] = [
 ];
 
 export const insightTools: ToolEntry[] = [
+  {
+    name: "Database",
+    title: "Campagne-opbrengst meten",
+    description:
+      "Zet een campagne-export naast de SSO-database: wie was een nieuw record en wie kenden we al.",
+    href: "/dashboard/database",
+    icon: Database,
+  },
   {
     name: "Paid Ads",
     title: "Paid ads analyseren",
