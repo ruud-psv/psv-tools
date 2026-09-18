@@ -227,6 +227,16 @@ function iso(date: Date): string {
  * wordt: over 90 dagen komt er een 500 terug, over een heel seizoen een
  * "Service temporarily unavailable". Officieel hoort daar een asynchrone
  * rapportage-job bij; dit haalt hetzelfde op met de endpoint die er al is.
+ *
+ * Die ruil kost verzoeken, en dat is de zwakke plek. Dertig dagen kost er
+ * ongeveer zes, negentig dagen vijftien, en een vergevorderd seizoen loopt op
+ * richting de veertig. Ze tellen allemaal mee voor hetzelfde app-quotum, dus
+ * een paar zware weergaven achter elkaar leveren "Application request limit
+ * reached" op — óók voor de korte periodes, die het op zichzelf prima doen.
+ *
+ * Wie dit structureel wil oplossen bouwt de asynchrone rapportage-API in
+ * (aanvragen, pollen, downloaden): dat is één verzoek per rapport in plaats
+ * van tientallen, en het is er precies voor gemaakt.
  */
 function splitWindow(window: FetchWindow): FetchWindow[] {
   const end = new Date(`${window.to}T00:00:00.000Z`);
