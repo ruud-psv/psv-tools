@@ -325,166 +325,6 @@ export function SourceTab({
         </CardContent>
       </Card>
 
-      {/* Upload */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Nieuwe export uploaden</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Een volledig nieuw bestand vervangt de bron. Het bestand wordt in je browser
-            gelezen — alleen een onomkeerbare hash van elk SSO-ID met de aanmaakdatum
-            gaat naar de server.
-          </p>
-
-          <div>
-            <Label htmlFor="source-file" className="mb-1.5 block">
-              CSV of tab-gescheiden export
-            </Label>
-            <Input
-              id="source-file"
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.tsv,.txt,text/csv,text/plain"
-              disabled={busy}
-              onChange={(e) => {
-                const picked = e.target.files?.[0];
-                if (picked) void readFile(picked);
-              }}
-            />
-          </div>
-
-          {file && (
-            <p className="text-xs text-muted-foreground">
-              {file.name} · {formatBytes(file.size)}
-            </p>
-          )}
-
-          {busy && (
-            <div className="space-y-1.5">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-psv-red-primary transition-all"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
-              </div>
-              <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                {phase === "reading"
-                  ? `Bestand lezen — ${formatNumber(rowsSeen)} regels`
-                  : "Index versturen"}
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <Notice tone="error" title="Mislukt">
-              {error}
-            </Notice>
-          )}
-
-          {phase === "saved" && (
-            <Notice tone="success" title="Bron bijgewerkt">
-              De nieuwe export is nu de bron waartegen campagnes worden geteld.
-            </Notice>
-          )}
-
-          {result && (phase === "ready" || phase === "uploading") && (
-            <div className="space-y-4 rounded-lg border border-border p-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <StatTile
-                  label="Unieke records"
-                  value={formatNumber(result.index.count)}
-                  accent="#e82026"
-                />
-                <StatTile
-                  label="Regels gelezen"
-                  value={formatNumber(result.report.rowsRead)}
-                />
-                <StatTile
-                  label="Overgeslagen"
-                  value={formatNumber(result.report.rowsSkipped)}
-                  sub={
-                    result.report.rowsSkipped
-                      ? `${formatNumber(result.report.skippedNoId)} zonder ID · ${formatNumber(result.report.skippedBadDate)} zonder datum`
-                      : "alles bruikbaar"
-                  }
-                />
-                <StatTile
-                  label="Periode"
-                  value={formatDate(result.report.firstRecordDate)}
-                  sub={`tot ${formatDate(result.report.lastRecordDate)}`}
-                />
-              </div>
-
-              {/* Kolomherkenning — zichtbaar en corrigeerbaar, zodat de aanname
-                  tegen het bestand te controleren is. */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(Object.keys(COLUMN_LABELS) as (keyof ColumnMap)[]).map((key) => (
-                  <div key={key}>
-                    <Label className="mb-1.5 block text-xs">
-                      {COLUMN_LABELS[key]}{" "}
-                      <span className="font-sans normal-case tracking-normal text-muted-foreground">
-                        ({result.report.detection.source[key] === "header"
-                          ? "op koptekst"
-                          : "op positie"}
-                        )
-                      </span>
-                    </Label>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={result.report.detection.columns[key]}
-                      disabled={phase === "uploading"}
-                      onChange={(e) => changeColumn(key, Number(e.target.value))}
-                    >
-                      {result.report.detection.cells.map((cell, i) => (
-                        <option key={i} value={i}>
-                          {i + 1}. {cell || "(leeg)"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Gelezen als {result.report.encoding}
-                {result.report.detection.hasHeader
-                  ? ", eerste regel is een koptekst"
-                  : ", geen koptekst gevonden"}
-                {result.report.duplicates > 0 &&
-                  ` · ${formatNumber(result.report.duplicates)} dubbele ID's samengevoegd tot de vroegste datum`}
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => void save()} disabled={phase === "uploading"}>
-                  {phase === "uploading" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                  Opslaan als bron
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={reset}
-                  disabled={phase === "uploading"}
-                >
-                  Annuleren
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {phase === "saved" && (
-            <Button variant="outline" onClick={reset}>
-              <FileUp className="h-4 w-4" />
-              Nog een bestand uploaden
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Groei uit de huidige export */}
       {growthRows.length > 1 && (
         <Card>
@@ -644,6 +484,166 @@ export function SourceTab({
           </CardContent>
         </Card>
       )}
+
+      {/* Upload */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Nieuwe export uploaden</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Een volledig nieuw bestand vervangt de bron. Het bestand wordt in je browser
+            gelezen — alleen een onomkeerbare hash van elk SSO-ID met de aanmaakdatum
+            gaat naar de server.
+          </p>
+
+          <div>
+            <Label htmlFor="source-file" className="mb-1.5 block">
+              CSV of tab-gescheiden export
+            </Label>
+            <Input
+              id="source-file"
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.tsv,.txt,text/csv,text/plain"
+              disabled={busy}
+              onChange={(e) => {
+                const picked = e.target.files?.[0];
+                if (picked) void readFile(picked);
+              }}
+            />
+          </div>
+
+          {file && (
+            <p className="text-xs text-muted-foreground">
+              {file.name} · {formatBytes(file.size)}
+            </p>
+          )}
+
+          {busy && (
+            <div className="space-y-1.5">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-psv-red-primary transition-all"
+                  style={{ width: `${Math.round(progress * 100)}%` }}
+                />
+              </div>
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {phase === "reading"
+                  ? `Bestand lezen — ${formatNumber(rowsSeen)} regels`
+                  : "Index versturen"}
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <Notice tone="error" title="Mislukt">
+              {error}
+            </Notice>
+          )}
+
+          {phase === "saved" && (
+            <Notice tone="success" title="Bron bijgewerkt">
+              De nieuwe export is nu de bron waartegen campagnes worden geteld.
+            </Notice>
+          )}
+
+          {result && (phase === "ready" || phase === "uploading") && (
+            <div className="space-y-4 rounded-lg border border-border p-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <StatTile
+                  label="Unieke records"
+                  value={formatNumber(result.index.count)}
+                  accent="#e82026"
+                />
+                <StatTile
+                  label="Regels gelezen"
+                  value={formatNumber(result.report.rowsRead)}
+                />
+                <StatTile
+                  label="Overgeslagen"
+                  value={formatNumber(result.report.rowsSkipped)}
+                  sub={
+                    result.report.rowsSkipped
+                      ? `${formatNumber(result.report.skippedNoId)} zonder ID · ${formatNumber(result.report.skippedBadDate)} zonder datum`
+                      : "alles bruikbaar"
+                  }
+                />
+                <StatTile
+                  label="Periode"
+                  value={formatDate(result.report.firstRecordDate)}
+                  sub={`tot ${formatDate(result.report.lastRecordDate)}`}
+                />
+              </div>
+
+              {/* Kolomherkenning — zichtbaar en corrigeerbaar, zodat de aanname
+                  tegen het bestand te controleren is. */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(Object.keys(COLUMN_LABELS) as (keyof ColumnMap)[]).map((key) => (
+                  <div key={key}>
+                    <Label className="mb-1.5 block text-xs">
+                      {COLUMN_LABELS[key]}{" "}
+                      <span className="font-sans normal-case tracking-normal text-muted-foreground">
+                        ({result.report.detection.source[key] === "header"
+                          ? "op koptekst"
+                          : "op positie"}
+                        )
+                      </span>
+                    </Label>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={result.report.detection.columns[key]}
+                      disabled={phase === "uploading"}
+                      onChange={(e) => changeColumn(key, Number(e.target.value))}
+                    >
+                      {result.report.detection.cells.map((cell, i) => (
+                        <option key={i} value={i}>
+                          {i + 1}. {cell || "(leeg)"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Gelezen als {result.report.encoding}
+                {result.report.detection.hasHeader
+                  ? ", eerste regel is een koptekst"
+                  : ", geen koptekst gevonden"}
+                {result.report.duplicates > 0 &&
+                  ` · ${formatNumber(result.report.duplicates)} dubbele ID's samengevoegd tot de vroegste datum`}
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void save()} disabled={phase === "uploading"}>
+                  {phase === "uploading" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  Opslaan als bron
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={reset}
+                  disabled={phase === "uploading"}
+                >
+                  Annuleren
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {phase === "saved" && (
+            <Button variant="outline" onClick={reset}>
+              <FileUp className="h-4 w-4" />
+              Nog een bestand uploaden
+            </Button>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
