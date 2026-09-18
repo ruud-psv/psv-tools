@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { AlertTriangle, CheckCircle2, Plug } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { CopyField } from "./copy-field";
+import { CopyField } from "@/components/copy-field";
 
 /**
  * Autorisatiestap voor de TikTok-koppeling van het Paid Ads dashboard.
