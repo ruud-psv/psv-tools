@@ -296,9 +296,18 @@ function mergeRows(rows: MetaInsightRow[], perDay: boolean): MetaInsightRow[] {
 }
 
 /**
+ * Hoeveel blokken er tegelijk mogen lopen.
+ *
+ * Alles tegelijk afvuren levert "Service temporarily unavailable" op: Meta
+ * knijpt af zodra er te veel zware aanvragen naast elkaar staan. Alles achter
+ * elkaar zetten kost dan weer meer tijd dan de route mag draaien. Twee tegelijk
+ * komt er doorheen zonder het tijdslot op te souperen.
+ */
+const CHUNK_CONCURRENCY = 2;
+
+/**
  * Haalt één Insights-query op over de volledige periode. Lange periodes gaan
- * in blokken, die tegelijk lopen en daarna worden samengeteld — sequentieel
- * ophalen duurt bij een seizoen langer dan de route mag draaien.
+ * in blokken, die in kleine groepjes lopen en daarna worden samengeteld.
  */
 async function fetchInsights(
   config: MetaConfig,
@@ -312,10 +321,17 @@ async function fetchInsights(
     return fetchWindow(config, level, fields, window, options);
   }
 
-  const perChunk = await Promise.all(
-    chunks.map((chunk) => fetchWindow(config, level, fields, chunk, options))
-  );
-  return mergeRows(perChunk.flat(), Boolean(options.timeIncrement));
+  const rows: MetaInsightRow[] = [];
+  for (let i = 0; i < chunks.length; i += CHUNK_CONCURRENCY) {
+    const group = await Promise.all(
+      chunks
+        .slice(i, i + CHUNK_CONCURRENCY)
+        .map((chunk) => fetchWindow(config, level, fields, chunk, options))
+    );
+    rows.push(...group.flat());
+  }
+
+  return mergeRows(rows, Boolean(options.timeIncrement));
 }
 
 /**
