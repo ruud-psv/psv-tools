@@ -103,6 +103,36 @@ interface GoogleApiError {
   code?: number;
   message?: string;
   status?: string;
+  /** De echte oorzaak zit hier, niet in `message`. Zie `describeFailure`. */
+  details?: {
+    errors?: {
+      errorCode?: Record<string, string>;
+      message?: string;
+    }[];
+  }[];
+}
+
+/**
+ * Pelt de werkelijke oorzaak uit een Google Ads-fout.
+ *
+ * De buitenste melding is bij een 403 altijd het generieke "The caller does not
+ * have permission", wat niets zegt over wat er moet gebeuren. De code die
+ * eronder zit wél: `USER_PERMISSION_DENIED` betekent dat de ingelogde gebruiker
+ * geen toegang tot dat account heeft, `DEVELOPER_TOKEN_NOT_APPROVED` dat het
+ * developer token nog op testniveau staat, `CUSTOMER_NOT_FOUND` dat het
+ * account-ID niet bestaat onder dit manageraccount.
+ */
+function describeFailure(failure: GoogleApiError | undefined): string | null {
+  const inner = failure?.details?.flatMap((detail) => detail.errors ?? []) ?? [];
+
+  const described = inner
+    .map((error) => {
+      const code = error.errorCode ? Object.values(error.errorCode)[0] : null;
+      return [code, error.message].filter(Boolean).join(" — ");
+    })
+    .filter(Boolean);
+
+  return described.length > 0 ? described.join(" · ") : (failure?.message ?? null);
 }
 
 /* ------------------------------------------------------------- objectief -- */
@@ -385,9 +415,15 @@ async function runQuery(
   const failure = chunks.find((chunk) => chunk?.error)?.error;
 
   if (!res.ok || failure) {
-    const detail = failure?.message ?? text.slice(0, 300);
+    const detail = describeFailure(failure) ?? text.slice(0, 300);
+    // De account-ID's staan er bewust bij: een rechtenfout zegt niets over
+    // wélk account geweigerd werd, en juist de verwisseling van klant- en
+    // manageraccount is hier de klassieke oorzaak. ID's zijn niet geheim.
+    const scope = config.loginCustomerId
+      ? `klant ${config.customerId} via manager ${config.loginCustomerId}`
+      : `klant ${config.customerId}`;
     throw new ConnectorRequestError(
-      `Google Ads API — ${res.status} ${res.statusText}: ${redact(detail, secrets)}`,
+      `Google Ads API (${scope}) — ${res.status} ${res.statusText}: ${redact(detail, secrets)}`,
       res.status,
       redact(detail, secrets)
     );
