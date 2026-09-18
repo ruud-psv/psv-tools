@@ -57,6 +57,23 @@ export interface PaidConnector {
 /** Ontbrekende of onvolledige configuratie — een serverprobleem, geen API-fout. */
 export class ConnectorConfigError extends Error {}
 
+/**
+ * Bewaakt dat een credential geen witruimte bevat.
+ *
+ * Een token of secret met een spatie of regeleinde erin is altijd fout
+ * overgenomen — meestal twee keer geplakt, of met een regeleinde uit een mail.
+ * Zonder deze controle belandt zo'n waarde in een HTTP-header, en gooit de
+ * fetch een `Headers.append`-fout mét de volledige waarde erin. Die komt dan
+ * via `platformErrors` op het scherm, en daar hoort een credential niet.
+ */
+export function assertCleanSecret(name: string, value: string): void {
+  if (/\s/.test(value)) {
+    throw new ConnectorConfigError(
+      `De waarde van ${name} bevat spaties of regeleindes. Zet er precies één waarde in, zonder witruimte eromheen of ertussen.`
+    );
+  }
+}
+
 /** Het platform gaf een foutstatus terug of was onbereikbaar. */
 export class ConnectorRequestError extends Error {
   constructor(

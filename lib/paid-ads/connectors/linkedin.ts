@@ -53,6 +53,7 @@ import {
   resolvePhase,
 } from "@/lib/paid-ads/mapping";
 import {
+  assertCleanSecret,
   ConnectorConfigError,
   ConnectorRequestError,
   type ConnectorDailyPoint,
@@ -120,6 +121,8 @@ function getConfig(): LinkedInConfig {
       `LinkedIn-configuratie ontbreekt: ${missing.join(", ")}. Zet deze als environment variable in Vercel.`
     );
   }
+
+  assertCleanSecret("LINKEDIN_ADS_ACCESS_TOKEN", token!);
 
   const accountId = accountIdRaw!.replace("urn:li:sponsoredAccount:", "");
 

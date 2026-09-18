@@ -42,6 +42,7 @@ import {
   resolvePhase,
 } from "@/lib/paid-ads/mapping";
 import {
+  assertCleanSecret,
   ConnectorConfigError,
   ConnectorRequestError,
   type ConnectorDailyPoint,
@@ -112,6 +113,8 @@ function getConfig(): TikTokConfig {
       `TikTok-configuratie ontbreekt: ${missing.join(", ")}. Zet deze als environment variable in Vercel.`
     );
   }
+
+  assertCleanSecret("TIKTOK_ADS_ACCESS_TOKEN", token!);
 
   return {
     token: token!,

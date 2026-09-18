@@ -45,6 +45,7 @@ import {
   resolvePhase,
 } from "@/lib/paid-ads/mapping";
 import {
+  assertCleanSecret,
   ConnectorConfigError,
   ConnectorRequestError,
   type ConnectorDailyPoint,
@@ -228,6 +229,11 @@ function getConfig(): GoogleConfig {
       `Google Ads-configuratie ontbreekt: ${missing.join(", ")}. Zet deze als environment variable in Vercel.`
     );
   }
+
+  assertCleanSecret("GOOGLE_ADS_DEVELOPER_TOKEN", developerToken!);
+  assertCleanSecret("GOOGLE_ADS_CLIENT_ID", clientId!);
+  assertCleanSecret("GOOGLE_ADS_CLIENT_SECRET", clientSecret!);
+  assertCleanSecret("GOOGLE_ADS_REFRESH_TOKEN", refreshToken!);
 
   const loginCustomerId = readEnv("GOOGLE_ADS_LOGIN_CUSTOMER_ID");
 

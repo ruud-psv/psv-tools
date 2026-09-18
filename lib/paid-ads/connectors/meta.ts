@@ -35,6 +35,7 @@ import {
   resolvePhase,
 } from "@/lib/paid-ads/mapping";
 import {
+  assertCleanSecret,
   ConnectorConfigError,
   ConnectorRequestError,
   type ConnectorDailyPoint,
@@ -179,6 +180,8 @@ function getConfig(): MetaConfig {
       `Meta-configuratie ontbreekt: ${missing.join(", ")}. Zet deze als environment variable in Vercel.`
     );
   }
+
+  assertCleanSecret("META_ADS_ACCESS_TOKEN", token!);
 
   return {
     token: token!,
