@@ -55,6 +55,14 @@ const DEFAULT_API_VERSION = "v21.0";
 const MAX_PAGES = 25;
 const PAGE_SIZE = 500;
 
+/**
+ * Grootste periode die Meta in één synchrone aanvraag aankan. Dertig dagen komt
+ * betrouwbaar door; negentig geeft een 500 en een heel seizoen een
+ * "Service temporarily unavailable". Zie `splitWindow`.
+ */
+const MAX_WINDOW_DAYS = 30;
+const DAY_MS = 86_400_000;
+
 /** Rijen zoals de Insights-endpoint ze teruggeeft: alle getallen als string. */
 interface MetaInsightRow {
   date_start?: string;
@@ -208,12 +216,114 @@ function redact(text: string, token: string): string {
   return token ? text.split(token).join("***") : text;
 }
 
+function iso(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Knipt een periode in blokken van hoogstens `MAX_WINDOW_DAYS` dagen.
+ *
+ * Meta weigert een synchrone insights-aanvraag zodra het resultaat te groot
+ * wordt: over 90 dagen komt er een 500 terug, over een heel seizoen een
+ * "Service temporarily unavailable". Officieel hoort daar een asynchrone
+ * rapportage-job bij; dit haalt hetzelfde op met de endpoint die er al is.
+ */
+function splitWindow(window: FetchWindow): FetchWindow[] {
+  const end = new Date(`${window.to}T00:00:00.000Z`);
+  const chunks: FetchWindow[] = [];
+
+  let from = new Date(`${window.from}T00:00:00.000Z`);
+  while (from <= end) {
+    const to = new Date(
+      Math.min(from.getTime() + (MAX_WINDOW_DAYS - 1) * DAY_MS, end.getTime())
+    );
+    chunks.push({ from: iso(from), to: iso(to) });
+    from = new Date(to.getTime() + DAY_MS);
+  }
+  return chunks;
+}
+
+/** Telt twee getallen op die als string binnenkomen. */
+function addNumeric(a: string | undefined, b: string | undefined): string {
+  return String(num(a) + num(b));
+}
+
+function mergeActions(
+  a: MetaInsightRow["actions"],
+  b: MetaInsightRow["actions"]
+): MetaInsightRow["actions"] {
+  const byType = new Map<string, number>();
+  for (const action of [...(a ?? []), ...(b ?? [])]) {
+    byType.set(action.action_type, (byType.get(action.action_type) ?? 0) + num(action.value));
+  }
+  return [...byType.entries()].map(([action_type, value]) => ({
+    action_type,
+    value: String(value),
+  }));
+}
+
+/**
+ * Telt de rijen van hetzelfde object uit opeenvolgende blokken bij elkaar op,
+ * zodat de rest van de connector niet hoeft te weten dat er geknipt is.
+ *
+ * `reach` is daarbij een benadering: unieke mensen uit twee periodes zijn niet
+ * op te tellen zonder dubbeltelling. Meta levert geen ontdubbeld bereik over
+ * een samengesteld venster, en het dashboard telt bereik elders ook al op over
+ * campagnes heen — de vertekening is dus niet nieuw, wel groter.
+ */
+function mergeRows(rows: MetaInsightRow[], perDay: boolean): MetaInsightRow[] {
+  const byKey = new Map<string, MetaInsightRow>();
+
+  for (const row of rows) {
+    const id = row.ad_id ?? row.adset_id ?? row.campaign_id ?? "";
+    const key = perDay ? `${id}|${row.date_start ?? ""}` : id;
+
+    const found = byKey.get(key);
+    if (!found) {
+      byKey.set(key, { ...row });
+      continue;
+    }
+
+    found.spend = addNumeric(found.spend, row.spend);
+    found.impressions = addNumeric(found.impressions, row.impressions);
+    found.reach = addNumeric(found.reach, row.reach);
+    found.clicks = addNumeric(found.clicks, row.clicks);
+    found.inline_link_clicks = addNumeric(found.inline_link_clicks, row.inline_link_clicks);
+    found.actions = mergeActions(found.actions, row.actions);
+  }
+
+  return [...byKey.values()];
+}
+
+/**
+ * Haalt één Insights-query op over de volledige periode. Lange periodes gaan
+ * in blokken, die tegelijk lopen en daarna worden samengeteld — sequentieel
+ * ophalen duurt bij een seizoen langer dan de route mag draaien.
+ */
+async function fetchInsights(
+  config: MetaConfig,
+  level: "account" | "campaign" | "adset" | "ad",
+  fields: string,
+  window: FetchWindow,
+  options: { timeIncrement?: number; signal?: AbortSignal } = {}
+): Promise<MetaInsightRow[]> {
+  const chunks = splitWindow(window);
+  if (chunks.length === 1) {
+    return fetchWindow(config, level, fields, window, options);
+  }
+
+  const perChunk = await Promise.all(
+    chunks.map((chunk) => fetchWindow(config, level, fields, chunk, options))
+  );
+  return mergeRows(perChunk.flat(), Boolean(options.timeIncrement));
+}
+
 /**
  * Doorloopt alle pagina's van één Insights-query. Meta geeft de volgende
  * pagina als volledige URL terug; die bevat het token niet meer, dus de header
  * gaat elke keer opnieuw mee.
  */
-async function fetchInsights(
+async function fetchWindow(
   config: MetaConfig,
   level: "account" | "campaign" | "adset" | "ad",
   fields: string,
