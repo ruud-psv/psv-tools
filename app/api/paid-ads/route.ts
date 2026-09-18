@@ -20,6 +20,8 @@ import {
 } from "@/lib/paid-ads/connectors/types";
 import { metaConnector } from "@/lib/paid-ads/connectors/meta";
 import { googleConnector } from "@/lib/paid-ads/connectors/google";
+import { tiktokConnector } from "@/lib/paid-ads/connectors/tiktok";
+import { linkedinConnector } from "@/lib/paid-ads/connectors/linkedin";
 
 /**
  * Leesroute voor het Paid Ads dashboard.
@@ -64,6 +66,8 @@ const CONNECTOR_ENV: Record<PaidPlatform, string[]> = {
 const CONNECTORS: Partial<Record<PaidPlatform, PaidConnector>> = {
   meta: metaConnector,
   google: googleConnector,
+  tiktok: tiktokConnector,
+  linkedin: linkedinConnector,
 };
 
 /* ------------------------------------------------------------ periodes -- */

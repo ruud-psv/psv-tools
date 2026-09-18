@@ -262,6 +262,8 @@ const OBJECTIVE_LABELS: Record<string, string> = {
   reach: "Bereik",
   video_views: "Videoweergaven",
   video_view: "Videoweergaven",
+  lead_generation_tiktok: "Leads",
+  brand_awareness_linkedin: "Bereik",
 };
 
 /**
