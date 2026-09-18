@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { AlertTriangle, CheckCircle2, Plug } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { CopyField } from "./copy-field";
 
 /**
@@ -36,6 +37,7 @@ export const dynamic = "force-dynamic";
 
 const PORTAL_AUTH_URL = "https://business-api.tiktok.com/portal/auth";
 const TOKEN_ENDPOINT = "https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/";
+const REPORT_ENDPOINT = "https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/";
 const REDIRECT_PATH = "/dashboard/auth/tiktok/callback";
 
 interface TokenResponse {
@@ -75,6 +77,40 @@ async function exchangeAuthCode(
     return JSON.parse(text) as TokenResponse;
   } catch {
     return { code: -1, message: `TikTok gaf een onleesbaar antwoord (${res.status}).` };
+  }
+}
+
+/**
+ * Doet meteen een echte rapportage-aanroep met de verse token. Zo staat hier
+ * zwart-op-wit of de token werkt, nog voordat hij in Vercel belandt: blijft het
+ * dashboard daarna leeg, dan ligt het aan overnemen of deployen en niet aan de
+ * token zelf.
+ */
+async function verifyToken(
+  token: string,
+  advertiserId: string
+): Promise<{ ok: boolean; message: string }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const url = new URL(`${REPORT_ENDPOINT}`);
+  url.searchParams.set("advertiser_id", advertiserId);
+  url.searchParams.set("report_type", "BASIC");
+  url.searchParams.set("data_level", "AUCTION_CAMPAIGN");
+  url.searchParams.set("dimensions", JSON.stringify(["campaign_id"]));
+  url.searchParams.set("metrics", JSON.stringify(["spend"]));
+  url.searchParams.set("start_date", today);
+  url.searchParams.set("end_date", today);
+
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { "Access-Token": token, Accept: "application/json" },
+      cache: "no-store",
+    });
+    const body = (await res.json()) as { code?: number; message?: string };
+    return body.code === 0
+      ? { ok: true, message: "De rapportage-API van TikTok accepteert deze token." }
+      : { ok: false, message: body.message ?? "TikTok gaf een onbekende fout." };
+  } catch {
+    return { ok: false, message: "TikTok was niet bereikbaar voor de controle." };
   }
 }
 
@@ -196,7 +232,7 @@ export default async function TikTokCallbackPage({
 
   const advertiserIds = result.data?.advertiser_ids ?? [];
   const scopes = result.data?.scope ?? [];
-  const hasReporting = scopes.some((s) => /report/i.test(s));
+  const check = advertiserIds[0] ? await verifyToken(token, advertiserIds[0]) : null;
 
   return (
     <Shell>
@@ -213,7 +249,28 @@ export default async function TikTokCallbackPage({
             </div>
           </div>
 
+          {check && (
+            <div
+              className={cn(
+                "rounded-md border px-3.5 py-3 text-sm",
+                check.ok
+                  ? "border-success/40 bg-success-bg/40 text-success"
+                  : "border-warning/50 bg-warning-bg/40 text-warning"
+              )}
+            >
+              {check.ok ? "Token getest en werkend — " : "Token getest, maar afgewezen — "}
+              {check.message}
+            </div>
+          )}
+
           <CopyField label="TIKTOK_ADS_ACCESS_TOKEN" value={token} masked />
+
+          {advertiserIds.length > 1 && (
+            <p className="text-xs text-muted-foreground">
+              Deze token geeft toegang tot meerdere advertentieaccounts. Neem het account over
+              waar de PSV-campagnes in staan; de controle hierboven is op het eerste gedaan.
+            </p>
+          )}
 
           {advertiserIds.map((id) => (
             <CopyField key={id} label="TIKTOK_ADS_ADVERTISER_ID" value={id} />
@@ -226,13 +283,6 @@ export default async function TikTokCallbackPage({
             <p className="mt-1.5 text-sm">
               {scopes.length > 0 ? scopes.join(", ") : "TikTok gaf geen scopes terug."}
             </p>
-            {!hasReporting && (
-              <p className="mt-2 text-sm text-warning">
-                Let op: er zit geen rapportagerecht in deze token. Zet Reporting aan bij de
-                scopes van de app en autoriseer daarna opnieuw — zonder dat recht blijft het
-                dashboard leeg.
-              </p>
-            )}
           </div>
         </CardContent>
       </Card>

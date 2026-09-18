@@ -41,7 +41,14 @@ export function CopyField({
     <div className="space-y-1.5">
       <p className="font-heading text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-md border border-border bg-muted px-3 py-2 font-mono text-sm">
+        {/* Gemaskeerd is de tekst bewust niet te selecteren: anders kopieer je
+            de bolletjes in plaats van de waarde. De knop kopieert altijd echt. */}
+        <code
+          className={cn(
+            "min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-md border border-border bg-muted px-3 py-2 font-mono text-sm",
+            !shown && "select-none"
+          )}
+        >
           {display}
         </code>
         {masked && (
