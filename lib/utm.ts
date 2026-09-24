@@ -107,7 +107,7 @@ const TUSSENVOEGSELS = new Set([
   "van", "de", "der", "den", "het", "ten", "ter", "te", "op", "aan", "in", "'t",
 ]);
 
-function nameFromEmail(email: string): string {
+export function nameFromEmail(email: string): string {
   const local = email.split("@")[0];
   if (!local) return email;
   const parts = local

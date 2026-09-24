@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Monitor,
   Smartphone,
@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_BLOCKS } from "@/lib/mail-builder/blocks";
+import { mailProblemen } from "@/lib/mail-builder/validate";
+import type { MailRecord } from "@/lib/mail-builder/mails";
 import { CollapsibleCard } from "@/components/mail-builder/shared/collapsible-card";
 import { HeroBlock } from "@/components/mail-builder/blocks/HeroBlock";
 import { TextBlocksEditor } from "@/components/mail-builder/blocks/TextBlocksEditor";
@@ -188,6 +190,9 @@ export interface MailBuilderState {
   enqueteHeeftSecImage?: boolean;
   enqueteSecImagePreviewUrl?: string;
   enqueteSecImageAlt?: string;
+  // Identificatie voor het mailoverzicht
+  dmid?: string;
+  mailNaam?: string;
   // Preview-tekst naast het onderwerp in de inbox
   preheaderTekst?: string;
   // Phoxy Club
@@ -2561,17 +2566,22 @@ export function Toggle({
 
 const PREVIEW_HEIGHT = 820;
 
-export function MailBuilderForm() {
+export function MailBuilderForm({
+  onOpgeslagen,
+}: {
+  onOpgeslagen?: (mail: MailRecord) => void;
+} = {}) {
   const [state, setState] = useState<MailBuilderState>(() => {
     if (typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem("mail-builder-draft-kaartverkoop");
+        const saved = localStorage.getItem("mail-builder-draft-prematch");
         if (saved) return migrateState(JSON.parse(saved));
       } catch {}
     }
-    return makeInitialState("kaartverkoop");
+    return makeInitialState("prematch");
   });
 
+  const problemen = useMemo(() => mailProblemen(state), [state]);
   const [previewHtml, setPreviewHtml] = useState("");
   const [device, setDevice] = useState<DevicePreset>("desktop");
   const [simulations, setSimulations] = useState<Set<Simulation>>(new Set());
@@ -2580,6 +2590,7 @@ export function MailBuilderForm() {
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [opslaanError, setOpslaanError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const uploadCallbackRef = useRef<((url: string) => void) | null>(null);
@@ -2649,6 +2660,34 @@ export function MailBuilderForm() {
     URL.revokeObjectURL(url);
     setDownloaded(true);
     setTimeout(() => setDownloaded(false), 2000);
+    void registreerMail();
+  }
+
+  /** Zet de gedownloade mail in het gedeelde overzicht onder de builder. */
+  async function registreerMail() {
+    setOpslaanError(null);
+    try {
+      const res = await fetch("/api/mail-builder/mails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dmid: state.dmid ?? "",
+          naam: state.mailNaam ?? "",
+          template: state.template,
+          previewTekst: state.preheaderTekst ?? "",
+          aantalBlokken:
+            state.template === "prematch" ? state.prematchBlocks.length : state.blocks.length,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setOpslaanError(data.error ?? "De mail is gedownload, maar staat niet in het overzicht.");
+        return;
+      }
+      if (data.mail) onOpgeslagen?.(data.mail as MailRecord);
+    } catch {
+      setOpslaanError("De mail is gedownload, maar het overzicht kon niet worden bijgewerkt.");
+    }
   }
 
   function handleImportClick() {
@@ -2764,24 +2803,38 @@ export function MailBuilderForm() {
         {/* BASIS */}
         <CollapsibleCard title="Basis" defaultOpen>
             <div className="space-y-2">
+              <Label htmlFor="dmid">DMID</Label>
+              <Input
+                id="dmid"
+                placeholder="DMID26-19542"
+                value={state.dmid ?? ""}
+                onChange={(e) => set("dmid", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mailNaam">Mailnaam</Label>
+              <Input
+                id="mailNaam"
+                placeholder="2026.09.18 PSV Vrouwen - Tickets Fortuna Hjørring"
+                value={state.mailNaam ?? ""}
+                onChange={(e) => set("mailNaam", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Waaronder de mail in het overzicht hieronder komt te staan.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label>Template</Label>
               <Select value={state.template} onValueChange={(v) => handleTemplateChange(v as Template)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="business">PSV Business</SelectItem>
-                  <SelectItem value="enquete">PSV Enquête</SelectItem>
-                  <SelectItem value="fanstore">PSV FANstore</SelectItem>
-                  <SelectItem value="fcpsvo12">FC PSV O12</SelectItem>
-                  <SelectItem value="fcpsvo16">FC PSV O16</SelectItem>
-                  <SelectItem value="kaartverkoop">PSV Kaartverkoop</SelectItem>
+                  {/* De overige templates staan tijdelijk uit; de code blijft staan.
+                      Terugzetten is een regel per template. */}
                   <SelectItem value="prematch">PSV 1 Pre-match</SelectItem>
-                  <SelectItem value="partnerships">PSV Partnerships</SelectItem>
-                  <SelectItem value="phoxy">Phoxy Club</SelectItem>
-                  <SelectItem value="psvplay">PSV Play</SelectItem>
-                  <SelectItem value="soccerschool">PSV Soccer School</SelectItem>
-                  <SelectItem value="tours">PSV Tours</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2915,7 +2968,13 @@ export function MailBuilderForm() {
                     <><Mail className="h-4 w-4" />Kopiëren</>
                   )}
                 </Button>
-                <Button size="sm" onClick={handleDownload} className="gap-1.5">
+                <Button
+                  size="sm"
+                  onClick={handleDownload}
+                  disabled={problemen.length > 0}
+                  title={problemen.length > 0 ? "Vul eerst de ontbrekende velden in" : undefined}
+                  className="gap-1.5"
+                >
                   {downloaded ? (
                     <><Check className="h-4 w-4" />Opgeslagen!</>
                   ) : (
@@ -2925,6 +2984,27 @@ export function MailBuilderForm() {
               </div>
             </div>
           </CardHeader>
+          {problemen.length > 0 && (
+            <div className="px-6 pb-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                Nog {problemen.length} {problemen.length === 1 ? "punt" : "punten"} voordat je kunt downloaden
+              </p>
+              <ul className="mt-1.5 space-y-0.5 pl-5 text-xs text-muted-foreground list-disc">
+                {problemen.map((p: string) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {opslaanError && (
+            <div className="px-6 pb-3">
+              <p className="flex items-center gap-1.5 text-xs text-warning">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                {opslaanError}
+              </p>
+            </div>
+          )}
           {importError && (
             <div className="px-6 pb-3">
               <p className="flex items-center gap-1.5 text-xs text-destructive">
