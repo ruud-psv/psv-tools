@@ -1,4 +1,4 @@
-import { MailBuilderForm } from "@/components/mail-builder-form";
+import { MailBuilder } from "@/components/mail-builder";
 
 export const metadata = {
   title: "Mail Builder | PSV Tools",
@@ -15,7 +15,7 @@ export default function MailBuilderPage() {
           Bouw Maileon-mails op basis van templates en huisstijl.
         </p>
       </div>
-      <MailBuilderForm />
+      <MailBuilder />
     </div>
   );
 }
