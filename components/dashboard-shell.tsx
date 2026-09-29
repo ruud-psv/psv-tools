@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Menu } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { FeedbackTab } from "@/components/feedback-tab";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -46,6 +47,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto bg-background pt-14 lg:pt-0">
         {children}
       </main>
+
+      <FeedbackTab />
     </div>
   );
 }
