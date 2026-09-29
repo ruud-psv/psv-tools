@@ -725,19 +725,6 @@ export function CopyGeneratorForm() {
       >
         Verstuur
       </Button>
-
-      {/* Feedback link */}
-      <div className="flex justify-center pt-2">
-        <a
-          href="https://form.asana.com/?k=8cmANuEgVHFzoChIx2aRbw&d=1113382548430224"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          Feedback geven
-        </a>
-      </div>
     </form>
   );
 }
