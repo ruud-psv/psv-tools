@@ -1,5 +1,6 @@
 /**
- * Dunne Replicate-client voor de Kleurplaat Creator.
+ * Dunne Replicate-client, gedeeld door de tools die beelden laten genereren
+ * (Kleurplaat Creator, Groepsfoto Creator).
  *
  * We praten rechtstreeks met de REST API in plaats van het npm-pakket: het gaat
  * om drie calls (schema opvragen, voorspelling starten, status opvragen) en zo

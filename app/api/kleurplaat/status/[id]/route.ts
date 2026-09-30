@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
-import type { StatusResponse } from "@/lib/kleurplaat";
-import { eersteAfbeelding, haalVoorspelling } from "@/lib/kleurplaat/replicate";
+import type { StatusResponse } from "@/lib/replicate/model";
+import { eersteAfbeelding, haalVoorspelling } from "@/lib/replicate/client";
 
 export const runtime = "nodejs";
 

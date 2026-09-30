@@ -9,71 +9,34 @@
  * samenstelt.
  */
 
-import { del, get, list, put } from "@vercel/blob";
+import { del, list, put } from "@vercel/blob";
 
-import type { BewaardModel, Logo, Referentie } from "./index";
+import {
+  alsDataUrl,
+  extensieVoor,
+  leesPriveBlob,
+  meldOpslagfout,
+  nieuwId,
+  veiligeNaam as veiligeBlobNaam,
+} from "@/lib/blob/beelden";
+import { modellenOpslag } from "@/lib/blob/modellen";
+import type { Logo, Referentie } from "./index";
+
+export { extensieVoor, mimeVanPad } from "@/lib/blob/beelden";
 
 const REFERENTIE_PREFIX = "kleurplaat/referenties/";
-const MODEL_PREFIX = "kleurplaat/modellen/";
 const LOGO_PREFIX = "kleurplaat/logo/";
 
 /** Zoveel referenties mogen er in de gedeelde bibliotheek staan. */
 export const MAX_BIBLIOTHEEK = 24;
 
-/**
- * Zonder blob-token valt er niets te delen. De melding komt in de UI terecht,
- * dus hij vertelt meteen wat eraan te doen is.
- */
-function meldOpslagfout(err: unknown): never {
-  const tekst = err instanceof Error ? err.message : String(err);
-  if (/token/i.test(tekst)) {
-    throw new Error(
-      "De gedeelde opslag is niet geconfigureerd (BLOB_READ_WRITE_TOKEN ontbreekt). Koppel een Blob-store in Vercel."
-    );
-  }
-  throw err instanceof Error ? err : new Error(tekst);
+function veiligeNaam(ruw: string): string {
+  return veiligeBlobNaam(ruw, "referentie");
 }
 
 /* ------------------------------------------------------------------ */
 /* Referenties                                                         */
 /* ------------------------------------------------------------------ */
-
-/** Maakt een bestandsnaam die veilig in een blob-pad past. */
-function veiligeNaam(ruw: string): string {
-  return (
-    ruw
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/\.[a-z0-9]+$/i, "")
-      .replace(/[^a-zA-Z0-9-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase()
-      .slice(0, 40) || "referentie"
-  );
-}
-
-/** De beeldtypes die we opslaan; de browser stuurt zelf altijd jpeg. */
-const TYPES: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
-
-const MIMES: Record<string, string> = {
-  jpg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-};
-
-export function extensieVoor(contentType: string): string | undefined {
-  return TYPES[contentType.toLowerCase().split(";")[0].trim()];
-}
-
-/** Het beeldtype hoort bij de extensie in het pad, niet bij een aanname. */
-export function mimeVanPad(pad: string): string {
-  const ext = pad.split(".").pop()?.toLowerCase() ?? "";
-  return MIMES[ext] ?? "application/octet-stream";
-}
 
 function leesReferentie(pathname: string, grootte: number, toegevoegdOp: Date | string): Referentie {
   const rest = pathname.slice(REFERENTIE_PREFIX.length).replace(/\.(jpg|png|webp)$/i, "");
@@ -106,7 +69,7 @@ export async function bewaarReferentie(
   const extensie = extensieVoor(contentType);
   if (!extensie) throw new Error("Alleen jpg, png of webp kan als referentie.");
 
-  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = nieuwId();
   const pad = `${REFERENTIE_PREFIX}${id}__${veiligeNaam(naam)}.${extensie}`;
 
   try {
@@ -144,13 +107,7 @@ export async function verwijderReferentie(pad: string): Promise<void> {
 /** Haalt de inhoud op — voor de preview in de browser en voor het beeldmodel. */
 export async function leesReferentieBestand(pad: string): Promise<Buffer | null> {
   if (!isOpslagPad(pad)) return null;
-  try {
-    const resultaat = await get(pad, { access: "private", useCache: false });
-    if (!resultaat?.stream) return null;
-    return Buffer.from(await new Response(resultaat.stream).arrayBuffer());
-  } catch {
-    return null;
-  }
+  return leesPriveBlob(pad);
 }
 
 /**
@@ -161,7 +118,7 @@ export async function referentiesAlsDataUrls(paden: string[]): Promise<string[]>
   const bestanden = await Promise.all(
     paden.map(async (pad) => {
       const inhoud = await leesReferentieBestand(pad);
-      return inhoud ? `data:${mimeVanPad(pad)};base64,${inhoud.toString("base64")}` : null;
+      return inhoud ? alsDataUrl(pad, inhoud) : null;
     })
   );
   return bestanden.filter((b): b is string => b !== null);
@@ -205,7 +162,7 @@ export async function huidigLogo(): Promise<Logo | null> {
  * hebben, en dat overleeft een jpeg niet.
  */
 export async function bewaarLogo(naam: string, inhoud: ArrayBuffer): Promise<Logo> {
-  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = nieuwId();
   const pad = `${LOGO_PREFIX}${id}__${veiligeNaam(naam)}.png`;
 
   try {
@@ -239,59 +196,8 @@ export async function verwijderLogo(): Promise<void> {
 /* Modellen                                                            */
 /* ------------------------------------------------------------------ */
 
-/**
- * `openai/gpt-image-1.5` wordt `openai~gpt-image-1.5.json`. De tilde en de apenstaart
- * komen niet voor in een Replicate-modelnaam, dus het pad blijft eenduidig.
- */
-function modelPad(id: string, versie?: string): string {
-  return `${MODEL_PREFIX}${id.replace(/\//g, "~")}${versie ? `@${versie}` : ""}.json`;
-}
+const modellen = modellenOpslag("kleurplaat/modellen/");
 
-export async function lijstModellen(): Promise<BewaardModel[]> {
-  let paden: string[];
-  try {
-    const { blobs } = await list({ prefix: MODEL_PREFIX });
-    paden = blobs.map((b) => b.pathname);
-  } catch (err) {
-    meldOpslagfout(err);
-  }
-
-  const modellen = await Promise.all(
-    paden.map(async (pad) => {
-      try {
-        const resultaat = await get(pad, { access: "private", useCache: false });
-        if (!resultaat?.stream) return null;
-        const tekst = await new Response(resultaat.stream).text();
-        const model = JSON.parse(tekst) as BewaardModel;
-        return model?.id ? model : null;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return modellen
-    .filter((m): m is BewaardModel => m !== null)
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-export async function bewaarModel(model: BewaardModel): Promise<void> {
-  try {
-    await put(modelPad(model.id, model.versie), JSON.stringify(model), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-    });
-  } catch (err) {
-    meldOpslagfout(err);
-  }
-}
-
-export async function verwijderModel(id: string, versie?: string): Promise<void> {
-  try {
-    await del(modelPad(id, versie));
-  } catch (err) {
-    meldOpslagfout(err);
-  }
-}
+export const lijstModellen = modellen.lijst;
+export const bewaarModel = modellen.bewaar;
+export const verwijderModel = modellen.verwijder;

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { parseerModelId, type ModelProfielInfo } from "@/lib/kleurplaat";
-import { maxReferenties } from "@/lib/kleurplaat/schema";
-import { haalProfiel } from "@/lib/kleurplaat/replicate";
+import { maxReferenties } from "@/lib/replicate/schema";
+import { haalProfiel } from "@/lib/replicate/client";
 
 export const runtime = "nodejs";
 

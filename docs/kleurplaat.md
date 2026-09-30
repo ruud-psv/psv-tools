@@ -129,7 +129,7 @@ dan staat hij er ook zonder de gedeelde opslag.
 
 ### Hoe een willekeurig model toch goed wordt aangeroepen
 
-Er staat geen regel code per model. `lib/kleurplaat/schema.ts` leest het openapi-schema dat
+Er staat geen regel code per model. `lib/replicate/schema.ts` leest het openapi-schema dat
 Replicate per model publiceert en zoekt daarin op:
 
 | Wat we nodig hebben | Waar het naar zoekt |

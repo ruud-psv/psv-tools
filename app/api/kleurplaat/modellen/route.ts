@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { labelUitId, parseerModelId } from "@/lib/kleurplaat";
 import { bewaarModel, lijstModellen, verwijderModel } from "@/lib/kleurplaat/opslag";
-import { haalProfiel } from "@/lib/kleurplaat/replicate";
+import { haalProfiel } from "@/lib/replicate/client";
 
 export const runtime = "nodejs";
 
