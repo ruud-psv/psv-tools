@@ -1,6 +1,8 @@
 # Groepsfoto Creator — bouwplan
 
-> Status: **in aanbouw**. Stap 1 (gedeelde Replicate- en blob-laag) is klaar, de rest volgt.
+> Status: **intern te testen**. Stap 1 t/m 5 zijn klaar: de tool werkt van selfie tot download
+> op `/dashboard/groepsfoto`. Nog te doen: logo, AI-label en kaartmodus (stap 6), en de
+> testronde met echte foto's (stap 8).
 > Werktitel "Groepsfoto Creator", route `/dashboard/groepsfoto`. De link komt voorlopig
 > **niet** in de sidebar of op het dashboard.
 
@@ -225,10 +227,23 @@ Validatie in `POST /api/groepsfoto`:
 
 ## 10. Risico's en open vragen (vóór livegang afstemmen)
 
-- **Portretrecht en beeldrechten van de spelers.** Het gaat om AI-bewerkingen van echte
-  spelers. Is dat binnen hun contract en de afspraken met de spelersvakbond (VVCS)
-  toegestaan, en voor welke foto's? **Dit is de belangrijkste open vraag. Juridisch/Legal
-  moet dit bevestigen voordat het naar fans gaat.**
+- **Beeldrechten van de spelers.** Contractueel afgetikt met de spelers. Het model weet dat
+  niet en kan het ook niet controleren: het krijgt alleen pixels en een prompt. Er gaat geen
+  toestemming of contract mee, en de aanbieders (Replicate, Google, ByteDance) leggen die
+  verantwoordelijkheid in hun voorwaarden bij ons als gebruiker. Daarom borgen we het in de
+  tool zelf:
+  - Alleen wij zetten basisfoto's in de bibliotheek, achter de login, met een verplicht
+    vinkje "de spelers gaven toestemming". Wie hem toevoegde, wordt bij de foto bewaard.
+  - Een publieke gebruiker kan nooit zelf een foto van spelers uploaden; alleen een selfie.
+  - De prompt noemt geen spelersnamen. Het model hoeft niet te weten wie het zijn, alleen
+    dat het ze niet mag veranderen. Namen noemen maakt een weigering juist waarschijnlijker.
+  - Blijft over om na te gaan: dekt het contract ook *bewerking met AI* en verspreiding door
+    fans (bijvoorbeeld als kerstkaart op social media), of alleen publicatie door de club?
+- **Weigeringen door het model.** De veiligheidsfilters van de modellen kunnen een aanvraag
+  weigeren als ze herkenbare publieke personen of kinderen zien. Dat is een technische
+  inschatting, geen oordeel over onze rechten, en per model en per keer anders. De tool
+  vertaalt zo'n weigering naar een begrijpelijke melding. In de testronde (stap 8) houden we
+  bij hoe vaak het gebeurt; valt het bij één model structureel tegen, dan kiezen we een ander.
 - **AVG.** Een selfie is een persoonsgegeven, en we verwerken hem via Replicate (VS). Doordat
   we niets opslaan, blijft het beperkt, maar Replicate bewaart API-inputs en -outputs
   standaard ongeveer een uur. Voor intern testen is dat prima. Bij een publieke versie horen
@@ -249,16 +264,34 @@ Validatie in `POST /api/groepsfoto`:
 | Stap | Wat | Oplevering |
 |---|---|---|
 | 1 ✅ | Replicate- en blob-laag loskoppelen naar `lib/replicate/` en `lib/blob/`, kleurplaat via re-exports | kleurplaat werkt ongewijzigd, `npm run build` groen |
-| 2 | `lib/groepsfoto/index.ts`: types, `POSITIES`, `TENUES`, `AANBEVOLEN_MODELLEN`, `bouwPrompt()` | promptbouwer met vaste opbouw |
-| 3 | Basisfoto-opslag (beeld + JSON met metadata) + routes `basisfotos` en `basisfotos/bestand` | foto's uploaden, labelen, tonen en verwijderen |
-| 4 | `POST /api/groepsfoto` met validatie, 2-beeldencheck en vaste volgorde | generatie start, status via bestaande route |
-| 5 | `app/dashboard/groepsfoto/page.tsx` + `components/groepsfoto-creator.tsx` (selfie, basisfoto, positie, tenue, model, genereren, resultaat) | end-to-end werkend achter de login, niet in de sidebar |
+| 2 ✅ | `lib/groepsfoto/index.ts`: types, `POSITIES`, `TENUES`, `AANBEVOLEN_MODELLEN`, `bouwPrompt()` | promptbouwer met vaste opbouw |
+| 3 ✅ | Basisfoto-opslag (beeld + JSON met metadata) + routes `basisfotos` en `basisfotos/bestand` | foto's uploaden, labelen, tonen en verwijderen |
+| 4 ✅ | `POST /api/groepsfoto` met validatie, 2-beeldencheck en vaste volgorde | generatie start, status via bestaande route |
+| 5 ✅ | `app/dashboard/groepsfoto/page.tsx` + `components/groepsfoto-creator.tsx` (selfie, basisfoto, positie, tenue, model, genereren, resultaat) | end-to-end werkend achter de login, niet in de sidebar |
 | 6 | `lib/groepsfoto/compositie.ts`: logo, "Gemaakt met AI"-label en de kaartmodus met rand en tekst, download als PNG | nette download als foto of kaart, bestandsnaam `psv-groepsfoto-….png` |
-| 7 | Voor/na-slider, varianten, historie | afwerking |
+| 7 | ~~Voor/na-slider~~ ✅, ~~historie~~ ✅, varianten (2 tegelijk) | afwerking |
 | 8 | Testronde met 3 modellen × ~10 selfies (verschillende huidskleuren, leeftijden, brillen en licht), prompt bijschaven | keuze voor standaardmodel |
 | 9 | `docs/groepsfoto.md` + eventueel toevoegen aan `lib/tools.ts` | pas na akkoord |
 
-Stap 1 t/m 5 is het minimum om intern te kunnen testen. De stappen 3 en 4 kunnen parallel.
+Stap 1 t/m 5 is het minimum om intern te kunnen testen.
+
+### Wat er na stap 5 staat
+
+| Bestand | Wat |
+|---|---|
+| `lib/groepsfoto/index.ts` | modellen, `POSITIES`, `KLEDING`, `GELEGENHEDEN`, `bouwPrompt()`, `modelBezwaar()` (≥ 2 beelden verplicht) |
+| `lib/groepsfoto/opslag.ts` | basisfoto's in privé Blob: beeld onder `groepsfoto/basisfotos/beelden/`, metadata onder `…/meta/`; eigen modellenlijst onder `groepsfoto/modellen/` |
+| `app/api/groepsfoto/route.ts` | start een generatie: valideert toestemming, selfie (data-URL, max. 3 MB), basisfoto, model; stuurt `[basisfoto, selfie]` en `match_input_image` |
+| `app/api/groepsfoto/basisfotos/…` | lijst, upload (met verplichte rechtenbevestiging), hints bijwerken, verwijderen, beeld tonen |
+| `app/api/groepsfoto/{model,modellen,status,download}` | modelcontrole, gedeelde modellenlijst, pollen, download als `psv-groepsfoto-….png` |
+| `components/groepsfoto-creator.tsx` | de UI: selfie (camera op mobiel), foto kiezen/toevoegen, positie, kleding, model, voor/na-schuif, historie |
+| `components/replicate/model-kiezer.tsx` | model kiezen en toevoegen, los van de tool; de kleurplaat kan hem later ook gebruiken |
+| `lib/replicate/doorgeven.ts`, `lib/replicate/modellen-routes.ts` | gedeelde handlers voor download en modellenlijst; de kleurplaat gebruikt ze ook |
+
+Getest met een nagebootste Blob-opslag en Replicate in de lokale dev-server: basisfoto
+toevoegen, selfie uploaden, genereren, vergelijken, downloaden, en de validatie van alle
+routes (zonder toestemming, ongeldige selfie, pad buiten de bibliotheek, model met één beeld,
+zonder login). Met echte modellen en echte foto's is het nog niet getest; dat is stap 8.
 
 ## 12. Later (buiten dit plan)
 

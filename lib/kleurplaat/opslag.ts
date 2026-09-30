@@ -196,8 +196,4 @@ export async function verwijderLogo(): Promise<void> {
 /* Modellen                                                            */
 /* ------------------------------------------------------------------ */
 
-const modellen = modellenOpslag("kleurplaat/modellen/");
-
-export const lijstModellen = modellen.lijst;
-export const bewaarModel = modellen.bewaar;
-export const verwijderModel = modellen.verwijder;
+export const kleurplaatModellen = modellenOpslag("kleurplaat/modellen/");
