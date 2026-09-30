@@ -9,8 +9,8 @@ import {
   type GenereerRequest,
   type Verhouding,
 } from "@/lib/kleurplaat";
-import { bouwInput, MAX_REFERENTIES } from "@/lib/kleurplaat/schema";
-import { haalProfiel, startVoorspelling } from "@/lib/kleurplaat/replicate";
+import { bouwInput, MAX_REFERENTIES } from "@/lib/replicate/schema";
+import { haalProfiel, startVoorspelling } from "@/lib/replicate/client";
 import { isReferentiePad, referentiesAlsDataUrls } from "@/lib/kleurplaat/opslag";
 
 export const runtime = "nodejs";

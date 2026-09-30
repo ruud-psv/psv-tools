@@ -9,8 +9,6 @@
  * zelf publiceert.
  */
 
-import type { Verhouding } from "./index";
-
 /* ------------------------------------------------------------------ */
 /* Schema uitlezen                                                     */
 /* ------------------------------------------------------------------ */
@@ -144,8 +142,6 @@ export function leesProfiel(
 /* Verhouding kiezen                                                   */
 /* ------------------------------------------------------------------ */
 
-const DOEL_RATIO: Record<Verhouding, number> = { "2:3": 2 / 3, "3:2": 3 / 2, "1:1": 1 };
-
 /** Leest "2:3", "1024x1536" of "1024*1536" als een getal. */
 function alsRatio(optie: string): number | null {
   const m = optie.match(/^(\d+(?:\.\d+)?)\s*[:x*×/]\s*(\d+(?:\.\d+)?)$/i);
@@ -169,15 +165,17 @@ const WOORDEN: Record<string, number> = {
 
 /**
  * Kiest uit de opties van het model de verhouding die het dichtst bij de
- * gevraagde ligt. Modellen schrijven het op drie manieren op: "2:3",
+ * gevraagde ligt. `gewenst` is een verhouding als "2:3" of "1536x1024", dus
+ * ook de gemeten verhouding van een foto. Modellen schrijven het op drie manieren op: "2:3",
  * "1024x1536" of "portrait". Past niets, dan sturen we het veld niet mee en
  * houdt het model zijn eigen standaard aan.
  */
-export function kiesVerhouding(opties: string[], gewenst: Verhouding): string | undefined {
+export function kiesVerhouding(opties: string[], gewenst: string): string | undefined {
   if (opties.length === 0) return undefined;
   if (opties.includes(gewenst)) return gewenst;
 
-  const doel = DOEL_RATIO[gewenst];
+  const doel = alsRatio(gewenst);
+  if (!doel) return undefined;
   let beste: { optie: string; afstand: number } | null = null;
 
   for (const optie of opties) {
@@ -197,7 +195,8 @@ export function kiesVerhouding(opties: string[], gewenst: Verhouding): string | 
 export interface InputArgs {
   prompt: string;
   referenties: string[];
-  verhouding: Verhouding;
+  /** "2:3", "3:2", … — zie `kiesVerhouding()`. */
+  verhouding: string;
 }
 
 /**
