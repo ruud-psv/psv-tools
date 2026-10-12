@@ -5,6 +5,7 @@ import { AlertTriangle, Download, FileUp, Loader2, RefreshCw, Users } from "luci
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StadiumMap, type AreaNumbers } from "@/components/stadium-map";
 import { isPsvHomeMatch } from "@/lib/aangrenzende-stoelen/events";
 
 interface IngestStatus {
@@ -54,6 +55,8 @@ interface ListResult {
     freeSeats: number;
     freeFromResale: number;
     freeByArea: Record<string, number>;
+    freeFromResaleByArea?: Record<string, number>;
+    listedSeatsByArea?: Record<string, number>;
     holderSeatsUnknown: number;
     skippedOwnResale: number;
     skippedTooManySeats: number;
@@ -254,9 +257,18 @@ export function AangrenzendeStoelen() {
   }
 
   const list = overview.list;
-  const areas = result
-    ? Object.entries(result.stats.freeByArea).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    : [];
+  // Per vak: vrij, waarvan in de resale, en hoeveel stoelen op de lijst staan.
+  const areaNumbers: Record<string, AreaNumbers> = {};
+  if (result) {
+    const { freeByArea, freeFromResaleByArea = {}, listedSeatsByArea = {} } = result.stats;
+    for (const area of new Set([...Object.keys(freeByArea), ...Object.keys(listedSeatsByArea)])) {
+      areaNumbers[area] = {
+        free: freeByArea[area] ?? 0,
+        resale: freeFromResaleByArea[area] ?? 0,
+        listed: listedSeatsByArea[area] ?? 0,
+      };
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -377,29 +389,6 @@ export function AangrenzendeStoelen() {
                 />
               </div>
 
-              {areas.length > 0 && (
-                <div>
-                  <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-2">
-                    Vrije stoelen per vak
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {areas.map(([area, count]) => (
-                      <span key={area} className="tag tag--outlined">
-                        {area} · {number.format(count)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {result.stats.holderSeatsUnknown > 0 && (
-                <p className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
-                  {number.format(result.stats.holderSeatsUnknown)} stoelen uit de lijst seizoenkaarthouders
-                  staan niet in de stoelenkaart van deze wedstrijd.
-                </p>
-              )}
-
               <div className="flex flex-wrap items-center gap-3">
                 <Button onClick={() => downloadCsv(result)} disabled={result.count === 0}>
                   <Download className="h-4 w-4" />
@@ -412,6 +401,16 @@ export function AangrenzendeStoelen() {
                   {result.catchUp === "mislukt" && " (bijwerken mislukte; dit is de vorige stand)"}
                 </span>
               </div>
+
+              {result.stats.holderSeatsUnknown > 0 && (
+                <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
+                  {number.format(result.stats.holderSeatsUnknown)} stoelen uit de lijst seizoenkaarthouders
+                  staan niet in de stoelenkaart van deze wedstrijd.
+                </p>
+              )}
+
+              <StadiumMap numbers={areaNumbers} />
             </div>
           )}
         </CardContent>

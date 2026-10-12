@@ -43,6 +43,9 @@ test("één vrije stoel levert de vier buren op", () => {
   const result = findNeighbors(seats, tickets, holders);
   assert.deepEqual(relations(result), ["N10-3", "N11-2", "N11-4", "N12-3"]);
   assert.equal(result.stats.freeSeats, 1);
+  assert.deepEqual(result.stats.freeByArea, { N: 1 });
+  assert.deepEqual(result.stats.freeFromResaleByArea, {});
+  assert.deepEqual(result.stats.listedSeatsByArea, { N: 4 });
 });
 
 test("een gat in de nummering is geen buur", () => {
@@ -90,6 +93,8 @@ test("een stoel in de resale telt als vrij", () => {
   const result = findNeighbors(seats, posted, holders);
   assert.deepEqual(relations(result), ["T3-1", "T3-3"]);
   assert.equal(result.stats.freeFromResale, 1);
+  assert.deepEqual(result.stats.freeFromResaleByArea, { T: 1 });
+  assert.deepEqual(result.stats.listedSeatsByArea, { T: 2 });
 });
 
 test("wie zelf de stoel ernaast aanbiedt, wordt niet benaderd", () => {
