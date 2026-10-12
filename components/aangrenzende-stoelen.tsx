@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, FileUp, Loader2, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { isPsvHomeMatch } from "@/lib/aangrenzende-stoelen/events";
 
 interface IngestStatus {
   manifestsComplete: boolean;
@@ -120,6 +121,7 @@ export function AangrenzendeStoelen() {
   const [error, setError] = useState<string | null>(null);
 
   const [eventId, setEventId] = useState("");
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const [maxSeats, setMaxSeats] = useState("");
   const [making, setMaking] = useState(false);
   const [makeError, setMakeError] = useState<string | null>(null);
@@ -139,7 +141,6 @@ export function AangrenzendeStoelen() {
       if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
       setOverview(data);
       setError(null);
-      setEventId((current) => current || data.events?.[0]?.eventId || "");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -150,6 +151,22 @@ export function AangrenzendeStoelen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Standaard alleen thuiswedstrijden van het eerste elftal; de rest blijft
+  // bereikbaar voor het geval een wedstrijd ooit anders heet.
+  const visibleEvents = useMemo(
+    () => (overview?.events ?? []).filter((event) => showAllEvents || isPsvHomeMatch(event.name)),
+    [overview, showAllEvents]
+  );
+
+  // Valt de gekozen wedstrijd buiten de lijst (of is er nog niets gekozen),
+  // neem dan de eerstvolgende.
+  useEffect(() => {
+    if (!visibleEvents.some((event) => event.eventId === eventId)) {
+      setEventId(visibleEvents[0]?.eventId ?? "");
+      setResult(null);
+    }
+  }, [visibleEvents, eventId]);
 
   const ingest = overview?.ingest;
   const ready = Boolean(ingest?.manifestsComplete && ingest?.salesComplete);
@@ -262,51 +279,63 @@ export function AangrenzendeStoelen() {
           ) : overview.events.length === 0 ? (
             <p className="text-sm text-muted-foreground">Er zijn geen komende wedstrijden met een stoelenkaart.</p>
           ) : (
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="space-y-1.5 min-w-[18rem] flex-1 max-w-xl">
-                <label
-                  htmlFor="wedstrijd"
-                  className="text-xs font-heading uppercase tracking-wide text-muted-foreground"
-                >
-                  Wedstrijd
-                </label>
-                <select
-                  id="wedstrijd"
-                  value={eventId}
-                  onChange={(e) => {
-                    setEventId(e.target.value);
-                    setResult(null);
-                  }}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {overview.events.map((event) => (
-                    <option key={event.eventId} value={event.eventId}>
-                      {event.name ?? "Onbekende wedstrijd"} · {formatEventDate(event.eventDate)}
-                    </option>
-                  ))}
-                </select>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1.5 min-w-[18rem] flex-1 max-w-xl">
+                  <label
+                    htmlFor="wedstrijd"
+                    className="text-xs font-heading uppercase tracking-wide text-muted-foreground"
+                  >
+                    Wedstrijd
+                  </label>
+                  <select
+                    id="wedstrijd"
+                    value={eventId}
+                    onChange={(e) => {
+                      setEventId(e.target.value);
+                      setResult(null);
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {visibleEvents.length === 0 && <option value="">Geen thuiswedstrijden gevonden</option>}
+                    {visibleEvents.map((event) => (
+                      <option key={event.eventId} value={event.eventId}>
+                        {event.name ?? "Onbekende wedstrijd"} · {formatEventDate(event.eventDate)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5 w-56">
+                  <label
+                    htmlFor="max-stoelen"
+                    className="text-xs font-heading uppercase tracking-wide text-muted-foreground"
+                  >
+                    Max. stoelen per relatie
+                  </label>
+                  <Input
+                    id="max-stoelen"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    placeholder="Geen grens"
+                    value={maxSeats}
+                    onChange={(e) => setMaxSeats(e.target.value)}
+                  />
+                </div>
+                <Button onClick={makeList} disabled={making || !eventId || !list}>
+                  {making ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+                  Maak lijst
+                </Button>
               </div>
-              <div className="space-y-1.5 w-56">
-                <label
-                  htmlFor="max-stoelen"
-                  className="text-xs font-heading uppercase tracking-wide text-muted-foreground"
-                >
-                  Max. stoelen per relatie
-                </label>
-                <Input
-                  id="max-stoelen"
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  placeholder="Geen grens"
-                  value={maxSeats}
-                  onChange={(e) => setMaxSeats(e.target.value)}
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showAllEvents}
+                  onChange={(e) => setShowAllEvents(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-primary"
                 />
-              </div>
-              <Button onClick={makeList} disabled={making || !eventId || !list}>
-                {making ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
-                Maak lijst
-              </Button>
+                Toon alle evenementen, niet alleen thuiswedstrijden van PSV
+              </label>
             </div>
           )}
 
@@ -463,7 +492,7 @@ export function AangrenzendeStoelen() {
                 <h2 className="text-xl">Stoelstatus uit Ringside</h2>
                 <p className="text-sm text-muted-foreground max-w-3xl">
                   {ready
-                    ? `Bijgehouden voor ${overview.events.length} komende wedstrijden. Laatst helemaal bij: ${formatDateTime(ingest.caughtUpAt)}.`
+                    ? `Bijgehouden voor ${overview.events.length} komende evenementen. Laatst helemaal bij: ${formatDateTime(ingest.caughtUpAt)}.`
                     : "De eerste keer wordt de hele historie van stoelen en verkoop doorgelezen. Dat duurt een paar uur en gaat vanzelf door."}
                 </p>
               </div>

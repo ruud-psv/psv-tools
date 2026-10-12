@@ -7,6 +7,11 @@ er nergens in.
 
 Pagina: `/dashboard/aangrenzende-stoelen`.
 
+De keuzelijst toont standaard alleen thuiswedstrijden van het eerste elftal: namen die
+beginnen met `PSV -` en geen `Jong PSV` of `Vrouwen` bevatten
+(`lib/aangrenzende-stoelen/events.ts`). Met "Toon alle evenementen" komt de rest terug,
+voor het geval een wedstrijd ooit anders heet.
+
 ## Regels
 
 De regels staan in `lib/aangrenzende-stoelen/neighbors.ts` en zijn getest in
