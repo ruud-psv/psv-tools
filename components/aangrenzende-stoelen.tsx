@@ -389,16 +389,6 @@ export function AangrenzendeStoelen() {
                 />
               </div>
 
-              <StadiumMap numbers={areaNumbers} />
-
-              {result.stats.holderSeatsUnknown > 0 && (
-                <p className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
-                  {number.format(result.stats.holderSeatsUnknown)} stoelen uit de lijst seizoenkaarthouders
-                  staan niet in de stoelenkaart van deze wedstrijd.
-                </p>
-              )}
-
               <div className="flex flex-wrap items-center gap-3">
                 <Button onClick={() => downloadCsv(result)} disabled={result.count === 0}>
                   <Download className="h-4 w-4" />
@@ -411,6 +401,16 @@ export function AangrenzendeStoelen() {
                   {result.catchUp === "mislukt" && " (bijwerken mislukte; dit is de vorige stand)"}
                 </span>
               </div>
+
+              {result.stats.holderSeatsUnknown > 0 && (
+                <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
+                  {number.format(result.stats.holderSeatsUnknown)} stoelen uit de lijst seizoenkaarthouders
+                  staan niet in de stoelenkaart van deze wedstrijd.
+                </p>
+              )}
+
+              <StadiumMap numbers={areaNumbers} />
             </div>
           )}
         </CardContent>
