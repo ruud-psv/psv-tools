@@ -3,7 +3,8 @@ import { requireEmail } from "@/lib/api-session";
 import { buildNeighborList, ListError, parseListRequest } from "@/lib/aangrenzende-stoelen/build-list";
 import {
   contactFilterUrl,
-  createFilterWithTargetGroup,
+  createContactFilter,
+  createTargetGroup,
   getTargetGroup,
   isMaileonConfigured,
   maileonName,
@@ -54,23 +55,34 @@ export async function POST(req: NextRequest) {
     }
 
     const name = maileonName({ sendDate: body.sendDate as string, eventName: event.name, dmid: body.dmid as string });
-    const created = await createFilterWithTargetGroup(name, relationNumbers);
+    const contactFilterId = await createContactFilter(name, relationNumbers);
+
+    // Lukt de doelgroep niet, dan blijft het filter staan: daar kan iemand in
+    // Maileon zelf een doelgroep op maken.
+    let targetGroupId: number | null = null;
+    let targetGroupError: string | null = null;
+    try {
+      targetGroupId = await createTargetGroup(name, contactFilterId);
+    } catch (error) {
+      targetGroupError = error instanceof Error ? error.message : String(error);
+    }
     console.info(
-      `[aangrenzende-stoelen] Maileon: filter ${created.contactFilterId}, doelgroep ${created.targetGroupId}, ` +
-        `${relationNumbers.length} relatienummers, operator ${created.operation}, door ${session.email}`
+      `[aangrenzende-stoelen] Maileon: filter ${contactFilterId}, doelgroep ${targetGroupId ?? `mislukt (${targetGroupError})`}, ` +
+        `${relationNumbers.length} relatienummers, door ${session.email}`
     );
 
     // Een nieuw filter rekent Maileon meestal vanzelf door; dit duwt het aan.
-    await refreshContactFilter(created.contactFilterId).catch((error) =>
+    await refreshContactFilter(contactFilterId).catch((error) =>
       console.warn("[aangrenzende-stoelen] Maileon-filter verversen mislukt:", error instanceof Error ? error.message : error)
     );
 
     return NextResponse.json(
       {
         name,
-        contactFilterId: created.contactFilterId,
-        targetGroupId: created.targetGroupId,
-        filterUrl: contactFilterUrl(created.contactFilterId),
+        contactFilterId,
+        targetGroupId,
+        targetGroupError,
+        filterUrl: contactFilterUrl(contactFilterId),
         pushed: relationNumbers.length,
         dataAsOf,
         catchUp,

@@ -131,9 +131,14 @@ sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
 - **De lijst wordt opnieuw uitgerekend** met dezelfde berekening als "Maak lijst"
   (`lib/aangrenzende-stoelen/build-list.ts`). De relatienummers komen dus nooit uit de
   browser.
-- **API:** `POST /contactfilters/v2?createTargetGroup=true`. De documentatie van Maileon
-  noemt de lijst-operator op twee manieren (`includein` en `includedin`); de code probeert
-  ze op volgorde en logt welke werkte.
+- **API:** eerst het filter (`POST /contactfilters/v2`), dan de doelgroep
+  (`POST /targetgroups`). Lukt de doelgroep niet, dan blijft het filter staan en zegt de
+  pagina waarom; de doelgroep maak je dan zelf in Maileon.
+- **Regels:** volg het JSON-schema (`contactfilter.json`) uit de XQueue-wiki "Creating
+  and Updating Contactfilters Using the REST API", niet de losse documentatiepagina's. Volgens
+  dat schema heet de operator `includedin` (niet `includein`) en mag een regel hooguit 100
+  waarden hebben. De lijst gaat daarom in blokken van 100, elk een eigen "add"-regel. Met
+  hooguit 100 regels per filter past er 10.000 relatienummers in.
 - **Daarna** vraagt de pagina de doelgroep op tot Maileon klaar is met rekenen, en toont
   hoeveel contacten Maileon vond en hoeveel daarvan te mailen zijn. Minder contacten dan
   relatienummers is normaal: niet iedere seizoenkaarthouder staat in Maileon.
