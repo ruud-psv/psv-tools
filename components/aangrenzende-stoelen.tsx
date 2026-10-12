@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Download, FileUp, Loader2, RefreshCw, Users } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, FileUp, Loader2, RefreshCw, Send, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StadiumMap, type AreaNumbers } from "@/components/stadium-map";
 import { isPsvHomeMatch } from "@/lib/aangrenzende-stoelen/events";
+import { defaultDmid, maileonName } from "@/lib/aangrenzende-stoelen/maileon";
 
 interface IngestStatus {
   manifestsComplete: boolean;
@@ -68,7 +69,30 @@ interface ListResult {
   catchUp: "bijgewerkt" | "overgeslagen" | "mislukt";
 }
 
+interface MaileonPush {
+  name: string;
+  contactFilterId: number;
+  targetGroupId: number | null;
+  filterUrl: string;
+  pushed: number;
+}
+
+interface TargetGroupStatus {
+  state: string;
+  countContacts: number | null;
+  countActiveContacts: number | null;
+  evaluated: string | null;
+}
+
 const number = new Intl.NumberFormat("nl-NL");
+
+/** Vandaag als `yyyy-mm-dd`, in Nederlandse tijd. */
+function today(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
+}
+
+/** Hoe vaak de pagina de doelgroep opvraagt terwijl Maileon rekent: elke 5 s, 2 minuten lang. */
+const STATUS_POLLS = 24;
 
 function formatDateTime(value: string | null): string {
   if (!value) return "onbekend";
@@ -130,6 +154,14 @@ export function AangrenzendeStoelen() {
   const [makeError, setMakeError] = useState<string | null>(null);
   const [result, setResult] = useState<ListResult | null>(null);
 
+  const [sendDate, setSendDate] = useState(today);
+  const [dmid, setDmid] = useState("");
+  const [pushing, setPushing] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [pushed, setPushed] = useState<MaileonPush | null>(null);
+  const [groupStatus, setGroupStatus] = useState<TargetGroupStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState(false);
@@ -180,6 +212,71 @@ export function AangrenzendeStoelen() {
     const timer = setInterval(load, 30_000);
     return () => clearInterval(timer);
   }, [overview, ready, load]);
+
+  // Een nieuwe lijst begint zonder Maileon-uitkomst.
+  useEffect(() => {
+    setPushed(null);
+    setPushError(null);
+    setGroupStatus(null);
+    setStatusError(null);
+  }, [result]);
+
+  const loadGroupStatus = useCallback(async (targetGroupId: number) => {
+    try {
+      const res = await fetch(`/api/aangrenzende-stoelen/maileon?targetGroupId=${targetGroupId}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
+      setGroupStatus(data);
+      setStatusError(null);
+      return data as TargetGroupStatus;
+    } catch (caught) {
+      setStatusError(caught instanceof Error ? caught.message : String(caught));
+      return null;
+    }
+  }, []);
+
+  // Maileon rekent het filter op de achtergrond door; vraag de stand op tot hij bij is.
+  useEffect(() => {
+    const targetGroupId = pushed?.targetGroupId;
+    if (!targetGroupId) return;
+    let polls = 0;
+    let stopped = false;
+    const poll = async () => {
+      const status = await loadGroupStatus(targetGroupId);
+      polls += 1;
+      if (!stopped && polls < STATUS_POLLS && status?.state !== "uptodate") timer = setTimeout(poll, 5000);
+    };
+    let timer = setTimeout(poll, 3000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [pushed, loadGroupStatus]);
+
+  async function pushToMaileon() {
+    if (!result) return;
+    setPushing(true);
+    setPushError(null);
+    try {
+      const res = await fetch("/api/aangrenzende-stoelen/maileon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: result.event.eventId,
+          maxSeatsPerRelation: result.maxSeatsPerRelation,
+          sendDate,
+          dmid: dmid.trim() || defaultDmid(sendDate),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
+      setPushed(data);
+    } catch (caught) {
+      setPushError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setPushing(false);
+    }
+  }
 
   async function makeList() {
     setMaking(true);
@@ -400,6 +497,111 @@ export function AangrenzendeStoelen() {
                   {result.catchUp === "overgeslagen" && " (er liep al een update; dit is de stand daarvoor)"}
                   {result.catchUp === "mislukt" && " (bijwerken mislukte; dit is de vorige stand)"}
                 </span>
+              </div>
+
+              <div className="space-y-3 rounded-md border border-border p-4">
+                <div>
+                  <h3 className="text-base font-heading">Doorzetten naar Maileon</h3>
+                  <p className="text-xs text-muted-foreground max-w-3xl">
+                    Maakt in Maileon een contactfilter en een doelgroep op relatienummer
+                    (MEMBERNUMBERPRIOR). De lijst wordt daarvoor opnieuw uitgerekend met de nieuwste stand.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1.5 w-44">
+                    <label
+                      htmlFor="verzenddatum"
+                      className="text-xs font-heading uppercase tracking-wide text-muted-foreground"
+                    >
+                      Verzenddatum
+                    </label>
+                    <Input
+                      id="verzenddatum"
+                      type="date"
+                      value={sendDate}
+                      onChange={(e) => setSendDate(e.target.value)}
+                      disabled={pushing || Boolean(pushed)}
+                    />
+                  </div>
+                  <div className="space-y-1.5 w-44">
+                    <label htmlFor="dmid" className="text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                      DMID
+                    </label>
+                    <Input
+                      id="dmid"
+                      placeholder={defaultDmid(sendDate || today())}
+                      value={dmid}
+                      onChange={(e) => setDmid(e.target.value)}
+                      disabled={pushing || Boolean(pushed)}
+                    />
+                  </div>
+                  <Button onClick={pushToMaileon} disabled={pushing || Boolean(pushed) || result.count === 0 || !sendDate}>
+                    {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Doorzetten naar Maileon
+                  </Button>
+                </div>
+                {!pushed && sendDate && (
+                  <p className="text-xs text-muted-foreground break-words">
+                    Naam:{" "}
+                    {maileonName({
+                      sendDate,
+                      eventName: result.event.name ?? "",
+                      dmid: dmid.trim() || defaultDmid(sendDate),
+                    })}
+                  </p>
+                )}
+                {pushError && (
+                  <p className="flex items-start gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
+                    {pushError}
+                  </p>
+                )}
+                {pushed && (
+                  <div className="space-y-1 text-sm">
+                    <p>
+                      Doorgezet: <span className="font-medium break-words">{pushed.name}</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      {number.format(pushed.pushed)} relatienummers · filter {pushed.contactFilterId}
+                      {pushed.targetGroupId
+                        ? ` · doelgroep ${pushed.targetGroupId}`
+                        : " · Maileon maakte geen doelgroep; maak die zelf aan op dit filter"}
+                    </p>
+                    {pushed.targetGroupId && (
+                      <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                        {groupStatus?.state === "uptodate" && groupStatus.countContacts !== null ? (
+                          <span>
+                            Maileon vond {number.format(groupStatus.countContacts)} contacten, waarvan{" "}
+                            {number.format(groupStatus.countActiveContacts ?? 0)} te mailen
+                            {groupStatus.evaluated && ` (stand van ${groupStatus.evaluated})`}.
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Maileon rekent de doelgroep door…
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => pushed.targetGroupId && loadGroupStatus(pushed.targetGroupId)}
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          Ververs
+                        </button>
+                      </p>
+                    )}
+                    {statusError && <p className="text-muted-foreground">Stand ophalen mislukt: {statusError}</p>}
+                    <a
+                      href={pushed.filterUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 underline underline-offset-2"
+                    >
+                      Open het filter in Maileon
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                )}
               </div>
 
               {result.stats.holderSeatsUnknown > 0 && (
