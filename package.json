@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --experimental-strip-types --no-warnings --import ./scripts/test-hooks.mjs --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.86.1",
@@ -27,6 +28,7 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "read-excel-file": "9.3.10",
     "recharts": "^3.8.1",
     "tailwind-merge": "^2.5.5"
   },
