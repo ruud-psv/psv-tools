@@ -475,17 +475,25 @@ export function AangrenzendeStoelen() {
               )}
             </div>
             {!ready && (
-              <p className="text-sm">
-                Stoelen: {number.format(ingest.manifestsRead)} rijen gelezen
-                {ingest.manifestsComplete ? " (klaar)" : ""} · verkoop: {number.format(ingest.salesRead)} rijen
-                gelezen{ingest.salesComplete ? " (klaar)" : ""}
-                {ingest.running ? " · bezig" : ""}
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm">
+                  Stoelen: {number.format(ingest.manifestsRead)} rijen gelezen
+                  {ingest.manifestsComplete ? " (klaar)" : ""} · verkoop: {number.format(ingest.salesRead)} rijen
+                  gelezen{ingest.salesComplete ? " (klaar)" : ""}
+                </p>
+                {ingest.running && (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Bezig. De tellers worden na elke ronde van ongeveer vier minuten bijgewerkt; deze pagina
+                    ververst vanzelf.
+                  </p>
+                )}
+              </div>
             )}
             {ingest.lastError && (
               <p className="flex items-start gap-2 text-sm text-muted-foreground">
                 <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
-                Laatste fout: {ingest.lastError}
+                Vorige ronde gaf een fout: {ingest.lastError}. De volgende ronde probeert het opnieuw.
               </p>
             )}
           </CardContent>

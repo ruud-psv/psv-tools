@@ -36,6 +36,53 @@ import {
 /** Een pagina mag niet eindeloos hangen; dan liever een fout en de volgende run. */
 const PAGE_TIMEOUT_MS = 60_000;
 
+/**
+ * Wachttijden voor een nieuwe poging na een tijdelijke fout. Ringside gaf bij
+ * de eerste vulling een `503 Connection reset by peer` op de allereerste pagina;
+ * zoiets is meestal na een paar seconden voorbij.
+ */
+const RETRY_DELAYS_MS = [2_000, 5_000, 15_000];
+
+/** Tijdelijk: serverfouten, te veel verzoeken, of een verbinding die wegviel. */
+function isTransient(status: number | null): boolean {
+  return status === null || status === 429 || status >= 500;
+}
+
+/**
+ * Haalt één pagina op, met een paar nieuwe pogingen bij een tijdelijke fout.
+ * Geen nieuwe poging meer als de deadline daardoor overschreden zou worden.
+ */
+async function fetchPage(path: string, cursor: string | null, deadline: number): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response | null = null;
+    let failure: unknown = null;
+    try {
+      res = await ringsideFetch(path, {
+        searchParams: cursor ? { cursor } : {},
+        signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    if (res && (res.ok || res.status === 205 || !isTransient(res.status))) return res;
+
+    const delay = RETRY_DELAYS_MS[attempt];
+    if (delay === undefined || Date.now() + delay > deadline) {
+      if (res) {
+        const body = (await res.text()).slice(0, 500);
+        throw new RingsideRequestError(`Ringside ${path} gaf ${res.status} ${res.statusText}`, res.status, body);
+      }
+      throw failure;
+    }
+    console.warn(
+      `[ringside/stoelen] ${path}: ${res ? `${res.status} ${res.statusText}` : String(failure)}; nieuwe poging over ${delay / 1000}s`
+    );
+    await res?.body?.cancel().catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
 interface FeedResult {
   rows: number;
   /** Tot het eind van de stroom gekomen: de data is nu actueel. */
@@ -62,10 +109,7 @@ async function readFeed<T>(
   let current = cursor;
 
   for (;;) {
-    const res = await ringsideFetch(path, {
-      searchParams: current ? { cursor: current } : {},
-      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
-    });
+    const res = await fetchPage(path, current, deadline);
     if (res.status === 205) return { rows, reachedEnd: false, reset: true };
     if (!res.ok) {
       const body = (await res.text()).slice(0, 500);
@@ -227,7 +271,17 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
 
 export type LockedRunOutcome =
   | { ran: false; state: SeatIngestState }
-  | { ran: true; state: SeatIngestState; result: SeatIngestResult | null; error: string | null };
+  | {
+      ran: true;
+      state: SeatIngestState;
+      result: SeatIngestResult | null;
+      error: string | null;
+      /**
+       * Of deze run rijen heeft verwerkt, ook als één van de stromen een fout
+       * gaf: dan is het werk van de andere stroom wel bewaard.
+       */
+      progressed: boolean;
+    };
 
 /**
  * Doet één run onder het slot en slaat de toestand op.
@@ -247,6 +301,7 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.runningUntil = new Date(deadline + 60_000).toISOString();
   await writeSeatState(state);
 
+  const readBefore = state.manifestsRead + state.salesRead;
   let result: SeatIngestResult | null = null;
   let error: string | null = null;
   try {
@@ -260,5 +315,5 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.lastError = error;
   state.runningUntil = null;
   await writeSeatState(state);
-  return { ran: true, state, result, error };
+  return { ran: true, state, result, error, progressed: state.manifestsRead + state.salesRead > readBefore };
 }

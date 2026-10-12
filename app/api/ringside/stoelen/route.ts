@@ -77,16 +77,18 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { state, result, error } = outcome;
+  const { state, result, error, progressed } = outcome;
   const done = state.manifestsComplete && state.salesComplete;
-  const progressed = Boolean(result && (result.manifestsRead > 0 || result.salesRead > 0));
 
   // `chain=0` zet de ketting uit; niet op falsy testen, anders valt juist die
   // stand terug op de standaard.
   const rawChain = searchParams.get("chain");
   const requested = rawChain === null ? DEFAULT_CHAIN : Number(rawChain);
   const chainRemaining = Number.isFinite(requested) ? Math.min(Math.max(requested, 0), MAX_CHAIN) : DEFAULT_CHAIN;
-  const chained = !done && chainRemaining > 0 && progressed && !error ? await startNextRun(req, chainRemaining - 1) : false;
+  // Doorpakken zolang er vooruitgang is, ook na een fout in één van de stromen:
+  // die krijgt in de volgende run een nieuwe kans. Een run die niets las, stopt
+  // de ketting, zodat een blijvende fout niet eindeloos herhaald wordt.
+  const chained = !done && chainRemaining > 0 && progressed ? await startNextRun(req, chainRemaining - 1) : false;
 
   return NextResponse.json(
     {
