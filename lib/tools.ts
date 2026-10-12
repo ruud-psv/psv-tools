@@ -1,4 +1,5 @@
 import {
+  Armchair,
   BarChart2,
   BookOpen,
   ClipboardCheck,
@@ -145,6 +146,15 @@ export const insightTools: ToolEntry[] = [
     href: "/dashboard/ticket-inzichten-new",
     icon: Ticket,
     badge: "Ringside",
+  },
+  {
+    name: "Aangrenzende stoelen",
+    title: "Fans naast vrije stoelen vinden",
+    description:
+      "Seizoenkaarthouders die naast een vrije stoel zitten, als CSV met relatienummers.",
+    href: "/dashboard/aangrenzende-stoelen",
+    icon: Armchair,
+    badge: "Beta",
   },
   {
     name: "DM Performance",
