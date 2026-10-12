@@ -31,13 +31,35 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 /**
- * Start de volgende run en wacht alleen tot het verzoek de deur uit is. Een
- * timeout is hier dus het verwachte geval.
+ * Waar de volgende run heen moet.
+ *
+ * Niet per se het adres waarop dit verzoek binnenkwam: de cron van Vercel roept
+ * het eigen adres van de deployment aan (`psv-tools-<hash>.vercel.app`), en dat
+ * zit achter Vercel-login. Een vervolgaanroep daarheen wordt doorgestuurd naar
+ * de inlogpagina en start niets. In productie gaat hij daarom naar het vaste
+ * productiedomein.
  */
-async function startNextRun(req: NextRequest, remaining: number): Promise<boolean> {
+function nextRunUrl(req: NextRequest, remaining: number): URL {
   const url = new URL(req.url);
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (process.env.VERCEL_ENV === "production" && productionHost) {
+    url.protocol = "https:";
+    url.host = productionHost;
+  }
   url.searchParams.set("chain", String(remaining));
   url.searchParams.delete("force");
+  return url;
+}
+
+/**
+ * Start de volgende run en wacht alleen tot het verzoek de deur uit is.
+ *
+ * Een run duurt minuten, dus een timeout is hier het verwachte geval. Komt er
+ * binnen twee seconden wél een antwoord, dan is de run niet gestart — behalve
+ * bij 409: dan loopt er al een, en dat is ook goed.
+ */
+async function startNextRun(req: NextRequest, remaining: number): Promise<boolean> {
+  const url = nextRunUrl(req, remaining);
 
   const headers: Record<string, string> = {};
   const cronSecret = process.env.CRON_SECRET;
@@ -46,10 +68,19 @@ async function startNextRun(req: NextRequest, remaining: number): Promise<boolea
   if (cookie) headers.cookie = cookie;
 
   try {
-    await fetch(url.toString(), { headers, signal: AbortSignal.timeout(2000), cache: "no-store" });
-    return true;
+    const res = await fetch(url.toString(), {
+      headers,
+      signal: AbortSignal.timeout(2000),
+      cache: "no-store",
+      redirect: "manual",
+    });
+    if (res.status === 409) return true;
+    console.error(`[ringside/stoelen] volgende run niet gestart: ${url.host} gaf ${res.status}`);
+    return false;
   } catch (error) {
-    return error instanceof Error && error.name === "TimeoutError";
+    if (error instanceof Error && error.name === "TimeoutError") return true;
+    console.error("[ringside/stoelen] volgende run niet gestart:", error instanceof Error ? error.message : error);
+    return false;
   }
 }
 
