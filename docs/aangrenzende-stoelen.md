@@ -113,6 +113,34 @@ Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom alti
 - **Slot:** er draait nooit meer dan één run tegelijk, ook niet tussen de cron en
   "Maak lijst". De cursors schuiven pas op nadat de data is opgeslagen.
 
+## Doorzetten naar Maileon
+
+Onder een gemaakte lijst staat "Doorzetten naar Maileon". Dat maakt in Maileon een
+contactfilter met een doelgroep erop, zodat kaartverkoop er direct een mailing naar kan
+sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
+`app/api/aangrenzende-stoelen/maileon/route.ts`.
+
+- **Naam** (filter én doelgroep), volgens de conventie van Digital Marketing:
+  `2026.10.31 PSV Kaartverkoop - Aangrenzende stoelen PSV - Willem II - DMID26-12345`.
+  In de interface vul je de verzenddatum en het DMID in. Zonder DMID wordt het
+  `DMID26-XXXX` (het jaar van de verzenddatum).
+- **Filter:** begint leeg en voegt iedereen toe van wie het custom veld
+  `MEMBERNUMBERPRIOR` (het relatienummer) in de lijst staat. Let op: `MEMBERNUMBER`
+  bestaat ook, maar is niet het relatienummer. Ongeveer de helft van de contacten in
+  Maileon heeft een relatienummer.
+- **De lijst wordt opnieuw uitgerekend** met dezelfde berekening als "Maak lijst"
+  (`lib/aangrenzende-stoelen/build-list.ts`). De relatienummers komen dus nooit uit de
+  browser.
+- **API:** `POST /contactfilters/v2?createTargetGroup=true`. De documentatie van Maileon
+  noemt de lijst-operator op twee manieren (`includein` en `includedin`); de code probeert
+  ze op volgorde en logt welke werkte.
+- **Daarna** vraagt de pagina de doelgroep op tot Maileon klaar is met rekenen, en toont
+  hoeveel contacten Maileon vond en hoeveel daarvan te mailen zijn. Minder contacten dan
+  relatienummers is normaal: niet iedere seizoenkaarthouder staat in Maileon.
+- **Sleutel:** `MAILEON_API_KEY` in Vercel (de API-sleutel "PSV Tools II" in Maileon).
+  Elke keer doorzetten maakt een nieuw filter en een nieuwe doelgroep; opruimen gaat in
+  Maileon zelf.
+
 ## Instellingen
 
 - `INCLUDE_SEAT_COLUMNS` in `lib/aangrenzende-stoelen/settings.ts`: vak, rij en stoel
@@ -125,7 +153,6 @@ Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom alti
 - Finetuning van uitsluitingen: hospitality, persvak, staanplaatsen, en stoelen die de
   club vasthoudt (gelockt, maar wel `is_counted_as_available`). Die tellen nu als vrij.
 - De bekende afwijkingen in rij- en stoelnummers hierboven.
-- De lijst direct als doelgroep naar Maileon in plaats van een CSV.
 - Een grens voor relatienummers met veel stoelen, als vaste instelling in plaats van
   een veld in de interface.
 
