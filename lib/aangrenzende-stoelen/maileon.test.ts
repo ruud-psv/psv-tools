@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import {
   contactFilterBody,
   defaultDmid,
+  maileonMessage,
   maileonName,
+  MAX_RELATION_NUMBERS,
   parseTargetGroup,
   RELATION_NUMBER_FIELD,
+  targetGroupXml,
   validateNameInput,
 } from "./maileon";
 
@@ -36,7 +39,7 @@ test("verzenddatum en DMID worden gecontroleerd", () => {
 });
 
 test("filter: leeg beginnen, relatienummers uit de lijst toevoegen, zonder dubbelen", () => {
-  const body = contactFilterBody("Naam", ["300", " 100", "200", "100", ""], "includein");
+  const body = contactFilterBody("Naam", ["300", " 100", "200", "100", ""]);
   assert.deepEqual(body, {
     name: "Naam",
     rules: [
@@ -45,11 +48,50 @@ test("filter: leeg beginnen, relatienummers uit de lijst toevoegen, zonder dubbe
         operation: "add",
         selection: {
           selection_base: "contactfield",
-          criterion: { field_name: RELATION_NUMBER_FIELD, operation: "includein", value: ["100", "200", "300"] },
+          criterion: { field_name: RELATION_NUMBER_FIELD, operation: "includedin", value: ["100", "200", "300"] },
         },
       },
     ],
   });
+});
+
+test("filter: hooguit 100 relatienummers per regel, alleen de eerste regel met startset", () => {
+  const numbers = Array.from({ length: 250 }, (_, i) => String(100000 + i));
+  const { rules } = contactFilterBody("Naam", numbers);
+  assert.deepEqual(
+    rules.map((rule) => rule.selection.criterion.value.length),
+    [100, 100, 50]
+  );
+  assert.equal(rules[0].startset, "empty");
+  assert.ok(rules.slice(1).every((rule) => !("startset" in rule) && rule.operation === "add"));
+  assert.deepEqual(
+    rules.flatMap((rule) => rule.selection.criterion.value),
+    numbers
+  );
+});
+
+test("filter: geen lege lijst en niet meer dan Maileon aankan", () => {
+  assert.throws(() => contactFilterBody("Naam", []), /geen relatienummers/);
+  const tooMany = Array.from({ length: MAX_RELATION_NUMBERS + 1 }, (_, i) => String(i + 1));
+  assert.throws(() => contactFilterBody("Naam", tooMany), /hooguit/);
+});
+
+test("doelgroep als XML, met de naam veilig ge-escapet", () => {
+  assert.equal(
+    targetGroupXml("A & B <test>", 2765),
+    '<?xml version="1.0" encoding="UTF-8"?><targetgroup><name>A &amp; B &lt;test&gt;</name>' +
+      "<type>regular</type><contact_filter_id>2765</contact_filter_id></targetgroup>"
+  );
+});
+
+test("foutmeldingen van Maileon in alle vormen", () => {
+  assert.equal(
+    maileonMessage('{"error":{"message":"Unable to create the contact filter","status":400}}'),
+    "Unable to create the contact filter"
+  );
+  assert.equal(maileonMessage('{"message":"kapot"}'), "kapot");
+  assert.equal(maileonMessage("<error><message>no such api key</message></error>"), "no such api key");
+  assert.equal(maileonMessage(" iets anders "), "iets anders");
 });
 
 test("status van een doelgroep uit de XML van Maileon", () => {

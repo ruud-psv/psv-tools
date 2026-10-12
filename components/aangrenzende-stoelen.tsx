@@ -73,6 +73,7 @@ interface MaileonPush {
   name: string;
   contactFilterId: number;
   targetGroupId: number | null;
+  targetGroupError: string | null;
   filterUrl: string;
   pushed: number;
 }
@@ -563,10 +564,18 @@ export function AangrenzendeStoelen() {
                     </p>
                     <p className="text-muted-foreground">
                       {number.format(pushed.pushed)} relatienummers · filter {pushed.contactFilterId}
-                      {pushed.targetGroupId
-                        ? ` · doelgroep ${pushed.targetGroupId}`
-                        : " · Maileon maakte geen doelgroep; maak die zelf aan op dit filter"}
+                      {pushed.targetGroupId && ` · doelgroep ${pushed.targetGroupId}`}
                     </p>
+                    {!pushed.targetGroupId && (
+                      <p className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
+                        <span>
+                          Het filter staat in Maileon, maar de doelgroep niet
+                          {pushed.targetGroupError ? ` (${pushed.targetGroupError})` : ""}. Maak de doelgroep zelf
+                          aan op dit filter.
+                        </span>
+                      </p>
+                    )}
                     {pushed.targetGroupId && (
                       <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                         {groupStatus?.state === "uptodate" && groupStatus.countContacts !== null ? (

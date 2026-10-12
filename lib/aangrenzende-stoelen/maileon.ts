@@ -4,9 +4,12 @@
  * sturen. Er gaan alleen relatienummers naar Maileon; Maileon kent de
  * contacten zelf al.
  *
- * API: `POST /contactfilters/v2?createTargetGroup=true` maakt filter én
- * doelgroep in één keer (https://support.maileon.com/support/create-contact-filter/,
- * regels: https://support.maileon.com/support/contactfilter-schema/).
+ * API: eerst het filter (`POST /contactfilters/v2`), dan de doelgroep erop
+ * (`POST /targetgroups`). Twee stappen in plaats van `createTargetGroup=true`,
+ * zodat we weten welke stap Maileon afwijst. De regels moeten voldoen aan het
+ * JSON-schema in de XQueue-wiki ("Creating and Updating Contactfilters Using
+ * the REST API"), niet aan de losse documentatiepagina's: die spreken elkaar
+ * tegen.
  */
 
 export const MAILEON_API = "https://api.maileon.com/1.0";
@@ -21,12 +24,18 @@ export const MAILEON_WEBAPP = "https://psv-news-mailer.maileon.com/eagle_kp_weba
 export const RELATION_NUMBER_FIELD = "MEMBERNUMBERPRIOR";
 
 /**
- * Operator voor "waarde staat in deze lijst". De documentatie van Maileon is
- * het met zichzelf oneens: de schema-pagina noemt `includedin`, de XQueue-wiki
- * `includein`. We proberen ze op volgorde; een afgewezen filter (400) maakt
- * niets aan. In de log staat welke werkte.
+ * Operator voor "waarde staat in deze lijst", volgens het JSON-schema. (De
+ * wiki-tekst schrijft `includein`; dat kent het schema niet.)
  */
-export const IN_LIST_OPERATIONS = ["includein", "includedin"] as const;
+export const IN_LIST_OPERATION = "includedin";
+
+/** Het schema staat hooguit 100 waarden per regel toe; meer gaat in extra regels. */
+export const MAX_VALUES_PER_RULE = 100;
+
+/** Maileon staat hooguit 100 regels per filter toe. */
+export const MAX_RULES = 100;
+
+export const MAX_RELATION_NUMBERS = MAX_VALUES_PER_RULE * MAX_RULES;
 
 const SEND_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DMID = /^[A-Za-z0-9-]{2,30}$/;
@@ -66,22 +75,45 @@ export function maileonName({ sendDate, eventName, dmid }: MaileonNameInput): st
   return `${sendDate.replaceAll("-", ".")} PSV Kaartverkoop - Aangrenzende stoelen ${event} - ${dmid.trim()}`;
 }
 
-/** Het contactfilter: begin leeg en voeg iedereen toe met een relatienummer uit de lijst. */
-export function contactFilterBody(name: string, relationNumbers: readonly string[], operation: string) {
+/**
+ * Het contactfilter: begin leeg en voeg iedereen toe met een relatienummer uit
+ * de lijst, in blokken van 100. Alleen de eerste regel heeft een `startset`.
+ */
+export function contactFilterBody(name: string, relationNumbers: readonly string[]) {
   const values = [...new Set(relationNumbers.map((value) => value.trim()).filter(Boolean))].sort();
-  return {
-    name,
-    rules: [
-      {
-        startset: "empty",
-        operation: "add",
-        selection: {
-          selection_base: "contactfield",
-          criterion: { field_name: RELATION_NUMBER_FIELD, operation, value: values },
+  if (values.length === 0) throw new Error("Er zijn geen relatienummers om door te zetten.");
+  if (values.length > MAX_RELATION_NUMBERS) {
+    throw new Error(
+      `Maileon past hooguit ${MAX_RELATION_NUMBERS} relatienummers in één filter; deze lijst heeft er ${values.length}.`
+    );
+  }
+
+  const rules = [];
+  for (let start = 0; start < values.length; start += MAX_VALUES_PER_RULE) {
+    rules.push({
+      ...(start === 0 ? { startset: "empty" } : {}),
+      operation: "add",
+      selection: {
+        selection_base: "contactfield",
+        criterion: {
+          field_name: RELATION_NUMBER_FIELD,
+          operation: IN_LIST_OPERATION,
+          value: values.slice(start, start + MAX_VALUES_PER_RULE),
         },
       },
-    ],
-  };
+    });
+  }
+  return { name, rules };
+}
+
+/** De doelgroep op een filter, als XML voor `POST /targetgroups`. */
+export function targetGroupXml(name: string, contactFilterId: number): string {
+  const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<targetgroup><name>${escaped}</name><type>regular</type>` +
+    `<contact_filter_id>${contactFilterId}</contact_filter_id></targetgroup>`
+  );
 }
 
 export function contactFilterUrl(contactFilterId: number): string {
@@ -102,61 +134,62 @@ function authorization(): string {
   return `Basic ${Buffer.from(key).toString("base64")}`;
 }
 
-/** De foutmelding van Maileon: JSON met `message`, of XML met `<message>`. */
-async function maileonError(res: Response): Promise<string> {
-  const text = (await res.text().catch(() => "")).trim();
-  let message = text;
+/**
+ * De foutmelding uit een antwoord van Maileon: JSON met `error.message` (v2),
+ * JSON met `message`, of XML met `<message>`.
+ */
+export function maileonMessage(text: string): string {
   try {
-    const parsed = JSON.parse(text) as { message?: unknown };
-    if (parsed && typeof parsed.message === "string") message = parsed.message;
+    const parsed = JSON.parse(text) as { message?: unknown; error?: { message?: unknown } };
+    if (typeof parsed?.error?.message === "string") return parsed.error.message;
+    if (typeof parsed?.message === "string") return parsed.message;
   } catch {
     const match = text.match(/<message>([\s\S]*?)<\/message>/);
-    if (match) message = match[1].trim();
+    if (match) return match[1].trim();
   }
-  return `Maileon ${res.status}: ${message.slice(0, 300) || res.statusText}`;
+  return text.trim();
 }
 
-export interface CreatedTargetGroup {
-  contactFilterId: number;
-  /** `null` als Maileon wel het filter maakte, maar geen doelgroep. */
-  targetGroupId: number | null;
-  operation: string;
+async function maileonError(res: Response): Promise<string> {
+  const message = maileonMessage(await res.text().catch(() => ""));
+  return `Maileon ${res.status}: ${message.slice(0, 500) || res.statusText}`;
 }
 
-export async function createFilterWithTargetGroup(
-  name: string,
-  relationNumbers: readonly string[]
-): Promise<CreatedTargetGroup> {
-  const rejected: string[] = [];
-  for (const operation of IN_LIST_OPERATIONS) {
-    const res = await fetch(`${MAILEON_API}/contactfilters/v2?createTargetGroup=true`, {
-      method: "POST",
-      headers: {
-        Authorization: authorization(),
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(contactFilterBody(name, relationNumbers, operation)),
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { contact_filter_id?: unknown; target_group_id?: unknown };
-      const contactFilterId = Number(data.contact_filter_id);
-      if (!Number.isInteger(contactFilterId) || contactFilterId <= 0) {
-        throw new Error("Maileon gaf geen ID van het contactfilter terug.");
-      }
-      const targetGroupId = Number(data.target_group_id);
-      return {
-        contactFilterId,
-        targetGroupId: Number.isInteger(targetGroupId) && targetGroupId > 0 ? targetGroupId : null,
-        operation,
-      };
-    }
-    const message = await maileonError(res);
-    if (res.status !== 400) throw new Error(message);
-    rejected.push(`${operation}: ${message}`);
+export async function createContactFilter(name: string, relationNumbers: readonly string[]): Promise<number> {
+  const res = await fetch(`${MAILEON_API}/contactfilters/v2`, {
+    method: "POST",
+    headers: {
+      Authorization: authorization(),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(contactFilterBody(name, relationNumbers)),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Maileon maakte het filter niet. ${await maileonError(res)}`);
+  const data = (await res.json()) as { contact_filter_id?: unknown };
+  const contactFilterId = Number(data.contact_filter_id);
+  if (!Number.isInteger(contactFilterId) || contactFilterId <= 0) {
+    throw new Error("Maileon gaf geen ID van het contactfilter terug.");
   }
-  throw new Error(`Maileon wees het filter af. ${rejected.join(" · ")}`);
+  return contactFilterId;
+}
+
+export async function createTargetGroup(name: string, contactFilterId: number): Promise<number> {
+  const res = await fetch(`${MAILEON_API}/targetgroups`, {
+    method: "POST",
+    headers: {
+      Authorization: authorization(),
+      "Content-Type": `${MAILEON_XML}; charset=utf-8`,
+      Accept: MAILEON_XML,
+    },
+    body: targetGroupXml(name, contactFilterId),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(await maileonError(res));
+  const id = xmlNumber(await res.text(), "id");
+  if (!id) throw new Error("Maileon gaf geen ID van de doelgroep terug.");
+  return id;
 }
 
 /**
