@@ -44,6 +44,22 @@ Bekende afwijkingen van "rij ±1", vastgesteld op de plattegrond van de ticketsh
 - P en R hebben geen rij 18, en UU heeft geen rij 29. Dat zijn echte lege rijen, dus
   daar klopt het.
 
+## Plattegrond
+
+Na "Maak lijst" toont de pagina de plattegrond van het Philips Stadion met per vak het
+aantal vrije stoelen (`components/stadium-map.tsx`). De vakken zijn nagetekend van de
+officiële plattegrond (`lib/aangrenzende-stoelen/stadium.ts`). Een test controleert dat
+elk genummerd vak er precies één keer op staat.
+
+- **Kleur:** één schaal van licht- naar donkerrood (PSV-tokens), in vier klassen
+  (1–4, 5–14, 15–39, 40+). Lichtgrijs is 0 vrij, grijs met arcering doet niet mee.
+  Het aantal staat altijd als getal in het vak.
+- **Aanwijzen of klikken:** onder de kaart verschijnen dan de vrije stoelen van dat vak,
+  hoeveel daarvan in de resale staan, en hoeveel stoelen van seizoenkaarthouders op de
+  lijst staan.
+- Vrije stoelen in een vak dat niet op de kaart staat, worden eronder apart genoemd.
+- Onder "Als tabel" staan dezelfde cijfers als tabel.
+
 ## Lijst seizoenkaarthouders
 
 Digital Marketing uploadt de lijst op de pagina: Excel (.xlsx) of CSV met de kolommen

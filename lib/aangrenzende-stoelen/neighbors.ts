@@ -114,6 +114,10 @@ export interface NeighborStats {
   /** Hoeveel daarvan vrij zijn omdat het ticket in de resale staat. */
   freeFromResale: number;
   freeByArea: Record<string, number>;
+  /** Per vak: hoeveel van de vrije stoelen in de resale staan. */
+  freeFromResaleByArea: Record<string, number>;
+  /** Per vak: hoeveel stoelen van seizoenkaarthouders op de lijst staan. */
+  listedSeatsByArea: Record<string, number>;
   /** Seizoenkaartstoelen die in de stoelenkaart van deze wedstrijd ontbreken. */
   holderSeatsUnknown: number;
   /** Buren die afvielen omdat ze zelf de stoel ernaast aanbieden. */
@@ -179,6 +183,8 @@ export function findNeighbors(
     freeSeats: 0,
     freeFromResale: 0,
     freeByArea: {},
+    freeFromResaleByArea: {},
+    listedSeatsByArea: {},
     holderSeatsUnknown: 0,
     skippedOwnResale: 0,
     skippedTooManySeats: tooMany.size,
@@ -201,6 +207,7 @@ export function findNeighbors(
     if (fromResale) stats.freeFromResale++;
     const area = normalizeArea(free.area);
     stats.freeByArea[area] = (stats.freeByArea[area] ?? 0) + 1;
+    if (fromResale) stats.freeFromResaleByArea[area] = (stats.freeFromResaleByArea[area] ?? 0) + 1;
 
     // Wie biedt deze stoel aan? Eerst op eigenaar uit Ringside, en als die
     // ontbreekt op het relatienummer dat volgens de lijst op deze stoel zit.
@@ -242,6 +249,12 @@ export function findNeighbors(
       seats: [...seatsOfRelation.values()].sort(compareSeats),
     }))
     .sort((a, b) => compareSeats(a.seats[0], b.seats[0]) || a.relationNumber.localeCompare(b.relationNumber));
+
+  for (const row of rows) {
+    for (const seat of row.seats) {
+      stats.listedSeatsByArea[seat.area] = (stats.listedSeatsByArea[seat.area] ?? 0) + 1;
+    }
+  }
 
   return { rows, stats };
 }
