@@ -1,9 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
-import { byAudienceType, derive, toneForCpa } from "@/lib/paid-ads/derive";
-import { eur, nl, pct } from "@/lib/paid-ads/format";
-import { AUDIENCE_LABELS, AudienceType } from "@/lib/paid-ads/types";
+import {
+  byAudienceType,
+  demographicSplit,
+  derive,
+  saturation,
+  toneForCpa,
+  type DemographicRow,
+} from "@/lib/paid-ads/derive";
+import { eur, nl, pct, roas } from "@/lib/paid-ads/format";
+import { AUDIENCE_LABELS, AudienceType, PaidTargeting } from "@/lib/paid-ads/types";
 import {
   Badge,
   BarRow,
@@ -12,6 +19,7 @@ import {
   SectionCard,
   Td,
   Th,
+  VolumeBar,
 } from "./shared";
 import type { PaidViewProps } from "./shared";
 
@@ -27,6 +35,11 @@ export function AudienceView({ data, avgCpa }: PaidViewProps) {
     const max = Math.max(...rows.map((r) => r.derived.costPerResult ?? 0), 1);
     return { rows, max };
   }, [data.adSets]);
+
+  const demographics = useMemo(() => demographicSplit(data.demographics), [data.demographics]);
+
+  // Retargeting en kleine doelgroepen raken het eerst verzadigd.
+  const saturated = useMemo(() => saturation(data.adSets, 8), [data.adSets]);
 
   const maxAudienceCpa = useMemo(
     () => Math.max(...audiences.map((a) => a.derived.costPerResult ?? 0), 1),
@@ -87,7 +100,7 @@ export function AudienceView({ data, avgCpa }: PaidViewProps) {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* CPA per advertentieset */}
-        <SectionCard title="CPA per advertentieset" hint="advertentiesetniveau">
+        <SectionCard title="Doelgroep & CPA per advertentieset" hint="met de ingestelde targeting (Meta)">
           {adSets.rows.length === 0 ? (
             <EmptySection />
           ) : (
@@ -115,6 +128,7 @@ export function AudienceView({ data, avgCpa }: PaidViewProps) {
                             />
                           )}
                         </div>
+                        {s.targeting && <TargetingLine targeting={s.targeting} />}
                       </div>
                       <span className="w-20 truncate text-right text-[10px] text-muted-foreground">
                         {s.audienceType ? AUDIENCE_LABELS[s.audienceType] : ""}
@@ -133,35 +147,113 @@ export function AudienceView({ data, avgCpa }: PaidViewProps) {
           )}
         </SectionCard>
 
-        {/* Audience overlap */}
-        <SectionCard title="Audience overlap" hint="dubbel bereikte mensen">
-          {data.audienceOverlap.length === 0 ? (
+        {/* Verzadiging per advertentieset */}
+        <SectionCard title="Verzadiging per advertentieset" hint="frequentie · hoe vaak dezelfde persoon de advertentie zag">
+          {saturated.length === 0 ? (
             <EmptySection>
-              Overlap komt niet uit de rapportage-API&apos;s; die vraagt een aparte export uit
-              Meta Audience Overlap.
+              Frequentie is beschikbaar zodra een platform bereik én weergaven per advertentieset
+              rapporteert.
             </EmptySection>
           ) : (
-            <div className="space-y-3.5">
-              {data.audienceOverlap.map((o) => {
-                const tone = o.percentage >= 30 ? "bad" : o.percentage >= 15 ? "warn" : "good";
-                return (
-                  <div key={o.label}>
+            <>
+              <div className="space-y-3">
+                {saturated.map((s) => (
+                  <div key={`${s.platform}-${s.name}`}>
                     <div className="mb-1.5 flex justify-between gap-3 text-sm">
-                      <span className="truncate text-muted-foreground">{o.label}</span>
-                      <Badge tone={tone}>{nl(o.percentage)}%</Badge>
+                      <span className="truncate text-muted-foreground">
+                        {s.name} <span className="text-psv-gray-09">· {s.platform}</span>
+                      </span>
+                      <Badge tone={s.tone}>{nl(s.frequency, 2)}</Badge>
                     </div>
                     <div className="flex">
-                      {/* Schaal tot 50%: daarboven overlappen doelgroepen structureel. */}
-                      <BarRow width={(o.percentage / 50) * 100} tone={tone} className="h-2" />
+                      {/* Schaal tot 8: daarboven is elke advertentieset verzadigd. */}
+                      <BarRow width={(s.frequency / 8) * 100} tone={s.tone} />
                     </div>
-                    {o.note && <p className="mt-1 text-[10px] text-muted-foreground">{o.note}</p>}
+                    <p className="mt-1 text-[10px] text-muted-foreground">{s.status}</p>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">
+                Groen onder 3,0 · oranje 3,0-6,0 · rood boven 6,0
+              </p>
+            </>
           )}
         </SectionCard>
       </div>
+
+      {/* Leeftijd en geslacht */}
+      <SectionCard
+        title="Prestaties per leeftijd en geslacht"
+        hint="binnen de huidige selectie · kies een advertentieset om één doelgroep te bekijken"
+      >
+        {demographics.byAge.length === 0 ? (
+          <EmptySection>
+            Verschijnt zodra Meta-advertentiesets binnen deze selectie vallen. De andere platformen
+            leveren deze uitsplitsing nog niet.
+          </EmptySection>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
+            <DemographicTable title="Leeftijd" rows={demographics.byAge} />
+            <DemographicTable title="Geslacht" rows={demographics.byGender} />
+          </div>
+        )}
+      </SectionCard>
     </div>
+  );
+}
+
+/** Eén regel met wie een advertentieset bereikt. */
+function TargetingLine({ targeting: t }: { targeting: PaidTargeting }) {
+  const parts = [
+    t.audiences.length > 0 && `Doelgroepen: ${t.audiences.join(", ")}`,
+    t.excluded.length > 0 && `Uitgesloten: ${t.excluded.join(", ")}`,
+    t.interests.length > 0 && `Interesses: ${t.interests.join(", ")}`,
+    t.age,
+    t.gender,
+    t.locations.length > 0 && t.locations.join(", "),
+    t.expanded && "Advantage+ mag verbreden",
+  ].filter((p): p is string => Boolean(p));
+  if (parts.length === 0) return null;
+  const text = parts.join(" · ");
+  return (
+    <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground" title={text}>
+      {text}
+    </p>
+  );
+}
+
+function DemographicTable({ title, rows }: { title: string; rows: DemographicRow[] }) {
+  return (
+    <DataTable>
+      <thead>
+        <tr className="border-b border-border">
+          <Th className="pl-0">{title}</Th>
+          <Th className="min-w-[120px]">Aandeel budget</Th>
+          <Th align="right">Resultaten</Th>
+          <Th align="right">ROAS</Th>
+          <Th align="right" className="pr-0">CPA</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key} className="border-b border-border/50 last:border-0 hover:bg-muted/40">
+            <Td className="whitespace-nowrap pl-0 font-medium">{r.label}</Td>
+            <Td>
+              <div className="flex items-center gap-2">
+                <VolumeBar width={r.spendShare} />
+                <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
+                  {pct(r.spendShare, 0)}
+                </span>
+              </div>
+            </Td>
+            <Td align="right">{nl(r.metrics.results)}</Td>
+            <Td align="right">{roas(r.derived.roas)}</Td>
+            <Td align="right" className="pr-0">
+              <Badge tone={r.tone}>{eur(r.derived.costPerResult, 2)}</Badge>
+            </Td>
+          </tr>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }

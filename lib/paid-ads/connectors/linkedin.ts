@@ -13,8 +13,7 @@
  * namen — daarvoor is een aparte aanroep naar de campagnelijst nodig.
  * Advertentieniveau (creatives) vraagt weer een eigen metadata-endpoint met
  * een vorm die per advertentieformat verschilt; die is hier bewust nog niet
- * gebouwd. `ads` blijft daarom leeg, net zoals `audienceOverlap` in de route
- * leeg blijft tot er een bron voor is.
+ * gebouwd. `ads` blijft daarom leeg.
  *
  * Benodigde environment variabelen:
  *   LINKEDIN_ADS_ACCESS_TOKEN   OAuth access token met de scope `rw_ads`.
@@ -235,6 +234,7 @@ interface LinkedInAnalyticsRow {
   costInLocalCurrency?: string;
   externalWebsiteConversions?: number;
   oneClickLeads?: number;
+  conversionValueInLocalCurrency?: string;
 }
 
 interface LinkedInAnalyticsResponse {
@@ -250,6 +250,7 @@ const ANALYTICS_FIELDS = [
   "costInLocalCurrency",
   "externalWebsiteConversions",
   "oneClickLeads",
+  "conversionValueInLocalCurrency",
 ].join(",");
 
 function dateRangeParam(window: FetchWindow): string {
@@ -332,6 +333,7 @@ function metricsFrom(row: LinkedInAnalyticsRow): PaidMetrics {
     reach: 0,
     clicks: num(row.clicks),
     results: conversions > 0 ? conversions : leads,
+    revenue: num(row.conversionValueInLocalCurrency),
   };
 }
 
@@ -346,6 +348,7 @@ function addMetrics(target: PaidMetrics, source: PaidMetrics): void {
   target.reach += source.reach;
   target.clicks += source.clicks;
   target.results += source.results;
+  target.revenue += source.revenue;
 }
 
 /** Het numerieke ID uit een LinkedIn-URN, bijv. "urn:li:sponsoredCampaign:123" → "123". */
@@ -357,6 +360,36 @@ function urnId(urn: string | undefined): string | null {
 
 /* ---------------------------------------------------------- connector -- */
 
+/** Analyticsrijen op campagneniveau naar campagnes, met naam uit de campagnelijst. */
+function toCampaigns(
+  campaignMeta: Map<string, LinkedInCampaign>,
+  campaignRows: LinkedInAnalyticsRow[]
+): PaidAdsCampaign[] {
+  const campaigns: PaidAdsCampaign[] = [];
+  for (const row of campaignRows) {
+    const id = urnId(row.pivotValues?.[0]);
+    if (!id) continue;
+
+    const meta = campaignMeta.get(id);
+    const name = meta?.name || `Campagne ${id}`;
+    const objective = pseudoObjective(meta?.objectiveType);
+    const metrics = metricsFrom(row);
+    if (!hasVolume(metrics)) continue;
+
+    campaigns.push({
+      id,
+      name,
+      platform: "linkedin",
+      phase: resolvePhase(name, objective),
+      businessUnit: resolveBusinessUnit(name),
+      objective: resolveObjectiveLabel(objective, null),
+      campaignGroup: resolveCampaignGroup(name),
+      metrics,
+    });
+  }
+  return campaigns;
+}
+
 async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
   const config = getConfig();
 
@@ -366,61 +399,37 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     fetchAnalytics(config, "CAMPAIGN", "DAILY", window, signal),
   ]);
 
-  const campaigns: PaidAdsCampaign[] = [];
-  const adSets: PaidAdsAdSet[] = [];
+  const campaigns = toCampaigns(campaignMeta, campaignRows);
 
-  for (const row of campaignRows) {
-    const id = urnId(row.pivotValues?.[0]);
-    if (!id) continue;
+  // LinkedIn kent geen advertentieset; er wordt er één per campagne
+  // gesynthetiseerd met dezelfde tellers (zie bestandscomment hierboven).
+  const adSets: PaidAdsAdSet[] = campaigns.map((c) => ({
+    id: `${c.id}:default`,
+    name: c.name,
+    campaignId: c.id,
+    platform: "linkedin",
+    phase: c.phase,
+    audienceType: resolveAudienceType(c.name),
+    targeting: null,
+    metrics: c.metrics,
+  }));
 
-    const meta = campaignMeta.get(id);
-    const name = meta?.name || `Campagne ${id}`;
-    const objective = pseudoObjective(meta?.objectiveType);
-    const phase = resolvePhase(name, objective);
-    const metrics = metricsFrom(row);
-    const businessUnit = resolveBusinessUnit(name);
-    const campaignGroup = resolveCampaignGroup(name);
-
-    if (!hasVolume(metrics)) continue;
-
-    campaigns.push({
-      id,
-      name,
-      platform: "linkedin",
-      phase,
-      businessUnit,
-      objective: resolveObjectiveLabel(objective, null),
-      campaignGroup,
-      metrics,
-    });
-
-    // LinkedIn kent geen advertentieset; er wordt er één per campagne
-    // gesynthetiseerd met dezelfde tellers (zie bestandscomment hierboven).
-    adSets.push({
-      id: `${id}:default`,
-      name,
-      campaignId: id,
-      platform: "linkedin",
-      phase,
-      audienceType: resolveAudienceType(name),
-      metrics,
-    });
-  }
-
-  const byDate = new Map<string, PaidMetrics>();
+  // De dagreeks per campagne, zodat het dashboard de grafieken dezelfde
+  // filters kan laten volgen als de campagnelijst.
+  const byDay = new Map<string, ConnectorDailyPoint>();
   for (const row of dailyRows) {
     const start = row.dateRange?.start;
-    if (!start) continue;
+    const campaignId = urnId(row.pivotValues?.[0]);
+    if (!start || !campaignId) continue;
     const date = `${start.year}-${String(start.month).padStart(2, "0")}-${String(start.day).padStart(2, "0")}`;
 
-    const point = byDate.get(date) ?? emptyMetrics();
-    addMetrics(point, metricsFrom(row));
-    byDate.set(date, point);
+    const key = `${date}|${campaignId}`;
+    const point = byDay.get(key) ?? { date, campaignId, metrics: emptyMetrics() };
+    addMetrics(point.metrics, metricsFrom(row));
+    byDay.set(key, point);
   }
 
-  const daily: ConnectorDailyPoint[] = [...byDate.entries()]
-    .map(([date, metrics]) => ({ date, metrics }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const daily = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   // Creative-niveau (ads) vraagt een eigen metadata-endpoint dat hier nog niet
   // gebouwd is — zie bestandscomment hierboven.
@@ -428,23 +437,23 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
 }
 
 /**
- * Totalen voor een vergelijkingsperiode, op campagneniveau — net als bij de
- * andere koppelingen.
+ * Campagnes van een vergelijkingsperiode, met dezelfde indeling als de
+ * hoofdperiode — net als bij de andere koppelingen. De namen komen uit de
+ * campagnelijst, want daar hangen fase en exploitatie aan.
  */
-async function fetchTotals(window: FetchWindow, signal?: AbortSignal): Promise<PaidMetrics> {
+async function fetchCampaigns(window: FetchWindow, signal?: AbortSignal): Promise<PaidAdsCampaign[]> {
   const config = getConfig();
-  const rows = await fetchAnalytics(config, "CAMPAIGN", "ALL", window, signal);
-
-  const totals = emptyMetrics();
-  for (const row of rows) {
-    addMetrics(totals, metricsFrom(row));
-  }
-  return totals;
+  const [campaignMeta, rows] = await Promise.all([
+    fetchCampaignMeta(config, signal),
+    fetchAnalytics(config, "CAMPAIGN", "ALL", window, signal),
+  ]);
+  return toCampaigns(campaignMeta, rows);
 }
 
 export const linkedinConnector: PaidConnector = {
   platform: "linkedin",
   isConfigured: isLinkedInConfigured,
+  reportsRevenue: true,
   fetchAll,
-  fetchTotals,
+  fetchCampaigns,
 };

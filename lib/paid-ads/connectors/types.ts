@@ -9,6 +9,7 @@
 
 import type {
   PaidAdsAd,
+  PaidAdsDemographic,
   PaidAdsAdSet,
   PaidAdsCampaign,
   PaidMetrics,
@@ -30,6 +31,7 @@ export interface FetchWindow {
 export interface ConnectorDailyPoint {
   /** ISO-datum (YYYY-MM-DD). */
   date: string;
+  campaignId: string;
   metrics: PaidMetrics;
 }
 
@@ -39,19 +41,25 @@ export interface ConnectorResult {
   adSets: PaidAdsAdSet[];
   ads: PaidAdsAd[];
   daily: ConnectorDailyPoint[];
+  /** Alleen gevuld door platforms die een leeftijd/geslacht-uitsplitsing leveren. */
+  demographics?: PaidAdsDemographic[];
 }
 
 /**
- * De vorm die elk platform implementeert. `fetchTotals` bestaat apart omdat de
- * vergelijkingsperiodes alleen totalen nodig hebben: die hoeven niet de hele
- * campagne-, advertentieset- en advertentielijst op te halen.
+ * De vorm die elk platform implementeert. `fetchCampaigns` bestaat apart omdat
+ * de vergelijkingsperiodes alleen campagnes nodig hebben: die hoeven niet de
+ * advertentiesets, advertenties en dagreeks op te halen. Campagnes en geen
+ * totaal, zodat het dashboard de vergelijking op dezelfde manier kan filteren
+ * als de hoofdperiode.
  */
 export interface PaidConnector {
   platform: PaidPlatform;
   /** Of alle verplichte environment variabelen gezet zijn. */
   isConfigured(): boolean;
+  /** Of het platform een conversiewaarde (omzet) levert, voor ROAS. */
+  reportsRevenue: boolean;
   fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult>;
-  fetchTotals(window: FetchWindow, signal?: AbortSignal): Promise<PaidMetrics>;
+  fetchCampaigns(window: FetchWindow, signal?: AbortSignal): Promise<PaidAdsCampaign[]>;
 }
 
 /** Ontbrekende of onvolledige configuratie — een serverprobleem, geen API-fout. */

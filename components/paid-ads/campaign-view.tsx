@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import {
   Bar,
+  BarChart,
   CartesianGrid,
-  ComposedChart,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -18,16 +18,22 @@ import {
   deltaFor,
   derive,
   topAdsByCtr,
+  scoreWeightsLabel,
   winnersAndLosers,
 } from "@/lib/paid-ads/derive";
-import { eur, eurShort, nl, pct, shortDate, signed } from "@/lib/paid-ads/format";
-import { PaidPlatform, PLATFORM_LABELS } from "@/lib/paid-ads/types";
+import { eur, eurShort, nl, pct, roas, shortDate, signed } from "@/lib/paid-ads/format";
+import { PaidPhase, PaidPlatform, PHASE_LABELS, PLATFORM_LABELS } from "@/lib/paid-ads/types";
 import {
   Badge,
+  CHART,
+  CHART_TOOLTIP,
   DataTable,
   EmptySection,
+  HoverTip,
   MiniKpi,
+  PHASE_FILL,
   PLATFORM_DOT,
+  SegmentBar,
   SectionCard,
   Td,
   Th,
@@ -35,23 +41,13 @@ import {
   VolumeBar,
 } from "./shared";
 import type { PaidViewProps } from "./shared";
-import { PerformanceQuadrant } from "./performance-quadrant";
+import { BudgetVsResults } from "./budget-vs-results";
 import { cn } from "@/lib/utils";
 
-/** Tooltipstijl gelijk aan de andere PSV-dashboards. */
-const TOOLTIP_STYLE = {
-  backgroundColor: "#09101d",
-  border: "1px solid #333",
-  borderRadius: "6px",
-  color: "#fff",
-  fontSize: 12,
-} as const;
+/** Gedeelde opmaak van de assen: haarlijnen, recessief. */
+const AXIS = { tick: { fontSize: 11 }, stroke: CHART.axis, tickLine: false } as const;
 
-const RED = "#e82026";
-const DARK = "#09101d";
-const GOLD = "#bb9753";
-
-export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmarkLabel }: PaidViewProps) {
+export function CampaignView({ data, scored, totals, benchmark, benchmarkLabel }: PaidViewProps) {
   const daily = useMemo(
     () => data.daily.map((d) => ({ ...d, label: shortDate(d.date) })),
     [data.daily]
@@ -59,11 +55,8 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
   const weekly = data.weekly;
   const platforms = useMemo(() => byPlatform(scored), [scored]);
   const topAds = useMemo(() => topAdsByCtr(data.ads), [data.ads]);
-  const { winners, losers } = useMemo(
-    () => winnersAndLosers(scored, avgCpa, { eur, pct }),
-    [scored, avgCpa]
-  );
-  const opportunities = useMemo(() => budgetOpportunities(scored, avgCpa), [scored, avgCpa]);
+  const highlights = useMemo(() => winnersAndLosers(scored, { eur, pct }), [scored]);
+  const opportunities = useMemo(() => budgetOpportunities(scored), [scored]);
 
   const secondary = [
     { key: "clicks" as const, label: "Clicks", value: nl(totals.clicks) },
@@ -83,102 +76,93 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
         ))}
       </div>
 
-      {/* Besteed bedrag & resultaten per dag */}
-      <SectionCard
-        title="Besteed bedrag & resultaten per dag"
-        action={
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-psv-red-primary" />Besteed bedrag
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-0.5 w-3.5 bg-psv-neutralDark" />Resultaten
-            </span>
-          </div>
-        }
-      >
+      {/* Besteed bedrag & resultaten per dag — twee grafieken met één as elk,
+          gekoppeld via syncId zodat de hover op dezelfde dag staat. */}
+      <SectionCard title="Besteed bedrag & resultaten per dag">
         {daily.length === 0 ? (
           <EmptySection />
         ) : (
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.2} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#999" />
-                <YAxis
-                  yAxisId="spend"
-                  tick={{ fontSize: 11 }}
-                  stroke="#999"
-                  tickFormatter={(v: number) => eurShort(v)}
-                />
-                <YAxis yAxisId="results" orientation="right" tick={{ fontSize: 11 }} stroke="#999" />
+          <div className="space-y-4">
+            <MiniChart label="Besteed bedrag">
+              <BarChart data={daily} syncId="paid-daily" barCategoryGap={2}>
+                <CartesianGrid vertical={false} stroke={CHART.grid} />
+                <XAxis dataKey="label" {...AXIS} hide />
+                <YAxis {...AXIS} width={52} tickFormatter={(v: number) => eurShort(v)} />
                 <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  formatter={(value, name) =>
-                    name === "Besteed bedrag" ? eur(Number(value)) : nl(Number(value))
-                  }
+                  contentStyle={CHART_TOOLTIP}
+                  cursor={{ fill: CHART.grid }}
+                  formatter={(value) => [eur(Number(value)), "Besteed bedrag"]}
                 />
-                <Bar yAxisId="spend" dataKey="spend" name="Besteed bedrag" fill={RED} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="spend" name="Besteed bedrag" fill={CHART.primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </MiniChart>
+            <MiniChart label="Resultaten" height="h-32">
+              <LineChart data={daily} syncId="paid-daily">
+                <CartesianGrid vertical={false} stroke={CHART.grid} />
+                <XAxis dataKey="label" {...AXIS} />
+                <YAxis {...AXIS} width={52} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP}
+                  cursor={{ stroke: CHART.axis }}
+                  formatter={(value) => [nl(Number(value)), "Resultaten"]}
+                />
                 <Line
-                  yAxisId="results"
                   type="monotone"
                   dataKey="results"
                   name="Resultaten"
-                  stroke={DARK}
+                  stroke={CHART.primary}
                   strokeWidth={2}
                   dot={false}
+                  activeDot={{ r: 4 }}
                 />
-              </ComposedChart>
-            </ResponsiveContainer>
+              </LineChart>
+            </MiniChart>
           </div>
         )}
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* CTR & kosten per resultaat */}
+        {/* CTR & kosten per resultaat — twee grafieken, elk met zijn eigen as */}
         <SectionCard title="CTR & kosten per resultaat" hint="trend per week">
           {weekly.length === 0 ? (
             <EmptySection />
           ) : (
-            <>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={weekly}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.2} />
-                    <XAxis dataKey="week" tick={{ fontSize: 11 }} stroke="#999" />
-                    <YAxis yAxisId="ctr" tick={{ fontSize: 11 }} stroke="#999" tickFormatter={(v: number) => pct(v, 1)} />
-                    <YAxis
-                      yAxisId="cpr"
-                      orientation="right"
-                      tick={{ fontSize: 11 }}
-                      stroke="#999"
-                      tickFormatter={(v: number) => eur(v)}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      formatter={(value, name) =>
-                        name === "CTR" ? pct(Number(value)) : eur(Number(value), 2)
-                      }
-                    />
-                    <Line yAxisId="ctr" type="monotone" dataKey="ctr" name="CTR" stroke={RED} strokeWidth={2} dot={false} />
-                    <Line
-                      yAxisId="cpr"
-                      type="monotone"
-                      dataKey="costPerResult"
-                      name="Kosten per resultaat"
-                      stroke={DARK}
-                      strokeWidth={2}
-                      strokeDasharray="5 4"
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5"><span className="h-0.5 w-3.5 bg-psv-red-primary" />CTR %</span>
-                <span className="flex items-center gap-1.5"><span className="h-0.5 w-3.5 bg-psv-neutralDark" />Kosten per resultaat</span>
-              </div>
-            </>
+            <div className="space-y-4">
+              <MiniChart label="CTR" height="h-32">
+                <LineChart data={weekly} syncId="paid-weekly">
+                  <CartesianGrid vertical={false} stroke={CHART.grid} />
+                  <XAxis dataKey="week" {...AXIS} hide />
+                  <YAxis {...AXIS} width={52} tickFormatter={(v: number) => pct(v, 1)} />
+                  <Tooltip
+                    contentStyle={CHART_TOOLTIP}
+                    cursor={{ stroke: CHART.axis }}
+                    formatter={(value) => [pct(Number(value)), "CTR"]}
+                  />
+                  <Line type="monotone" dataKey="ctr" name="CTR" stroke={CHART.primary} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              </MiniChart>
+              <MiniChart label="Kosten per resultaat" height="h-32">
+                <LineChart data={weekly} syncId="paid-weekly">
+                  <CartesianGrid vertical={false} stroke={CHART.grid} />
+                  <XAxis dataKey="week" {...AXIS} />
+                  <YAxis {...AXIS} width={52} tickFormatter={(v: number) => eur(v)} />
+                  <Tooltip
+                    contentStyle={CHART_TOOLTIP}
+                    cursor={{ stroke: CHART.axis }}
+                    formatter={(value) => [eur(Number(value), 2), "Kosten per resultaat"]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="costPerResult"
+                    name="Kosten per resultaat"
+                    stroke={CHART.primary}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </MiniChart>
+            </div>
           )}
         </SectionCard>
 
@@ -261,22 +245,30 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
         </SectionCard>
 
         {/* Winnaars & verliezers */}
-        <SectionCard title="Winnaars & verliezers" hint="op campagnescore">
-          {winners.length === 0 ? (
-            <EmptySection>Minimaal vier gescoorde campagnes nodig voor een ranglijst.</EmptySection>
+        <SectionCard title="Winnaars & verliezers" hint="per exploitatie · op campagnescore">
+          {highlights.length === 0 ? (
+            <EmptySection>
+              Verschijnt zodra een exploitatie minstens twee gescoorde campagnes in dezelfde fase
+              heeft.
+            </EmptySection>
           ) : (
-            <>
-              <div className="space-y-2.5">
-                {winners.map((w) => (
-                  <Highlight key={w.name} name={w.name} platform={w.platform} why={w.why} mark="▲" tone="good" />
-                ))}
-              </div>
-              <div className="mt-4 space-y-2.5 border-t border-border pt-4">
-                {losers.map((l) => (
-                  <Highlight key={l.name} name={l.name} platform={l.platform} why={l.why} mark="▼" tone="bad" />
-                ))}
-              </div>
-            </>
+            <div className="space-y-5">
+              {highlights.map((group) => (
+                <div key={group.unit}>
+                  <p className="mb-2 font-heading text-xs uppercase tracking-wide text-muted-foreground">
+                    {group.unit}
+                  </p>
+                  <div className="space-y-2.5">
+                    {group.winners.map((w) => (
+                      <Highlight key={`w-${w.name}`} name={w.name} platform={w.platform} why={w.why} mark="▲" tone="good" />
+                    ))}
+                    {group.losers.map((l) => (
+                      <Highlight key={`l-${l.name}`} name={l.name} platform={l.platform} why={l.why} mark="▼" tone="bad" />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </SectionCard>
       </div>
@@ -284,7 +276,7 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
       {/* Budget opportunities */}
       <SectionCard
         title="Budget opportunities"
-        hint="voorgestelde verschuiving binnen hetzelfde totaalbudget"
+        hint="voorgestelde verschuiving binnen dezelfde exploitatie"
       >
         {opportunities.length === 0 ? (
           <EmptySection>
@@ -307,7 +299,7 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{o.name}</p>
-                  <p className="text-xs text-muted-foreground">{o.platform} · {o.why}</p>
+                  <p className="text-xs text-muted-foreground">{o.unit} · {o.platform} · {o.why}</p>
                 </div>
                 <span
                   className={cn(
@@ -324,7 +316,13 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <PerformanceQuadrant scored={scored} avgCpa={avgCpa} />
+        <BudgetVsResults
+          title="Budget versus resultaat per exploitatie"
+          campaigns={scored}
+          revenuePlatforms={data.revenuePlatforms}
+          groupBy={(c) => c.businessUnit}
+          labelFor={(k) => k}
+        />
 
         {/* Verdeling besteed bedrag */}
         <SectionCard title="Verdeling besteed bedrag">
@@ -332,16 +330,15 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
             <EmptySection />
           ) : (
             <>
-              <div className="mb-5 flex h-3.5 overflow-hidden rounded-sm">
-                {platforms.map((p) => (
-                  <div
-                    key={p.key}
-                    title={`${p.label} — ${pct(p.spendShare, 1)}`}
-                    className={cn("h-full", PLATFORM_DOT[p.key as PaidPlatform])}
-                    style={{ width: `${p.spendShare}%` }}
-                  />
-                ))}
-              </div>
+              <SegmentBar
+                className="mb-5 h-3.5"
+                segments={platforms.map((p) => ({
+                  key: p.key,
+                  share: p.spendShare,
+                  fill: PLATFORM_DOT[p.key as PaidPlatform],
+                  tip: `${p.label} — ${eur(p.metrics.spend)} · ${pct(p.spendShare, 1)}`,
+                }))}
+              />
               <div className="space-y-3">
                 {platforms.map((p) => (
                   <div key={p.key} className="flex items-center gap-3 text-sm">
@@ -360,11 +357,13 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
       {/* Campagnetabel */}
       <SectionCard
         title="Campagnes"
-        hint={`${scored.length} ${scored.length === 1 ? "campagne" : "campagnes"} · score per fase · CTR 20% · CPC 20% · CVR 30% · CPA 30%`}
+        hint={`${scored.length} ${scored.length === 1 ? "campagne" : "campagnes"}`}
       >
         {scored.length === 0 ? (
           <EmptySection />
         ) : (
+          <>
+          <ScoreExplainer />
           <DataTable>
             <thead>
               <tr className="border-b border-t border-border">
@@ -381,6 +380,8 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
                 <Th align="right">CVR %</Th>
                 <Th align="right">Resultaten</Th>
                 <Th align="right">Kosten / res.</Th>
+                <Th align="right">Conv.waarde</Th>
+                <Th align="right">ROAS</Th>
                 <Th align="right" className="pr-0">Besteed</Th>
               </tr>
             </thead>
@@ -389,7 +390,16 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
                 <tr key={c.id} className="border-b border-border/50 last:border-0 hover:bg-muted/40">
                   <Td className="pl-0 font-medium">{c.name}</Td>
                   <Td align="right">
-                    {c.score != null ? <Badge tone={c.scoreTone}>{c.score}</Badge> : "—"}
+                    <HoverTip
+                      className="inline-block"
+                      content={
+                        c.score != null
+                          ? `Ten opzichte van ${PHASE_LABELS[c.phase].toLowerCase()}campagnes van ${c.businessUnit} · ${scoreWeightsLabel(c.phase)}`
+                          : `Geen andere ${PHASE_LABELS[c.phase].toLowerCase()}campagne van ${c.businessUnit} om mee te vergelijken`
+                      }
+                    >
+                      {c.score != null ? <Badge tone={c.scoreTone}>{c.score}</Badge> : "—"}
+                    </HoverTip>
                   </Td>
                   <Td className="text-muted-foreground">{c.businessUnit}</Td>
                   <Td className="text-muted-foreground">{PLATFORM_LABELS[c.platform]}</Td>
@@ -402,11 +412,14 @@ export function CampaignView({ data, scored, totals, avgCpa, benchmark, benchmar
                   <Td align="right">{pct(c.derived.cvr, 1)}</Td>
                   <Td align="right">{nl(c.metrics.results)}</Td>
                   <Td align="right" className="text-muted-foreground">{eur(c.derived.costPerResult, 2)}</Td>
+                  <Td align="right">{c.metrics.revenue > 0 ? eur(c.metrics.revenue) : "—"}</Td>
+                  <Td align="right">{roas(c.derived.roas)}</Td>
                   <Td align="right" className="pr-0 font-semibold">{eur(c.metrics.spend)}</Td>
                 </tr>
               ))}
             </tbody>
           </DataTable>
+          </>
         )}
       </SectionCard>
     </div>
@@ -447,21 +460,64 @@ function Highlight({
 }
 
 /** Kleine fasetag; kleur is vast per fase, niet afhankelijk van prestatie. */
-export function PhaseTag({ phase }: { phase: "bereik" | "verkeer" | "conversie" }) {
-  const styles = {
-    bereik: "bg-error-bg text-error",
-    verkeer: "bg-muted text-muted-foreground",
-    conversie: "bg-success-bg text-success",
-  } as const;
-  const labels = { bereik: "Bereik", verkeer: "Verkeer", conversie: "Conversie" } as const;
+export function PhaseTag({ phase }: { phase: PaidPhase }) {
   return (
     <span
       className={cn(
-        "inline-block whitespace-nowrap rounded-sm px-2 py-0.5 font-heading text-[10px] uppercase tracking-wide",
-        styles[phase]
+        "inline-block whitespace-nowrap rounded-sm px-2 py-0.5 font-heading text-[10px] uppercase tracking-wide text-white",
+        PHASE_FILL[phase]
       )}
     >
-      {labels[phase]}
+      {PHASE_LABELS[phase]}
     </span>
+  );
+}
+
+/**
+ * Hoe de score tot stand komt — staat boven de tabel, zodat niemand hoeft te
+ * raden waar een 34 vandaan komt.
+ */
+function ScoreExplainer() {
+  return (
+    <div className="mb-4 border border-border bg-muted/40 px-3.5 py-3 text-xs text-muted-foreground">
+      <p>
+        <span className="font-semibold text-foreground">Score 0-100</span> — een campagne wordt
+        alleen vergeleken met campagnes in dezelfde fase én exploitatie. 100 is de beste van die
+        groep, 0 de zwakste. Zonder vergelijkingsmateriaal staat er een streepje.
+      </p>
+      <ul className="mt-1.5 grid gap-x-6 gap-y-0.5 sm:grid-cols-3">
+        {(["bereik", "verkeer", "conversie"] as PaidPhase[]).map((phase) => (
+          <li key={phase}>
+            <span className="font-semibold text-foreground">{PHASE_LABELS[phase]}:</span>{" "}
+            {scoreWeightsLabel(phase)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Eén kleine grafiek met zijn naam erboven. Eén reeks per grafiek, dus geen
+ * legenda nodig; de hoogte omvat ook de x-as, zodat er niets wegvalt.
+ */
+function MiniChart({
+  label,
+  height = "h-40",
+  children,
+}: {
+  label: string;
+  height?: string;
+  children: React.ReactElement;
+}) {
+  return (
+    <div>
+      <p className="mb-1 font-heading text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className={height}>
+        <ResponsiveContainer width="100%" height="100%">
+          {children}
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }

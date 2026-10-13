@@ -12,8 +12,10 @@ import {
 } from "@/components/ui/select";
 import {
   AlertTriangle,
+  Banknote,
   BarChart3,
   Eye,
+  Gauge,
   Loader2,
   MousePointerClick,
   Plug,
@@ -27,29 +29,29 @@ import {
 import {
   BENCHMARK_LABELS,
   benchmarkMetrics,
-  byPhase,
   byPlatform,
   deltaFor,
   derive,
   EMPTY_FILTERS,
   filterCampaigns,
+  itemKey,
+  narrowResponse,
   optionsFrom,
   quickInsights,
   scoreCampaigns,
-  sumMetrics,
+  totalsOf,
+  withoutPhase,
   type MetricKey,
   type PaidFilters,
   type Tone,
 } from "@/lib/paid-ads/derive";
-import { eur, longDate, nl, pct, signed } from "@/lib/paid-ads/format";
+import { eur, longDate, nl, pct, roas, signed } from "@/lib/paid-ads/format";
 import {
   BenchmarkKey,
   PaidAdsResponse,
-  PaidPhase,
   PaidPlatform,
   PERIODS,
   PeriodKey,
-  PHASE_LABELS,
   PLATFORM_LABELS,
 } from "@/lib/paid-ads/types";
 import type { PaidAdsInsightResult } from "@/lib/insights/paid-ads";
@@ -71,6 +73,8 @@ import { CampaignView, PhaseTag } from "./campaign-view";
 import { CreativeView } from "./creative-view";
 import { AudienceView } from "./audience-view";
 import { InsightsPanel } from "./insights-panel";
+import { FunnelOverview } from "./funnel-view";
+import { MultiSelect, type MultiOption } from "./multi-select";
 import { cn } from "@/lib/utils";
 
 const VIEWS = [
@@ -80,13 +84,6 @@ const VIEWS = [
   { key: "audience", label: "Audience intelligence" },
 ] as const;
 type ViewKey = (typeof VIEWS)[number]["key"];
-
-const PHASE_TABS: { key: PaidPhase | "alles"; label: string }[] = [
-  { key: "alles", label: "Alle fases" },
-  { key: "bereik", label: "Bereik" },
-  { key: "verkeer", label: "Verkeer" },
-  { key: "conversie", label: "Conversie" },
-];
 
 const BENCHMARKS: BenchmarkKey[] = ["previous", "yearAgo", "target"];
 
@@ -99,6 +96,8 @@ const KPI_TILES: {
   icon: React.ReactNode;
 }[] = [
   { key: "spend", label: "Besteed bedrag", sub: "mediabudget", format: (v) => eur(v), icon: <Wallet className="h-3.5 w-3.5" /> },
+  { key: "revenue", label: "Conversiewaarde", sub: "omzet uit conversies", format: (v) => eur(v), icon: <Banknote className="h-3.5 w-3.5" /> },
+  { key: "roas", label: "ROAS", sub: "omzet per bestede euro", format: (v) => roas(v), icon: <Gauge className="h-3.5 w-3.5" /> },
   { key: "results", label: "Resultaten", sub: "conversies en leads", format: (v) => nl(v), icon: <Target className="h-3.5 w-3.5" /> },
   { key: "costPerResult", label: "Kosten per resultaat", sub: "gemiddeld", format: (v) => eur(v, 2), icon: <TrendingUp className="h-3.5 w-3.5" /> },
   { key: "cpc", label: "CPC", sub: "kosten per klik", format: (v) => eur(v, 2), icon: <MousePointerClick className="h-3.5 w-3.5" /> },
@@ -163,17 +162,55 @@ export function PaidAdsDashboard() {
   const benchmarkLabel = BENCHMARK_LABELS[benchmark];
 
   const allCampaigns = data?.campaigns ?? [];
-  const filtered = useMemo(() => filterCampaigns(allCampaigns, filters), [allCampaigns, filters]);
+  // Alles wat de weergaven zien volgt de filters: campagnes, advertenties,
+  // grafieken én de vergelijkingsperiode.
+  const viewData = useMemo(() => (data ? narrowResponse(data, filters) : null), [data, filters]);
+  const filtered = viewData?.campaigns ?? [];
   const scored = useMemo(() => scoreCampaigns(filtered), [filtered]);
-  const totals = useMemo(() => derive(sumMetrics(filtered)), [filtered]);
+  const revenuePlatforms = useMemo(() => data?.revenuePlatforms ?? [], [data]);
+  const totals = useMemo(() => totalsOf(filtered, revenuePlatforms), [filtered, revenuePlatforms]);
   const avgCpa = totals.costPerResult;
   const benchmarkTotals = useMemo(
-    () => (data ? benchmarkMetrics(data, benchmark) : null),
-    [data, benchmark]
+    () => (viewData ? benchmarkMetrics(viewData, benchmark) : null),
+    [viewData, benchmark]
   );
 
-  const phaseTotals = useMemo(() => byPhase(allCampaigns), [allCampaigns]);
-  const allTotals = useMemo(() => derive(sumMetrics(allCampaigns)), [allCampaigns]);
+  // De funnel toont altijd alle fases, binnen de overige filters.
+  const funnelCampaigns = useMemo(
+    () => (data ? narrowResponse(data, withoutPhase(filters)).campaigns : []),
+    [data, filters]
+  );
+
+  // Campagnes en advertentiesets om uit te kiezen: alleen wat binnen de andere
+  // filters valt. Kies je eerst PSV Play, dan staan hier alleen PSV Play-campagnes.
+  const campaignOptions = useMemo<MultiOption[]>(
+    () =>
+      filterCampaigns(allCampaigns, { ...filters, campaigns: [], adSets: [], query: "" })
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "nl"))
+        .map((c) => ({
+          value: itemKey(c),
+          label: c.name,
+          detail: `${PLATFORM_LABELS[c.platform]} · ${c.businessUnit}`,
+          dot: PLATFORM_DOT[c.platform],
+        })),
+    [allCampaigns, filters]
+  );
+  const adSetOptions = useMemo<MultiOption[]>(() => {
+    if (!data) return [];
+    const parents = new Map(
+      filterCampaigns(allCampaigns, { ...filters, adSets: [], query: "" }).map((c) => [itemKey(c), c.name])
+    );
+    return data.adSets
+      .filter((s) => parents.has(`${s.platform}:${s.campaignId}`))
+      .sort((a, b) => a.name.localeCompare(b.name, "nl"))
+      .map((s) => ({
+        value: itemKey(s),
+        label: s.name,
+        detail: parents.get(`${s.platform}:${s.campaignId}`),
+        dot: PLATFORM_DOT[s.platform],
+      }));
+  }, [data, allCampaigns, filters]);
 
   const platformOptions = useMemo(
     () => optionsFrom(allCampaigns, (c) => c.platform) as PaidPlatform[],
@@ -189,7 +226,10 @@ export function PaidAdsDashboard() {
     () => (activeGroup ? allCampaigns.filter((c) => c.campaignGroup === activeGroup) : []),
     [allCampaigns, activeGroup]
   );
-  const groupTotals = useMemo(() => derive(sumMetrics(groupRows)), [groupRows]);
+  const groupTotals = useMemo(
+    () => totalsOf(groupRows, revenuePlatforms),
+    [groupRows, revenuePlatforms]
+  );
 
   const quick = useMemo(() => {
     if (!data || scored.length === 0) return [];
@@ -207,7 +247,7 @@ export function PaidAdsDashboard() {
   }, [data, scored, filtered, totals, benchmarkLabel, benchmarkTotals]);
 
   const viewProps = {
-    data: data as PaidAdsResponse,
+    data: viewData as PaidAdsResponse,
     scored,
     totals,
     avgCpa,
@@ -233,7 +273,7 @@ export function PaidAdsDashboard() {
       const res = await fetch("/api/paid-ads/insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data, periodLabel }),
+        body: JSON.stringify({ data: forAnalysis(data), periodLabel }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -259,7 +299,10 @@ export function PaidAdsDashboard() {
         const res = await fetch("/api/paid-ads/insights/question", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: [{ role: "user", content: question }], data }),
+          body: JSON.stringify({
+            messages: [{ role: "user", content: question }],
+            data: forAnalysis(data),
+          }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -279,6 +322,10 @@ export function PaidAdsDashboard() {
   /* ---------- Render ---------- */
 
   const notConnected = data ? data.connectedPlatforms.length === 0 : false;
+  // Platforms zonder omzetdata tellen niet mee in omzet en ROAS; dat staat erbij.
+  const missingRevenue = data
+    ? data.connectedPlatforms.filter((p) => !data.revenuePlatforms.includes(p))
+    : [];
 
   return (
     <div className="space-y-5">
@@ -332,6 +379,22 @@ export function PaidAdsDashboard() {
           options={platformOptions}
           labelFor={(p) => PLATFORM_LABELS[p as PaidPlatform] ?? p}
         />
+        <MultiSelect
+          className="w-56"
+          value={filters.campaigns}
+          onChange={(v) => setFilters((f) => ({ ...f, campaigns: v }))}
+          options={campaignOptions}
+          allLabel="Alle campagnes"
+          unit="campagnes"
+        />
+        <MultiSelect
+          className="w-56"
+          value={filters.adSets}
+          onChange={(v) => setFilters((f) => ({ ...f, adSets: v }))}
+          options={adSetOptions}
+          allLabel="Alle advertentiesets"
+          unit="advertentiesets"
+        />
 
         <button
           onClick={() => fetchData(period)}
@@ -362,6 +425,14 @@ export function PaidAdsDashboard() {
           </div>
         </div>
       </div>
+
+      {filters.adSets.length > 0 && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Gefilterd op advertentieset: KPI&apos;s en tabellen gaan over de gekozen sets. De
+          dagelijkse grafieken tonen de hele campagne, en de vergelijking met eerdere periodes
+          vervalt — die cijfers bestaan alleen op campagneniveau.
+        </p>
+      )}
 
       {/* Koppeling ontbreekt */}
       {notConnected && data && (
@@ -429,40 +500,12 @@ export function PaidAdsDashboard() {
       ) : (
         data && (
           <>
-            {/* Funnelfases */}
-            <div className="flex flex-wrap items-stretch gap-2.5">
-              {PHASE_TABS.map((tab) => {
-                const row =
-                  tab.key === "alles"
-                    ? { spend: allTotals.spend, count: allCampaigns.length }
-                    : {
-                        spend: phaseTotals.find((p) => p.key === tab.key)?.metrics.spend ?? 0,
-                        count: allCampaigns.filter((c) => c.phase === tab.key).length,
-                      };
-                const active = filters.phase === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setFilters((f) => ({ ...f, phase: tab.key }))}
-                    className={cn(
-                      "min-w-[168px] flex-1 border border-l-4 px-3.5 py-3 text-left transition-colors",
-                      active
-                        ? "border-psv-neutralDark bg-psv-neutralDark text-white"
-                        : "border-border bg-card hover:bg-muted",
-                      tab.key === "bereik" && "border-l-psv-red-primary",
-                      tab.key === "verkeer" && "border-l-psv-neutralDark",
-                      tab.key === "conversie" && "border-l-success",
-                      tab.key === "alles" && "border-l-psv-red-primary"
-                    )}
-                  >
-                    <p className="font-heading text-base uppercase tracking-wide">{tab.label}</p>
-                    <p className={cn("mt-0.5 text-xs", active ? "opacity-75" : "text-muted-foreground")}>
-                      {eur(row.spend)} · {nl(row.count)} {row.count === 1 ? "campagne" : "campagnes"}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Funnel — tegelijk het fasefilter */}
+            <FunnelOverview
+              campaigns={funnelCampaigns}
+              active={filters.phase}
+              onSelect={(phase) => setFilters((f) => ({ ...f, phase }))}
+            />
 
             {/* Quick insights */}
             <SectionCard title="Quick insights">
@@ -518,7 +561,7 @@ export function PaidAdsDashboard() {
                     <TotalTile label="Clicks" value={nl(groupTotals.clicks)} />
                     <TotalTile label="Resultaten" value={nl(groupTotals.results)} />
                     <TotalTile label="Kosten per resultaat" value={eur(groupTotals.costPerResult, 2)} />
-                    <TotalTile label="Conversieratio" value={pct(groupTotals.cvr, 1)} />
+                    <TotalTile label="ROAS" value={roas(groupTotals.roas)} />
                   </div>
                   <DataTable>
                     <thead>
@@ -587,7 +630,7 @@ export function PaidAdsDashboard() {
             />
 
             {/* KPI's */}
-            <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3.5 md:grid-cols-5">
               {KPI_TILES.map((tile) => {
                 const value = totals[tile.key] as number | null;
                 const d = deltaFor(tile.key, value, (benchmarkTotals?.[tile.key] as number | null) ?? null);
@@ -599,7 +642,9 @@ export function PaidAdsDashboard() {
                     sub={
                       tile.key === "spend" && data.targets.budget != null
                         ? `van ${eur(data.targets.budget)} budget`
-                        : tile.sub
+                        : (tile.key === "revenue" || tile.key === "roas") && missingRevenue.length > 0
+                          ? `excl. ${missingRevenue.map((p) => PLATFORM_LABELS[p]).join(", ")}`
+                          : tile.sub
                     }
                     delta={d.value != null ? signed(d.value, d.unit) : null}
                     deltaTone={d.tone as Tone}
@@ -638,6 +683,21 @@ export function PaidAdsDashboard() {
       )}
     </div>
   );
+}
+
+/**
+ * De respons zonder de ruwe dagreeks per campagne en de campagnes van vorig
+ * jaar: de analyse gebruikt die niet, en zo blijft het verzoek klein, ook bij
+ * een heel seizoen.
+ */
+function forAnalysis(data: PaidAdsResponse): PaidAdsResponse {
+  return {
+    ...data,
+    campaignDaily: [],
+    demographics: [],
+    // De vorige periode blijft mee: daaruit komt de ROAS-vergelijking.
+    benchmarks: { ...data.benchmarks, yearAgoCampaigns: null },
+  };
 }
 
 /** Keuzelijst met een "alles"-optie bovenaan. */
