@@ -14,6 +14,7 @@ import {
   MailPlus,
   Megaphone,
   Palette,
+  Users,
   ShoppingBag,
   Ticket,
   type LucideIcon,
@@ -140,13 +141,12 @@ export const insightTools: ToolEntry[] = [
     icon: Ticket,
   },
   {
-    name: "Wedstrijdverkoop",
+    name: "Ringside",
     title: "Wedstrijden vergelijken",
     description:
       "Verkoop per dag tot de aftrap, afgezet tegen andere wedstrijden of vorig seizoen.",
     href: "/dashboard/ticket-inzichten-new",
     icon: Ticket,
-    badge: "Ringside",
   },
   {
     name: "Aangrenzende stoelen",
@@ -197,4 +197,12 @@ export const insightTools: ToolEntry[] = [
     href: "/dashboard/fandesk",
     icon: Headset,
   },
+];
+
+/** Het BETA-blok in de footer van de sidebar: verschijnt bij hover op "Beta tools". */
+export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
+  { name: "Kleurplaat Creator", href: "/dashboard/kleurplaat", icon: Palette },
+  { name: "Ringside", href: "/dashboard/ticket-inzichten-new", icon: Ticket },
+  { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
+  { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
 ];

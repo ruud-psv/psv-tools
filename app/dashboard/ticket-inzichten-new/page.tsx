@@ -3,17 +3,16 @@ import { ArrowLeft } from "lucide-react";
 import { RingsideMatchSales } from "@/components/ringside-match-sales";
 
 export const metadata = {
-  title: "Wedstrijdverkoop | PSV Tools",
+  title: "Ringside | PSV Tools",
 };
 
-export default function WedstrijdverkoopPage() {
+export default function RingsidePage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl">Wedstrijdverkoop</h1>
-            <span className="tag tag--gold">Ringside</span>
+            <h1 className="text-3xl">Ringside</h1>
           </div>
           <p className="text-muted-foreground max-w-3xl">
             Zoek een wedstrijd en zie de verkoop per dag, afgezet tegen het aantal dagen tot de

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { FlaskConical, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import {
   insightTools as insights,
   knowledgeTools as kennisbank,
   makeTools as tools,
+  betaTools,
   navItems,
 } from "@/lib/tools";
 
@@ -257,7 +258,40 @@ export function AppSidebar({ onMobileClose }: { onMobileClose?: () => void } = {
 
       {/* Footer */}
       {!collapsed && (
-        <div className="px-2 py-4 border-t border-sidebar-border">
+        <div className="px-2 py-4 border-t border-sidebar-border space-y-0.5">
+          <div className="group relative">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-focus-within:bg-sidebar-accent group-focus-within:text-sidebar-accent-foreground"
+            >
+              <FlaskConical className="h-4 w-4 flex-shrink-0" />
+              <span>Beta tools</span>
+            </button>
+            <div className="invisible absolute bottom-0 left-full z-50 pl-2 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+              <div className="w-56 rounded-md border border-sidebar-border bg-sidebar p-2 shadow-lg">
+                <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
+                  Beta tools
+                </p>
+                <ul className="space-y-0.5">
+                  {betaTools.map((tool) => {
+                    const Icon = tool.icon;
+                    return (
+                      <li key={tool.href}>
+                        <Link
+                          href={tool.href}
+                          onClick={onMobileClose}
+                          className="flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        >
+                          <Icon className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{tool.name}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </div>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
