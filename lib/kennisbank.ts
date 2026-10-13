@@ -141,6 +141,83 @@ export const kennisbankTools: KennisbankTool[] = [
     features: [],
   },
   {
+    slug: "delen-van-persoonsgegevens",
+    name: "Delen van persoonsgegevens",
+    category: "E-mail & Data",
+    description:
+      "Zo zet je een wachtwoord uit NordPass op een Excel-bestand met persoonsgegevens, zoals mailadressen, voordat je het deelt.",
+    features: [],
+    steps: [
+      {
+        title: "Excel — open het bestand in de app op je laptop",
+        description:
+          "Open het Excel-bestand in de Excel-app op je laptop, niet in Excel in de browser. In de browser kun je geen wachtwoord op een bestand zetten.",
+      },
+      {
+        title: "Excel — kies Versleutelen met wachtwoord",
+        description:
+          "Ga naar Bestand > Info > Werkmap beveiligen > Versleutelen met wachtwoord. In een Engelstalige Excel is dat File > Info > Protect Workbook > Encrypt with Password. Laat dit venster openstaan.",
+      },
+      {
+        title: "NordPass — open het volledige scherm",
+        description: "Open NordPass via de browserextensie en klik rechtsonder op Full Screen.",
+      },
+      {
+        title: "NordPass — maak een nieuw item",
+        description: "Ga linksboven naar Vault en klik rechtsboven op Create item.",
+      },
+      {
+        title: "NordPass — kies Password en gebruik de bestandsnaam als titel",
+        description:
+          "Kies Password en vul bij Title de bestandsnaam van het Excel-bestand in. Zo vind je het wachtwoord later makkelijk terug.",
+      },
+      {
+        title: "NordPass — maak het wachtwoord aan en sla het op",
+        description: "Klik op Generate password > Fill password en daarna op Save.",
+      },
+      {
+        title: "NordPass — kopieer het wachtwoord",
+        description: "Kopieer het wachtwoord in de sidebar rechts.",
+      },
+      {
+        title: "Excel — plak het wachtwoord en sla het bestand op",
+        description:
+          "Plak het wachtwoord in het venster in Excel. Excel vraagt het wachtwoord twee keer: plak het nog een keer om het te bevestigen. Sla het Excel-bestand daarna op.",
+      },
+      {
+        title: "Delen — deel het beveiligde bestand",
+        description: "Deel het beveiligde Excel-bestand, bijvoorbeeld via een Asana-taak.",
+      },
+      {
+        title: "Opruimen — verwijder het bestand en het wachtwoord",
+        description:
+          "Zijn de gegevens verwerkt of niet meer nodig? Verwijder dan het hele Excel-bestand en het wachtwoord in NordPass.",
+      },
+    ],
+    tips: [
+      {
+        type: "warning",
+        text: "Deel liever geen Excel-bestanden met persoonsgegevens. Moet het toch, omdat systemen nog niet aan elkaar gekoppeld zijn? Zet er dan altijd een wachtwoord op. Met alle hacks en datalekken kan PSV het zich niet veroorloven om slordig om te gaan met de gegevens van fans en zakelijke relaties.",
+      },
+      {
+        type: "warning",
+        text: "Zet het wachtwoord nooit in dezelfde Asana-taak, opmerking of mail als het Excel-bestand. Wie het bestand in handen krijgt, heeft dan ook het wachtwoord.",
+      },
+      {
+        type: "warning",
+        text: "Kies in het menu Werkmap beveiligen echt Versleutelen met wachtwoord. De andere opties in dat menu, zoals een blad beveiligen, zetten geen wachtwoord op het openen van het bestand.",
+      },
+      {
+        type: "tip",
+        text: "Werk je met een .csv-bestand, bijvoorbeeld een export? Sla het eerst op als Excel-werkmap (.xlsx). Op een .csv-bestand kun je geen wachtwoord zetten.",
+      },
+      {
+        type: "note",
+        text: "Bewaar het wachtwoord altijd in NordPass. Excel kan een vergeten wachtwoord niet herstellen, en zonder wachtwoord gaat het Excel-bestand niet meer open.",
+      },
+    ],
+  },
+  {
     slug: "asana",
     name: "Asana",
     category: "Automatisering & Projectmanagement",
@@ -610,6 +687,13 @@ const CHECKLIST_LABELS: Record<KennisbankChecklistGroup["type"], string> = {
   exclude: "ALTIJD UITSLUITEN",
 };
 
+/** Dezelfde labels als op de documentatiepagina, zodat de assistent een regel van een tip onderscheidt. */
+const TIP_LABELS: Record<KennisbankTip["type"], string> = {
+  warning: "Let op",
+  note: "Opmerking",
+  tip: "Tip",
+};
+
 /**
  * Serialiseert de volledige kennisbank naar platte tekst voor gebruik als
  * context in de system prompt van de kennisbank-assistent (context-stuffing).
@@ -678,7 +762,7 @@ export function buildKennisbankContext(): string {
       });
       if (tool.tips?.length) {
         lines.push(`Tips ${bron("tips")}`);
-        tool.tips.forEach((tip) => lines.push(`- ${tip.text}`));
+        tool.tips.forEach((tip) => lines.push(`- ${TIP_LABELS[tip.type]}: ${tip.text}`));
       }
       return lines.join("\n");
     })
