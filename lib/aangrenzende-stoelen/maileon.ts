@@ -43,8 +43,8 @@ export const MAX_VALUES_PER_RULE = 100;
 /** Maileon staat hooguit 100 regels per filter toe. */
 export const MAX_RULES = 100;
 
-/** Eén regel gaat op aan de Ticketing-preference; de rest is voor relatienummers. */
-export const MAX_RELATION_NUMBERS = MAX_VALUES_PER_RULE * (MAX_RULES - 1);
+/** Hooguit twee regels gaan op aan de Ticketing-preference; de rest is voor relatienummers. */
+export const MAX_RELATION_NUMBERS = MAX_VALUES_PER_RULE * (MAX_RULES - 2);
 
 const SEND_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DMID = /^[A-Za-z0-9-]{2,30}$/;
@@ -85,12 +85,32 @@ export function maileonName({ sendDate, eventName, dmid }: MaileonNameInput): st
 }
 
 /**
- * Het contactfilter: begin leeg en voeg iedereen toe met een relatienummer uit
- * de lijst, in blokken van 100. Alleen de eerste regel heeft een `startset`.
- * De laatste regel houdt daarvan alleen de contacten over met de
- * Ticketing-preference op ja.
+ * Hoe het filter de Ticketing-preference toepast. Maileon wees de eerste vorm
+ * op 2026-10-13 af met alleen "Unable to create the contact filter", terwijl
+ * hij precies het schema en het voorbeeld in de wiki volgt. Daarom proberen we
+ * ze op volgorde, tot Maileon er een accepteert. Elke vorm houdt alleen de
+ * contacten over die op de lijst staan én Ticketing op ja hebben.
+ *
+ * - `intersection`: relatienummers toevoegen, dan doorsnede met Ticketing = ja.
+ * - `remove`: relatienummers toevoegen, dan wie Ticketing op nee of niet
+ *   ingevuld heeft eruit.
+ * - `twee filters`: een hulpfilter met alleen de relatienummers (zonder
+ *   doelgroep), en het echte filter: iedereen met Ticketing = ja, min wie niet
+ *   in het hulpfilter zit. Precies de vorm van het wiki-voorbeeld voor
+ *   preferences (startset leeg, `add`).
  */
-export function contactFilterBody(name: string, relationNumbers: readonly string[]) {
+export type TicketingForm = "intersection" | "remove" | "twee filters";
+
+/** De Ticketing-preference als selectie: `equals` met ja/nee, of `undefined` (niet ingevuld). */
+function ticketingSelection(criterion: { operation: "equals"; value: boolean } | { operation: "undefined" }) {
+  return { selection_base: "contactpreference", criterion: { ...TICKETING_PREFERENCE, ...criterion } };
+}
+
+/**
+ * Begin leeg en voeg iedereen toe met een relatienummer uit de lijst, in
+ * blokken van 100. Alleen de eerste regel heeft een `startset`.
+ */
+function relationNumberRules(relationNumbers: readonly string[]) {
   const values = [...new Set(relationNumbers.map((value) => value.trim()).filter(Boolean))].sort();
   if (values.length === 0) throw new Error("Er zijn geen relatienummers om door te zetten.");
   if (values.length > MAX_RELATION_NUMBERS) {
@@ -99,9 +119,9 @@ export function contactFilterBody(name: string, relationNumbers: readonly string
     );
   }
 
-  const relationRules = [];
+  const rules = [];
   for (let start = 0; start < values.length; start += MAX_VALUES_PER_RULE) {
-    relationRules.push({
+    rules.push({
       ...(start === 0 ? { startset: "empty" } : {}),
       operation: "add",
       selection: {
@@ -114,14 +134,49 @@ export function contactFilterBody(name: string, relationNumbers: readonly string
       },
     });
   }
-  const ticketingRule = {
-    operation: "intersection",
-    selection: {
-      selection_base: "contactpreference",
-      criterion: { ...TICKETING_PREFERENCE, operation: "equals", value: true },
-    },
+  return rules;
+}
+
+/**
+ * Het contactfilter op relatienummers, met de Ticketing-preference in de vorm
+ * `intersection` of `remove`. Zonder vorm (`null`) alleen de relatienummers:
+ * dat is het hulpfilter van `twee filters`, daar komt nooit een doelgroep op.
+ */
+export function contactFilterBody(
+  name: string,
+  relationNumbers: readonly string[],
+  ticketing: Exclude<TicketingForm, "twee filters"> | null
+) {
+  const rules: object[] = relationNumberRules(relationNumbers);
+  if (ticketing === "intersection") {
+    rules.push({ operation: "intersection", selection: ticketingSelection({ operation: "equals", value: true }) });
+  } else if (ticketing === "remove") {
+    rules.push(
+      { operation: "remove", selection: ticketingSelection({ operation: "equals", value: false }) },
+      { operation: "remove", selection: ticketingSelection({ operation: "undefined" }) }
+    );
+  }
+  return { name, rules };
+}
+
+/**
+ * Het echte filter van `twee filters`: iedereen met Ticketing = ja, min wie
+ * niet in het hulpfilter met de relatienummers zit.
+ */
+export function ticketingFromFilterBody(name: string, relationFilterId: number) {
+  return {
+    name,
+    rules: [
+      { startset: "empty", operation: "add", selection: ticketingSelection({ operation: "equals", value: true }) },
+      {
+        operation: "remove",
+        selection: {
+          selection_base: "list_or_filter_affiliation",
+          criterion: { type: "contactfilter", operation: "notequals", value: relationFilterId },
+        },
+      },
+    ],
   };
-  return { name, rules: [...relationRules, ticketingRule] };
 }
 
 /** De doelgroep op een filter, als XML voor `POST /targetgroups`. */
@@ -173,7 +228,10 @@ async function maileonError(res: Response): Promise<string> {
   return `Maileon ${res.status}: ${message.slice(0, 500) || res.statusText}`;
 }
 
-export async function createContactFilter(name: string, relationNumbers: readonly string[]): Promise<number> {
+/** Maileon wees het filter af met een 400: de volgende vorm mag het proberen. */
+class FilterRejected extends Error {}
+
+async function postContactFilter(body: object): Promise<number> {
   const res = await fetch(`${MAILEON_API}/contactfilters/v2`, {
     method: "POST",
     headers: {
@@ -181,9 +239,10 @@ export async function createContactFilter(name: string, relationNumbers: readonl
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify(contactFilterBody(name, relationNumbers)),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
+  if (res.status === 400) throw new FilterRejected(await maileonError(res));
   if (!res.ok) throw new Error(`Maileon maakte het filter niet. ${await maileonError(res)}`);
   const data = (await res.json()) as { contact_filter_id?: unknown };
   const contactFilterId = Number(data.contact_filter_id);
@@ -191,6 +250,59 @@ export async function createContactFilter(name: string, relationNumbers: readonl
     throw new Error("Maileon gaf geen ID van het contactfilter terug.");
   }
   return contactFilterId;
+}
+
+export interface TicketingFilter {
+  contactFilterId: number;
+  /** De vorm die Maileon accepteerde. */
+  form: TicketingForm;
+  /** Bij `twee filters`: het hulpfilter met alleen de relatienummers, zonder doelgroep. */
+  relationFilterId: number | null;
+  /** De vormen die Maileon eerst afwees, met de reden. */
+  rejected: string[];
+}
+
+/**
+ * Maakt het filter op relatienummers met Ticketing = ja, in de eerste vorm die
+ * Maileon accepteert (zie `TicketingForm`). Wijst Maileon alles af, dan komt er
+ * een fout en dus geen doelgroep: nooit een filter zonder de preference.
+ */
+export async function createTicketingContactFilter(
+  name: string,
+  relationNumbers: readonly string[]
+): Promise<TicketingFilter> {
+  const rejected: string[] = [];
+  const allRejected = (extra = "") =>
+    new Error(`Maileon wees elke vorm van het filter af.${extra} ${rejected.join(" · ")}`);
+
+  for (const form of ["intersection", "remove"] as const) {
+    try {
+      const contactFilterId = await postContactFilter(contactFilterBody(name, relationNumbers, form));
+      return { contactFilterId, form, relationFilterId: null, rejected };
+    } catch (error) {
+      if (!(error instanceof FilterRejected)) throw error;
+      rejected.push(`${form}: ${error.message}`);
+    }
+  }
+
+  let relationFilterId: number;
+  try {
+    relationFilterId = await postContactFilter(
+      contactFilterBody(`${name} - hulpfilter relatienummers`, relationNumbers, null)
+    );
+  } catch (error) {
+    if (!(error instanceof FilterRejected)) throw error;
+    rejected.push(`twee filters (hulpfilter): ${error.message}`);
+    throw allRejected();
+  }
+  try {
+    const contactFilterId = await postContactFilter(ticketingFromFilterBody(name, relationFilterId));
+    return { contactFilterId, form: "twee filters", relationFilterId, rejected };
+  } catch (error) {
+    if (!(error instanceof FilterRejected)) throw error;
+    rejected.push(`twee filters: ${error.message}`);
+    throw allRejected(` Het hulpfilter ${relationFilterId} (alleen relatienummers, geen doelgroep) blijft staan.`);
+  }
 }
 
 export async function createTargetGroup(name: string, contactFilterId: number): Promise<number> {

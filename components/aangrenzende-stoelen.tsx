@@ -75,6 +75,9 @@ interface MaileonPush {
   targetGroupId: number | null;
   targetGroupError: string | null;
   filterUrl: string;
+  ticketingForm: string;
+  relationFilterId: number | null;
+  rejectedForms: string[];
   pushed: number;
 }
 
@@ -566,6 +569,11 @@ export function AangrenzendeStoelen() {
                     <p className="text-muted-foreground">
                       {number.format(pushed.pushed)} relatienummers · filter {pushed.contactFilterId}
                       {pushed.targetGroupId && ` · doelgroep ${pushed.targetGroupId}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground break-words">
+                      Ticketing-regel in de vorm &ldquo;{pushed.ticketingForm}&rdquo;
+                      {pushed.relationFilterId && `, met hulpfilter ${pushed.relationFilterId} (alleen relatienummers)`}
+                      {pushed.rejectedForms.length > 0 && `. Maileon wees eerst af: ${pushed.rejectedForms.join(" · ")}`}
                     </p>
                     {!pushed.targetGroupId && (
                       <p className="flex items-start gap-2">
