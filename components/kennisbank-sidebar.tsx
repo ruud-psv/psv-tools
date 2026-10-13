@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   kennisbankCategories,
@@ -51,14 +52,22 @@ export function KennisbankSidebar() {
       <nav className="py-6 px-3 space-y-4">
         <Link
           href="/dashboard/kennisbank"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+        >
+          <MessageCircle className="h-4 w-4 text-psv-red-primary" />
+          Stel een vraag
+        </Link>
+
+        <Link
+          href="/dashboard/kennisbank/documentatie"
           className={cn(
             "block px-2 text-xs font-heading uppercase tracking-wider transition-colors",
-            pathname === "/dashboard/kennisbank"
+            pathname === "/dashboard/kennisbank/documentatie"
               ? "text-foreground font-bold"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
-          Kennisbank
+          Documentatie
         </Link>
 
         {kennisbankCategories.map((category) => (

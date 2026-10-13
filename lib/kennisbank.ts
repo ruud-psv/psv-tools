@@ -613,31 +613,41 @@ const CHECKLIST_LABELS: Record<KennisbankChecklistGroup["type"], string> = {
 /**
  * Serialiseert de volledige kennisbank naar platte tekst voor gebruik als
  * context in de system prompt van de kennisbank-assistent (context-stuffing).
+ *
+ * Elk onderdeel krijgt een bronlabel (`[bron: slug#sectie]`) met dezelfde
+ * ankers als `getToolSections`, zodat de assistent kan aangeven waar een
+ * antwoord vandaan komt en de chat daar rechtstreeks naartoe kan linken.
  */
 export function buildKennisbankContext(): string {
   return kennisbankTools
     .map((tool) => {
       const lines: string[] = [];
-      lines.push(`## ${tool.name} (categorie: ${tool.category}, slug: ${tool.slug})`);
+      const bron = (id?: string) => `[bron: ${tool.slug}${id ? `#${id}` : ""}]`;
+      lines.push(`## ${tool.name} (categorie: ${tool.category}) ${bron()}`);
       lines.push(tool.description);
       if (tool.comingSoon)
         lines.push("Status: documentatie nog niet beschikbaar (binnenkort).");
-      if (tool.accessUrl) lines.push(`Inloggen: ${tool.accessUrl}`);
-      tool.accessLinks?.forEach((l) => lines.push(`Inloggen (${l.label}): ${l.url}`));
-      if (tool.accessNote) lines.push(`Toegang: ${tool.accessNote}`);
-      if (tool.docsUrl) lines.push(`Officiële documentatie: ${tool.docsUrl}`);
-      tool.features?.forEach((f) =>
-        lines.push(`Mogelijkheid — ${f.title}: ${f.description}`)
-      );
-      tool.steps?.forEach((s, i) =>
-        lines.push(`Stap ${i + 1} — ${s.title}: ${s.description}`)
-      );
+      if (tool.accessUrl || tool.accessNote || tool.accessLinks?.length || tool.docsUrl) {
+        lines.push(`Toegang ${bron("toegang")}`);
+        if (tool.accessUrl) lines.push(`Inloggen: ${tool.accessUrl}`);
+        tool.accessLinks?.forEach((l) => lines.push(`Inloggen (${l.label}): ${l.url}`));
+        if (tool.accessNote) lines.push(`Toegang: ${tool.accessNote}`);
+        if (tool.docsUrl) lines.push(`Officiële documentatie: ${tool.docsUrl}`);
+      }
+      if (tool.features.length > 0) {
+        lines.push(`Mogelijkheden ${bron("mogelijkheden")}`);
+        tool.features.forEach((f) => lines.push(`- ${f.title}: ${f.description}`));
+      }
+      if (tool.steps?.length) {
+        lines.push(`Aan de slag ${bron("aan-de-slag")}`);
+        tool.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
+      }
       tool.checklists?.forEach((c) => {
-        lines.push(`Checklist — ${c.caption ?? ""}`);
+        lines.push(`Checklist: ${c.caption ?? ""} ${c.caption ? bron(slugify(c.caption)) : bron()}`);
         if (c.intro) lines.push(c.intro);
         c.groups.forEach((g) => {
           lines.push(
-            `${CHECKLIST_LABELS[g.type]} — ${g.title}${g.description ? `: ${g.description}` : ""}`
+            `${CHECKLIST_LABELS[g.type]}: ${g.title}${g.description ? `. ${g.description}` : ""}`
           );
           g.items.forEach((it) =>
             lines.push(`  - ${it.label}${it.note ? ` (${it.note})` : ""}`)
@@ -645,29 +655,50 @@ export function buildKennisbankContext(): string {
         });
       });
       tool.tables?.forEach((t) => {
-        lines.push(`Tabel — ${t.caption ?? ""}`);
+        lines.push(`Tabel: ${t.caption ?? ""} ${t.caption ? bron(slugify(t.caption)) : bron()}`);
         lines.push(t.headers.join(" | "));
         t.rows.forEach((r) => lines.push(r.join(" | ")));
       });
       tool.flows?.forEach((f) => {
-        lines.push(`Flow — ${f.caption ?? ""}`);
+        lines.push(`Flow: ${f.caption ?? ""} ${f.caption ? bron(slugify(f.caption)) : bron()}`);
         if (f.intro) lines.push(f.intro);
         f.stages.forEach((s, i) => {
           const badges = s.badges?.map((b) => b.label).join(", ");
           lines.push(
-            `Stap ${i + 1} — ${s.title} (${s.visibilityLabel}${badges ? `; ${badges}` : ""}): ${s.description}`
+            `Stap ${i + 1}, ${s.title} (${s.visibilityLabel}${badges ? `; ${badges}` : ""}): ${s.description}`
           );
         });
       });
       tool.embeds?.forEach((e) => {
-        lines.push(`Ingesloten (${e.type}) — ${e.caption ?? ""}`);
+        lines.push(
+          `Ingesloten (${e.type}): ${e.caption ?? ""} ${e.caption ? bron(slugify(e.caption)) : bron()}`
+        );
         if (e.intro) lines.push(e.intro);
-        lines.push(`Bron: ${e.url}`);
+        lines.push(`Link: ${e.openUrl ?? e.url}`);
       });
-      tool.tips?.forEach((tip) => lines.push(`Let op: ${tip.text}`));
+      if (tool.tips?.length) {
+        lines.push(`Tips ${bron("tips")}`);
+        tool.tips.forEach((tip) => lines.push(`- ${tip.text}`));
+      }
       return lines.join("\n");
     })
     .join("\n\n");
+}
+
+/**
+ * Zet een bronlabel uit een antwoord (`slug` of `slug#sectie`) om naar een
+ * link en een leesbaar label. Geeft null terug voor een onbekende tool; een
+ * onbekende sectie valt terug op de pagina van de tool.
+ */
+export function resolveBron(ref: string): { href: string; label: string } | null {
+  const [slug, sectie] = ref.trim().split("#");
+  const tool = slug ? getToolBySlug(slug) : undefined;
+  if (!tool) return null;
+  const href = `/dashboard/kennisbank/${tool.slug}`;
+  const section = sectie ? getToolSections(tool).find((s) => s.id === sectie) : undefined;
+  return section
+    ? { href: `${href}#${section.id}`, label: `${tool.name} · ${section.label}` }
+    : { href, label: tool.name };
 }
 
 export function slugify(text: string): string {
