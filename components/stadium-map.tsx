@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { AreaSeatView } from "@/components/area-seat-view";
+import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
+import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 import {
   areaCenter,
   binFor,
   EXCLUDED_AREA,
   EXCLUSION_LABELS,
+  FIELD_FILL,
   FREE_SEAT_BINS,
   NO_FREE_SEATS,
   STADIUM_AREAS,
@@ -16,6 +20,7 @@ export interface AreaNumbers {
   free: number;
   resale: number;
   listed: number;
+  groups?: FreeGroups;
 }
 
 const number = new Intl.NumberFormat("nl-NL");
@@ -25,16 +30,24 @@ function mapLabel(area: StadiumArea): string {
   return area.area === "BEZOEKERS" ? "Bezoekers" : area.area;
 }
 
-function describe(area: StadiumArea, numbers: AreaNumbers | undefined): string {
-  const name = area.title && area.title !== area.area ? `${area.title} (${area.area})` : `Vak ${area.area}`;
-  if (area.excluded) return `${name} · doet niet mee (${EXCLUSION_LABELS[area.excluded]})`;
+function areaName(area: StadiumArea): string {
+  return area.title && area.title !== area.area ? `${area.title} (${area.area})` : `Vak ${area.area}`;
+}
+
+/** De cijfers van een vak in één zin, zonder de naam. */
+function describeNumbers(area: StadiumArea, numbers: AreaNumbers | undefined): string {
+  if (area.excluded) return `doet niet mee (${EXCLUSION_LABELS[area.excluded]})`;
   const free = numbers?.free ?? 0;
-  if (free === 0) return `${name} · geen vrije stoelen`;
+  if (free === 0) return "geen vrije stoelen";
   const resale = numbers?.resale ? `, waarvan ${number.format(numbers.resale)} in de resale` : "";
   const listed = numbers?.listed ?? 0;
-  return `${name} · ${number.format(free)} vrije ${free === 1 ? "stoel" : "stoelen"}${resale} · ${number.format(listed)} ${
+  return `${number.format(free)} vrije ${free === 1 ? "stoel" : "stoelen"}${resale} · ${number.format(listed)} ${
     listed === 1 ? "stoel" : "stoelen"
   } van seizoenkaarthouders op de lijst`;
+}
+
+function describe(area: StadiumArea, numbers: AreaNumbers | undefined): string {
+  return `${areaName(area)} · ${describeNumbers(area, numbers)}`;
 }
 
 function Shape({ area, fill }: { area: StadiumArea; fill: string }) {
@@ -50,9 +63,10 @@ function Shape({ area, fill }: { area: StadiumArea; fill: string }) {
  *
  * Kleur is één schaal van licht naar donker rood; het aantal staat er altijd
  * als getal bij, zodat de kaart ook zonder kleurwaarneming te lezen is. Vakken
- * die niet meedoen zijn grijs en gearceerd.
+ * die niet meedoen zijn grijs en gearceerd. Rechts (op een smal scherm eronder)
+ * staan de stoelen van het vak dat je aanwijst; klikken zet het vast.
  */
-export function StadiumMap({ numbers }: { numbers: Record<string, AreaNumbers> }) {
+export function StadiumMap({ numbers, seatMaps }: { numbers: Record<string, AreaNumbers>; seatMaps: SeatMaps }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -85,128 +99,136 @@ export function StadiumMap({ numbers }: { numbers: Record<string, AreaNumbers> }
         </span>
       </div>
 
-      {/* Op een smal scherm liever scrollen dan onleesbaar kleine vaknamen. */}
-      <div className="overflow-x-auto">
-        <svg
-          viewBox="200 110 1600 1300"
-          className="w-full min-w-[560px] max-w-3xl h-auto select-none"
-          role="group"
-          aria-label="Plattegrond van het Philips Stadion met het aantal vrije stoelen per vak"
-        >
-          <defs>
-            <pattern id="stadion-arcering" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="16" height="16" fill={EXCLUDED_AREA.fill} />
-              <line x1="0" y1="0" x2="0" y2="16" stroke="#999999" strokeWidth="4" />
-            </pattern>
-          </defs>
+      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+        {/* Op een smal scherm liever scrollen dan onleesbaar kleine vaknamen. */}
+        <div className="overflow-x-auto">
+          <svg
+            viewBox="200 110 1600 1300"
+            className="w-full min-w-[560px] xl:min-w-0 max-w-3xl h-auto select-none"
+            role="group"
+            aria-label="Plattegrond van het Philips Stadion met het aantal vrije stoelen per vak"
+          >
+            <defs>
+              <pattern id="stadion-arcering" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="16" height="16" fill={EXCLUDED_AREA.fill} />
+                <line x1="0" y1="0" x2="0" y2="16" stroke="#999999" strokeWidth="4" />
+              </pattern>
+            </defs>
 
-          {/* Omloop, binnenring en veld: alleen decor. */}
-          <path
-            d="M418 505 V430 L530 318 H1467 L1578 430 V997 H1607 V1075 L1467 1215 H530 L390 1075 V997 H418 Z"
-            fill="#555555"
-          />
-          <path d="M452 400 L500 352 H1490 L1545 407 V1060 L1455 1150 H545 L452 1057 Z" fill="#ffffff" />
-          <rect x="587" y="492" width="823" height="491" fill="#8fbb72" />
-          <g fill="none" stroke="#ffffff" strokeWidth="3" opacity="0.8">
-            <rect x="622" y="527" width="753" height="421" />
-            <line x1="998" y1="527" x2="998" y2="948" />
-            <circle cx="998" cy="737" r="70" />
-            <rect x="622" y="598" width="118" height="279" />
-            <rect x="1257" y="598" width="118" height="279" />
-          </g>
-          <text x="998" y="1192" textAnchor="middle" fill="#ffffff" fontSize="26" className="font-heading" letterSpacing="2">
-            PSV BUSINESS
-          </text>
+            {/* Omloop, binnenring en veld: alleen decor. */}
+            <path
+              d="M418 505 V430 L530 318 H1467 L1578 430 V997 H1607 V1075 L1467 1215 H530 L390 1075 V997 H418 Z"
+              fill="#555555"
+            />
+            <path d="M452 400 L500 352 H1490 L1545 407 V1060 L1455 1150 H545 L452 1057 Z" fill="#ffffff" />
+            <rect x="587" y="492" width="823" height="491" fill={FIELD_FILL} />
+            <g fill="none" stroke="#ffffff" strokeWidth="3" opacity="0.8">
+              <rect x="622" y="527" width="753" height="421" />
+              <line x1="998" y1="527" x2="998" y2="948" />
+              <circle cx="998" cy="737" r="70" />
+              <rect x="622" y="598" width="118" height="279" />
+              <rect x="1257" y="598" width="118" height="279" />
+            </g>
+            <text x="998" y="1192" textAnchor="middle" fill="#ffffff" fontSize="26" className="font-heading" letterSpacing="2">
+              PSV BUSINESS
+            </text>
 
-          {/* Windrichtingen. */}
-          <g className="font-heading" fill="#e82026" fontSize="44" textAnchor="middle">
-            <text x="998" y="170">
-              Noord
-            </text>
-            <text x="998" y="1395">
-              Zuid
-            </text>
-            <text x="262" y="750" transform="rotate(-90 262 750)">
-              West
-            </text>
-            <text x="1738" y="750" transform="rotate(90 1738 750)">
-              Oost
-            </text>
-          </g>
+            {/* Windrichtingen. */}
+            <g className="font-heading" fill="#e82026" fontSize="44" textAnchor="middle">
+              <text x="998" y="170">
+                Noord
+              </text>
+              <text x="998" y="1395">
+                Zuid
+              </text>
+              <text x="262" y="750" transform="rotate(-90 262 750)">
+                West
+              </text>
+              <text x="1738" y="750" transform="rotate(90 1738 750)">
+                Oost
+              </text>
+            </g>
 
-          {STADIUM_AREAS.map((area) => {
-            const n = numbers[area.area];
-            const free = n?.free ?? 0;
-            const colors = area.excluded ? EXCLUDED_AREA : binFor(free);
-            const fill = area.excluded ? "url(#stadion-arcering)" : colors.fill;
-            const [cx, cy] = areaCenter(area);
-            const isActive = active?.area === area.area;
-            const short = area.rect ? area.rect[3] < 70 : false;
-            const label = mapLabel(area);
+            {STADIUM_AREAS.map((area) => {
+              const n = numbers[area.area];
+              const free = n?.free ?? 0;
+              const colors = area.excluded ? EXCLUDED_AREA : binFor(free);
+              const fill = area.excluded ? "url(#stadion-arcering)" : colors.fill;
+              const [cx, cy] = areaCenter(area);
+              const isActive = active?.area === area.area;
+              const short = area.rect ? area.rect[3] < 70 : false;
+              const label = mapLabel(area);
 
-            return (
-              <g
-                key={area.area}
-                role="button"
-                tabIndex={0}
-                aria-label={describe(area, n)}
-                aria-pressed={selected === area.area}
-                className="cursor-pointer outline-none"
-                onMouseEnter={() => setHovered(area.area)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(area.area)}
-                onBlur={() => setHovered(null)}
-                onClick={() => setSelected((current) => (current === area.area ? null : area.area))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelected((current) => (current === area.area ? null : area.area));
-                  }
-                }}
-              >
-                <title>{describe(area, n)}</title>
-                <Shape area={area} fill={fill} />
-                {/* Witte rand als ruimte tussen de vakken, zwart als het vak actief is. */}
-                <g fill="none" stroke={isActive ? "#000000" : "#ffffff"} strokeWidth={isActive ? 6 : 4}>
-                  {area.rect ? (
-                    <rect x={area.rect[0]} y={area.rect[1]} width={area.rect[2]} height={area.rect[3]} />
-                  ) : (
-                    <path d={area.path} />
-                  )}
-                </g>
-                <g className="font-heading" textAnchor="middle" fill={colors.ink} pointerEvents="none">
-                  {area.compact ? (
-                    <text x={cx} y={cy + 7} fontSize="18">
-                      {label}
-                    </text>
-                  ) : area.excluded ? (
-                    <text x={cx} y={cy + 10} fontSize="28">
-                      {label}
-                    </text>
-                  ) : short ? (
-                    <text x={cx} y={cy + 10} fontSize="28">
-                      {label} <tspan fontWeight="700">{free}</tspan>
-                    </text>
-                  ) : (
-                    <>
-                      <text x={cx} y={cy - 4} fontSize="30">
+              return (
+                <g
+                  key={area.area}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={describe(area, n)}
+                  aria-pressed={selected === area.area}
+                  className="cursor-pointer outline-none"
+                  onMouseEnter={() => setHovered(area.area)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => setHovered(area.area)}
+                  onBlur={() => setHovered(null)}
+                  onClick={() => setSelected((current) => (current === area.area ? null : area.area))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelected((current) => (current === area.area ? null : area.area));
+                    }
+                  }}
+                >
+                  <title>{describe(area, n)}</title>
+                  <Shape area={area} fill={fill} />
+                  {/* Witte rand als ruimte tussen de vakken, zwart als het vak actief is. */}
+                  <g fill="none" stroke={isActive ? "#000000" : "#ffffff"} strokeWidth={isActive ? 6 : 4}>
+                    {area.rect ? (
+                      <rect x={area.rect[0]} y={area.rect[1]} width={area.rect[2]} height={area.rect[3]} />
+                    ) : (
+                      <path d={area.path} />
+                    )}
+                  </g>
+                  <g className="font-heading" textAnchor="middle" fill={colors.ink} pointerEvents="none">
+                    {area.compact ? (
+                      <text x={cx} y={cy + 7} fontSize="18">
                         {label}
                       </text>
-                      <text x={cx} y={cy + 30} fontSize="30" fontWeight="700">
-                        {free}
+                    ) : area.excluded ? (
+                      <text x={cx} y={cy + 10} fontSize="28">
+                        {label}
                       </text>
-                    </>
-                  )}
+                    ) : short ? (
+                      <text x={cx} y={cy + 10} fontSize="28">
+                        {label} <tspan fontWeight="700">{free}</tspan>
+                      </text>
+                    ) : (
+                      <>
+                        <text x={cx} y={cy - 4} fontSize="30">
+                          {label}
+                        </text>
+                        <text x={cx} y={cy + 30} fontSize="30" fontWeight="700">
+                          {free}
+                        </text>
+                      </>
+                    )}
+                  </g>
                 </g>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
+              );
+            })}
+          </svg>
+        </div>
 
-      <p className="text-sm min-h-[1.25rem]" aria-live="polite">
-        {active ? describe(active, numbers[active.area]) : "Wijs een vak aan of klik erop voor de cijfers."}
-      </p>
+        <AreaSeatView
+          area={active}
+          name={active ? areaName(active) : ""}
+          summary={active ? describeNumbers(active, numbers[active.area]) : ""}
+          groups={active ? numbers[active.area]?.groups : undefined}
+          rows={active ? seatMaps[active.area] : undefined}
+          pinned={active !== null && active.area === selected}
+          onUnpin={() => setSelected(null)}
+        />
+      </div>
 
       {elsewhere.length > 0 && (
         <p className="text-xs text-muted-foreground">

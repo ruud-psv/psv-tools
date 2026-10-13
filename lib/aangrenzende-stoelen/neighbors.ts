@@ -15,6 +15,8 @@
  * - **Op de lijst**: een seizoenkaarthouder op zo'n buurstoel, die voor deze
  *   wedstrijd een geldig ticket heeft dat niet in de resale staat. Behalve als
  *   hij zelf de aanbieder is van de vrije stoel ernaast.
+ * - **Groepjes**: vrije stoelen met opeenvolgende stoelnummers in dezelfde rij
+ *   vormen samen een groepje. Geteld als los, twee, of drie of meer.
  *
  * Bewust niet hier: hoe de rijen uit Ringside gelezen worden. Dit krijgt
  * stoelen en tickets binnen en geeft relatienummers terug.
@@ -109,10 +111,28 @@ export interface NeighborRow {
   seats: SeatRef[];
 }
 
+/**
+ * Hoe de vrije stoelen liggen: los, met z'n tweeën of met meer direct naast
+ * elkaar in dezelfde rij. Voor en achter telt hier niet; een gat in de
+ * nummering (trap) breekt een groepje.
+ */
+export interface FreeGroups {
+  /** Losse vrije stoelen: links en rechts is niets vrij. */
+  one: number;
+  /** Groepjes van precies twee vrije stoelen naast elkaar. */
+  two: number;
+  /** Groepjes van drie of meer vrije stoelen naast elkaar. */
+  threeOrMore: number;
+  /** Hoeveel stoelen die groepjes van drie of meer samen tellen. */
+  seatsInThreeOrMore: number;
+}
+
 export interface NeighborStats {
   freeSeats: number;
   /** Hoeveel daarvan vrij zijn omdat het ticket in de resale staat. */
   freeFromResale: number;
+  freeGroups: FreeGroups;
+  freeGroupsByArea: Record<string, FreeGroups>;
   freeByArea: Record<string, number>;
   /** Per vak: hoeveel van de vrije stoelen in de resale staan. */
   freeFromResaleByArea: Record<string, number>;
@@ -133,6 +153,67 @@ export interface NeighborResult {
 
 function compareSeats(a: SeatRef, b: SeatRef): number {
   return a.area.localeCompare(b.area) || a.row - b.row || a.seat - b.seat;
+}
+
+export type SeatStatus = "vrij" | "resale" | "bezet" | "geblokkeerd";
+
+/**
+ * Wat er op een stoel aan de hand is, volgens de regels bovenaan. Een geldig
+ * ticket dat niet in de resale staat maakt hem bezet; anders is hij
+ * geblokkeerd als Ringside hem niet meetelt, en vrij als dat wel zo is (via de
+ * resale als er alleen zulke tickets op staan). Uitgesloten vakken bekijkt de
+ * aanroeper zelf.
+ */
+export function seatStatus(seat: SeatInfo, here: readonly TicketInfo[]): SeatStatus {
+  if (here.some((ticket) => !ticket.resalePosted)) return "bezet";
+  if (!seat.sellable) return "geblokkeerd";
+  return here.length > 0 ? "resale" : "vrij";
+}
+
+function emptyGroups(): FreeGroups {
+  return { one: 0, two: 0, threeOrMore: 0, seatsInThreeOrMore: 0 };
+}
+
+function addGroup(groups: FreeGroups, size: number) {
+  if (size === 1) groups.one++;
+  else if (size === 2) groups.two++;
+  else {
+    groups.threeOrMore++;
+    groups.seatsInThreeOrMore += size;
+  }
+}
+
+/** Telt de groepjes vrije stoelen naast elkaar, in totaal en per vak. */
+export function countFreeGroups(free: Iterable<SeatRef>): { total: FreeGroups; byArea: Record<string, FreeGroups> } {
+  const seatsPerRow = new Map<string, { area: string; seats: Set<number> }>();
+  for (const { area, row, seat } of free) {
+    const a = normalizeArea(area);
+    const key = `${a}|${row}`;
+    let entry = seatsPerRow.get(key);
+    if (!entry) {
+      entry = { area: a, seats: new Set() };
+      seatsPerRow.set(key, entry);
+    }
+    entry.seats.add(seat);
+  }
+
+  const total = emptyGroups();
+  const byArea: Record<string, FreeGroups> = {};
+  for (const { area, seats } of seatsPerRow.values()) {
+    const sorted = [...seats].sort((a, b) => a - b);
+    const groups = (byArea[area] ??= emptyGroups());
+    let size = 1;
+    for (let i = 1; i <= sorted.length; i++) {
+      if (i < sorted.length && sorted[i] === sorted[i - 1] + 1) {
+        size++;
+        continue;
+      }
+      addGroup(total, size);
+      addGroup(groups, size);
+      size = 1;
+    }
+  }
+  return { total, byArea };
 }
 
 function neighborKeys({ area, row, seat }: SeatRef): string[] {
@@ -182,6 +263,8 @@ export function findNeighbors(
   const stats: NeighborStats = {
     freeSeats: 0,
     freeFromResale: 0,
+    freeGroups: emptyGroups(),
+    freeGroupsByArea: {},
     freeByArea: {},
     freeFromResaleByArea: {},
     listedSeatsByArea: {},
@@ -195,14 +278,17 @@ export function findNeighbors(
   }
 
   const found = new Map<string, Map<string, SeatRef>>();
+  const freeSeats: SeatRef[] = [];
 
   for (const [freeKey, free] of seatByKey) {
-    if (!free.sellable || isExcludedArea(free.area)) continue;
+    if (isExcludedArea(free.area)) continue;
 
     const here = ticketsByKey.get(freeKey) ?? [];
-    if (here.some((ticket) => !ticket.resalePosted)) continue;
+    const status = seatStatus(free, here);
+    if (status !== "vrij" && status !== "resale") continue;
 
-    const fromResale = here.length > 0;
+    const fromResale = status === "resale";
+    freeSeats.push(free);
     stats.freeSeats++;
     if (fromResale) stats.freeFromResale++;
     const area = normalizeArea(free.area);
@@ -255,6 +341,10 @@ export function findNeighbors(
       stats.listedSeatsByArea[seat.area] = (stats.listedSeatsByArea[seat.area] ?? 0) + 1;
     }
   }
+
+  const groups = countFreeGroups(freeSeats);
+  stats.freeGroups = groups.total;
+  stats.freeGroupsByArea = groups.byArea;
 
   return { rows, stats };
 }
