@@ -174,6 +174,9 @@ export const FREE_SEAT_BINS = [
   { min: 40, max: Infinity, fill: "#9c1006", ink: "#ffffff" },
 ] as const;
 
+/** Het veld, op de plattegrond en boven de vakweergave. */
+export const FIELD_FILL = "#8fbb72";
+
 export const NO_FREE_SEATS = { fill: "#eeeeee", ink: "#000000" } as const;
 export const EXCLUDED_AREA = { fill: "#cccccc", ink: "#333333" } as const;
 

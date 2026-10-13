@@ -1,4 +1,5 @@
 import { findNeighbors, type NeighborResult } from "@/lib/aangrenzende-stoelen/neighbors";
+import { buildSeatMaps, type SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 import { CATCH_UP_SECONDS } from "@/lib/aangrenzende-stoelen/settings";
 import { readHolderList, type HolderListMeta } from "@/lib/aangrenzende-stoelen/store";
 import { isRingsideConfigured } from "@/lib/ringside/auth";
@@ -48,6 +49,8 @@ export type CatchUp = "bijgewerkt" | "overgeslagen" | "mislukt";
 export interface BuiltList {
   event: { eventId: string; name: string | null; eventDate: string | null };
   result: NeighborResult;
+  /** De stoelen per vak, voor de vakweergave op de pagina. */
+  seatMaps: SeatMaps;
   listMeta: HolderListMeta;
   dataAsOf: string | null;
   catchUp: CatchUp;
@@ -86,6 +89,7 @@ export async function buildNeighborList({ eventId, maxSeatsPerRelation }: ListRe
   return {
     event: { eventId: event.eventId, name: event.name, eventDate: event.eventDate },
     result,
+    seatMaps: buildSeatMaps(seats, tickets, result.rows),
     listMeta: list.meta,
     dataAsOf,
     catchUp,

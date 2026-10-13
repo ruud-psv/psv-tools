@@ -18,13 +18,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const request = parseListRequest(await req.json().catch(() => ({})));
-    const { event, result, listMeta, dataAsOf, catchUp } = await buildNeighborList(request);
+    const { event, result, seatMaps, listMeta, dataAsOf, catchUp } = await buildNeighborList(request);
 
     return NextResponse.json(
       {
         event,
         count: result.rows.length,
         stats: result.stats,
+        seatMaps,
         csv: toCsv(result.rows, INCLUDE_SEAT_COLUMNS),
         includeSeatColumns: INCLUDE_SEAT_COLUMNS,
         maxSeatsPerRelation: request.maxSeatsPerRelation,

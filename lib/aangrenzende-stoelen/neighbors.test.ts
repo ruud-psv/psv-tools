@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  countFreeGroups,
   findNeighbors,
   isExcludedArea,
   seatKey,
@@ -185,4 +186,34 @@ test("seizoenkaartstoelen die niet in de stoelenkaart staan worden geteld", () =
   ];
   const result = findNeighbors(seats, [ticket("G", 1, 1)], holders);
   assert.equal(result.stats.holderSeatsUnknown, 1);
+});
+
+test("groepjes vrije stoelen naast elkaar in een rij", () => {
+  // Rij 1: 1 los, 3-4 twee, 6-9 vier. Rij 2: 1 en 2 twee. Stoel 1 van rij 1 en
+  // 2 liggen voor elkaar: dat telt niet als naast elkaar.
+  const free = [1, 3, 4, 6, 7, 8, 9]
+    .map((seat) => ({ area: "N", row: 1, seat }))
+    .concat([1, 2].map((seat) => ({ area: "N", row: 2, seat })), [{ area: "o", row: 1, seat: 5 }]);
+  const { total, byArea } = countFreeGroups(free);
+  assert.deepEqual(total, { one: 2, two: 2, threeOrMore: 1, seatsInThreeOrMore: 4 });
+  assert.deepEqual(byArea.N, { one: 1, two: 2, threeOrMore: 1, seatsInThreeOrMore: 4 });
+  assert.deepEqual(byArea.O, { one: 1, two: 0, threeOrMore: 0, seatsInThreeOrMore: 0 });
+});
+
+test("een gat in de nummering breekt een groepje", () => {
+  // Stoel 3 bestaat niet (trap): 2 en 4 zijn twee losse stoelen.
+  const { total } = countFreeGroups([2, 4].map((seat) => ({ area: "A", row: 5, seat })));
+  assert.deepEqual(total, { one: 2, two: 0, threeOrMore: 0, seatsInThreeOrMore: 0 });
+});
+
+test("de groepjes tellen samen op tot de vrije stoelen, resale inbegrepen", () => {
+  const seats = block("P", [1, 2], [1, 2, 3, 4, 5, 6]);
+  const { holders, tickets } = fullHouse(seats, ["P|1|1", "P|1|3", "P|1|4", "P|2|2", "P|2|3", "P|2|4"]);
+  const posted = tickets.map((t) => (t.key === "P|2|5" ? { ...t, resalePosted: true } : t));
+  const { stats } = findNeighbors(seats, posted, holders);
+  assert.equal(stats.freeSeats, 7);
+  assert.deepEqual(stats.freeGroups, { one: 1, two: 1, threeOrMore: 1, seatsInThreeOrMore: 4 });
+  assert.deepEqual(stats.freeGroupsByArea, { P: stats.freeGroups });
+  const { one, two, seatsInThreeOrMore } = stats.freeGroups;
+  assert.equal(one + 2 * two + seatsInThreeOrMore, stats.freeSeats);
 });

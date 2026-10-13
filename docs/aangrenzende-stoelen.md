@@ -34,6 +34,12 @@ De regels staan in `lib/aangrenzende-stoelen/neighbors.ts` en zijn getest in
   een vrije stoel grenzen. Zijn dat er meer, dan staan ze met een komma achter elkaar.
 - **Grens per relatienummer.** Optioneel in de interface: relatienummers met meer dan
   N stoelen laten we weg, bijvoorbeeld zakelijke accounts. Standaard is er geen grens.
+- **Groepjes vrije stoelen.** Vrije stoelen met opeenvolgende stoelnummers in dezelfde rij
+  vormen een groepje. Boven de plattegrond staan drie tellers: hoeveel losse vrije stoelen
+  (één stoel), hoeveel keer twee naast elkaar, en hoeveel groepjes van drie of meer, met
+  het aantal stoelen erin. Samen tellen ze op tot de vrije stoelen. Voor en achter telt
+  hier niet mee, en een gat in de nummering (trap) breekt een groepje
+  (`countFreeGroups()` in `neighbors.ts`).
 
 Bekende afwijkingen van "rij ±1", vastgesteld op de plattegrond van de ticketshop
 (oktober 2026):
@@ -54,9 +60,22 @@ elk genummerd vak er precies één keer op staat.
 - **Kleur:** één schaal van licht- naar donkerrood (PSV-tokens), in vier klassen
   (1–4, 5–14, 15–39, 40+). Lichtgrijs is 0 vrij, grijs met arcering doet niet mee.
   Het aantal staat altijd als getal in het vak.
-- **Aanwijzen of klikken:** onder de kaart verschijnen dan de vrije stoelen van dat vak,
-  hoeveel daarvan in de resale staan, en hoeveel stoelen van seizoenkaarthouders op de
-  lijst staan.
+- **Vakweergave:** wijs een vak aan en rechts van de kaart (op een smaller scherm
+  eronder) verschijnen de stoelen van dat vak, zoals in de ticketshop: het veld boven,
+  per rij de stoelen, met de rijnummers aan beide kanten (`components/area-seat-view.tsx`).
+  Rood is vrij, rood met een witte stip vrij via de resale, goud een seizoenkaarthouder
+  op de lijst, grijs bezet en wit met een rand geblokkeerd. Erboven staan de cijfers van
+  het vak en de groepjes vrije stoelen. Wijs een stoel aan voor rij en stoelnummer.
+  Klikken zet het vak vast, zodat je met de muis naar de stoelen kunt; nog een keer
+  klikken of "Vastgezet" maakt het weer los.
+- **Schema op nummer:** Ringside kent alleen vak, rij en stoelnummer, niet de echte vorm
+  van het vak. Kolommen zijn dus stoelnummers (laag links) en rijen rijnummers (laag aan
+  het veld), net als bij de regels voor buren. Waar de nummering in alle rijen
+  overslaat, staat een smalle opening; meestal is dat een trap. Of stoel 1 in het echt
+  links of rechts zit, kan per vak verschillen.
+- **Data:** "Maak lijst" stuurt per vak de stoelen mee, compact: per rij het eerste
+  stoelnummer en één teken per stoel (`lib/aangrenzende-stoelen/seat-map.ts`). Voor het
+  hele stadion is dat zo'n 45 kB. Uitgesloten vakken zitten er niet in.
 - Vrije stoelen in een vak dat niet op de kaart staat, worden eronder apart genoemd.
 - Onder "Als tabel" staan dezelfde cijfers als tabel.
 

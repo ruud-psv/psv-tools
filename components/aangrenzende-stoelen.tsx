@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { StadiumMap, type AreaNumbers } from "@/components/stadium-map";
 import { isPsvHomeMatch } from "@/lib/aangrenzende-stoelen/events";
 import { defaultDmid, maileonName } from "@/lib/aangrenzende-stoelen/maileon";
+import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
+import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 
 interface IngestStatus {
   manifestsComplete: boolean;
@@ -55,6 +57,8 @@ interface ListResult {
   stats: {
     freeSeats: number;
     freeFromResale: number;
+    freeGroups: FreeGroups;
+    freeGroupsByArea: Record<string, FreeGroups>;
     freeByArea: Record<string, number>;
     freeFromResaleByArea?: Record<string, number>;
     listedSeatsByArea?: Record<string, number>;
@@ -62,6 +66,7 @@ interface ListResult {
     skippedOwnResale: number;
     skippedTooManySeats: number;
   };
+  seatMaps: SeatMaps;
   csv: string;
   includeSeatColumns: boolean;
   maxSeatsPerRelation: number | null;
@@ -310,12 +315,13 @@ export function AangrenzendeStoelen() {
   // Per vak: vrij, waarvan in de resale, en hoeveel stoelen op de lijst staan.
   const areaNumbers: Record<string, AreaNumbers> = {};
   if (result) {
-    const { freeByArea, freeFromResaleByArea = {}, listedSeatsByArea = {} } = result.stats;
+    const { freeByArea, freeFromResaleByArea = {}, listedSeatsByArea = {}, freeGroupsByArea } = result.stats;
     for (const area of new Set([...Object.keys(freeByArea), ...Object.keys(listedSeatsByArea)])) {
       areaNumbers[area] = {
         free: freeByArea[area] ?? 0,
         resale: freeFromResaleByArea[area] ?? 0,
         listed: listedSeatsByArea[area] ?? 0,
+        groups: freeGroupsByArea[area],
       };
     }
   }
@@ -436,6 +442,21 @@ export function AangrenzendeStoelen() {
                       ? `relatienummers met meer dan ${result.maxSeatsPerRelation} stoelen`
                       : "geen grens ingesteld"
                   }
+                />
+                <Stat
+                  label="Eén stoel"
+                  value={number.format(result.stats.freeGroups.one)}
+                  hint="losse vrije stoelen, geen vrije stoel ernaast in de rij"
+                />
+                <Stat
+                  label="Twee stoelen"
+                  value={number.format(result.stats.freeGroups.two)}
+                  hint={`keer twee vrije stoelen naast elkaar (${number.format(2 * result.stats.freeGroups.two)} stoelen)`}
+                />
+                <Stat
+                  label="Drie of meer stoelen"
+                  value={number.format(result.stats.freeGroups.threeOrMore)}
+                  hint={`groepjes vrije stoelen naast elkaar (samen ${number.format(result.stats.freeGroups.seatsInThreeOrMore)} stoelen)`}
                 />
               </div>
 
@@ -560,7 +581,7 @@ export function AangrenzendeStoelen() {
                 </p>
               )}
 
-              <StadiumMap numbers={areaNumbers} />
+              <StadiumMap numbers={areaNumbers} seatMaps={result.seatMaps} />
             </div>
           )}
         </CardContent>
