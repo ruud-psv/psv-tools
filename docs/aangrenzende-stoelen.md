@@ -116,11 +116,11 @@ Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom alti
 ## Doorzetten naar Maileon
 
 Onder een gemaakte lijst staat "Doorzetten naar Maileon". Dat maakt in Maileon een
-contactfilter met een doelgroep erop, zodat kaartverkoop er direct een mailing naar kan
-sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
-`app/api/aangrenzende-stoelen/maileon/route.ts`.
+contactfilter op relatienummer. De doelgroep maakt Digital Marketing daarna zelf in
+Maileon, nadat die de Ticketing-regel heeft toegevoegd (zie hieronder). Code:
+`lib/aangrenzende-stoelen/maileon.ts` en `app/api/aangrenzende-stoelen/maileon/route.ts`.
 
-- **Naam** (filter én doelgroep), volgens de conventie van Digital Marketing:
+- **Naam** (filter, en later de doelgroep), volgens de conventie van Digital Marketing:
   `2026.10.31 PSV Kaartverkoop - Aangrenzende stoelen PSV - Willem II - DMID26-12345`.
   In de interface vul je de verzenddatum en het DMID in. Zonder DMID wordt het
   `DMID26-XXXX` (het jaar van de verzenddatum).
@@ -128,38 +128,33 @@ sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
   `MEMBERNUMBERPRIOR` (het relatienummer) in de lijst staat. Let op: `MEMBERNUMBER`
   bestaat ook, maar is niet het relatienummer. Ongeveer de helft van de contacten in
   Maileon heeft een relatienummer.
-- **Alleen met Ticketing op ja:** het filter houdt alleen de contacten over met de
-  preference `Ticketing` in de preference group `Email` op ja. Op de voorkeurenpagina
-  (`psv-voorkeuren-algemeen`) heet die "PSV Kaartverkoop thuiswedstrijden". Wie hem uit
-  heeft staan, mag geen mail over kaartverkoop krijgen. Maileon wees de eerste vorm
-  (`intersection`) op 2026-10-13 af met alleen "Unable to create the contact filter",
-  hoewel die het schema en het wiki-voorbeeld volgt. Daarom probeert de code drie vormen
-  op volgorde (`TicketingForm` in `maileon.ts`): `intersection`; `remove` (wie Ticketing
-  op nee of niet ingevuld heeft eruit); en `twee filters` (een hulpfilter met alleen de
-  relatienummers, zonder doelgroep, en een filter "Ticketing = ja, min wie niet in het
-  hulpfilter zit"). De pagina en de log tonen welke vorm Maileon accepteerde. Wijst
-  Maileon alles af, dan komt er geen doelgroep.
+- **Ticketing-regel met de hand:** kaartverkoop mag alleen contacten mailen met de
+  preference `Ticketing` in de preference group `Email` op ja (op de voorkeurenpagina
+  `psv-voorkeuren-algemeen`: "PSV Kaartverkoop thuiswedstrijden"). De API van Maileon wijst
+  elk filter met een `contactpreference`-regel af met alleen "Unable to create the contact
+  filter". Getest op 2026-10-13 in drie vormen: `intersection`, `remove` (nee en niet
+  ingevuld eruit) en een filter op "zit in hulpfilter", ook in de exacte vorm uit de
+  wiki. Filters met alleen relatienummers lukken wel. Daarom maakt de tool **geen
+  doelgroep**: na het doorzetten toont de pagina de stappen (filter openen, onderaan een
+  regel "alleen Email › Ticketing = ja" toevoegen, dan een doelgroep op het filter maken
+  met dezelfde naam). Zo kan niemand mailen naar een doelgroep zonder die regel.
   Let op: de CSV-export is níet op deze preference gefilterd. Ringside kent de
   preferences niet.
 - **De lijst wordt opnieuw uitgerekend** met dezelfde berekening als "Maak lijst"
   (`lib/aangrenzende-stoelen/build-list.ts`). De relatienummers komen dus nooit uit de
   browser.
-- **API:** eerst het filter (`POST /contactfilters/v2`), dan de doelgroep
-  (`POST /targetgroups`). Lukt de doelgroep niet, dan blijft het filter staan en zegt de
-  pagina waarom; de doelgroep maak je dan zelf in Maileon.
+- **API:** `POST /contactfilters/v2`, daarna een refresh zodat Maileon het filter meteen
+  doorrekent.
 - **Regels:** volg het JSON-schema (`contactfilter.json`) uit de XQueue-wiki "Creating
   and Updating Contactfilters Using the REST API", niet de losse documentatiepagina's. Volgens
   dat schema heet de operator `includedin` (niet `includein`) en mag een regel hooguit 100
-  waarden hebben. De lijst gaat daarom in blokken van 100, elk een eigen "add"-regel. Met
-  hooguit 100 regels per filter, waarvan twee voor Ticketing, passen er 9.800
-  relatienummers in.
-- **Daarna** vraagt de pagina de doelgroep op tot Maileon klaar is met rekenen, en toont
-  hoeveel contacten Maileon vond en hoeveel daarvan te mailen zijn. Minder contacten dan
-  relatienummers is normaal: niet iedere seizoenkaarthouder staat in Maileon, en niet
-  iedereen heeft Ticketing op ja.
+  waarden hebben. De lijst gaat daarom in blokken van 100, elk een eigen "add"-regel.
+  Maileon staat hooguit 100 regels per filter toe; er blijft er één vrij voor de
+  Ticketing-regel, dus er passen 9.900 relatienummers in.
+- **Minder contacten dan relatienummers** is normaal: niet iedere seizoenkaarthouder staat
+  in Maileon, en na de Ticketing-regel valt iedereen af die hem niet op ja heeft.
 - **Sleutel:** `MAILEON_API_KEY` in Vercel (de API-sleutel "PSV Tools II" in Maileon).
-  Elke keer doorzetten maakt een nieuw filter en een nieuwe doelgroep; opruimen gaat in
-  Maileon zelf.
+  Elke keer doorzetten maakt een nieuw filter; opruimen gaat in Maileon zelf.
 
 ## Instellingen
 

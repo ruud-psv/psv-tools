@@ -3,9 +3,7 @@ import { requireEmail } from "@/lib/api-session";
 import { buildNeighborList, ListError, parseListRequest } from "@/lib/aangrenzende-stoelen/build-list";
 import {
   contactFilterUrl,
-  createTargetGroup,
-  createTicketingContactFilter,
-  getTargetGroup,
+  createContactFilter,
   isMaileonConfigured,
   maileonName,
   refreshContactFilter,
@@ -16,9 +14,9 @@ import {
  * Doorzetten naar Maileon.
  *
  * POST rekent de lijst opnieuw uit (zelfde berekening als "Maak lijst") en
- * maakt er een contactfilter met doelgroep van. De relatienummers komen dus
- * nooit uit de browser. GET geeft de stand van de doelgroep: Maileon rekent
- * het filter op de achtergrond door, de pagina vraagt dit op tot het klaar is.
+ * maakt er een contactfilter op relatienummer van. De relatienummers komen dus
+ * nooit uit de browser. Er komt bewust geen doelgroep: de Ticketing-regel moet
+ * er in Maileon nog met de hand bij (zie `lib/aangrenzende-stoelen/maileon.ts`).
  */
 
 export const dynamic = "force-dynamic";
@@ -55,47 +53,21 @@ export async function POST(req: NextRequest) {
     }
 
     const name = maileonName({ sendDate: body.sendDate as string, eventName: event.name, dmid: body.dmid as string });
-    const { contactFilterId, form, relationFilterId, rejected } = await createTicketingContactFilter(
-      name,
-      relationNumbers
-    );
-
-    // Lukt de doelgroep niet, dan blijft het filter staan: daar kan iemand in
-    // Maileon zelf een doelgroep op maken.
-    let targetGroupId: number | null = null;
-    let targetGroupError: string | null = null;
-    try {
-      targetGroupId = await createTargetGroup(name, contactFilterId);
-    } catch (error) {
-      targetGroupError = error instanceof Error ? error.message : String(error);
-    }
+    const contactFilterId = await createContactFilter(name, relationNumbers);
     console.info(
-      `[aangrenzende-stoelen] Maileon: filter ${contactFilterId}, doelgroep ${targetGroupId ?? `mislukt (${targetGroupError})`}, ` +
-        `${relationNumbers.length} relatienummers, Ticketing-vorm "${form}"` +
-        (relationFilterId ? ` met hulpfilter ${relationFilterId}` : "") +
-        (rejected.length ? ` (afgewezen: ${rejected.join(" · ")})` : "") +
-        `, door ${session.email}`
+      `[aangrenzende-stoelen] Maileon: filter ${contactFilterId}, ${relationNumbers.length} relatienummers, door ${session.email}`
     );
 
     // Een nieuw filter rekent Maileon meestal vanzelf door; dit duwt het aan.
-    // Het hulpfilter eerst, want het echte filter leunt erop.
-    for (const id of [relationFilterId, contactFilterId]) {
-      if (!id) continue;
-      await refreshContactFilter(id).catch((error) =>
-        console.warn(`[aangrenzende-stoelen] Maileon-filter ${id} verversen mislukt:`, error instanceof Error ? error.message : error)
-      );
-    }
+    await refreshContactFilter(contactFilterId).catch((error) =>
+      console.warn("[aangrenzende-stoelen] Maileon-filter verversen mislukt:", error instanceof Error ? error.message : error)
+    );
 
     return NextResponse.json(
       {
         name,
         contactFilterId,
-        targetGroupId,
-        targetGroupError,
         filterUrl: contactFilterUrl(contactFilterId),
-        ticketingForm: form,
-        relationFilterId,
-        rejectedForms: rejected,
         pushed: relationNumbers.length,
         dataAsOf,
         catchUp,
@@ -108,26 +80,6 @@ export async function POST(req: NextRequest) {
     }
     const message = error instanceof Error ? error.message : String(error);
     console.error("[aangrenzende-stoelen] doorzetten naar Maileon mislukt:", message);
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
-}
-
-export async function GET(req: NextRequest) {
-  const session = requireEmail(req);
-  if ("error" in session) return session.error;
-
-  const targetGroupId = Number(req.nextUrl.searchParams.get("targetGroupId"));
-  if (!Number.isInteger(targetGroupId) || targetGroupId <= 0) {
-    return NextResponse.json({ error: "Geen geldige doelgroep." }, { status: 400 });
-  }
-  if (!isMaileonConfigured()) {
-    return NextResponse.json({ error: "Maileon is niet gekoppeld (MAILEON_API_KEY ontbreekt)." }, { status: 503 });
-  }
-
-  try {
-    return NextResponse.json(await getTargetGroup(targetGroupId), { headers: NO_STORE });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
