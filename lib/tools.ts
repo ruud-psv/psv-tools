@@ -92,15 +92,6 @@ export const makeTools: ToolEntry[] = [
     href: "/dashboard/rapportage-generator",
     icon: BarChart2,
   },
-  {
-    name: "Kleurplaat Creator",
-    title: "Kleurplaat maken",
-    description:
-      "Maak een gepersonaliseerde kleurplaat met Phoxy in de hoofdrol en download hem als PNG.",
-    href: "/dashboard/kleurplaat",
-    icon: Palette,
-    badge: "Beta",
-  },
 ];
 
 export const knowledgeTools: ToolEntry[] = [
@@ -139,23 +130,6 @@ export const insightTools: ToolEntry[] = [
       "Real-time beschikbaarheid voor wedstrijden, tours, museum en andere evenementen.",
     href: "/dashboard/ticket-inzichten",
     icon: Ticket,
-  },
-  {
-    name: "Ringside",
-    title: "Wedstrijden vergelijken",
-    description:
-      "Verkoop per dag tot de aftrap, afgezet tegen andere wedstrijden of vorig seizoen.",
-    href: "/dashboard/ticket-inzichten-new",
-    icon: Ticket,
-  },
-  {
-    name: "Aangrenzende stoelen",
-    title: "Fans naast vrije stoelen vinden",
-    description:
-      "Seizoenkaarthouders die naast een vrije stoel zitten, als CSV met relatienummers.",
-    href: "/dashboard/aangrenzende-stoelen",
-    icon: Armchair,
-    badge: "Beta",
   },
   {
     name: "DM Performance",
