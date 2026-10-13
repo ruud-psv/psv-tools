@@ -3,8 +3,8 @@ import { requireEmail } from "@/lib/api-session";
 import { buildNeighborList, ListError, parseListRequest } from "@/lib/aangrenzende-stoelen/build-list";
 import {
   contactFilterUrl,
-  createContactFilter,
   createTargetGroup,
+  createTicketingContactFilter,
   getTargetGroup,
   isMaileonConfigured,
   maileonName,
@@ -55,7 +55,10 @@ export async function POST(req: NextRequest) {
     }
 
     const name = maileonName({ sendDate: body.sendDate as string, eventName: event.name, dmid: body.dmid as string });
-    const contactFilterId = await createContactFilter(name, relationNumbers);
+    const { contactFilterId, form, relationFilterId, rejected } = await createTicketingContactFilter(
+      name,
+      relationNumbers
+    );
 
     // Lukt de doelgroep niet, dan blijft het filter staan: daar kan iemand in
     // Maileon zelf een doelgroep op maken.
@@ -68,13 +71,20 @@ export async function POST(req: NextRequest) {
     }
     console.info(
       `[aangrenzende-stoelen] Maileon: filter ${contactFilterId}, doelgroep ${targetGroupId ?? `mislukt (${targetGroupError})`}, ` +
-        `${relationNumbers.length} relatienummers, door ${session.email}`
+        `${relationNumbers.length} relatienummers, Ticketing-vorm "${form}"` +
+        (relationFilterId ? ` met hulpfilter ${relationFilterId}` : "") +
+        (rejected.length ? ` (afgewezen: ${rejected.join(" · ")})` : "") +
+        `, door ${session.email}`
     );
 
     // Een nieuw filter rekent Maileon meestal vanzelf door; dit duwt het aan.
-    await refreshContactFilter(contactFilterId).catch((error) =>
-      console.warn("[aangrenzende-stoelen] Maileon-filter verversen mislukt:", error instanceof Error ? error.message : error)
-    );
+    // Het hulpfilter eerst, want het echte filter leunt erop.
+    for (const id of [relationFilterId, contactFilterId]) {
+      if (!id) continue;
+      await refreshContactFilter(id).catch((error) =>
+        console.warn(`[aangrenzende-stoelen] Maileon-filter ${id} verversen mislukt:`, error instanceof Error ? error.message : error)
+      );
+    }
 
     return NextResponse.json(
       {
@@ -83,6 +93,9 @@ export async function POST(req: NextRequest) {
         targetGroupId,
         targetGroupError,
         filterUrl: contactFilterUrl(contactFilterId),
+        ticketingForm: form,
+        relationFilterId,
+        rejectedForms: rejected,
         pushed: relationNumbers.length,
         dataAsOf,
         catchUp,

@@ -128,10 +128,17 @@ sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
   `MEMBERNUMBERPRIOR` (het relatienummer) in de lijst staat. Let op: `MEMBERNUMBER`
   bestaat ook, maar is niet het relatienummer. Ongeveer de helft van de contacten in
   Maileon heeft een relatienummer.
-- **Alleen met Ticketing op ja:** de laatste regel van het filter (`intersection`) houdt
-  alleen de contacten over met de preference `Ticketing` in de categorie `Email` op ja.
-  Op de voorkeurenpagina (`psv-voorkeuren-algemeen`) heet die "PSV Kaartverkoop
-  thuiswedstrijden". Wie hem uit heeft staan, mag geen mail over kaartverkoop krijgen.
+- **Alleen met Ticketing op ja:** het filter houdt alleen de contacten over met de
+  preference `Ticketing` in de preference group `Email` op ja. Op de voorkeurenpagina
+  (`psv-voorkeuren-algemeen`) heet die "PSV Kaartverkoop thuiswedstrijden". Wie hem uit
+  heeft staan, mag geen mail over kaartverkoop krijgen. Maileon wees de eerste vorm
+  (`intersection`) op 2026-10-13 af met alleen "Unable to create the contact filter",
+  hoewel die het schema en het wiki-voorbeeld volgt. Daarom probeert de code drie vormen
+  op volgorde (`TicketingForm` in `maileon.ts`): `intersection`; `remove` (wie Ticketing
+  op nee of niet ingevuld heeft eruit); en `twee filters` (een hulpfilter met alleen de
+  relatienummers, zonder doelgroep, en een filter "Ticketing = ja, min wie niet in het
+  hulpfilter zit"). De pagina en de log tonen welke vorm Maileon accepteerde. Wijst
+  Maileon alles af, dan komt er geen doelgroep.
   Let op: de CSV-export is níet op deze preference gefilterd. Ringside kent de
   preferences niet.
 - **De lijst wordt opnieuw uitgerekend** met dezelfde berekening als "Maak lijst"
@@ -144,7 +151,7 @@ sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
   and Updating Contactfilters Using the REST API", niet de losse documentatiepagina's. Volgens
   dat schema heet de operator `includedin` (niet `includein`) en mag een regel hooguit 100
   waarden hebben. De lijst gaat daarom in blokken van 100, elk een eigen "add"-regel. Met
-  hooguit 100 regels per filter, waarvan één voor Ticketing, passen er 9.900
+  hooguit 100 regels per filter, waarvan twee voor Ticketing, passen er 9.800
   relatienummers in.
 - **Daarna** vraagt de pagina de doelgroep op tot Maileon klaar is met rekenen, en toont
   hoeveel contacten Maileon vond en hoeveel daarvan te mailen zijn. Minder contacten dan
