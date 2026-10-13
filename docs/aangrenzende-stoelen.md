@@ -128,6 +128,12 @@ sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
   `MEMBERNUMBERPRIOR` (het relatienummer) in de lijst staat. Let op: `MEMBERNUMBER`
   bestaat ook, maar is niet het relatienummer. Ongeveer de helft van de contacten in
   Maileon heeft een relatienummer.
+- **Alleen met Ticketing op ja:** de laatste regel van het filter (`intersection`) houdt
+  alleen de contacten over met de preference `Ticketing` in de categorie `Email` op ja.
+  Op de voorkeurenpagina (`psv-voorkeuren-algemeen`) heet die "PSV Kaartverkoop
+  thuiswedstrijden". Wie hem uit heeft staan, mag geen mail over kaartverkoop krijgen.
+  Let op: de CSV-export is níet op deze preference gefilterd. Ringside kent de
+  preferences niet.
 - **De lijst wordt opnieuw uitgerekend** met dezelfde berekening als "Maak lijst"
   (`lib/aangrenzende-stoelen/build-list.ts`). De relatienummers komen dus nooit uit de
   browser.
@@ -138,10 +144,12 @@ sturen. Code: `lib/aangrenzende-stoelen/maileon.ts` en
   and Updating Contactfilters Using the REST API", niet de losse documentatiepagina's. Volgens
   dat schema heet de operator `includedin` (niet `includein`) en mag een regel hooguit 100
   waarden hebben. De lijst gaat daarom in blokken van 100, elk een eigen "add"-regel. Met
-  hooguit 100 regels per filter past er 10.000 relatienummers in.
+  hooguit 100 regels per filter, waarvan één voor Ticketing, passen er 9.900
+  relatienummers in.
 - **Daarna** vraagt de pagina de doelgroep op tot Maileon klaar is met rekenen, en toont
   hoeveel contacten Maileon vond en hoeveel daarvan te mailen zijn. Minder contacten dan
-  relatienummers is normaal: niet iedere seizoenkaarthouder staat in Maileon.
+  relatienummers is normaal: niet iedere seizoenkaarthouder staat in Maileon, en niet
+  iedereen heeft Ticketing op ja.
 - **Sleutel:** `MAILEON_API_KEY` in Vercel (de API-sleutel "PSV Tools II" in Maileon).
   Elke keer doorzetten maakt een nieuw filter en een nieuwe doelgroep; opruimen gaat in
   Maileon zelf.

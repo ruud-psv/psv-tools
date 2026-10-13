@@ -505,7 +505,8 @@ export function AangrenzendeStoelen() {
                   <h3 className="text-base font-heading">Doorzetten naar Maileon</h3>
                   <p className="text-xs text-muted-foreground max-w-3xl">
                     Maakt in Maileon een contactfilter en een doelgroep op relatienummer
-                    (MEMBERNUMBERPRIOR). De lijst wordt daarvoor opnieuw uitgerekend met de nieuwste stand.
+                    (MEMBERNUMBERPRIOR), alleen met contacten die de preference Ticketing ("PSV Kaartverkoop
+                    thuiswedstrijden") op ja hebben. De lijst wordt daarvoor opnieuw uitgerekend met de nieuwste stand.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-4">
@@ -580,7 +581,7 @@ export function AangrenzendeStoelen() {
                       <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                         {groupStatus?.state === "uptodate" && groupStatus.countContacts !== null ? (
                           <span>
-                            Maileon vond {number.format(groupStatus.countContacts)} contacten, waarvan{" "}
+                            Maileon vond {number.format(groupStatus.countContacts)} contacten met Ticketing op ja, waarvan{" "}
                             {number.format(groupStatus.countActiveContacts ?? 0)} te mailen
                             {groupStatus.evaluated && ` (stand van ${groupStatus.evaluated})`}.
                           </span>
