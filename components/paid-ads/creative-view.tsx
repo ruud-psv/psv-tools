@@ -31,6 +31,7 @@ import {
   VolumeBar,
 } from "./shared";
 import type { PaidViewProps } from "./shared";
+import { AdHoverPreview } from "./ad-preview";
 import { cn } from "@/lib/utils";
 
 /** Zoveel advertentiesets staan er standaard; de rest achter "Toon alle". */
@@ -139,7 +140,9 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
             <div className="space-y-3">
               {idle.rows.map((a) => (
                 <div key={`${a.platform}-${a.id}`} className="flex items-center gap-3">
-                  <CreativeThumb src={a.thumbnailUrl} alt={a.name} />
+                  <AdHoverPreview ad={a}>
+                    <CreativeThumb src={a.thumbnailUrl} alt={a.name} />
+                  </AdHoverPreview>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">{a.name}</p>
                     <p className="truncate text-[11px] text-muted-foreground">
@@ -251,11 +254,13 @@ function AdPreview({ ad, adSetName }: { ad: PaidAdsAd; adSetName: string | null 
         title="Open de afbeelding"
         className="block bg-muted"
       >
-        <CreativeThumb
-          src={ad.thumbnailUrl}
-          alt={ad.name}
-          className="aspect-[4/5] h-auto w-full rounded-none [&>img]:object-contain [&>svg]:h-6 [&>svg]:w-6"
-        />
+        <AdHoverPreview ad={ad} className="flex w-full">
+          <CreativeThumb
+            src={ad.thumbnailUrl}
+            alt={ad.name}
+            className="aspect-[4/5] h-auto w-full rounded-none [&>img]:object-contain [&>svg]:h-6 [&>svg]:w-6"
+          />
+        </AdHoverPreview>
       </a>
       <figcaption className="flex flex-1 flex-col gap-2 p-3">
         <div className="min-w-0">
@@ -339,7 +344,9 @@ function AdSetBlock({ group, defaultOpen }: { group: AdSetGroup; defaultOpen: bo
               <tr key={ad.id} className="border-b border-border/50 last:border-0 hover:bg-muted/40">
                 <Td className="max-w-[320px] pl-0">
                   <div className="flex items-center gap-3">
-                    <CreativeThumb src={ad.thumbnailUrl} alt={ad.name} />
+                    <AdHoverPreview ad={ad}>
+                      <CreativeThumb src={ad.thumbnailUrl} alt={ad.name} />
+                    </AdHoverPreview>
                     <div className="min-w-0">
                       <p className="truncate">{ad.name}</p>
                       {ad.format && <p className="text-[11px] text-muted-foreground">{ad.format}</p>}

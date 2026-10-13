@@ -632,7 +632,9 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       format: resolveFormat(name),
       hook: resolveHook(name),
       videoViews3s: videoViews > 0 ? videoViews : null,
-      thumbnailUrl: null,
+      // Via de eigen route: die haalt de afbeelding pas op als hij in beeld
+      // komt, met een verse URL — die van Meta verlopen na een paar uur.
+      thumbnailUrl: `/api/paid-ads/meta/${encodeURIComponent(id)}/image`,
       metrics,
     });
   }
@@ -660,11 +662,10 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
   // De extra's pas na de kerncijfers: Meta knijpt af bij te veel zware
   // aanvragen tegelijk. Elk mag mislukken zonder de rest mee te nemen — dan
   // ontbreekt alleen die laag in het dashboard.
-  const [demographicRows, creatives, targetings] = await Promise.all([
+  const [demographicRows, targetings] = await Promise.all([
     fetchInsights(config, "adset", DEMOGRAPHIC_FIELDS, window, { breakdowns: "age,gender", signal }).catch(
       softFail("leeftijd en geslacht", [] as MetaInsightRow[])
     ),
-    fetchCreatives(config, ads.map((a) => a.id), signal).catch(softFail("creatives", new Map())),
     fetchNodes<{ targeting?: MetaTargeting }>(
       config,
       adSets.map((s) => s.id),
@@ -673,11 +674,6 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     ).catch(softFail("targeting", new Map())),
   ]);
 
-  for (const ad of ads) {
-    const creative = creatives.get(ad.id)?.creative;
-    // De volledige afbeelding waar die er is; video's hebben alleen een thumbnail.
-    ad.thumbnailUrl = creative?.image_url ?? creative?.thumbnail_url ?? null;
-  }
   for (const adSet of adSets) {
     const targeting = targetings.get(adSet.id)?.targeting;
     adSet.targeting = targeting ? summarizeTargeting(targeting) : null;
@@ -712,32 +708,102 @@ function softFail<T>(what: string, fallback: T): (error: unknown) => T {
   };
 }
 
-type CreativeNode = { creative?: { thumbnail_url?: string; image_url?: string } };
+/* ------------------------------------------------------- creatives -- */
+
+/** Graph-ID's zijn cijfers; alles anders hoort niet in een URL-pad naar Meta. */
+export function isMetaId(value: string): boolean {
+  return /^\d{1,30}$/.test(value);
+}
+
+async function graphGet<T>(config: MetaConfig, path: string, params: Record<string, string>): Promise<T> {
+  const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/${path}`);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
+    cache: "no-store",
+  });
+  const text = await res.text();
+  let body: (T & { error?: { message?: string } }) | null = null;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    // Valt hieronder door naar de foutmelding.
+  }
+  if (!res.ok || !body || body.error) {
+    throw new ConnectorRequestError(
+      `Meta Graph API — ${res.status}: ${redact(body?.error?.message ?? text.slice(0, 300), config.token)}`,
+      res.status,
+      redact(text.slice(0, 300), config.token)
+    );
+  }
+  return body;
+}
 
 /** Breedte van de voorbeeldafbeelding; standaard levert Meta maar 64 px. */
 const THUMBNAIL_SIZE = 600;
 
+type CreativeNode = { creative?: { thumbnail_url?: string; image_url?: string } };
+
 /**
- * Afbeeldingen per advertentie, met een thumbnail op galerijformaat. Weigert
- * Graph de maatparameters, dan alsnog de standaardthumbnail.
+ * De afbeeldings-URL's van één advertentie, beste eerst: de thumbnail op
+ * galerijformaat (werkt ook voor video en carrousel), dan de volledige
+ * afbeelding. Weigert Graph de maatparameters, dan de standaardthumbnail.
  */
-async function fetchCreatives(
-  config: MetaConfig,
-  ids: string[],
-  signal?: AbortSignal
-): Promise<Map<string, CreativeNode>> {
+export async function fetchMetaCreativeImageUrls(adId: string): Promise<string[]> {
+  const config = getConfig();
+  let node: CreativeNode;
   try {
-    return await fetchNodes<CreativeNode>(
-      config,
-      ids,
-      `creative.thumbnail_width(${THUMBNAIL_SIZE}).thumbnail_height(${THUMBNAIL_SIZE}){thumbnail_url,image_url}`,
-      signal
-    );
+    node = await graphGet<CreativeNode>(config, adId, {
+      fields: `creative.thumbnail_width(${THUMBNAIL_SIZE}).thumbnail_height(${THUMBNAIL_SIZE}){thumbnail_url,image_url}`,
+    });
   } catch (error) {
-    if (signal?.aborted) throw error;
-    console.error("[paid-ads] meta creatives op groot formaat niet opgehaald", error);
-    return fetchNodes<CreativeNode>(config, ids, "creative{thumbnail_url,image_url}", signal);
+    console.error("[paid-ads] meta thumbnail op groot formaat niet opgehaald", error);
+    node = await graphGet<CreativeNode>(config, adId, { fields: "creative{thumbnail_url,image_url}" });
   }
+  return [node.creative?.thumbnail_url, node.creative?.image_url].filter(
+    (url): url is string => typeof url === "string" && url.startsWith("https://")
+  );
+}
+
+/** De plaatsingen waarin Meta een voorbeeld van de advertentie kan tonen. */
+export const META_PREVIEW_FORMATS = [
+  "INSTAGRAM_STANDARD",
+  "INSTAGRAM_STORY",
+  "MOBILE_FEED_STANDARD",
+  "FACEBOOK_STORY_MOBILE",
+] as const;
+
+export type MetaPreviewFormat = (typeof META_PREVIEW_FORMATS)[number];
+
+export interface MetaAdPreview {
+  src: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Het voorbeeld zoals Meta het in Ads Manager toont: een iframe van Facebook
+ * met de advertentie in de gekozen plaatsing. `null` als Meta voor die
+ * plaatsing geen voorbeeld heeft.
+ */
+export async function fetchMetaAdPreview(
+  adId: string,
+  format: MetaPreviewFormat
+): Promise<MetaAdPreview | null> {
+  const config = getConfig();
+  const body = await graphGet<{ data?: { body?: string }[] }>(config, `${adId}/previews`, {
+    ad_format: format,
+  });
+  const html = body.data?.[0]?.body ?? "";
+  const src = /src="([^"]+)"/.exec(html)?.[1]?.replace(/&amp;/g, "&");
+  if (!src || !src.startsWith("https://")) return null;
+  const width = Number(/width="(\d+)"/.exec(html)?.[1]);
+  const height = Number(/height="(\d+)"/.exec(html)?.[1]);
+  return {
+    src,
+    width: Number.isFinite(width) && width > 0 ? width : 320,
+    height: Number.isFinite(height) && height > 0 ? height : 560,
+  };
 }
 
 /** Hoeveel objecten Graph per `?ids=`-aanvraag toestaat. */
