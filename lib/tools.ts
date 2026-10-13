@@ -110,6 +110,7 @@ export const knowledgeTools: ToolEntry[] = [
       "Stel een vraag over de tools, processen en afspraken binnen PSV Marketing.",
     href: "/dashboard/kennisbank",
     icon: BookOpen,
+    badge: "Beta",
   },
 ];
 
