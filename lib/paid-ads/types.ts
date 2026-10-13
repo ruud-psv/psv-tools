@@ -115,6 +115,11 @@ export interface PaidAdsAd {
   videoViews3s: number | null;
   /** Voorbeeldafbeelding van de creative. Tijdelijke URL van het platform; `null` als die er niet is. */
   thumbnailUrl: string | null;
+  /**
+   * Staat de advertentie nu aan. `false` als hij uitgezet is (of zijn set of
+   * campagne); `null` als het platform dat niet levert of het niet lukte.
+   */
+  active: boolean | null;
   metrics: PaidMetrics;
 }
 
@@ -214,7 +219,7 @@ export interface PaidAdsResponse {
  */
 export interface PaidAdsWarning {
   platform: PaidPlatform;
-  part: "creatives" | "demographics" | "targeting";
+  part: "creatives" | "demographics" | "targeting" | "status";
   message: string;
 }
 

@@ -93,6 +93,7 @@ const WARNING_PARTS: Record<PaidAdsWarning["part"], string> = {
   creatives: "afbeeldingen",
   demographics: "leeftijd en geslacht",
   targeting: "targeting",
+  status: "aan/uit-status van advertenties",
 };
 
 /** De KPI-tegels bovenaan, met hun eenheid en icoon. */
