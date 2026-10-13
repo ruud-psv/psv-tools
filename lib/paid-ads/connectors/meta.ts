@@ -356,7 +356,7 @@ async function fetchInsights(
 ): Promise<MetaInsightRow[]> {
   const chunks = splitWindow(window);
   if (chunks.length === 1) {
-    return fetchWindow(config, level, fields, window, options);
+    return fetchWindowOrSplit(config, level, fields, window, options);
   }
 
   const rows: MetaInsightRow[] = [];
@@ -364,12 +364,67 @@ async function fetchInsights(
     const group = await Promise.all(
       chunks
         .slice(i, i + CHUNK_CONCURRENCY)
-        .map((chunk) => fetchWindow(config, level, fields, chunk, options))
+        .map((chunk) => fetchWindowOrSplit(config, level, fields, chunk, options))
     );
     rows.push(...group.flat());
   }
 
   return mergeRows(rows, Boolean(options.timeIncrement));
+}
+
+/** Zo vaak mag een blok gehalveerd worden: dertig dagen wordt hooguit vier. */
+const MAX_SPLITS = 3;
+const RETRY_DELAY_MS = 1_000;
+
+/**
+ * Een 500 van Meta ("An unknown error occurred", "Service temporarily
+ * unavailable") is meestal tijdelijk of een te zwaar antwoord. Fouten in de
+ * aanvraag zelf (4xx) worden niet beter van nog een poging.
+ */
+function isServerError(error: unknown): boolean {
+  return error instanceof ConnectorRequestError && error.status >= 500;
+}
+
+/**
+ * Eén blok Insights, met een vangnet voor een 500 van Meta: het blok wordt
+ * gehalveerd en elke helft apart gevraagd, tot een blok van één dag. Die
+ * krijgt nog één poging na een korte pauze; mislukt dat ook, dan de fout.
+ */
+async function fetchWindowOrSplit(
+  config: MetaConfig,
+  level: "account" | "campaign" | "adset" | "ad",
+  fields: string,
+  window: FetchWindow,
+  options: { timeIncrement?: number; breakdowns?: string; signal?: AbortSignal },
+  splits = 0
+): Promise<MetaInsightRow[]> {
+  try {
+    return await fetchWindow(config, level, fields, window, options);
+  } catch (error) {
+    if (!isServerError(error) || options.signal?.aborted) throw error;
+
+    const from = new Date(`${window.from}T00:00:00.000Z`);
+    const to = new Date(`${window.to}T00:00:00.000Z`);
+    const days = Math.round((to.getTime() - from.getTime()) / DAY_MS) + 1;
+
+    if (days < 2 || splits >= MAX_SPLITS) {
+      console.warn(`[paid-ads] meta ${level} ${window.from}–${window.to}: 500, nog één poging`);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      return fetchWindow(config, level, fields, window, options);
+    }
+
+    console.warn(`[paid-ads] meta ${level} ${window.from}–${window.to}: 500, in tweeën opnieuw`);
+    const middle = new Date(from.getTime() + (Math.floor(days / 2) - 1) * DAY_MS);
+    const halves: FetchWindow[] = [
+      { from: window.from, to: iso(middle) },
+      { from: iso(new Date(middle.getTime() + DAY_MS)), to: window.to },
+    ];
+    const rows: MetaInsightRow[] = [];
+    for (const half of halves) {
+      rows.push(...(await fetchWindowOrSplit(config, level, fields, half, options, splits + 1)));
+    }
+    return mergeRows(rows, Boolean(options.timeIncrement));
+  }
 }
 
 /**

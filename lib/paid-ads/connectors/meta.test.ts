@@ -160,3 +160,42 @@ test("alleen numerieke advertentie-ID's", () => {
   assert.ok(!isMetaId("../me"));
   assert.ok(!isMetaId("1001?fields=x"));
 });
+
+test("een 500 op Insights halveert de periode en probeert het opnieuw", async () => {
+  const ranges: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    if (!url.pathname.endsWith("/insights")) return json({ data: [] });
+    if (url.searchParams.get("level") !== "campaign" || url.searchParams.has("time_increment")) {
+      return json({ data: [] });
+    }
+    const { since, until } = JSON.parse(url.searchParams.get("time_range")!);
+    ranges.push(`${since}/${until}`);
+    // Het volle blok van dertig dagen is Meta te zwaar; de helften gaan goed.
+    if (since === WINDOW.from && until === WINDOW.to) {
+      return graphError("An unknown error occurred", 500);
+    }
+    return json({ data: [{ ...row, campaign_name: "Campagne", spend: "5" }] });
+  }) as typeof fetch;
+
+  const campaigns = await metaConnector.fetchCampaigns(WINDOW);
+
+  assert.deepEqual(ranges.slice(0, 3), [
+    "2026-09-14/2026-10-13",
+    "2026-09-14/2026-09-28",
+    "2026-09-29/2026-10-13",
+  ]);
+  assert.equal(campaigns.length, 1);
+  assert.equal(campaigns[0].metrics.spend, 10);
+});
+
+test("een 400 op Insights wordt niet opnieuw geprobeerd", async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return graphError("(#100) Invalid parameter", 400);
+  }) as typeof fetch;
+
+  await assert.rejects(metaConnector.fetchCampaigns(WINDOW), /Invalid parameter/);
+  assert.equal(calls, 1);
+});
