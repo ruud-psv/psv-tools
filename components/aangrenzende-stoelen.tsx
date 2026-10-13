@@ -72,20 +72,8 @@ interface ListResult {
 interface MaileonPush {
   name: string;
   contactFilterId: number;
-  targetGroupId: number | null;
-  targetGroupError: string | null;
   filterUrl: string;
-  ticketingForm: string;
-  relationFilterId: number | null;
-  rejectedForms: string[];
   pushed: number;
-}
-
-interface TargetGroupStatus {
-  state: string;
-  countContacts: number | null;
-  countActiveContacts: number | null;
-  evaluated: string | null;
 }
 
 const number = new Intl.NumberFormat("nl-NL");
@@ -94,9 +82,6 @@ const number = new Intl.NumberFormat("nl-NL");
 function today(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
 }
-
-/** Hoe vaak de pagina de doelgroep opvraagt terwijl Maileon rekent: elke 5 s, 2 minuten lang. */
-const STATUS_POLLS = 24;
 
 function formatDateTime(value: string | null): string {
   if (!value) return "onbekend";
@@ -163,8 +148,6 @@ export function AangrenzendeStoelen() {
   const [pushing, setPushing] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const [pushed, setPushed] = useState<MaileonPush | null>(null);
-  const [groupStatus, setGroupStatus] = useState<TargetGroupStatus | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -221,41 +204,7 @@ export function AangrenzendeStoelen() {
   useEffect(() => {
     setPushed(null);
     setPushError(null);
-    setGroupStatus(null);
-    setStatusError(null);
   }, [result]);
-
-  const loadGroupStatus = useCallback(async (targetGroupId: number) => {
-    try {
-      const res = await fetch(`/api/aangrenzende-stoelen/maileon?targetGroupId=${targetGroupId}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
-      setGroupStatus(data);
-      setStatusError(null);
-      return data as TargetGroupStatus;
-    } catch (caught) {
-      setStatusError(caught instanceof Error ? caught.message : String(caught));
-      return null;
-    }
-  }, []);
-
-  // Maileon rekent het filter op de achtergrond door; vraag de stand op tot hij bij is.
-  useEffect(() => {
-    const targetGroupId = pushed?.targetGroupId;
-    if (!targetGroupId) return;
-    let polls = 0;
-    let stopped = false;
-    const poll = async () => {
-      const status = await loadGroupStatus(targetGroupId);
-      polls += 1;
-      if (!stopped && polls < STATUS_POLLS && status?.state !== "uptodate") timer = setTimeout(poll, 5000);
-    };
-    let timer = setTimeout(poll, 3000);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [pushed, loadGroupStatus]);
 
   async function pushToMaileon() {
     if (!result) return;
@@ -507,9 +456,10 @@ export function AangrenzendeStoelen() {
                 <div>
                   <h3 className="text-base font-heading">Doorzetten naar Maileon</h3>
                   <p className="text-xs text-muted-foreground max-w-3xl">
-                    Maakt in Maileon een contactfilter en een doelgroep op relatienummer
-                    (MEMBERNUMBERPRIOR), alleen met contacten die de preference Ticketing ("PSV Kaartverkoop
-                    thuiswedstrijden") op ja hebben. De lijst wordt daarvoor opnieuw uitgerekend met de nieuwste stand.
+                    Maakt in Maileon een contactfilter op relatienummer (MEMBERNUMBERPRIOR). De lijst wordt
+                    daarvoor opnieuw uitgerekend met de nieuwste stand. Er komt nog geen doelgroep: de regel voor
+                    de preference Ticketing (&ldquo;PSV Kaartverkoop thuiswedstrijden&rdquo;) voeg je in Maileon
+                    zelf toe, want de API van Maileon accepteert die regel niet.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-4">
@@ -562,62 +512,42 @@ export function AangrenzendeStoelen() {
                   </p>
                 )}
                 {pushed && (
-                  <div className="space-y-1 text-sm">
-                    <p>
-                      Doorgezet: <span className="font-medium break-words">{pushed.name}</span>
-                    </p>
-                    <p className="text-muted-foreground">
-                      {number.format(pushed.pushed)} relatienummers · filter {pushed.contactFilterId}
-                      {pushed.targetGroupId && ` · doelgroep ${pushed.targetGroupId}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground break-words">
-                      Ticketing-regel in de vorm &ldquo;{pushed.ticketingForm}&rdquo;
-                      {pushed.relationFilterId && `, met hulpfilter ${pushed.relationFilterId} (alleen relatienummers)`}
-                      {pushed.rejectedForms.length > 0 && `. Maileon wees eerst af: ${pushed.rejectedForms.join(" · ")}`}
-                    </p>
-                    {!pushed.targetGroupId && (
-                      <p className="flex items-start gap-2">
-                        <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
-                        <span>
-                          Het filter staat in Maileon, maar de doelgroep niet
-                          {pushed.targetGroupError ? ` (${pushed.targetGroupError})` : ""}. Maak de doelgroep zelf
-                          aan op dit filter.
-                        </span>
+                  <div className="space-y-3 text-sm">
+                    <div className="space-y-1">
+                      <p>
+                        Filter {pushed.contactFilterId} gemaakt:{" "}
+                        <span className="font-medium break-words select-all">{pushed.name}</span>
                       </p>
-                    )}
-                    {pushed.targetGroupId && (
-                      <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                        {groupStatus?.state === "uptodate" && groupStatus.countContacts !== null ? (
-                          <span>
-                            Maileon vond {number.format(groupStatus.countContacts)} contacten met Ticketing op ja, waarvan{" "}
-                            {number.format(groupStatus.countActiveContacts ?? 0)} te mailen
-                            {groupStatus.evaluated && ` (stand van ${groupStatus.evaluated})`}.
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Maileon rekent de doelgroep door…
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => pushed.targetGroupId && loadGroupStatus(pushed.targetGroupId)}
-                          className="underline underline-offset-2 hover:text-foreground"
-                        >
-                          Ververs
-                        </button>
+                      <p className="text-muted-foreground">{number.format(pushed.pushed)} relatienummers</p>
+                    </div>
+                    <div className="space-y-2 rounded-md border border-primary/40 p-3">
+                      <p className="flex items-start gap-2 font-medium">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+                        Nog doen in Maileon, vóór je mailt
                       </p>
-                    )}
-                    {statusError && <p className="text-muted-foreground">Stand ophalen mislukt: {statusError}</p>}
-                    <a
-                      href={pushed.filterUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 underline underline-offset-2"
-                    >
-                      Open het filter in Maileon
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
+                      <ol className="list-decimal space-y-1 pl-5">
+                        <li>
+                          <a
+                            href={pushed.filterUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 underline underline-offset-2"
+                          >
+                            Open het filter in Maileon
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                          .
+                        </li>
+                        <li>
+                          Voeg onderaan een regel toe die alleen de contacten overhoudt met de preference{" "}
+                          <span className="font-medium">Email › Ticketing = ja</span>.
+                        </li>
+                        <li>Maak een doelgroep op dit filter, met dezelfde naam.</li>
+                      </ol>
+                      <p className="text-xs text-muted-foreground">
+                        Zonder stap 2 krijgen ook mensen die nee zeiden tegen mail over kaartverkoop deze mailing.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
