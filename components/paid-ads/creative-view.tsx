@@ -17,6 +17,7 @@ import {
   PLATFORM_LABELS,
   type PaidAdsAd,
   type PaidAdsAdSet,
+  type PaidAdsWarning,
 } from "@/lib/paid-ads/types";
 import {
   Badge,
@@ -51,10 +52,14 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
   );
   const sets = useMemo(() => adsByAdSet(data.adSets, data.ads), [data.adSets, data.ads]);
   const [showAllSets, setShowAllSets] = useState(false);
+  const imageWarnings = useMemo(
+    () => data.warnings.filter((w) => w.part === "creatives"),
+    [data.warnings]
+  );
 
   return (
     <div className="space-y-6">
-      <AdGallery ads={data.ads} adSets={data.adSets} />
+      <AdGallery ads={data.ads} adSets={data.adSets} warnings={imageWarnings} />
 
       {/* Format performance */}
       <SectionCard title="Format performance" hint="welk format levert het resultaat op">
@@ -189,8 +194,17 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
 /**
  * De advertenties zelf, op volgorde van besteding. Alleen advertenties waarvan
  * het platform een afbeelding levert; een klik opent de afbeelding volledig.
+ * Kwamen de afbeeldingen niet binnen, dan staat de reden erbij.
  */
-function AdGallery({ ads, adSets }: { ads: PaidAdsAd[]; adSets: PaidAdsAdSet[] }) {
+function AdGallery({
+  ads,
+  adSets,
+  warnings,
+}: {
+  ads: PaidAdsAd[];
+  adSets: PaidAdsAdSet[];
+  warnings: PaidAdsWarning[];
+}) {
   const [showAll, setShowAll] = useState(false);
   const setNames = useMemo(
     () => new Map(adSets.map((s) => [`${s.platform}:${s.id}`, s.name])),
@@ -212,8 +226,13 @@ function AdGallery({ ads, adSets }: { ads: PaidAdsAd[]; adSets: PaidAdsAdSet[] }
     >
       {withImage.length === 0 ? (
         <EmptySection>
-          Afbeeldingen verschijnen zodra Meta-advertenties binnenkomen. Google Ads, TikTok en LinkedIn
-          leveren nog geen afbeeldingen.
+          {warnings.length > 0 ? (
+            <ImageWarnings warnings={warnings} />
+          ) : ads.some((a) => a.platform === "meta") ? (
+            "Meta leverde bij deze advertenties geen afbeelding mee."
+          ) : (
+            "Afbeeldingen verschijnen zodra Meta-advertenties binnenkomen. Google Ads, TikTok en LinkedIn leveren nog geen afbeeldingen."
+          )}
         </EmptySection>
       ) : (
         <>
@@ -234,9 +253,26 @@ function AdGallery({ ads, adSets }: { ads: PaidAdsAd[]; adSets: PaidAdsAdSet[] }
               {showAll ? "Toon minder" : `Toon alle ${nl(withImage.length)} advertenties`}
             </button>
           )}
+          {warnings.length > 0 && (
+            <div className="mt-4 text-xs text-muted-foreground">
+              <ImageWarnings warnings={warnings} />
+            </div>
+          )}
         </>
       )}
     </SectionCard>
+  );
+}
+
+function ImageWarnings({ warnings }: { warnings: PaidAdsWarning[] }) {
+  return (
+    <div className="space-y-1">
+      {warnings.map((w, i) => (
+        <p key={i}>
+          Afbeeldingen van {PLATFORM_LABELS[w.platform]} niet opgehaald: {w.message}
+        </p>
+      ))}
+    </div>
   );
 }
 

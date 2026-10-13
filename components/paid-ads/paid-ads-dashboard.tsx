@@ -49,6 +49,7 @@ import { eur, longDate, nl, pct, roas, signed } from "@/lib/paid-ads/format";
 import {
   BenchmarkKey,
   PaidAdsResponse,
+  PaidAdsWarning,
   PaidPlatform,
   PERIODS,
   PeriodKey,
@@ -86,6 +87,13 @@ const VIEWS = [
 type ViewKey = (typeof VIEWS)[number]["key"];
 
 const BENCHMARKS: BenchmarkKey[] = ["previous", "yearAgo", "target"];
+
+/** Hoe een ontbrekend onderdeel in de waarschuwing heet. */
+const WARNING_PARTS: Record<PaidAdsWarning["part"], string> = {
+  creatives: "afbeeldingen",
+  demographics: "leeftijd en geslacht",
+  targeting: "targeting",
+};
 
 /** De KPI-tegels bovenaan, met hun eenheid en icoon. */
 const KPI_TILES: {
@@ -477,18 +485,25 @@ export function PaidAdsDashboard() {
       )}
 
       {/* Deels opgehaald */}
-      {data && !notConnected && Object.keys(data.platformErrors).length > 0 && (
-        <Card className="border-warning/50 bg-warning-bg/40">
-          <CardContent className="flex items-start gap-3 py-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <div className="text-xs text-muted-foreground">
-              {Object.values(data.platformErrors).map((message, i) => (
-                <p key={i}>{message}</p>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {data &&
+        !notConnected &&
+        (Object.keys(data.platformErrors).length > 0 || data.warnings.length > 0) && (
+          <Card className="border-warning/50 bg-warning-bg/40">
+            <CardContent className="flex items-start gap-3 py-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="text-xs text-muted-foreground">
+                {Object.values(data.platformErrors).map((message, i) => (
+                  <p key={i}>{message}</p>
+                ))}
+                {data.warnings.map((w, i) => (
+                  <p key={`w${i}`}>
+                    {PLATFORM_LABELS[w.platform]}: {WARNING_PARTS[w.part]} niet opgehaald — {w.message}
+                  </p>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {loading && !data ? (
         <Card>
