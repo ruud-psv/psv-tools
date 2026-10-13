@@ -12,6 +12,7 @@ import type {
   PaidAdsDemographic,
   PaidAdsAdSet,
   PaidAdsCampaign,
+  PaidAdsWarning,
   PaidMetrics,
   PaidPlatform,
 } from "@/lib/paid-ads/types";
@@ -43,6 +44,8 @@ export interface ConnectorResult {
   daily: ConnectorDailyPoint[];
   /** Alleen gevuld door platforms die een leeftijd/geslacht-uitsplitsing leveren. */
   demographics?: PaidAdsDemographic[];
+  /** Aanvullende onderdelen die niet binnenkwamen; de route zet het platform erbij. */
+  warnings?: Omit<PaidAdsWarning, "platform">[];
 }
 
 /**
@@ -84,11 +87,14 @@ export function assertCleanSecret(name: string, value: string): void {
 
 /** Het platform gaf een foutstatus terug of was onbereikbaar. */
 export class ConnectorRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly body: string
-  ) {
+  // Uitgeschreven velden in plaats van parameter properties: die kan
+  // `node --test` (alleen types strippen) niet lezen.
+  readonly status: number;
+  readonly body: string;
+
+  constructor(message: string, status: number, body: string) {
     super(message);
+    this.status = status;
+    this.body = body;
   }
 }

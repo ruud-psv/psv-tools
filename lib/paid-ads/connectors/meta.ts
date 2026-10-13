@@ -659,18 +659,38 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
 
   // De extra's pas na de kerncijfers: Meta knijpt af bij te veel zware
   // aanvragen tegelijk. Elk mag mislukken zonder de rest mee te nemen — dan
-  // ontbreekt alleen die laag in het dashboard.
+  // ontbreekt alleen die laag in het dashboard, met de reden erbij.
+  const warnings: Warning[] = [];
+  const softFail =
+    <T>(part: Warning["part"], fallback: T) =>
+    (error: unknown): T => {
+      console.error(`[paid-ads] meta ${part} niet opgehaald`, error);
+      warnings.push({ part, message: failureMessage(error, signal) });
+      return fallback;
+    };
+  const partial =
+    (part: Warning["part"], total: number) =>
+    <T>(result: NodeResult<T>): Map<string, T> => {
+      if (result.error) {
+        console.error(`[paid-ads] meta ${part} deels niet opgehaald`, result.error);
+        warnings.push({
+          part,
+          message: `${result.failed} van ${total} niet opgehaald — ${failureMessage(result.error, signal)}`,
+        });
+      }
+      return result.nodes;
+    };
+
   const [demographicRows, creatives, targetings] = await Promise.all([
     fetchInsights(config, "adset", DEMOGRAPHIC_FIELDS, window, { breakdowns: "age,gender", signal }).catch(
-      softFail("leeftijd en geslacht", [] as MetaInsightRow[])
+      softFail("demographics", [] as MetaInsightRow[])
     ),
-    fetchCreatives(config, ads.map((a) => a.id), signal).catch(softFail("creatives", new Map())),
-    fetchNodes<{ targeting?: MetaTargeting }>(
-      config,
-      adSets.map((s) => s.id),
-      "targeting",
-      signal
-    ).catch(softFail("targeting", new Map())),
+    fetchCreatives(config, ads.map((a) => a.id), signal)
+      .then(partial("creatives", ads.length))
+      .catch(softFail("creatives", new Map<string, CreativeNode>())),
+    fetchNodes<{ targeting?: MetaTargeting }>(config, adSets.map((s) => s.id), "targeting", signal)
+      .then(partial("targeting", adSets.length))
+      .catch(softFail("targeting", new Map<string, { targeting?: MetaTargeting }>())),
   ]);
 
   for (const ad of ads) {
@@ -701,15 +721,15 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     });
   }
 
-  return { campaigns, adSets, ads, daily, demographics };
+  return { campaigns, adSets, ads, daily, demographics, warnings };
 }
 
-/** Logt een mislukte extra laag en gaat door met een lege waarde. */
-function softFail<T>(what: string, fallback: T): (error: unknown) => T {
-  return (error) => {
-    console.error(`[paid-ads] meta ${what} niet opgehaald`, error);
-    return fallback;
-  };
+type Warning = NonNullable<ConnectorResult["warnings"]>[number];
+
+/** De reden dat een extra laag ontbreekt, zoals het dashboard hem toont. */
+function failureMessage(error: unknown, signal?: AbortSignal): string {
+  if (signal?.aborted) return "de tijdslimiet van het dashboard was bereikt.";
+  return error instanceof Error ? error.message : String(error);
 }
 
 type CreativeNode = { creative?: { thumbnail_url?: string; image_url?: string } };
@@ -725,7 +745,7 @@ async function fetchCreatives(
   config: MetaConfig,
   ids: string[],
   signal?: AbortSignal
-): Promise<Map<string, CreativeNode>> {
+): Promise<NodeResult<CreativeNode>> {
   try {
     return await fetchNodes<CreativeNode>(
       config,
@@ -743,48 +763,113 @@ async function fetchCreatives(
 /** Hoeveel objecten Graph per `?ids=`-aanvraag toestaat. */
 const NODE_BATCH = 50;
 
+/** Zo vaak gaat een blok opnieuw, telkens zonder de id's die Graph afwees. */
+const MAX_NODE_RETRIES = 3;
+
+/** Wat `fetchNodes` oplevert: de objecten die binnenkwamen, en waarom de rest niet. */
+interface NodeResult<T> {
+  nodes: Map<string, T>;
+  /** Hoeveel gevraagde objecten ontbreken doordat hun blok mislukte. */
+  failed: number;
+  /** De fout van het eerste mislukte blok; `null` als alles binnenkwam. */
+  error: unknown;
+}
+
 /**
  * Haalt velden op van losse objecten (advertenties, advertentiesets) via
  * `?ids=a,b,c`: vijftig per aanvraag, twee aanvragen tegelijk.
+ *
+ * Een mislukt blok neemt de andere niet mee: wat binnenkwam blijft staan, en
+ * het resultaat zegt hoeveel er ontbreekt. Alleen als niets binnenkomt, gooit
+ * deze functie de fout zelf.
  */
 async function fetchNodes<T>(
   config: MetaConfig,
   ids: string[],
   fields: string,
   signal?: AbortSignal
-): Promise<Map<string, T>> {
+): Promise<NodeResult<T>> {
   const batches: string[][] = [];
   for (let i = 0; i < ids.length; i += NODE_BATCH) batches.push(ids.slice(i, i + NODE_BATCH));
 
-  const out = new Map<string, T>();
+  const result: NodeResult<T> = { nodes: new Map(), failed: 0, error: null };
   for (let i = 0; i < batches.length; i += CHUNK_CONCURRENCY) {
-    const results = await Promise.all(
-      batches.slice(i, i + CHUNK_CONCURRENCY).map(async (batch) => {
-        const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/`);
-        url.searchParams.set("ids", batch.join(","));
-        url.searchParams.set("fields", fields);
-        const res = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
-          cache: "no-store",
-          signal,
-        });
-        const text = await res.text();
-        const body = JSON.parse(text) as Record<string, T> & { error?: { message?: string } };
-        if (!res.ok || body.error) {
-          throw new ConnectorRequestError(
-            `Meta Graph API — ${res.status}: ${redact(body.error?.message ?? text.slice(0, 300), config.token)}`,
-            res.status,
-            redact(text.slice(0, 300), config.token)
-          );
-        }
-        return body;
-      })
+    const group = batches.slice(i, i + CHUNK_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      group.map((batch) => fetchNodeBatch<T>(config, batch, fields, signal))
     );
-    for (const body of results) {
-      for (const [id, node] of Object.entries(body)) out.set(id, node as T);
-    }
+    settled.forEach((outcome, j) => {
+      if (outcome.status === "rejected") {
+        result.failed += group[j].length;
+        result.error ??= outcome.reason;
+        return;
+      }
+      for (const [id, node] of Object.entries(outcome.value)) result.nodes.set(id, node);
+    });
   }
-  return out;
+
+  if (result.error && result.nodes.size === 0) throw result.error;
+  return result;
+}
+
+/**
+ * Eén `?ids=`-aanvraag. Graph weigert die in zijn geheel zodra één id niet te
+ * lezen is, bijvoorbeeld een advertentie die inmiddels verwijderd is. Noemt de
+ * foutmelding die id's, dan gaan ze eruit en wordt de rest opnieuw gevraagd.
+ */
+async function fetchNodeBatch<T>(
+  config: MetaConfig,
+  batch: string[],
+  fields: string,
+  signal?: AbortSignal
+): Promise<Record<string, T>> {
+  let ids = batch;
+  for (let attempt = 0; ids.length > 0; attempt++) {
+    const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/`);
+    url.searchParams.set("ids", ids.join(","));
+    url.searchParams.set("fields", fields);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
+      cache: "no-store",
+      signal,
+    });
+
+    const text = await res.text();
+    let body: Record<string, T> & { error?: { message?: string } };
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new ConnectorRequestError(
+        `Meta gaf een onleesbaar antwoord (${res.status}).`,
+        res.status,
+        redact(text.slice(0, 300), config.token)
+      );
+    }
+    if (res.ok && !body.error) return body;
+
+    const detail = redact(body.error?.message ?? text.slice(0, 300), config.token);
+    const rejected = unreadableIds(detail, ids);
+    if (rejected.length === 0 || attempt >= MAX_NODE_RETRIES) {
+      throw new ConnectorRequestError(`Meta Graph API — ${res.status}: ${detail}`, res.status, detail);
+    }
+    console.warn(`[paid-ads] meta: ${rejected.length} object(en) niet leesbaar, overgeslagen`, rejected);
+    ids = ids.filter((id) => !rejected.includes(id));
+  }
+  return {};
+}
+
+/**
+ * De id's die Graph in een foutmelding als onleesbaar aanwijst — verwijderd,
+ * of buiten bereik van het token. Graph gebruikt twee vormen:
+ *   "(#803) Some of the aliases you requested do not exist: 123,456"
+ *   "Unsupported get request. Object with ID '123' does not exist, …"
+ */
+export function unreadableIds(message: string, ids: string[]): string[] {
+  const named = new Set<string>();
+  const listed = /do not exist:\s*([\d,\s]+)/i.exec(message);
+  for (const id of listed?.[1].split(",") ?? []) named.add(id.trim());
+  for (const match of message.matchAll(/Object with ID '(\d+)'/gi)) named.add(match[1]);
+  return ids.filter((id) => named.has(id));
 }
 
 /* ---------------------------------------------------------- targeting -- */
