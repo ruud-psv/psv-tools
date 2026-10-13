@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import {
-  emptyMetrics,
   isPeriod,
-  PaidAdsDailyPoint,
+  PaidAdsCampaign,
   PaidAdsResponse,
   PaidAdsTargets,
-  PaidAdsWeeklyPoint,
-  PaidMetrics,
   PaidPlatform,
   PeriodKey,
   PLATFORM_LABELS,
 } from "@/lib/paid-ads/types";
+import { EMPTY_FILTERS, narrowResponse } from "@/lib/paid-ads/derive";
 import {
   ConnectorConfigError,
-  type ConnectorDailyPoint,
   type FetchWindow,
   type PaidConnector,
 } from "@/lib/paid-ads/connectors/types";
@@ -28,7 +25,7 @@ import { linkedinConnector } from "@/lib/paid-ads/connectors/linkedin";
  *
  * Per platform met een complete set credentials én een gebouwde connector
  * worden campagnes, advertentiesets, advertenties en de dagreeks opgehaald,
- * plus de totalen van twee vergelijkingsperiodes. Valt een platform uit, dan
+ * plus de campagnes van twee vergelijkingsperiodes. Valt een platform uit, dan
  * blijft de rest gewoon staan en vertelt `platformErrors` wat er misging.
  *
  * Een nieuw platform aansluiten:
@@ -156,6 +153,7 @@ function getTargets(): PaidAdsTargets {
     ctr: num("PAID_ADS_TARGET_CTR"),
     cvr: num("PAID_ADS_TARGET_CVR"),
     cpc: num("PAID_ADS_TARGET_CPC"),
+    roas: num("PAID_ADS_TARGET_ROAS"),
     byBusinessUnit: {},
   };
 }
@@ -193,76 +191,6 @@ function connectionStatus(): {
 
 /* -------------------------------------------------------------- ophalen -- */
 
-function addMetrics(target: PaidMetrics, source: PaidMetrics): void {
-  target.spend += source.spend;
-  target.impressions += source.impressions;
-  target.reach += source.reach;
-  target.clicks += source.clicks;
-  target.results += source.results;
-}
-
-/** ISO-weeknummer; week 1 is de week met de eerste donderdag van het jaar. */
-function isoWeek(date: Date): { year: number; week: number } {
-  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  // Naar de donderdag van deze week: dan bepaalt het jaartal van die dag het weekjaar.
-  const day = (target.getUTCDay() + 6) % 7;
-  target.setUTCDate(target.getUTCDate() - day + 3);
-  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
-  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
-  const week = 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * DAY_MS));
-  return { year: target.getUTCFullYear(), week };
-}
-
-/** Dagreeks naar weekpunten: CTR in procenten, kosten per resultaat in euro's. */
-function toWeekly(daily: ConnectorDailyPoint[]): PaidAdsWeeklyPoint[] {
-  const byWeek = new Map<string, { label: string; metrics: PaidMetrics }>();
-
-  for (const point of daily) {
-    const { year, week } = isoWeek(utcDate(point.date));
-    const key = `${year}-${String(week).padStart(2, "0")}`;
-    const entry = byWeek.get(key) ?? { label: `wk ${week}`, metrics: emptyMetrics() };
-    addMetrics(entry.metrics, point.metrics);
-    byWeek.set(key, entry);
-  }
-
-  return [...byWeek.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([, { label, metrics }]) => ({
-      week: label,
-      ctr: metrics.impressions > 0 ? (metrics.clicks / metrics.impressions) * 100 : 0,
-      costPerResult: metrics.results > 0 ? metrics.spend / metrics.results : 0,
-    }));
-}
-
-/** Dagreeksen van meerdere platformen samenvoegen tot één lijn. */
-function mergeDaily(series: ConnectorDailyPoint[][]): {
-  daily: PaidAdsDailyPoint[];
-  merged: ConnectorDailyPoint[];
-} {
-  const byDate = new Map<string, PaidMetrics>();
-  for (const points of series) {
-    for (const point of points) {
-      const entry = byDate.get(point.date) ?? emptyMetrics();
-      addMetrics(entry, point.metrics);
-      byDate.set(point.date, entry);
-    }
-  }
-
-  const merged = [...byDate.entries()]
-    .map(([date, metrics]) => ({ date, metrics }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  return {
-    merged,
-    daily: merged.map(({ date, metrics }) => ({
-      date,
-      spend: metrics.spend,
-      results: metrics.results,
-    })),
-  };
-}
-
 function errorMessage(platform: PaidPlatform, error: unknown): string {
   if (error instanceof ConnectorConfigError) return error.message;
   const detail = error instanceof Error ? error.message : String(error);
@@ -291,12 +219,10 @@ export async function GET(req: NextRequest) {
   const campaigns: PaidAdsResponse["campaigns"] = [];
   const adSets: PaidAdsResponse["adSets"] = [];
   const ads: PaidAdsResponse["ads"] = [];
-  const dailySeries: ConnectorDailyPoint[][] = [];
-  const previousByPlatform: Partial<Record<PaidPlatform, PaidMetrics>> = {};
-  const previousTotals = emptyMetrics();
-  const yearAgoTotals = emptyMetrics();
-  let hasPrevious = false;
-  let hasYearAgo = false;
+  const demographics: PaidAdsResponse["demographics"] = [];
+  const campaignDaily: PaidAdsResponse["campaignDaily"] = [];
+  let previousCampaigns: PaidAdsCampaign[] | null = null;
+  let yearAgoCampaigns: PaidAdsCampaign[] | null = null;
 
   try {
     const results = await Promise.all(
@@ -307,8 +233,8 @@ export async function GET(req: NextRequest) {
           // hoofdperiode mee te slepen.
           const [data, prev, year] = await Promise.all([
             connector.fetchAll(current, controller.signal),
-            connector.fetchTotals(previous, controller.signal).catch(() => null),
-            connector.fetchTotals(yearAgo, controller.signal).catch(() => null),
+            connector.fetchCampaigns(previous, controller.signal).catch(() => null),
+            connector.fetchCampaigns(yearAgo, controller.signal).catch(() => null),
           ]);
           return { platform, data, prev, year, error: null as string | null };
         } catch (error) {
@@ -330,43 +256,44 @@ export async function GET(req: NextRequest) {
       campaigns.push(...result.data.campaigns);
       adSets.push(...result.data.adSets);
       ads.push(...result.data.ads);
-      dailySeries.push(result.data.daily);
+      demographics.push(...(result.data.demographics ?? []));
+      for (const point of result.data.daily) {
+        campaignDaily.push({ ...point, platform: result.platform });
+      }
 
-      if (result.prev) {
-        previousByPlatform[result.platform] = result.prev;
-        addMetrics(previousTotals, result.prev);
-        hasPrevious = true;
-      }
-      if (result.year) {
-        addMetrics(yearAgoTotals, result.year);
-        hasYearAgo = true;
-      }
+      if (result.prev) previousCampaigns = [...(previousCampaigns ?? []), ...result.prev];
+      if (result.year) yearAgoCampaigns = [...(yearAgoCampaigns ?? []), ...result.year];
     }
   } finally {
     clearTimeout(timeout);
   }
 
-  const { daily, merged } = mergeDaily(dailySeries);
-
-  const body: PaidAdsResponse = {
+  const raw: PaidAdsResponse = {
     period: resolved,
     campaigns,
     adSets,
     ads,
-    daily,
-    weekly: toWeekly(merged),
+    demographics,
+    campaignDaily,
+    daily: [],
+    weekly: [],
     benchmarks: {
-      previous: hasPrevious ? previousTotals : null,
-      yearAgo: hasYearAgo ? yearAgoTotals : null,
-      previousByPlatform,
+      previous: null,
+      yearAgo: null,
+      previousByPlatform: {},
+      previousCampaigns,
+      yearAgoCampaigns,
     },
     targets: getTargets(),
-    // Doelgroepoverlap komt uit een aparte export, niet uit de rapportage-API's.
-    audienceOverlap: [],
     connectedPlatforms: connected,
+    revenuePlatforms: connected.filter((p) => CONNECTORS[p]?.reportsRevenue),
     platformErrors: errors,
     fetchedAt: new Date().toISOString(),
   };
+
+  // Dagreeks, weekreeks en vergelijkingstotalen via hetzelfde rekenpad als het
+  // dashboard gebruikt wanneer er gefilterd wordt.
+  const body = narrowResponse(raw, EMPTY_FILTERS);
 
   // Voorkomt dat een respons in een CDN-cache blijft hangen.
   return NextResponse.json(body, {

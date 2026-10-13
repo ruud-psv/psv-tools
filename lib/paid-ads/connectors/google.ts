@@ -89,6 +89,8 @@ interface GoogleRow {
     clicks?: string;
     conversions?: number;
     allConversions?: number;
+    conversionsValue?: number;
+    allConversionsValue?: number;
   };
   segments?: { date?: string };
 }
@@ -194,6 +196,8 @@ const METRIC_FIELDS = [
   "metrics.clicks",
   "metrics.conversions",
   "metrics.all_conversions",
+  "metrics.conversions_value",
+  "metrics.all_conversions_value",
 ];
 
 const CAMPAIGN_FIELDS = [
@@ -448,6 +452,10 @@ function metricsFrom(config: GoogleConfig, row: GoogleRow): PaidMetrics {
     reach: 0,
     clicks: num(metrics?.clicks),
     results: config.useAllConversions ? num(metrics?.allConversions) : num(metrics?.conversions),
+    // Dezelfde conversieset als bij `results`, zodat ROAS en CPA op één noemer staan.
+    revenue: config.useAllConversions
+      ? num(metrics?.allConversionsValue)
+      : num(metrics?.conversionsValue),
   };
 }
 
@@ -462,6 +470,7 @@ function addMetrics(target: PaidMetrics, source: PaidMetrics): void {
   target.reach += source.reach;
   target.clicks += source.clicks;
   target.results += source.results;
+  target.revenue += source.revenue;
 }
 
 /** Leesbare naam voor een advertentie die er in Google Ads geen heeft. */
@@ -484,17 +493,11 @@ interface CampaignContext {
   name: string;
 }
 
-async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
-  const config = getConfig();
-
-  // De campagnes eerst: hun fase en exploitatie gelden ook voor de
-  // onderliggende advertentiegroepen en advertenties.
-  const campaignRows = await runQuery(
-    config,
-    buildQuery([...CAMPAIGN_FIELDS, ...METRIC_FIELDS], "campaign", window),
-    signal
-  );
-
+/** Campagnerijen naar campagnes, plus de context per campagne-id. */
+function toCampaigns(
+  config: GoogleConfig,
+  campaignRows: GoogleRow[]
+): { campaigns: PaidAdsCampaign[]; context: Map<string, CampaignContext> } {
   const context = new Map<string, CampaignContext>();
   const campaigns: PaidAdsCampaign[] = [];
 
@@ -527,6 +530,21 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       metrics,
     });
   }
+
+  return { campaigns, context };
+}
+
+async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
+  const config = getConfig();
+
+  // De campagnes eerst: hun fase en exploitatie gelden ook voor de
+  // onderliggende advertentiegroepen en advertenties.
+  const campaignRows = await runQuery(
+    config,
+    buildQuery([...CAMPAIGN_FIELDS, ...METRIC_FIELDS], "campaign", window),
+    signal
+  );
+  const { campaigns, context } = toCampaigns(config, campaignRows);
 
   // Advertentiegroepen, advertenties en de dagreeks zijn onafhankelijk van
   // elkaar en mogen tegelijk lopen.
@@ -577,6 +595,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       platform: "google",
       phase: context.get(campaignId)?.phase ?? resolvePhase(name, ""),
       audienceType: resolveAudienceType(name),
+      targeting: null,
       metrics,
     });
   }
@@ -608,51 +627,48 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       // Google rapporteert videoweergaven in een eigen metric die niet op elk
       // advertentietype bestaat; die blijft hier leeg.
       videoViews3s: null,
+      thumbnailUrl: null,
       metrics,
     });
   }
 
-  // De dagreeks komt op campagneniveau binnen, zodat het dagtotaal gelijk blijft
-  // aan de som van de campagnes.
-  const byDate = new Map<string, PaidMetrics>();
+  // De dagreeks komt per campagne binnen, zodat het dashboard de grafieken
+  // dezelfde filters kan laten volgen als de campagnelijst.
+  const byDay = new Map<string, ConnectorDailyPoint>();
   for (const row of dailyRows) {
     const date = row.segments?.date;
-    if (!date) continue;
+    const campaignId = row.campaign?.id;
+    if (!date || !campaignId) continue;
 
-    const point = byDate.get(date) ?? emptyMetrics();
-    addMetrics(point, metricsFrom(config, row));
-    byDate.set(date, point);
+    const key = `${date}|${campaignId}`;
+    const point = byDay.get(key) ?? { date, campaignId, metrics: emptyMetrics() };
+    addMetrics(point.metrics, metricsFrom(config, row));
+    byDay.set(key, point);
   }
 
-  const daily: ConnectorDailyPoint[] = [...byDate.entries()]
-    .map(([date, metrics]) => ({ date, metrics }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const daily = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   return { campaigns, adSets, ads, daily };
 }
 
 /**
- * Totalen voor een vergelijkingsperiode. Net als bij Meta op campagneniveau,
- * zodat dezelfde rijen op dezelfde manier geteld worden als in de hoofdperiode.
+ * Campagnes van een vergelijkingsperiode. Net als bij Meta met dezelfde
+ * indeling als de hoofdperiode, zodat de vergelijking mee kan filteren.
  */
-async function fetchTotals(window: FetchWindow, signal?: AbortSignal): Promise<PaidMetrics> {
+async function fetchCampaigns(window: FetchWindow, signal?: AbortSignal): Promise<PaidAdsCampaign[]> {
   const config = getConfig();
   const rows = await runQuery(
     config,
     buildQuery([...CAMPAIGN_FIELDS, ...METRIC_FIELDS], "campaign", window),
     signal
   );
-
-  const totals = emptyMetrics();
-  for (const row of rows) {
-    addMetrics(totals, metricsFrom(config, row));
-  }
-  return totals;
+  return toCampaigns(config, rows).campaigns;
 }
 
 export const googleConnector: PaidConnector = {
   platform: "google",
   isConfigured: isGoogleConfigured,
+  reportsRevenue: true,
   fetchAll,
-  fetchTotals,
+  fetchCampaigns,
 };

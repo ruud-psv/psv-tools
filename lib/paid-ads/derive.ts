@@ -14,8 +14,12 @@ import {
   PaidAdsAd,
   PaidAdsAdSet,
   PaidAdsCampaign,
+  PaidAdsCampaignDay,
+  PaidAdsDailyPoint,
+  PaidAdsDemographic,
   PaidAdsResponse,
   PaidAdsTargets,
+  PaidAdsWeeklyPoint,
   PaidMetrics,
   PaidPhase,
   PaidPlatform,
@@ -40,6 +44,7 @@ export function sumMetrics(list: { metrics: PaidMetrics }[]): PaidMetrics {
     acc.reach += item.metrics.reach;
     acc.clicks += item.metrics.clicks;
     acc.results += item.metrics.results;
+    acc.revenue += item.metrics.revenue;
     return acc;
   }, emptyMetrics());
 }
@@ -52,6 +57,12 @@ export interface DerivedMetrics extends PaidMetrics {
   cvr: number | null;
   costPerResult: number | null;
   cpm: number | null;
+  /**
+   * Omzet per bestede euro. `null` zonder omzet: een rij van een platform dat
+   * geen waarde levert heeft geen ROAS van 0. Voor totalen over meerdere
+   * campagnes geldt `roasOf`, die daar zorgvuldiger mee omgaat.
+   */
+  roas: number | null;
 }
 
 export function derive(m: PaidMetrics): DerivedMetrics {
@@ -63,7 +74,35 @@ export function derive(m: PaidMetrics): DerivedMetrics {
     cvr: mul100(div(m.results, m.clicks)),
     costPerResult: div(m.spend, m.results),
     cpm: mulN(div(m.spend, m.impressions), 1000),
+    roas: m.revenue > 0 ? div(m.revenue, m.spend) : null,
   };
+}
+
+/**
+ * ROAS over een groep campagnes. Telt mee: elke campagne met omzet, plus de
+ * aankoopcampagnes zonder omzet op platforms die wél een waarde leveren (die
+ * hebben echt niets verkocht). Leadcampagnes zonder omzet en platforms zonder
+ * omzetdata blijven erbuiten — anders drukt hun budget de ROAS kunstmatig.
+ */
+export function roasOf(
+  campaigns: PaidAdsCampaign[],
+  revenuePlatforms: PaidPlatform[]
+): number | null {
+  const relevant = campaigns.filter(
+    (c) =>
+      c.metrics.revenue > 0 ||
+      (c.objective === "Aankopen" && revenuePlatforms.includes(c.platform))
+  );
+  const m = sumMetrics(relevant);
+  return relevant.length > 0 ? div(m.revenue, m.spend) : null;
+}
+
+/** Totalen over campagnes, met ROAS volgens `roasOf`. */
+export function totalsOf(
+  campaigns: PaidAdsCampaign[],
+  revenuePlatforms: PaidPlatform[]
+): DerivedMetrics {
+  return { ...derive(sumMetrics(campaigns)), roas: roasOf(campaigns, revenuePlatforms) };
 }
 
 function mul100(v: number | null): number | null {
@@ -123,14 +162,18 @@ export function benchmarkMetrics(
   benchmark: BenchmarkKey
 ): DerivedMetrics | null {
   if (benchmark === "previous") {
-    return data.benchmarks.previous ? derive(data.benchmarks.previous) : null;
+    return data.benchmarks.previousCampaigns
+      ? totalsOf(data.benchmarks.previousCampaigns, data.revenuePlatforms)
+      : null;
   }
   if (benchmark === "yearAgo") {
-    return data.benchmarks.yearAgo ? derive(data.benchmarks.yearAgo) : null;
+    return data.benchmarks.yearAgoCampaigns
+      ? totalsOf(data.benchmarks.yearAgoCampaigns, data.revenuePlatforms)
+      : null;
   }
   // Doelstelling: alleen de KPI's waarvoor een doel is vastgelegd.
   const t = data.targets;
-  if (t.results == null && t.costPerResult == null && t.ctr == null) return null;
+  if (t.results == null && t.costPerResult == null && t.ctr == null && t.roas == null) return null;
   return {
     ...emptyMetrics(),
     spend: t.budget ?? 0,
@@ -141,6 +184,7 @@ export function benchmarkMetrics(
     cvr: t.cvr,
     costPerResult: t.costPerResult,
     cpm: null,
+    roas: t.roas,
   };
 }
 
@@ -158,6 +202,10 @@ export interface PaidFilters {
   objective: string;
   platform: PaidPlatform | "alles";
   query: string;
+  /** Gekozen campagnes als `platform:id`; leeg is alles. */
+  campaigns: string[];
+  /** Gekozen advertentiesets als `platform:id`; leeg is alles. */
+  adSets: string[];
 }
 
 export const EMPTY_FILTERS: PaidFilters = {
@@ -166,7 +214,14 @@ export const EMPTY_FILTERS: PaidFilters = {
   objective: "alles",
   platform: "alles",
   query: "",
+  campaigns: [],
+  adSets: [],
 };
+
+/** Sleutel voor een campagne of advertentieset; id's zijn alleen binnen hun platform uniek. */
+export function itemKey(item: { platform: PaidPlatform; id: string }): string {
+  return `${item.platform}:${item.id}`;
+}
 
 export function filterCampaigns(
   campaigns: PaidAdsCampaign[],
@@ -178,12 +233,162 @@ export function filterCampaigns(
     if (f.businessUnit !== "alles" && c.businessUnit !== f.businessUnit) return false;
     if (f.objective !== "alles" && c.objective !== f.objective) return false;
     if (f.platform !== "alles" && c.platform !== f.platform) return false;
+    if (f.campaigns.length > 0 && !f.campaigns.includes(itemKey(c))) return false;
     if (q) {
       const haystack = `${c.name} ${PLATFORM_LABELS[c.platform]} ${c.businessUnit}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
   });
+}
+
+/** Dezelfde filters zonder fasekeuze — de funnel toont alle fases naast elkaar. */
+export function withoutPhase(f: PaidFilters): PaidFilters {
+  return { ...f, phase: "alles" };
+}
+
+/** Sleutel voor een campagne; id's zijn alleen binnen hun eigen platform uniek. */
+function campaignKey(platform: PaidPlatform, campaignId: string): string {
+  return `${platform}:${campaignId}`;
+}
+
+/**
+ * De respons zoals de weergaven hem zien wanneer er gefilterd is. Niet alleen
+ * de campagnelijst: ook advertentiesets, advertenties, de dag- en weekreeks en
+ * de vergelijkingsperiodes volgen de filters. Anders toont een grafiek onder
+ * "Conversie" nog steeds het budget van alle fases, en vergelijkt een KPI-tegel
+ * één fase met het totaal van vorige periode.
+ *
+ * De API-route gebruikt dezelfde functie zonder filters om de totalen op te
+ * bouwen, zodat er maar één rekenpad is.
+ */
+export function narrowResponse(data: PaidAdsResponse, f: PaidFilters): PaidAdsResponse {
+  let campaigns = filterCampaigns(data.campaigns, f);
+  const keep = new Set(campaigns.map((c) => campaignKey(c.platform, c.id)));
+  const kept = (row: { platform: PaidPlatform; campaignId: string }) =>
+    keep.has(campaignKey(row.platform, row.campaignId));
+
+  let adSets = data.adSets.filter(kept);
+  let ads = data.ads.filter(kept);
+  let demographics = data.demographics.filter(kept);
+  const bySet = f.adSets.length > 0;
+
+  if (bySet) {
+    // Alleen de gekozen advertentiesets. De campagnes erboven tellen dan alleen
+    // die sets mee, zodat de KPI's over precies de selectie gaan.
+    const chosen = new Set(f.adSets);
+    adSets = adSets.filter((s) => chosen.has(itemKey(s)));
+    ads = ads.filter((a) => chosen.has(`${a.platform}:${a.adSetId}`));
+    demographics = demographics.filter((d) => chosen.has(`${d.platform}:${d.adSetId}`));
+    campaigns = campaigns
+      .map((c) => {
+        const own = adSets.filter((s) => s.platform === c.platform && s.campaignId === c.id);
+        return own.length > 0 ? { ...c, metrics: sumMetrics(own) } : null;
+      })
+      .filter((c): c is PaidAdsCampaign => c !== null);
+  }
+
+  // Dagreeks en vergelijkingsperiodes bestaan alleen op campagneniveau. Bij een
+  // selectie van advertentiesets tonen de grafieken de bovenliggende
+  // campagnes, en vervalt de vergelijking: een paar sets afzetten tegen hele
+  // campagnes van vorige periode zou een vertekend verschil geven.
+  const parents = new Set(campaigns.map((c) => campaignKey(c.platform, c.id)));
+  const campaignDaily = data.campaignDaily.filter((d) =>
+    parents.has(campaignKey(d.platform, d.campaignId))
+  );
+  const { daily, weekly } = timeSeries(campaignDaily);
+
+  const previousCampaigns =
+    data.benchmarks.previousCampaigns && !bySet
+      ? filterCampaigns(data.benchmarks.previousCampaigns, f)
+      : null;
+  const yearAgoCampaigns =
+    data.benchmarks.yearAgoCampaigns && !bySet
+      ? filterCampaigns(data.benchmarks.yearAgoCampaigns, f)
+      : null;
+
+  return {
+    ...data,
+    campaigns,
+    adSets,
+    ads,
+    demographics,
+    campaignDaily,
+    daily,
+    weekly,
+    benchmarks: {
+      previous: previousCampaigns ? sumMetrics(previousCampaigns) : null,
+      yearAgo: yearAgoCampaigns ? sumMetrics(yearAgoCampaigns) : null,
+      previousByPlatform: previousCampaigns ? metricsByPlatform(previousCampaigns) : {},
+      previousCampaigns,
+      yearAgoCampaigns,
+    },
+  };
+}
+
+function metricsByPlatform(
+  campaigns: PaidAdsCampaign[]
+): Partial<Record<PaidPlatform, PaidMetrics>> {
+  const out: Partial<Record<PaidPlatform, PaidMetrics>> = {};
+  for (const row of byPlatform(campaigns)) {
+    out[row.key as PaidPlatform] = row.metrics;
+  }
+  return out;
+}
+
+/* ---------- Tijdreeks ---------- */
+
+const DAY_MS = 86_400_000;
+
+/** ISO-weeknummer; week 1 is de week met de eerste donderdag van het jaar. */
+function isoWeek(iso: string): { year: number; week: number } {
+  const target = new Date(`${iso}T00:00:00.000Z`);
+  // Naar de donderdag van deze week: dan bepaalt het jaartal van die dag het weekjaar.
+  const day = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - day + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
+  const week = 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * DAY_MS));
+  return { year: target.getUTCFullYear(), week };
+}
+
+/**
+ * Campagnedagen naar de dag- en weekgrafiek: per dag besteding en resultaten,
+ * per week CTR in procenten en kosten per resultaat in euro's.
+ */
+export function timeSeries(points: PaidAdsCampaignDay[]): {
+  daily: PaidAdsDailyPoint[];
+  weekly: PaidAdsWeeklyPoint[];
+} {
+  const byDate = new Map<string, { metrics: PaidMetrics }[]>();
+  for (const point of points) {
+    const list = byDate.get(point.date);
+    if (list) list.push(point);
+    else byDate.set(point.date, [point]);
+  }
+  const days = [...byDate.entries()]
+    .map(([date, list]) => ({ date, metrics: sumMetrics(list) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const byWeek = new Map<string, { label: string; days: { metrics: PaidMetrics }[] }>();
+  for (const day of days) {
+    const { year, week } = isoWeek(day.date);
+    const key = `${year}-${String(week).padStart(2, "0")}`;
+    const entry = byWeek.get(key) ?? { label: `wk ${week}`, days: [] };
+    entry.days.push(day);
+    byWeek.set(key, entry);
+  }
+
+  return {
+    daily: days.map(({ date, metrics }) => ({ date, spend: metrics.spend, results: metrics.results })),
+    weekly: [...byWeek.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, { label, days: list }]) => {
+        const d = derive(sumMetrics(list));
+        return { week: label, ctr: d.ctr ?? 0, costPerResult: d.costPerResult ?? 0 };
+      }),
+  };
 }
 
 /** Unieke waarden voor de keuzelijsten, in de volgorde waarin ze voorkomen. */
@@ -200,17 +405,52 @@ export function optionsFrom<T>(items: T[], pick: (item: T) => string | null): st
 
 export interface ScoredCampaign extends PaidAdsCampaign {
   derived: DerivedMetrics;
-  /** 0-100, genormaliseerd binnen de eigen funnelfase. `null` bij te weinig data. */
+  /**
+   * 0-100, ten opzichte van campagnes in dezelfde fase én exploitatie. `null`
+   * zonder vergelijkingsmateriaal: een ticketingcampagne wordt niet afgezet
+   * tegen een PSV Connect-campagne.
+   */
   score: number | null;
   scoreTone: Tone;
 }
 
+type ScoreMetric = "ctr" | "cpc" | "cpm" | "cvr" | "costPerResult" | "roas";
+
 /**
- * Score per funnelfase. Een bereikcampagne wordt alleen met andere
- * bereikcampagnes vergeleken: een CPA van € 0,02 voor bereik zegt niets over
- * een conversiecampagne. Weging CTR 20% · CPC 20% · CVR 30% · CPA 30%.
+ * Gewichten per fase: elke fase wordt beoordeeld op waar hij voor bedoeld is.
+ * Een bereikcampagne op CPA beoordelen zegt niets; een conversiecampagne op
+ * CPM ook niet. Ontbreekt een metric (geen ROAS bij leads, geen bereik bij
+ * Google), dan wordt de rest herwogen naar 100.
  */
-export const SCORE_WEIGHTS = { ctr: 20, cpc: 20, cvr: 30, costPerResult: 30 } as const;
+export const SCORE_WEIGHTS: Record<PaidPhase, Partial<Record<ScoreMetric, number>>> = {
+  bereik: { cpm: 60, ctr: 40 },
+  verkeer: { cpc: 50, ctr: 50 },
+  conversie: { costPerResult: 40, roas: 30, cvr: 20, ctr: 10 },
+};
+
+const SCORE_LABELS: Record<ScoreMetric, string> = {
+  ctr: "CTR",
+  cpc: "CPC",
+  cpm: "CPM",
+  cvr: "CVR",
+  costPerResult: "CPA",
+  roas: "ROAS",
+};
+
+/** Lager is beter voor kosten; hoger voor CTR, CVR en ROAS. */
+const SCORE_LOWER_IS_BETTER = new Set<ScoreMetric>(["cpc", "cpm", "costPerResult"]);
+
+/** "CPM 60% · CTR 40%" — voor de uitleg bij de score. */
+export function scoreWeightsLabel(phase: PaidPhase): string {
+  return Object.entries(SCORE_WEIGHTS[phase])
+    .map(([key, weight]) => `${SCORE_LABELS[key as ScoreMetric]} ${weight}%`)
+    .join(" · ");
+}
+
+/** Vergelijkingsgroep: zelfde fase, zelfde exploitatie. */
+function peerKey(c: { phase: PaidPhase; businessUnit: string }): string {
+  return `${c.phase}|${c.businessUnit}`;
+}
 
 export function scoreCampaigns(campaigns: PaidAdsCampaign[]): ScoredCampaign[] {
   const rows: ScoredCampaign[] = campaigns.map((c) => ({
@@ -220,12 +460,19 @@ export function scoreCampaigns(campaigns: PaidAdsCampaign[]): ScoredCampaign[] {
     scoreTone: "neutral",
   }));
 
-  for (const phase of ["bereik", "verkeer", "conversie"] as PaidPhase[]) {
-    const group = rows.filter((r) => r.phase === phase);
+  const groups = new Map<string, ScoredCampaign[]>();
+  for (const row of rows) {
+    const list = groups.get(peerKey(row));
+    if (list) list.push(row);
+    else groups.set(peerKey(row), [row]);
+  }
+
+  for (const group of groups.values()) {
     // Onder de twee campagnes valt er niets te normaliseren: alles zou 50 worden.
     if (group.length < 2) continue;
+    const weights = SCORE_WEIGHTS[group[0].phase];
 
-    const normalizer = (key: keyof DerivedMetrics, lowerIsBetter = false) => {
+    const normalizer = (key: ScoreMetric) => {
       const values = group
         .map((r) => r.derived[key])
         .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
@@ -233,27 +480,23 @@ export function scoreCampaigns(campaigns: PaidAdsCampaign[]): ScoredCampaign[] {
       const lo = Math.min(...values);
       const hi = Math.max(...values);
       if (hi === lo) return null;
+      const lowerIsBetter = SCORE_LOWER_IS_BETTER.has(key);
       return (v: number | null) => {
         if (v == null || !Number.isFinite(v)) return null;
         return lowerIsBetter ? (hi - v) / (hi - lo) : (v - lo) / (hi - lo);
       };
     };
 
-    const norms = {
-      ctr: normalizer("ctr"),
-      cpc: normalizer("cpc", true),
-      cvr: normalizer("cvr"),
-      costPerResult: normalizer("costPerResult", true),
-    };
+    const norms = Object.keys(weights).map((key) => ({
+      key: key as ScoreMetric,
+      weight: weights[key as ScoreMetric] ?? 0,
+      norm: normalizer(key as ScoreMetric),
+    }));
 
     for (const row of group) {
       let total = 0;
       let weight = 0;
-      for (const [key, w] of Object.entries(SCORE_WEIGHTS) as [
-        keyof typeof SCORE_WEIGHTS,
-        number,
-      ][]) {
-        const norm = norms[key];
+      for (const { key, weight: w, norm } of norms) {
         if (!norm) continue;
         const n = norm(row.derived[key]);
         if (n == null) continue;
@@ -468,6 +711,12 @@ export function targetRows(
       target: targets.cpc != null ? `≤ ${fmt.eur(targets.cpc, 2)}` : null,
       onTrack: targets.cpc != null && totals.cpc != null ? totals.cpc <= targets.cpc : null,
     },
+    {
+      label: "ROAS",
+      actual: totals.roas != null ? `${fmt.nl(totals.roas, 2)}x` : "—",
+      target: targets.roas != null ? `≥ ${fmt.nl(targets.roas, 2)}x` : null,
+      onTrack: targets.roas != null && totals.roas != null ? totals.roas >= targets.roas : null,
+    },
   ];
   return rows;
 }
@@ -558,51 +807,74 @@ export interface Highlight {
   tone: Tone;
 }
 
+export interface HighlightGroup {
+  /** De exploitatie waarbinnen gerankt is. */
+  unit: string;
+  winners: Highlight[];
+  losers: Highlight[];
+}
+
 /**
- * Winnaars en verliezers over de campagnes die een score kregen. Er wordt niets
- * getoond zolang er te weinig campagnes zijn om zinnig te ranken.
+ * Winnaars en verliezers per exploitatie. De score is al relatief binnen fase
+ * en exploitatie; hier wordt ook de ranglijst niet over exploitaties heen
+ * gemengd. Per exploitatie hoogstens drie van elk, en nooit dezelfde campagne
+ * aan beide kanten.
  */
 export function winnersAndLosers(
   scored: ScoredCampaign[],
-  avgCpa: number | null,
   fmt: { eur: (v: number | null, d?: number) => string; pct: (v: number | null, d?: number) => string }
-): { winners: Highlight[]; losers: Highlight[] } {
+): HighlightGroup[] {
   const ranked = scored.filter((c) => c.score != null);
-  if (ranked.length < 4) return { winners: [], losers: [] };
+
+  // Gemiddelde CPA per vergelijkingsgroep, voor de toelichting.
+  const peerCpa = new Map<string, number | null>();
+  for (const key of new Set(ranked.map(peerKey))) {
+    peerCpa.set(key, derive(sumMetrics(ranked.filter((c) => peerKey(c) === key))).costPerResult);
+  }
 
   const describe = (c: ScoredCampaign): string => {
-    const parts: string[] = [];
-    if (c.derived.costPerResult != null) {
+    const parts: string[] = [`${PHASE_LABELS[c.phase]} · score ${c.score}`];
+    const avg = peerCpa.get(peerKey(c)) ?? null;
+    if (c.phase === "conversie" && c.derived.costPerResult != null) {
       const relative =
-        avgCpa != null && avgCpa > 0
-          ? ` · ${Math.abs(Math.round(((c.derived.costPerResult - avgCpa) / avgCpa) * 100))}% ${
-              c.derived.costPerResult < avgCpa ? "onder" : "boven"
-            } gemiddeld`
+        avg != null && avg > 0
+          ? ` (${Math.abs(Math.round(((c.derived.costPerResult - avg) / avg) * 100))}% ${
+              c.derived.costPerResult < avg ? "onder" : "boven"
+            } gemiddeld)`
           : "";
       parts.push(`CPA ${fmt.eur(c.derived.costPerResult, 2)}${relative}`);
+    } else if (c.phase === "verkeer" && c.derived.cpc != null) {
+      parts.push(`CPC ${fmt.eur(c.derived.cpc, 2)}`);
+    } else if (c.phase === "bereik" && c.derived.cpm != null) {
+      parts.push(`CPM ${fmt.eur(c.derived.cpm, 2)}`);
     }
     if (c.derived.ctr != null) parts.push(`CTR ${fmt.pct(c.derived.ctr)}`);
-    return parts.join(" · ") || `Score ${c.score}`;
+    return parts.join(" · ");
   };
+  const toHighlight = (tone: Tone) => (c: ScoredCampaign): Highlight => ({
+    name: c.name,
+    platform: PLATFORM_LABELS[c.platform],
+    why: describe(c),
+    tone,
+  });
 
-  const sorted = [...ranked].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  return {
-    winners: sorted.slice(0, 3).map((c) => ({
-      name: c.name,
-      platform: PLATFORM_LABELS[c.platform],
-      why: describe(c),
-      tone: "good" as Tone,
-    })),
-    losers: sorted
-      .slice(-3)
-      .reverse()
-      .map((c) => ({
-        name: c.name,
-        platform: PLATFORM_LABELS[c.platform],
-        why: describe(c),
-        tone: "bad" as Tone,
-      })),
-  };
+  const units = [...new Set(ranked.map((c) => c.businessUnit))];
+  return units
+    .map((unit) => {
+      const list = ranked
+        .filter((c) => c.businessUnit === unit)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const n = Math.min(3, Math.floor(list.length / 2));
+      return {
+        unit,
+        winners: list.slice(0, n).map(toHighlight("good")),
+        losers: list.slice(-n).reverse().map(toHighlight("bad")),
+        spend: list.reduce((sum, c) => sum + c.metrics.spend, 0),
+      };
+    })
+    .filter((g) => g.winners.length > 0)
+    .sort((a, b) => b.spend - a.spend)
+    .map(({ unit, winners, losers }) => ({ unit, winners, losers }));
 }
 
 /* ---------- Budget opportunities ---------- */
@@ -611,68 +883,68 @@ export interface BudgetOpportunity {
   type: "Opschalen" | "Afbouwen";
   name: string;
   platform: string;
+  /** Binnen deze exploitatie wordt geschoven. */
+  unit: string;
   why: string;
   /** Voorgestelde verschuiving in euro's; positief bij opschalen. */
   amount: number;
   tone: Tone;
 }
 
-/**
- * Verschuiving binnen hetzelfde totaalbudget: haal weg bij de campagnes met de
- * hoogste CPA, leg bij bij de laagste. Het voorstel is een tiende van het
- * bestede bedrag van de campagne — genoeg om verschil te maken, klein genoeg om
- * de campagne niet uit balans te trekken.
- *
- * Alleen campagnes die er duidelijk naast zitten komen in aanmerking: een CPA
- * die 5% van het gemiddelde afwijkt is ruis, geen aanleiding om budget te
- * verschuiven.
- */
 /** Minimale afwijking van het gemiddelde voordat een verschuiving zinnig is. */
 const MIN_GAP_PCT = 15;
 
-export function budgetOpportunities(
-  scored: ScoredCampaign[],
-  avgCpa: number | null,
-  limit = 3
-): BudgetOpportunity[] {
+/**
+ * Verschuiving binnen dezelfde exploitatie: haal weg bij de conversiecampagnes
+ * met de hoogste CPA, leg bij bij de laagste. Nooit van ticketing naar
+ * PSV Connect — die hebben elk hun eigen budget en doel. Het voorstel is een
+ * tiende van het bestede bedrag: genoeg om verschil te maken, klein genoeg om
+ * de campagne niet uit balans te trekken.
+ *
+ * Alleen campagnes die er duidelijk naast zitten komen in aanmerking: een CPA
+ * die 5% van het gemiddelde afwijkt is ruis, geen aanleiding om te schuiven.
+ */
+export function budgetOpportunities(scored: ScoredCampaign[], limit = 3): BudgetOpportunity[] {
   const eligible = scored.filter(
-    (c) => CONVERSION_OBJECTIVES.includes(c.objective) && c.derived.costPerResult != null && c.metrics.spend > 0
-  );
-  if (eligible.length < 4 || avgCpa == null || avgCpa <= 0) return [];
-
-  const byCpa = [...eligible].sort(
-    (a, b) => (a.derived.costPerResult ?? 0) - (b.derived.costPerResult ?? 0)
+    (c) =>
+      CONVERSION_OBJECTIVES.includes(c.objective) &&
+      c.derived.costPerResult != null &&
+      c.metrics.spend > 0
   );
   const share = (c: ScoredCampaign) => Math.round((c.metrics.spend * 0.1) / 50) * 50;
-  const gap = (c: ScoredCampaign) =>
-    Math.abs(Math.round((((c.derived.costPerResult ?? 0) - avgCpa) / avgCpa) * 100));
 
-  const up: BudgetOpportunity[] = byCpa
-    .filter((c) => gap(c) >= MIN_GAP_PCT && (c.derived.costPerResult ?? 0) < avgCpa)
-    .slice(0, limit)
-    .map((c) => ({
-      type: "Opschalen" as const,
-      name: c.name,
-      platform: PLATFORM_LABELS[c.platform],
-      why: `CPA ${gap(c)}% onder gemiddeld`,
-      amount: share(c),
-      tone: "good" as Tone,
-    }));
+  const all: (BudgetOpportunity & { gap: number })[] = [];
+  for (const unit of new Set(eligible.map((c) => c.businessUnit))) {
+    const group = eligible.filter((c) => c.businessUnit === unit);
+    if (group.length < 3) continue;
+    const avg = derive(sumMetrics(group)).costPerResult;
+    if (avg == null || avg <= 0) continue;
 
-  const down: BudgetOpportunity[] = [...byCpa]
-    .reverse()
-    .filter((c) => gap(c) >= MIN_GAP_PCT && (c.derived.costPerResult ?? 0) > avgCpa)
-    .slice(0, limit)
-    .map((c) => ({
-      type: "Afbouwen" as const,
-      name: c.name,
-      platform: PLATFORM_LABELS[c.platform],
-      why: `CPA ${gap(c)}% boven gemiddeld`,
-      amount: -share(c),
-      tone: "bad" as Tone,
-    }));
+    for (const c of group) {
+      const cpa = c.derived.costPerResult ?? 0;
+      const gap = Math.abs(Math.round(((cpa - avg) / avg) * 100));
+      if (gap < MIN_GAP_PCT) continue;
+      const up = cpa < avg;
+      all.push({
+        type: up ? "Opschalen" : "Afbouwen",
+        name: c.name,
+        platform: PLATFORM_LABELS[c.platform],
+        unit,
+        why: `CPA ${gap}% ${up ? "onder" : "boven"} gemiddeld ${unit}`,
+        amount: up ? share(c) : -share(c),
+        tone: up ? "good" : "bad",
+        gap,
+      });
+    }
+  }
 
-  return [...up, ...down];
+  const pick = (type: BudgetOpportunity["type"]) =>
+    all
+      .filter((o) => o.type === type)
+      .sort((a, b) => b.gap - a.gap)
+      .slice(0, limit)
+      .map(({ gap: _gap, ...o }) => o);
+  return [...pick("Opschalen"), ...pick("Afbouwen")];
 }
 
 /* ---------- Verzadiging ---------- */
@@ -685,17 +957,21 @@ export interface SaturationRow {
   status: string;
 }
 
-export function saturation(campaigns: PaidAdsCampaign[], limit = 6): SaturationRow[] {
-  return campaigns
-    .map((c) => ({ campaign: c, frequency: derive(c.metrics).frequency }))
-    .filter((r): r is { campaign: PaidAdsCampaign; frequency: number } => r.frequency != null)
+/** Hoogste frequenties eerst — voor campagnes én advertentiesets. */
+export function saturation(
+  items: { name: string; platform: PaidPlatform; metrics: PaidMetrics }[],
+  limit = 6
+): SaturationRow[] {
+  return items
+    .map((item) => ({ item, frequency: derive(item.metrics).frequency }))
+    .filter((r): r is { item: (typeof items)[number]; frequency: number } => r.frequency != null)
     .sort((a, b) => b.frequency - a.frequency)
     .slice(0, limit)
-    .map(({ campaign, frequency }) => {
+    .map(({ item, frequency }) => {
       const tone = toneForFrequency(frequency);
       return {
-        name: campaign.name,
-        platform: PLATFORM_LABELS[campaign.platform],
+        name: item.name,
+        platform: PLATFORM_LABELS[item.platform],
         frequency,
         tone,
         status: tone === "good" ? "Gezond" : tone === "warn" ? "Refresh" : "Vervangen",
@@ -703,98 +979,206 @@ export function saturation(campaigns: PaidAdsCampaign[], limit = 6): SaturationR
     });
 }
 
-/* ---------- Hook performance ---------- */
+/* ---------- Budget versus resultaat ---------- */
 
-export interface HookRow {
+export interface ShareRow {
+  key: string;
   label: string;
-  /** Aandeel van de weergaven dat langer dan 3 seconden keek. */
-  rate: number | null;
+  spend: number;
+  results: number;
+  /** Aandeel in het budget van de conversiecampagnes, 0-100. */
+  spendShare: number;
+  /** Aandeel in hun conversies, 0-100. */
+  resultShare: number;
   costPerResult: number | null;
+  roas: number | null;
   tone: Tone;
 }
 
-export function hookPerformance(ads: PaidAdsAd[], avgCpa: number | null): HookRow[] {
-  const buckets = new Map<string, { views3s: number; impressions: number; metrics: PaidAdsAd[] }>();
-  for (const ad of ads) {
-    if (!ad.hook || ad.videoViews3s == null) continue;
-    const bucket = buckets.get(ad.hook) ?? { views3s: 0, impressions: 0, metrics: [] };
-    bucket.views3s += ad.videoViews3s;
-    bucket.impressions += ad.metrics.impressions;
-    bucket.metrics.push(ad);
-    buckets.set(ad.hook, bucket);
-  }
-  return [...buckets.entries()]
-    .map(([label, bucket]) => {
-      const d = derive(sumMetrics(bucket.metrics));
-      const rate = mul100(div(bucket.views3s, bucket.impressions));
-      return {
-        label,
-        rate,
-        costPerResult: d.costPerResult,
-        tone: toneForCpa(d.costPerResult, avgCpa),
-      };
-    })
-    .sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0));
+/**
+ * Aandeel budget naast aandeel conversies per groep (platform, exploitatie).
+ * Krijgt een groep meer budget dan hij aan conversies teruggeeft, dan is zijn
+ * CPA hoger dan gemiddeld — dit maakt dat in één oogopslag zichtbaar.
+ *
+ * Alleen lead-, registratie- en aankoopcampagnes: een "resultaat" van een
+ * bereikcampagne is iets anders dan een conversie, en die optellen vertekent.
+ */
+export function budgetVersusResults(
+  campaigns: PaidAdsCampaign[],
+  key: (c: PaidAdsCampaign) => string | null,
+  label: (k: string) => string,
+  revenuePlatforms: PaidPlatform[]
+): ShareRow[] {
+  const conversion = campaigns.filter((c) => CONVERSION_OBJECTIVES.includes(c.objective));
+  const total = sumMetrics(conversion);
+  if (total.results === 0) return [];
+  const avgCpa = derive(total).costPerResult;
+
+  return groupBy(conversion, key, label).map((row) => ({
+    key: row.key,
+    label: row.label,
+    spend: row.metrics.spend,
+    results: row.metrics.results,
+    spendShare: row.spendShare,
+    resultShare: (row.metrics.results / total.results) * 100,
+    costPerResult: row.derived.costPerResult,
+    roas: roasOf(
+      conversion.filter((c) => key(c) === row.key),
+      revenuePlatforms
+    ),
+    tone: toneForCpa(row.derived.costPerResult, avgCpa),
+  }));
 }
 
-/* ---------- Performance quadrant ---------- */
+/* ---------- Leeftijd en geslacht ---------- */
 
-export interface QuadrantPoint {
+export interface DemographicRow extends GroupRow {
+  /** CPA ten opzichte van de hele selectie. */
+  tone: Tone;
+}
+
+const GENDER_LABELS: Record<PaidAdsDemographic["gender"], string> = {
+  female: "Vrouwen",
+  male: "Mannen",
+  unknown: "Onbekend",
+};
+
+/**
+ * Prestaties per leeftijdsgroep en per geslacht over de gekozen
+ * advertentiesets. Leeftijden in hun eigen volgorde (18-24 eerst), niet op
+ * budget: dan lees je de verschuiving over de leeftijden in één keer af.
+ */
+export function demographicSplit(rows: PaidAdsDemographic[]): {
+  byAge: DemographicRow[];
+  byGender: DemographicRow[];
+} {
+  const avgCpa = derive(sumMetrics(rows)).costPerResult;
+  const withTone = (r: GroupRow): DemographicRow => ({
+    ...r,
+    tone: toneForCpa(r.derived.costPerResult, avgCpa),
+  });
+  return {
+    byAge: groupBy(rows, (r) => r.age, (k) => k)
+      .sort((a, b) => a.key.localeCompare(b.key, "nl", { numeric: true }))
+      .map(withTone),
+    byGender: groupBy(rows, (r) => r.gender, (k) => GENDER_LABELS[k as PaidAdsDemographic["gender"]] ?? k).map(
+      withTone
+    ),
+  };
+}
+
+/* ---------- Besteed zonder resultaat ---------- */
+
+export interface IdleAd {
   id: string;
   name: string;
   platform: PaidPlatform;
-  /** CPA op de x-as. */
-  costPerResult: number;
-  /** Aantal conversies op de y-as. */
-  results: number;
-  /** Bereik bepaalt de bolgrootte. */
-  reach: number;
+  adSetName: string | null;
+  thumbnailUrl: string | null;
   spend: number;
+  clicks: number;
+  ctr: number | null;
 }
 
-export interface Quadrant {
-  points: QuadrantPoint[];
-  /** Assen lopen tot deze waarden. */
-  maxCpa: number;
-  maxResults: number;
-  maxReach: number;
-  /** Scheidslijnen: gemiddelde CPA en mediaan aantal conversies. */
-  splitCpa: number;
-  splitResults: number;
-}
+/**
+ * Advertenties in conversiecampagnes die wel budget verbruiken maar nog geen
+ * enkel resultaat opleverden, duurste eerst. Plus welk deel van het
+ * advertentiebudget van die campagnes daarin zit.
+ */
+export function adsWithoutResults(
+  ads: PaidAdsAd[],
+  adSets: PaidAdsAdSet[],
+  campaigns: PaidAdsCampaign[],
+  limit = 8
+): { rows: IdleAd[]; count: number; spend: number; share: number | null } {
+  const conversion = new Set(
+    campaigns
+      .filter((c) => CONVERSION_OBJECTIVES.includes(c.objective))
+      .map((c) => `${c.platform}:${c.id}`)
+  );
+  const adSetNames = new Map(adSets.map((s) => [`${s.platform}:${s.id}`, s.name]));
 
-export function quadrant(scored: ScoredCampaign[], avgCpa: number | null): Quadrant | null {
-  const points = scored
-    .filter(
-      (c) =>
-        CONVERSION_OBJECTIVES.includes(c.objective) &&
-        c.derived.costPerResult != null &&
-        c.metrics.results > 0
-    )
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      platform: c.platform,
-      costPerResult: c.derived.costPerResult as number,
-      results: c.metrics.results,
-      reach: c.metrics.reach,
-      spend: c.metrics.spend,
-    }));
-  if (points.length < 3) return null;
+  const eligible = ads.filter((a) => conversion.has(`${a.platform}:${a.campaignId}`));
+  const idle = eligible
+    .filter((a) => a.metrics.spend > 0 && a.metrics.results === 0)
+    .sort((a, b) => b.metrics.spend - a.metrics.spend);
 
-  const maxCpa = Math.max(...points.map((p) => p.costPerResult)) * 1.1;
-  const maxResults = Math.max(...points.map((p) => p.results)) * 1.1;
-  const maxReach = Math.max(...points.map((p) => p.reach), 1);
-  const sortedResults = [...points].map((p) => p.results).sort((a, b) => a - b);
-  const splitResults = sortedResults[Math.floor(sortedResults.length / 2)];
+  const idleSpend = idle.reduce((sum, a) => sum + a.metrics.spend, 0);
+  const eligibleSpend = eligible.reduce((sum, a) => sum + a.metrics.spend, 0);
+
   return {
-    points,
-    maxCpa,
-    maxResults,
-    maxReach,
-    splitCpa: avgCpa ?? maxCpa / 2,
-    splitResults,
+    rows: idle.slice(0, limit).map((a) => ({
+      id: a.id,
+      name: a.name,
+      platform: a.platform,
+      adSetName: adSetNames.get(`${a.platform}:${a.adSetId}`) ?? null,
+      thumbnailUrl: a.thumbnailUrl,
+      spend: a.metrics.spend,
+      clicks: a.metrics.clicks,
+      ctr: derive(a.metrics).ctr,
+    })),
+    count: idle.length,
+    spend: idleSpend,
+    share: eligibleSpend > 0 ? (idleSpend / eligibleSpend) * 100 : null,
   };
+}
+
+/* ---------- Advertenties per advertentieset ---------- */
+
+export interface AdInSet {
+  ad: PaidAdsAd;
+  derived: DerivedMetrics;
+  /** Aandeel in het budget van de eigen advertentieset, 0-100. */
+  spendShare: number;
+  /** CPA ten opzichte van de eigen advertentieset. */
+  tone: Tone;
+}
+
+export interface AdSetGroup {
+  adSet: PaidAdsAdSet;
+  derived: DerivedMetrics;
+  ads: AdInSet[];
+}
+
+/**
+ * Advertentiesets met hun advertenties eronder, beide op besteed bedrag. Een
+ * advertentie wordt afgezet tegen de CPA van zijn eigen set: daar concurreert
+ * hij om hetzelfde budget en dezelfde doelgroep.
+ */
+export function adsByAdSet(adSets: PaidAdsAdSet[], ads: PaidAdsAd[]): AdSetGroup[] {
+  const bySet = new Map<string, PaidAdsAd[]>();
+  for (const ad of ads) {
+    const k = `${ad.platform}:${ad.adSetId}`;
+    const list = bySet.get(k);
+    if (list) list.push(ad);
+    else bySet.set(k, [ad]);
+  }
+
+  return adSets
+    .map((adSet) => {
+      const list = bySet.get(`${adSet.platform}:${adSet.id}`) ?? [];
+      const derived = derive(adSet.metrics);
+      const setSpend = list.reduce((sum, a) => sum + a.metrics.spend, 0);
+      // Pas vergelijken als er binnen de set iets te vergelijken valt.
+      const comparable = list.filter((a) => a.metrics.results > 0).length >= 2;
+      return {
+        adSet,
+        derived,
+        ads: list
+          .map((ad) => {
+            const d = derive(ad.metrics);
+            return {
+              ad,
+              derived: d,
+              spendShare: setSpend > 0 ? (ad.metrics.spend / setSpend) * 100 : 0,
+              tone: comparable ? toneForCpa(d.costPerResult, derived.costPerResult) : ("neutral" as Tone),
+            };
+          })
+          .sort((a, b) => b.ad.metrics.spend - a.ad.metrics.spend),
+      };
+    })
+    .filter((g) => g.ads.length > 0)
+    .sort((a, b) => b.adSet.metrics.spend - a.adSet.metrics.spend);
 }
 
 /* ---------- Quick insights ---------- */

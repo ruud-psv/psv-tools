@@ -54,6 +54,27 @@ import {
 const API_HOST = "https://business-api.tiktok.com";
 const DEFAULT_API_VERSION = "v1.3";
 
+/**
+ * TikTok staat hoogstens 30 dagen per rapportaanvraag toe. Langere periodes,
+ * zoals een heel seizoen, worden daarom in blokken opgehaald en daarna weer
+ * opgeteld — zie `runChunkedReport`.
+ */
+const MAX_WINDOW_DAYS = 30;
+const DAY_MS = 86_400_000;
+
+/** Knipt een periode in opeenvolgende blokken van hoogstens `days` dagen. */
+function splitWindow(window: FetchWindow, days: number): FetchWindow[] {
+  const end = new Date(`${window.to}T00:00:00.000Z`);
+  const chunks: FetchWindow[] = [];
+  let from = new Date(`${window.from}T00:00:00.000Z`);
+  while (from.getTime() <= end.getTime()) {
+    const to = new Date(Math.min(from.getTime() + (days - 1) * DAY_MS, end.getTime()));
+    chunks.push({ from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) });
+    from = new Date(to.getTime() + DAY_MS);
+  }
+  return chunks;
+}
+
 /** Harde bovengrens op het doorbladeren, net als bij de andere koppelingen. */
 const MAX_PAGES = 25;
 const PAGE_SIZE = 1000;
@@ -223,6 +244,51 @@ async function runReport(
   return rows;
 }
 
+/** Tellers die over blokken heen opgeteld worden; de rest (namen, id's) blijft staan. */
+const SUMMABLE_METRICS = new Set(["spend", "impressions", "clicks", "reach", "result"]);
+
+/**
+ * `runReport` over een periode van willekeurige lengte: in blokken van 30
+ * dagen, daarna per object weer samengevoegd. Na elkaar in plaats van
+ * tegelijk, want TikTok begrenst het aantal aanvragen per minuut en een seizoen
+ * is maar een handvol blokken.
+ *
+ * `reach` is na het optellen een benadering: unieke mensen uit twee blokken
+ * zijn niet op te tellen zonder dubbeltelling. Dezelfde afweging als bij Meta.
+ */
+async function runChunkedReport(
+  config: TikTokConfig,
+  dataLevel: DataLevel,
+  dimensions: string[],
+  metrics: string[],
+  window: FetchWindow,
+  signal?: AbortSignal
+): Promise<TikTokRow[]> {
+  const chunks = splitWindow(window, MAX_WINDOW_DAYS);
+  if (chunks.length === 1) return runReport(config, dataLevel, dimensions, metrics, window, signal);
+
+  const byKey = new Map<string, TikTokRow>();
+  for (const chunk of chunks) {
+    const rows = await runReport(config, dataLevel, dimensions, metrics, chunk, signal);
+    for (const row of rows) {
+      const key = JSON.stringify(row.dimensions);
+      const found = byKey.get(key);
+      if (!found) {
+        byKey.set(key, { dimensions: row.dimensions, metrics: { ...row.metrics } });
+        continue;
+      }
+      for (const [name, value] of Object.entries(row.metrics)) {
+        if (SUMMABLE_METRICS.has(name)) {
+          found.metrics[name] = String(num(found.metrics[name]) + num(value));
+        } else if (!found.metrics[name]) {
+          found.metrics[name] = value;
+        }
+      }
+    }
+  }
+  return [...byKey.values()];
+}
+
 /* -------------------------------------------------------------- parsen -- */
 
 function num(value: string | number | undefined): number {
@@ -237,6 +303,9 @@ function metricsFrom(row: TikTokRow): PaidMetrics {
     reach: num(row.metrics.reach),
     clicks: num(row.metrics.clicks),
     results: num(row.metrics.result),
+    // Conversiewaarde wordt nog niet opgehaald; een onbekende metric laat het
+    // hele rapport falen, dus pas toevoegen na een test tegen de echte API.
+    revenue: 0,
   };
 }
 
@@ -251,6 +320,7 @@ function addMetrics(target: PaidMetrics, source: PaidMetrics): void {
   target.reach += source.reach;
   target.clicks += source.clicks;
   target.results += source.results;
+  target.revenue += source.revenue;
 }
 
 /* ---------------------------------------------------------- connector -- */
@@ -268,13 +338,10 @@ const ADGROUP_METRICS = ["campaign_id", "adgroup_name", "spend", "impressions", 
 const AD_METRICS = ["campaign_id", "adgroup_id", "ad_name", "spend", "impressions", "clicks", "reach", "result"];
 const DAILY_METRICS = ["spend", "impressions", "clicks", "reach", "result"];
 
-async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
-  const config = getConfig();
-
-  // De campagnes eerst: hun fase en exploitatie gelden ook voor de
-  // onderliggende advertentiegroepen en advertenties.
-  const campaignRows = await runReport(config, "AUCTION_CAMPAIGN", ["campaign_id"], CAMPAIGN_METRICS, window, signal);
-
+/** Campagnerijen naar campagnes, plus de context per campagne-id. */
+function toCampaigns(
+  campaignRows: TikTokRow[]
+): { campaigns: PaidAdsCampaign[]; context: Map<string, CampaignContext> } {
   const context = new Map<string, CampaignContext>();
   const campaigns: PaidAdsCampaign[] = [];
 
@@ -308,12 +375,23 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     });
   }
 
+  return { campaigns, context };
+}
+
+async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
+  const config = getConfig();
+
+  // De campagnes eerst: hun fase en exploitatie gelden ook voor de
+  // onderliggende advertentiegroepen en advertenties.
+  const campaignRows = await runChunkedReport(config, "AUCTION_CAMPAIGN", ["campaign_id"], CAMPAIGN_METRICS, window, signal);
+  const { campaigns, context } = toCampaigns(campaignRows);
+
   // Advertentiegroepen, advertenties en de dagreeks zijn onafhankelijk van
   // elkaar en mogen tegelijk lopen.
   const [adGroupRows, adRows, dailyRows] = await Promise.all([
-    runReport(config, "AUCTION_ADGROUP", ["adgroup_id"], ADGROUP_METRICS, window, signal),
-    runReport(config, "AUCTION_AD", ["ad_id"], AD_METRICS, window, signal),
-    runReport(config, "AUCTION_CAMPAIGN", ["campaign_id", "stat_time_day"], DAILY_METRICS, window, signal),
+    runChunkedReport(config, "AUCTION_ADGROUP", ["adgroup_id"], ADGROUP_METRICS, window, signal),
+    runChunkedReport(config, "AUCTION_AD", ["ad_id"], AD_METRICS, window, signal),
+    runChunkedReport(config, "AUCTION_CAMPAIGN", ["campaign_id", "stat_time_day"], DAILY_METRICS, window, signal),
   ]);
 
   const adSets: PaidAdsAdSet[] = [];
@@ -333,6 +411,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       platform: "tiktok",
       phase: context.get(campaignId)?.phase ?? resolvePhase(name, ""),
       audienceType: resolveAudienceType(name),
+      targeting: null,
       metrics,
     });
   }
@@ -359,48 +438,45 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       hook: resolveHook(name),
       // TikTok rapporteert videoweergaven niet los in deze reportage-endpoint.
       videoViews3s: null,
+      thumbnailUrl: null,
       metrics,
     });
   }
 
-  // De dagreeks komt op campagneniveau binnen, zodat het dagtotaal gelijk
-  // blijft aan de som van de campagnes.
-  const byDate = new Map<string, PaidMetrics>();
+  // De dagreeks komt per campagne binnen, zodat het dashboard de grafieken
+  // dezelfde filters kan laten volgen als de campagnelijst.
+  const byDay = new Map<string, ConnectorDailyPoint>();
   for (const row of dailyRows) {
     // TikTok levert `stat_time_day` als "JJJJ-MM-DD HH:MM:SS".
     const date = row.dimensions.stat_time_day?.slice(0, 10);
-    if (!date) continue;
+    const campaignId = row.dimensions.campaign_id;
+    if (!date || !campaignId) continue;
 
-    const point = byDate.get(date) ?? emptyMetrics();
-    addMetrics(point, metricsFrom(row));
-    byDate.set(date, point);
+    const key = `${date}|${campaignId}`;
+    const point = byDay.get(key) ?? { date, campaignId, metrics: emptyMetrics() };
+    addMetrics(point.metrics, metricsFrom(row));
+    byDay.set(key, point);
   }
 
-  const daily: ConnectorDailyPoint[] = [...byDate.entries()]
-    .map(([date, metrics]) => ({ date, metrics }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const daily = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   return { campaigns, adSets, ads, daily };
 }
 
 /**
- * Totalen voor een vergelijkingsperiode, op campagneniveau — net als bij de
- * andere koppelingen.
+ * Campagnes van een vergelijkingsperiode, met dezelfde indeling als de
+ * hoofdperiode — net als bij de andere koppelingen.
  */
-async function fetchTotals(window: FetchWindow, signal?: AbortSignal): Promise<PaidMetrics> {
+async function fetchCampaigns(window: FetchWindow, signal?: AbortSignal): Promise<PaidAdsCampaign[]> {
   const config = getConfig();
-  const rows = await runReport(config, "AUCTION_CAMPAIGN", ["campaign_id"], CAMPAIGN_METRICS, window, signal);
-
-  const totals = emptyMetrics();
-  for (const row of rows) {
-    addMetrics(totals, metricsFrom(row));
-  }
-  return totals;
+  const rows = await runChunkedReport(config, "AUCTION_CAMPAIGN", ["campaign_id"], CAMPAIGN_METRICS, window, signal);
+  return toCampaigns(rows).campaigns;
 }
 
 export const tiktokConnector: PaidConnector = {
   platform: "tiktok",
   isConfigured: isTikTokConfigured,
+  reportsRevenue: false,
   fetchAll,
-  fetchTotals,
+  fetchCampaigns,
 };

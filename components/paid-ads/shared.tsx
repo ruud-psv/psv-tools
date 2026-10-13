@@ -1,10 +1,11 @@
 "use client";
 
-import { ReactNode } from "react";
+import { CSSProperties, ReactNode, useState } from "react";
+import { ImageOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { DerivedMetrics, ScoredCampaign, Tone } from "@/lib/paid-ads/derive";
-import { PaidAdsResponse, PaidPlatform } from "@/lib/paid-ads/types";
+import { PaidAdsResponse, PaidPhase, PaidPlatform } from "@/lib/paid-ads/types";
 
 /* ---------- Kleur per tone ---------- */
 
@@ -30,13 +31,49 @@ export const TONE_MARK: Record<Tone, string> = {
   neutral: "·",
 };
 
-/** Vaste kleur per platform, zodat een kanaal overal dezelfde kleur houdt. */
+/**
+ * Vaste kleur per platform, zodat een kanaal overal dezelfde kleur houdt.
+ * Getoetst op kleurenblindheid: van de huisstijlkleuren scheidt deze set het
+ * best. LinkedIn leent het blauw van `info`; dat kan omdat dit dashboard `info`
+ * nergens als status gebruikt. Goud is licht van contrast, dus platformen staan
+ * altijd met naam in een legenda of tabel, nooit alleen als kleur.
+ */
 export const PLATFORM_DOT: Record<PaidPlatform, string> = {
   meta: "bg-psv-red-primary",
   tiktok: "bg-psv-neutralDark",
   google: "bg-psv-gold",
   linkedin: "bg-info",
 };
+
+/**
+ * Fasekleur: één rode reeks van licht naar donker, omdat de fases een volgorde
+ * hebben. Bewust geen groen of foutrood — die betekenen in dit dashboard goed
+ * en slecht. Witte tekst haalt op alle drie minstens 4,5:1.
+ */
+export const PHASE_FILL: Record<PaidPhase, string> = {
+  bereik: "bg-psv-red-primary",
+  verkeer: "bg-psv-red-secondary",
+  conversie: "bg-psv-red-dark",
+};
+
+/**
+ * Kleuren voor Recharts. Die zet SVG-attributen in plaats van classes, dus hier
+ * de CSS custom properties uit de PSV-tokens in plaats van losse hex-waarden.
+ */
+export const CHART = {
+  primary: "var(--color-red-primary)",
+  grid: "var(--color-gray-07)",
+  axis: "var(--color-gray-09)",
+} as const;
+
+/** Tooltipstijl gelijk aan de andere PSV-dashboards. */
+export const CHART_TOOLTIP = {
+  backgroundColor: "var(--color-neutral-dark)",
+  border: "1px solid var(--color-gray-11)",
+  borderRadius: "6px",
+  color: "var(--color-white)",
+  fontSize: 12,
+} as const;
 
 /* ---------- Bouwstenen ---------- */
 
@@ -169,6 +206,99 @@ export function MiniKpi({
       <p className="font-heading text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="ml-auto font-heading text-xl uppercase leading-none">{value}</p>
       {delta && <Badge tone={deltaTone}>{delta}</Badge>}
+    </div>
+  );
+}
+
+/**
+ * Tooltip bij hover én toetsenbordfocus, voor marks die geen Recharts-grafiek
+ * zijn. Vult aan, nooit als enige plek voor een waarde: die staat ook in de
+ * legenda of tabel ernaast.
+ */
+export function HoverTip({
+  content,
+  children,
+  side = "top",
+  className,
+  style,
+}: {
+  content: ReactNode;
+  children?: ReactNode;
+  side?: "top" | "bottom";
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div tabIndex={0} className={cn("group relative outline-none", className)} style={style}>
+      {children}
+      <div
+        role="tooltip"
+        className={cn(
+          "pointer-events-none absolute left-1/2 z-20 hidden w-max max-w-[16rem] -translate-x-1/2 rounded-md bg-psv-neutralDark px-2.5 py-1.5 text-xs text-white shadow-md group-hover:block group-focus-visible:block",
+          side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+        )}
+      >
+        {content}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Gestapelde aandelenbalk. Segmenten worden gescheiden door 2px lucht in plaats
+ * van een rand, en elk segment heeft een tooltip. Breedte via `flex-grow`, zodat
+ * de tussenruimtes de balk niet laten overlopen.
+ */
+export function SegmentBar({
+  segments,
+  className,
+}: {
+  segments: { key: string; share: number; fill: string; tip: ReactNode }[];
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex h-3 gap-[2px]", className)}>
+      {segments
+        .filter((s) => s.share > 0)
+        .map((s) => (
+          <HoverTip
+            key={s.key}
+            content={s.tip}
+            className={cn("h-full first:rounded-l-sm last:rounded-r-sm", s.fill)}
+            style={{ flexGrow: s.share, flexBasis: 0 }}
+          />
+        ))}
+    </div>
+  );
+}
+
+/**
+ * Voorbeeldafbeelding van een creative. Platform-URL's verlopen na een tijd;
+ * laadt de afbeelding niet, dan staat er een rustig icoon in plaats van een
+ * kapot plaatje.
+ */
+export function CreativeThumb({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div
+      className={cn(
+        "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted",
+        className
+      )}
+    >
+      {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <ImageOff className="h-4 w-4 text-psv-gray-09" aria-hidden />
+      )}
     </div>
   );
 }

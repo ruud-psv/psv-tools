@@ -22,8 +22,10 @@ import {
   type PaidAdsAd,
   type PaidAdsAdSet,
   type PaidAdsCampaign,
+  type PaidAdsDemographic,
   type PaidMetrics,
   type PaidPhase,
+  type PaidTargeting,
 } from "@/lib/paid-ads/types";
 import {
   resolveAudienceType,
@@ -78,7 +80,12 @@ interface MetaInsightRow {
   reach?: string;
   clicks?: string;
   inline_link_clicks?: string;
+  /** Alleen bij de uitsplitsing naar leeftijd en geslacht. */
+  age?: string;
+  gender?: string;
   actions?: { action_type: string; value: string }[];
+  /** Zelfde vorm als `actions`, maar met de waarde in euro's in plaats van aantallen. */
+  action_values?: { action_type: string; value: string }[];
 }
 
 interface MetaInsightsResponse {
@@ -119,6 +126,7 @@ const CAMPAIGN_FIELDS = [
   "clicks",
   "inline_link_clicks",
   "actions",
+  "action_values",
 ].join(",");
 
 const ADSET_FIELDS = [
@@ -132,6 +140,7 @@ const ADSET_FIELDS = [
   "clicks",
   "inline_link_clicks",
   "actions",
+  "action_values",
 ].join(",");
 
 const AD_FIELDS = [
@@ -146,6 +155,21 @@ const AD_FIELDS = [
   "clicks",
   "inline_link_clicks",
   "actions",
+  "action_values",
+].join(",");
+
+/** Advertentiesets uitgesplitst naar leeftijd en geslacht (via `breakdowns`). */
+const DEMOGRAPHIC_FIELDS = [
+  "campaign_id",
+  "adset_id",
+  "objective",
+  "spend",
+  "impressions",
+  "reach",
+  "clicks",
+  "inline_link_clicks",
+  "actions",
+  "action_values",
 ].join(",");
 
 const DAILY_FIELDS = [
@@ -158,6 +182,7 @@ const DAILY_FIELDS = [
   "clicks",
   "inline_link_clicks",
   "actions",
+  "action_values",
 ].join(",");
 
 /* ------------------------------------------------------------- config -- */
@@ -286,7 +311,9 @@ function mergeRows(rows: MetaInsightRow[], perDay: boolean): MetaInsightRow[] {
 
   for (const row of rows) {
     const id = row.ad_id ?? row.adset_id ?? row.campaign_id ?? "";
-    const key = perDay ? `${id}|${row.date_start ?? ""}` : id;
+    // Bij een uitsplitsing is elke leeftijd/geslacht-combinatie een eigen rij.
+    const segment = row.age || row.gender ? `|${row.age ?? ""}|${row.gender ?? ""}` : "";
+    const key = (perDay ? `${id}|${row.date_start ?? ""}` : id) + segment;
 
     const found = byKey.get(key);
     if (!found) {
@@ -300,6 +327,7 @@ function mergeRows(rows: MetaInsightRow[], perDay: boolean): MetaInsightRow[] {
     found.clicks = addNumeric(found.clicks, row.clicks);
     found.inline_link_clicks = addNumeric(found.inline_link_clicks, row.inline_link_clicks);
     found.actions = mergeActions(found.actions, row.actions);
+    found.action_values = mergeActions(found.action_values, row.action_values);
   }
 
   return [...byKey.values()];
@@ -324,7 +352,7 @@ async function fetchInsights(
   level: "account" | "campaign" | "adset" | "ad",
   fields: string,
   window: FetchWindow,
-  options: { timeIncrement?: number; signal?: AbortSignal } = {}
+  options: { timeIncrement?: number; breakdowns?: string; signal?: AbortSignal } = {}
 ): Promise<MetaInsightRow[]> {
   const chunks = splitWindow(window);
   if (chunks.length === 1) {
@@ -354,7 +382,7 @@ async function fetchWindow(
   level: "account" | "campaign" | "adset" | "ad",
   fields: string,
   window: FetchWindow,
-  options: { timeIncrement?: number; signal?: AbortSignal } = {}
+  options: { timeIncrement?: number; breakdowns?: string; signal?: AbortSignal } = {}
 ): Promise<MetaInsightRow[]> {
   const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/${config.accountPath}/insights`);
   url.searchParams.set("level", level);
@@ -365,6 +393,7 @@ async function fetchWindow(
   // plaats van dat van het account — dan wijken de cijfers af van Ads Manager.
   url.searchParams.set("use_unified_attribution_setting", "true");
   if (options.timeIncrement) url.searchParams.set("time_increment", String(options.timeIncrement));
+  if (options.breakdowns) url.searchParams.set("breakdowns", options.breakdowns);
 
   const rows: MetaInsightRow[] = [];
   let next: string | undefined = url.toString();
@@ -436,6 +465,28 @@ function pickResult(row: MetaInsightRow, phase: PaidPhase): { value: number; act
   return { value: 0, actionType: null };
 }
 
+/**
+ * Actietypes waarvan de waarde als omzet telt, op volgorde van voorkeur. Ze
+ * overlappen (`omni_purchase` bevat de pixelaankopen al), dus alleen het eerste
+ * type dat voorkomt telt — anders wordt dezelfde verkoop dubbel geteld.
+ */
+const REVENUE_ACTIONS = [
+  "omni_purchase",
+  "purchase",
+  "offsite_conversion.fb_pixel_purchase",
+  "onsite_web_purchase",
+];
+
+function revenueFrom(row: MetaInsightRow): number {
+  for (const actionType of REVENUE_ACTIONS) {
+    const value = (row.action_values ?? [])
+      .filter((a) => a.action_type === actionType)
+      .reduce((sum, a) => sum + num(a.value), 0);
+    if (value > 0) return value;
+  }
+  return 0;
+}
+
 function metricsFrom(config: MetaConfig, row: MetaInsightRow, phase: PaidPhase): PaidMetrics {
   // In "link"-modus telt uitsluitend `inline_link_clicks`. Nul linkkliks is een
   // echte nul: terugvallen op `clicks` zou bij een bereikcampagne de reacties en
@@ -449,6 +500,7 @@ function metricsFrom(config: MetaConfig, row: MetaInsightRow, phase: PaidPhase):
     reach: num(row.reach),
     clicks,
     results: pickResult(row, phase).value,
+    revenue: revenueFrom(row),
   };
 }
 
@@ -463,6 +515,7 @@ function addMetrics(target: PaidMetrics, source: PaidMetrics): void {
   target.reach += source.reach;
   target.clicks += source.clicks;
   target.results += source.results;
+  target.revenue += source.revenue;
 }
 
 /* ---------------------------------------------------------- connector -- */
@@ -475,13 +528,11 @@ interface CampaignContext {
   name: string;
 }
 
-async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
-  const config = getConfig();
-
-  // De campagnes eerst: hun fase en exploitatie gelden ook voor de onderliggende
-  // advertentiesets en advertenties.
-  const campaignRows = await fetchInsights(config, "campaign", CAMPAIGN_FIELDS, window, { signal });
-
+/** Campagnerijen naar campagnes, plus de context per campagne-id. */
+function toCampaigns(
+  config: MetaConfig,
+  campaignRows: MetaInsightRow[]
+): { campaigns: PaidAdsCampaign[]; context: Map<string, CampaignContext> } {
   const context = new Map<string, CampaignContext>();
   const campaigns: PaidAdsCampaign[] = [];
 
@@ -514,6 +565,17 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     });
   }
 
+  return { campaigns, context };
+}
+
+async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<ConnectorResult> {
+  const config = getConfig();
+
+  // De campagnes eerst: hun fase en exploitatie gelden ook voor de onderliggende
+  // advertentiesets en advertenties.
+  const campaignRows = await fetchInsights(config, "campaign", CAMPAIGN_FIELDS, window, { signal });
+  const { campaigns, context } = toCampaigns(config, campaignRows);
+
   // Advertentiesets, advertenties en de dagreeks zijn onafhankelijk van elkaar.
   const [adSetRows, adRows, dailyRows] = await Promise.all([
     fetchInsights(config, "adset", ADSET_FIELDS, window, { signal }),
@@ -539,6 +601,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       platform: "meta",
       phase,
       audienceType: resolveAudienceType(name),
+      targeting: null,
       metrics,
     });
   }
@@ -569,55 +632,218 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       format: resolveFormat(name),
       hook: resolveHook(name),
       videoViews3s: videoViews > 0 ? videoViews : null,
+      thumbnailUrl: null,
       metrics,
     });
   }
 
-  // De dagreeks komt op campagneniveau binnen, zodat elke rij met de fase van
-  // zijn eigen campagne geteld wordt en het dagtotaal gelijk blijft aan de som
-  // van de campagnes.
-  const byDate = new Map<string, PaidMetrics>();
+  // De dagreeks komt per campagne binnen, zodat elke rij met de fase van zijn
+  // eigen campagne geteld wordt en het dashboard de grafieken kan filteren.
+  const byDay = new Map<string, ConnectorDailyPoint>();
   for (const row of dailyRows) {
     const date = row.date_start;
     const campaignId = row.campaign_id;
-    if (!date) continue;
+    if (!date || !campaignId) continue;
 
     const phase =
-      (campaignId ? context.get(campaignId)?.phase : undefined) ??
+      context.get(campaignId)?.phase ??
       resolvePhase(row.campaign_name ?? "", row.objective ?? "");
 
-    const point = byDate.get(date) ?? emptyMetrics();
-    addMetrics(point, metricsFrom(config, row, phase));
-    byDate.set(date, point);
+    const key = `${date}|${campaignId}`;
+    const point = byDay.get(key) ?? { date, campaignId, metrics: emptyMetrics() };
+    addMetrics(point.metrics, metricsFrom(config, row, phase));
+    byDay.set(key, point);
   }
 
-  const daily: ConnectorDailyPoint[] = [...byDate.entries()]
-    .map(([date, metrics]) => ({ date, metrics }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const daily = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
 
-  return { campaigns, adSets, ads, daily };
+  // De extra's pas na de kerncijfers: Meta knijpt af bij te veel zware
+  // aanvragen tegelijk. Elk mag mislukken zonder de rest mee te nemen — dan
+  // ontbreekt alleen die laag in het dashboard.
+  const [demographicRows, creatives, targetings] = await Promise.all([
+    fetchInsights(config, "adset", DEMOGRAPHIC_FIELDS, window, { breakdowns: "age,gender", signal }).catch(
+      softFail("leeftijd en geslacht", [] as MetaInsightRow[])
+    ),
+    fetchNodes<{ creative?: { thumbnail_url?: string; image_url?: string } }>(
+      config,
+      ads.map((a) => a.id),
+      "creative{thumbnail_url,image_url}",
+      signal
+    ).catch(softFail("creatives", new Map())),
+    fetchNodes<{ targeting?: MetaTargeting }>(
+      config,
+      adSets.map((s) => s.id),
+      "targeting",
+      signal
+    ).catch(softFail("targeting", new Map())),
+  ]);
+
+  for (const ad of ads) {
+    const creative = creatives.get(ad.id)?.creative;
+    // De volledige afbeelding waar die er is; video's hebben alleen een thumbnail.
+    ad.thumbnailUrl = creative?.image_url ?? creative?.thumbnail_url ?? null;
+  }
+  for (const adSet of adSets) {
+    const targeting = targetings.get(adSet.id)?.targeting;
+    adSet.targeting = targeting ? summarizeTargeting(targeting) : null;
+  }
+
+  const demographics: PaidAdsDemographic[] = [];
+  for (const row of demographicRows) {
+    const campaignId = row.campaign_id;
+    const adSetId = row.adset_id;
+    if (!campaignId || !adSetId || !row.age) continue;
+    const phase = context.get(campaignId)?.phase ?? resolvePhase("", row.objective ?? "");
+    const metrics = metricsFrom(config, row, phase);
+    if (!hasVolume(metrics)) continue;
+    demographics.push({
+      platform: "meta",
+      campaignId,
+      adSetId,
+      age: row.age,
+      gender: row.gender === "female" || row.gender === "male" ? row.gender : "unknown",
+      metrics,
+    });
+  }
+
+  return { campaigns, adSets, ads, daily, demographics };
+}
+
+/** Logt een mislukte extra laag en gaat door met een lege waarde. */
+function softFail<T>(what: string, fallback: T): (error: unknown) => T {
+  return (error) => {
+    console.error(`[paid-ads] meta ${what} niet opgehaald`, error);
+    return fallback;
+  };
+}
+
+/** Hoeveel objecten Graph per `?ids=`-aanvraag toestaat. */
+const NODE_BATCH = 50;
+
+/**
+ * Haalt velden op van losse objecten (advertenties, advertentiesets) via
+ * `?ids=a,b,c`: vijftig per aanvraag, twee aanvragen tegelijk.
+ */
+async function fetchNodes<T>(
+  config: MetaConfig,
+  ids: string[],
+  fields: string,
+  signal?: AbortSignal
+): Promise<Map<string, T>> {
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += NODE_BATCH) batches.push(ids.slice(i, i + NODE_BATCH));
+
+  const out = new Map<string, T>();
+  for (let i = 0; i < batches.length; i += CHUNK_CONCURRENCY) {
+    const results = await Promise.all(
+      batches.slice(i, i + CHUNK_CONCURRENCY).map(async (batch) => {
+        const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/`);
+        url.searchParams.set("ids", batch.join(","));
+        url.searchParams.set("fields", fields);
+        const res = await fetch(url.toString(), {
+          headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
+          cache: "no-store",
+          signal,
+        });
+        const text = await res.text();
+        const body = JSON.parse(text) as Record<string, T> & { error?: { message?: string } };
+        if (!res.ok || body.error) {
+          throw new ConnectorRequestError(
+            `Meta Graph API — ${res.status}: ${redact(body.error?.message ?? text.slice(0, 300), config.token)}`,
+            res.status,
+            redact(text.slice(0, 300), config.token)
+          );
+        }
+        return body;
+      })
+    );
+    for (const body of results) {
+      for (const [id, node] of Object.entries(body)) out.set(id, node as T);
+    }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------- targeting -- */
+
+/** De delen van Metas targeting-spec die het dashboard toont. */
+interface MetaTargeting {
+  age_min?: number;
+  age_max?: number;
+  /** 1 = mannen, 2 = vrouwen; leeg is iedereen. */
+  genders?: number[];
+  geo_locations?: {
+    countries?: string[];
+    regions?: { name?: string }[];
+    cities?: { name?: string; radius?: number; distance_unit?: string }[];
+    zips?: { name?: string; key?: string }[];
+    custom_locations?: { name?: string; radius?: number; distance_unit?: string }[];
+  };
+  custom_audiences?: { name?: string }[];
+  excluded_custom_audiences?: { name?: string }[];
+  flexible_spec?: {
+    interests?: { name?: string }[];
+    behaviors?: { name?: string }[];
+    life_events?: { name?: string }[];
+  }[];
+  targeting_automation?: { advantage_audience?: number };
+}
+
+function names(list: { name?: string }[] | undefined): string[] {
+  return (list ?? []).map((item) => item.name).filter((n): n is string => Boolean(n));
+}
+
+function radius(item: { radius?: number; distance_unit?: string }): string {
+  return item.radius ? ` +${item.radius} ${item.distance_unit === "mile" ? "mi" : "km"}` : "";
+}
+
+/** Metas targeting-spec naar leesbare labels. */
+function summarizeTargeting(t: MetaTargeting): PaidTargeting {
+  const min = t.age_min ?? 18;
+  const max = t.age_max ?? 65;
+  const geo = t.geo_locations ?? {};
+  return {
+    audiences: names(t.custom_audiences),
+    excluded: names(t.excluded_custom_audiences),
+    interests: [
+      ...new Set(
+        (t.flexible_spec ?? []).flatMap((spec) => [
+          ...names(spec.interests),
+          ...names(spec.behaviors),
+          ...names(spec.life_events),
+        ])
+      ),
+    ],
+    // Metas standaard is 18 tot 65+; dat is geen leeftijdskeuze.
+    age: min === 18 && max === 65 ? null : `${min}-${max >= 65 ? "65+" : max}`,
+    gender:
+      t.genders?.length === 1 ? (t.genders[0] === 2 ? "Vrouwen" : "Mannen") : null,
+    locations: [
+      ...(geo.countries ?? []),
+      ...names(geo.regions),
+      ...(geo.cities ?? []).filter((c) => c.name).map((c) => `${c.name}${radius(c)}`),
+      ...(geo.zips ?? []).map((z) => z.name ?? z.key).filter((z): z is string => Boolean(z)),
+      ...(geo.custom_locations ?? []).map((c) => `${c.name ?? "Eigen locatie"}${radius(c)}`),
+    ],
+    expanded: t.targeting_automation?.advantage_audience === 1,
+  };
 }
 
 /**
- * Totalen voor een vergelijkingsperiode. Bewust op campagneniveau: dan wordt
- * elke rij met dezelfde faselogica geteld als in de hoofdperiode, en vergelijkt
- * het dashboard appels met appels.
+ * Campagnes van een vergelijkingsperiode, met dezelfde fase- en
+ * exploitatielogica als de hoofdperiode — zo vergelijkt het dashboard appels
+ * met appels, ook als er gefilterd is.
  */
-async function fetchTotals(window: FetchWindow, signal?: AbortSignal): Promise<PaidMetrics> {
+async function fetchCampaigns(window: FetchWindow, signal?: AbortSignal): Promise<PaidAdsCampaign[]> {
   const config = getConfig();
   const rows = await fetchInsights(config, "campaign", CAMPAIGN_FIELDS, window, { signal });
-
-  const totals = emptyMetrics();
-  for (const row of rows) {
-    const phase = resolvePhase(row.campaign_name ?? "", row.objective ?? "");
-    addMetrics(totals, metricsFrom(config, row, phase));
-  }
-  return totals;
+  return toCampaigns(config, rows).campaigns;
 }
 
 export const metaConnector: PaidConnector = {
   platform: "meta",
   isConfigured: isMetaConfigured,
+  reportsRevenue: true,
   fetchAll,
-  fetchTotals,
+  fetchCampaigns,
 };

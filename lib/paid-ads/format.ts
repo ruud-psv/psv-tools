@@ -18,6 +18,12 @@ export function pct(value: number | null | undefined, decimals = 2): string {
   return `${nl(value, decimals)}%`;
 }
 
+/** Return on ad spend: omzet per bestede euro, als 4,25x. */
+export function roas(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${nl(value, 2)}x`;
+}
+
 /** Kort bedrag voor de as van een grafiek: € 4,2k. */
 export function eurShort(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";

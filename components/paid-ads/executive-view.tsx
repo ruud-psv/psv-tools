@@ -14,6 +14,7 @@ import {
   DataTable,
   EmptySection,
   PLATFORM_DOT,
+  SegmentBar,
   SectionCard,
   Td,
   Th,
@@ -21,13 +22,13 @@ import {
   VolumeBar,
 } from "./shared";
 import type { PaidViewProps } from "./shared";
-import { PerformanceQuadrant } from "./performance-quadrant";
-import { PaidPlatform } from "@/lib/paid-ads/types";
+import { BudgetVsResults } from "./budget-vs-results";
+import { PaidPlatform, PLATFORM_LABELS } from "@/lib/paid-ads/types";
 import { cn } from "@/lib/utils";
 
 const fmt = { eur, nl, pct };
 
-export function ExecutiveView({ data, scored, totals, avgCpa }: PaidViewProps) {
+export function ExecutiveView({ data, scored, totals }: PaidViewProps) {
   const targets = useMemo(() => targetRows(totals, data.targets, fmt), [totals, data.targets]);
   const funnel = useMemo(() => funnelSteps(totals, fmt), [totals]);
   const forecast = useMemo(
@@ -89,7 +90,7 @@ export function ExecutiveView({ data, scored, totals, avgCpa }: PaidViewProps) {
         </SectionCard>
 
         {/* Funnel health */}
-        <SectionCard title="Funnel health" hint="waar valt het verkeer weg">
+        <SectionCard title="Doorstroom" hint="van weergave naar resultaat · waar valt het verkeer weg">
           {!hasData ? (
             <EmptySection />
           ) : (
@@ -195,7 +196,13 @@ export function ExecutiveView({ data, scored, totals, avgCpa }: PaidViewProps) {
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <PerformanceQuadrant scored={scored} avgCpa={avgCpa} />
+        <BudgetVsResults
+          title="Budget versus resultaat per platform"
+          campaigns={scored}
+          revenuePlatforms={data.revenuePlatforms}
+          groupBy={(c) => c.platform}
+          labelFor={(k) => PLATFORM_LABELS[k as PaidPlatform] ?? k}
+        />
 
         {/* Verdeling besteed bedrag */}
         <SectionCard title="Verdeling besteed bedrag">
@@ -203,16 +210,15 @@ export function ExecutiveView({ data, scored, totals, avgCpa }: PaidViewProps) {
             <EmptySection />
           ) : (
             <>
-              <div className="mb-5 flex h-3.5 overflow-hidden rounded-sm">
-                {platforms.map((p) => (
-                  <div
-                    key={p.key}
-                    title={`${p.label} — ${pct(p.spendShare, 1)}`}
-                    className={cn("h-full", PLATFORM_DOT[p.key as PaidPlatform])}
-                    style={{ width: `${p.spendShare}%` }}
-                  />
-                ))}
-              </div>
+              <SegmentBar
+                className="mb-5 h-3.5"
+                segments={platforms.map((p) => ({
+                  key: p.key,
+                  share: p.spendShare,
+                  fill: PLATFORM_DOT[p.key as PaidPlatform],
+                  tip: `${p.label} — ${eur(p.metrics.spend)} · ${pct(p.spendShare, 1)}`,
+                }))}
+              />
               <div className="space-y-3">
                 {platforms.map((p) => (
                   <div key={p.key} className="flex items-center gap-3 text-sm">
