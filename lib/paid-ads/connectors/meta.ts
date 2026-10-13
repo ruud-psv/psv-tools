@@ -664,12 +664,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     fetchInsights(config, "adset", DEMOGRAPHIC_FIELDS, window, { breakdowns: "age,gender", signal }).catch(
       softFail("leeftijd en geslacht", [] as MetaInsightRow[])
     ),
-    fetchNodes<{ creative?: { thumbnail_url?: string; image_url?: string } }>(
-      config,
-      ads.map((a) => a.id),
-      "creative{thumbnail_url,image_url}",
-      signal
-    ).catch(softFail("creatives", new Map())),
+    fetchCreatives(config, ads.map((a) => a.id), signal).catch(softFail("creatives", new Map())),
     fetchNodes<{ targeting?: MetaTargeting }>(
       config,
       adSets.map((s) => s.id),
@@ -715,6 +710,34 @@ function softFail<T>(what: string, fallback: T): (error: unknown) => T {
     console.error(`[paid-ads] meta ${what} niet opgehaald`, error);
     return fallback;
   };
+}
+
+type CreativeNode = { creative?: { thumbnail_url?: string; image_url?: string } };
+
+/** Breedte van de voorbeeldafbeelding; standaard levert Meta maar 64 px. */
+const THUMBNAIL_SIZE = 600;
+
+/**
+ * Afbeeldingen per advertentie, met een thumbnail op galerijformaat. Weigert
+ * Graph de maatparameters, dan alsnog de standaardthumbnail.
+ */
+async function fetchCreatives(
+  config: MetaConfig,
+  ids: string[],
+  signal?: AbortSignal
+): Promise<Map<string, CreativeNode>> {
+  try {
+    return await fetchNodes<CreativeNode>(
+      config,
+      ids,
+      `creative.thumbnail_width(${THUMBNAIL_SIZE}).thumbnail_height(${THUMBNAIL_SIZE}){thumbnail_url,image_url}`,
+      signal
+    );
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    console.error("[paid-ads] meta creatives op groot formaat niet opgehaald", error);
+    return fetchNodes<CreativeNode>(config, ids, "creative{thumbnail_url,image_url}", signal);
+  }
 }
 
 /** Hoeveel objecten Graph per `?ids=`-aanvraag toestaat. */

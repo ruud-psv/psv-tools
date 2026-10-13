@@ -6,12 +6,18 @@ import {
   adsByAdSet,
   adsWithoutResults,
   byFormat,
+  derive,
   saturation,
   toneForCpa,
   type AdSetGroup,
 } from "@/lib/paid-ads/derive";
 import { eur, nl, pct, roas } from "@/lib/paid-ads/format";
-import { AUDIENCE_LABELS, PLATFORM_LABELS } from "@/lib/paid-ads/types";
+import {
+  AUDIENCE_LABELS,
+  PLATFORM_LABELS,
+  type PaidAdsAd,
+  type PaidAdsAdSet,
+} from "@/lib/paid-ads/types";
 import {
   Badge,
   BarRow,
@@ -29,6 +35,8 @@ import { cn } from "@/lib/utils";
 
 /** Zoveel advertentiesets staan er standaard; de rest achter "Toon alle". */
 const VISIBLE_SETS = 8;
+/** Zoveel advertenties staan er standaard in de galerij. */
+const VISIBLE_ADS = 8;
 
 export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
   const formats = useMemo(() => byFormat(data.ads), [data.ads]);
@@ -46,6 +54,8 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
 
   return (
     <div className="space-y-6">
+      <AdGallery ads={data.ads} adSets={data.adSets} />
+
       {/* Format performance */}
       <SectionCard title="Format performance" hint="welk format levert het resultaat op">
         {formats.length === 0 ? (
@@ -172,6 +182,113 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
           </>
         )}
       </SectionCard>
+    </div>
+  );
+}
+
+/**
+ * De advertenties zelf, op volgorde van besteding. Alleen advertenties waarvan
+ * het platform een afbeelding levert; een klik opent de afbeelding volledig.
+ */
+function AdGallery({ ads, adSets }: { ads: PaidAdsAd[]; adSets: PaidAdsAdSet[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const setNames = useMemo(
+    () => new Map(adSets.map((s) => [`${s.platform}:${s.id}`, s.name])),
+    [adSets]
+  );
+  const withImage = useMemo(
+    () =>
+      ads
+        .filter((a) => a.thumbnailUrl)
+        .sort((a, b) => b.metrics.spend - a.metrics.spend),
+    [ads]
+  );
+  const visible = showAll ? withImage : withImage.slice(0, VISIBLE_ADS);
+
+  return (
+    <SectionCard
+      title="Advertentievoorbeelden"
+      hint={withImage.length > 0 ? `${nl(withImage.length)} met afbeelding · op besteding` : undefined}
+    >
+      {withImage.length === 0 ? (
+        <EmptySection>
+          Afbeeldingen verschijnen zodra Meta-advertenties binnenkomen. Google Ads, TikTok en LinkedIn
+          leveren nog geen afbeeldingen.
+        </EmptySection>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {visible.map((ad) => (
+              <AdPreview
+                key={`${ad.platform}-${ad.id}`}
+                ad={ad}
+                adSetName={setNames.get(`${ad.platform}:${ad.adSetId}`) ?? null}
+              />
+            ))}
+          </div>
+          {withImage.length > VISIBLE_ADS && (
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-4 font-heading text-xs uppercase tracking-wide text-psv-red-primary hover:underline"
+            >
+              {showAll ? "Toon minder" : `Toon alle ${nl(withImage.length)} advertenties`}
+            </button>
+          )}
+        </>
+      )}
+    </SectionCard>
+  );
+}
+
+function AdPreview({ ad, adSetName }: { ad: PaidAdsAd; adSetName: string | null }) {
+  const d = derive(ad.metrics);
+  return (
+    <figure className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-border">
+      <a
+        href={ad.thumbnailUrl ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+        title="Open de afbeelding"
+        className="block bg-muted"
+      >
+        <CreativeThumb
+          src={ad.thumbnailUrl}
+          alt={ad.name}
+          className="aspect-[4/5] h-auto w-full rounded-none [&>img]:object-contain [&>svg]:h-6 [&>svg]:w-6"
+        />
+      </a>
+      <figcaption className="flex flex-1 flex-col gap-2 p-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium" title={ad.name}>
+            {ad.name}
+          </p>
+          <p className="flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+            <span className={cn("h-2 w-2 shrink-0 rounded-full", PLATFORM_DOT[ad.platform])} />
+            <span className="truncate">
+              {PLATFORM_LABELS[ad.platform]}
+              {ad.format ? ` · ${ad.format}` : ""}
+              {adSetName ? ` · ${adSetName}` : ""}
+            </span>
+          </p>
+        </div>
+        <dl className="mt-auto grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs tabular-nums">
+          <Stat label="Besteed" value={eur(ad.metrics.spend)} />
+          <Stat label="CTR" value={pct(d.ctr)} />
+          <Stat label="Res." value={nl(ad.metrics.results)} />
+          <Stat label="CPC" value={eur(d.cpc, 2)} />
+          <Stat label="CPA" value={eur(d.costPerResult, 2)} />
+          <Stat label="ROAS" value={roas(d.roas)} />
+        </dl>
+      </figcaption>
+    </figure>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="font-heading text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="truncate">{value}</dd>
     </div>
   );
 }
