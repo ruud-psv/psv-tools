@@ -145,9 +145,14 @@ export const kennisbankTools: KennisbankTool[] = [
     name: "Delen van persoonsgegevens",
     category: "E-mail & Data",
     description:
-      "Zo zet je een wachtwoord uit NordPass op een Excel-bestand met persoonsgegevens, zoals mailadressen, voordat je het deelt.",
+      "Zo zet je een wachtwoord uit NordPass op een Excel-bestand met persoonsgegevens, zoals mailadressen, en deel je het bestand en het wachtwoord veilig.",
     features: [],
     steps: [
+      {
+        title: "Voorbereiden — haal weg wat niet nodig is",
+        description:
+          "Verwijder uit het Excel-bestand de kolommen en rijen die de ontvanger niet nodig heeft. Deel alleen de persoonsgegevens die nodig zijn.",
+      },
       {
         title: "Excel — open het bestand in de app op je laptop",
         description:
@@ -156,7 +161,7 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "Excel — kies Versleutelen met wachtwoord",
         description:
-          "Ga naar Bestand > Info > Werkmap beveiligen > Versleutelen met wachtwoord. In een Engelstalige Excel is dat File > Info > Protect Workbook > Encrypt with Password. Laat dit venster openstaan.",
+          "Ga naar Bestand > Info > Werkmap beveiligen > Versleutelen met wachtwoord. In een Engelstalige Excel is dat File > Info > Protect Workbook > Encrypt with Password. Op een Mac kies je File > Passwords en gebruik je het veld Password to open. Laat dit venster openstaan.",
       },
       {
         title: "NordPass — open het volledige scherm",
@@ -186,12 +191,23 @@ export const kennisbankTools: KennisbankTool[] = [
       },
       {
         title: "Delen — deel het beveiligde bestand",
-        description: "Deel het beveiligde Excel-bestand, bijvoorbeeld via een Asana-taak.",
+        description:
+          "Deel het beveiligde Excel-bestand, bijvoorbeeld via een Asana-taak. Zet bij die Asana-taak de datum waarop het bestand weg moet als einddatum. Wie de taak aanmaakt, ruimt op die datum op.",
       },
       {
-        title: "Opruimen — verwijder het bestand en het wachtwoord",
+        title: "Delen — deel het wachtwoord via NordPass",
         description:
-          "Zijn de gegevens verwerkt of niet meer nodig? Verwijder dan het hele Excel-bestand en het wachtwoord in NordPass.",
+          "Klik in NordPass bij het wachtwoord op de drie puntjes > Share. Vul het mailadres van de ontvanger in, kies Can view, stel een einddatum in en klik op Share. De ontvanger moet de share in NordPass eerst accepteren. Heeft de ontvanger geen NordPass van PSV, bijvoorbeeld bij een externe partij? Geef het wachtwoord dan telefonisch door, niet per sms of mail.",
+      },
+      {
+        title: "Opruimen — verwijder alle kopieën van het bestand",
+        description:
+          "Zijn de gegevens verwerkt, niet meer nodig of is de einddatum van de Asana-taak bereikt? Verwijder dan het Excel-bestand overal: de bijlage in de Asana-taak (elke bijlage apart), en je eigen kopieën in Downloads, op je laptop en in OneDrive of SharePoint. Vraag de ontvanger om de eigen kopie ook te verwijderen.",
+      },
+      {
+        title: "Opruimen — verwijder het wachtwoord in NordPass",
+        description:
+          "Klik in NordPass bij het wachtwoord op de drie puntjes en zet het in de prullenbak (Trash). Leeg daarna de prullenbak.",
       },
     ],
     tips: [
@@ -201,11 +217,15 @@ export const kennisbankTools: KennisbankTool[] = [
       },
       {
         type: "warning",
-        text: "Zet het wachtwoord nooit in dezelfde Asana-taak, opmerking of mail als het Excel-bestand. Wie het bestand in handen krijgt, heeft dan ook het wachtwoord.",
+        text: "Zet het wachtwoord nooit in dezelfde Asana-taak, opmerking of mail als het Excel-bestand. Wie het bestand in handen krijgt, heeft dan ook het wachtwoord. Deel het wachtwoord via NordPass, of telefonisch als de ontvanger geen NordPass van PSV heeft.",
       },
       {
         type: "warning",
-        text: "Kies in het menu Werkmap beveiligen echt Versleutelen met wachtwoord. De andere opties in dat menu, zoals een blad beveiligen, zetten geen wachtwoord op het openen van het bestand.",
+        text: "Zet het wachtwoord op het Excel-bestand voordat je het bestand in OneDrive, SharePoint of Teams zet. Anders blijven oude versies zonder wachtwoord in de versiegeschiedenis staan. Staat het bestand er al zonder wachtwoord? Verwijder dan die oude versies uit de versiegeschiedenis.",
+      },
+      {
+        type: "warning",
+        text: "Kies in het menu Werkmap beveiligen echt Versleutelen met wachtwoord. De andere opties in dat menu, zoals een blad beveiligen, zetten geen wachtwoord op het openen van het bestand. Op een Mac geldt hetzelfde voor Review > Protect Workbook: gebruik File > Passwords.",
       },
       {
         type: "tip",
@@ -213,7 +233,19 @@ export const kennisbankTools: KennisbankTool[] = [
       },
       {
         type: "note",
+        text: "Persoonsgegevens zijn alle gegevens die iets zeggen over een persoon die je kunt herkennen, zoals naam, mailadres, telefoonnummer, adres, geboortedatum en klant- of CRM-nummer. Een bestand met alleen een kolom mailadressen bevat dus ook persoonsgegevens.",
+      },
+      {
+        type: "note",
         text: "Bewaar het wachtwoord altijd in NordPass. Excel kan een vergeten wachtwoord niet herstellen, en zonder wachtwoord gaat het Excel-bestand niet meer open.",
+      },
+      {
+        type: "note",
+        text: "Een Excel-bestand met een wachtwoord kun je niet tegelijk met anderen bewerken.",
+      },
+      {
+        type: "note",
+        text: "Vragen over deze werkwijze? Neem contact op met het Digital Marketing-team.",
       },
     ],
   },

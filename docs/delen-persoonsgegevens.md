@@ -6,51 +6,59 @@ beantwoordt vragen met Haiku 5.5 op lage effort en gebruikt alleen wat in de
 kennisbank staat. Wat hier als **open** staat, kan de chat dus niet beantwoorden.
 De chat zegt dan dat het ontbreekt en verzint niets.
 
-Vul een open punt in door de tekst in `lib/kennisbank.ts` aan te passen. De
-voorstellen hieronder zijn klaar om over te nemen, maar het zijn **beslissingen
-voor PSV**: neem ze pas over als ze kloppen met hoe we het willen.
+Pas de pagina aan in `lib/kennisbank.ts`. Werk daarna dit document bij en stel
+de testvragen opnieuw in de kennisbank-chat.
 
 ## Wat er met de originele tekst is gebeurd
 
-- **Stap 9 (Delen) was een kopie van stap 8.** De pagina zegt nu alleen wat de
-  tekst wél zegt: deel het bestand, bijvoorbeeld via een Asana-taak. Hoe de
-  ontvanger het wachtwoord krijgt, is open punt 1.
-- **Toegevoegd, controleer of je dit wilt:**
-  - De waarschuwing "zet het wachtwoord nooit in dezelfde Asana-taak, opmerking
-    of mail als het bestand". Dit volgt uit het doel van de procedure, en de
-    Autoriteit Persoonsgegevens adviseert het ook.
-  - Het Engelse menupad voor wie Excel in het Engels gebruikt.
-  - Drie tips: .csv eerst opslaan als .xlsx, Excel kan een vergeten wachtwoord
-    niet herstellen, en kies echt *Versleutelen met wachtwoord* en niet een
-    andere optie in hetzelfde menu.
+- **Stap 9 (Delen) was een kopie van stap 8.** Het delen is nu uitgeschreven in
+  twee stappen: het bestand via Asana en het wachtwoord via NordPass.
 - **Weggelaten:** tijdgebonden zinnen ("sinds kort", "vanaf nu") en "in minder
   dan een minuut klaar". Die verouderen of helpen de chat niet bij een antwoord.
 - **Elke stap noemt de app** (Excel of NordPass) en het bestand bij naam, zonder
   "hem" of "dit". De chat leest een stap soms los van de rest.
+- **Toegevoegd:** de punten hieronder. Ze stonden niet in de originele tekst en
+  zijn op deze pagina vastgelegd als werkwijze.
 
-## Open punten
+| Onderwerp | Wat er op de pagina staat | Waarom |
+|---|---|---|
+| Wachtwoord aan de ontvanger geven | Stap 11: via NordPass > drie puntjes > **Share**, met *Can view* en een einddatum. De ontvanger accepteert de share. | Zonder deze stap gaan collega's zelf iets bedenken, vaak het wachtwoord in dezelfde taak. |
+| Ontvanger buiten PSV of zonder NordPass | Stap 11: geef het wachtwoord telefonisch door, niet per sms of mail. | In NordPass Business staat delen buiten de organisatie standaard uit. De AP noemt bellen als apart kanaal; een sms is niet versleuteld (NCSC). |
+| Wachtwoord nooit bij het bestand | Waarschuwing: nooit in dezelfde Asana-taak, opmerking of mail. | Wie het bestand heeft, heeft anders ook het wachtwoord. De AP adviseert een apart kanaal. |
+| Alleen delen wat nodig is | Stap 1: haal overbodige kolommen en rijen weg. | Dataminimalisatie (AVG). |
+| Verwijderdatum en eigenaar | Stap 10: de einddatum van de Asana-taak is de verwijderdatum; wie de taak aanmaakt, ruimt op. | De AVG vraagt om een vaste bewaartermijn. "Als het niet meer nodig is" had geen datum en geen eigenaar. |
+| Opruimen | Stap 12 en 13: Asana-bijlage (elke bijlage apart), eigen kopieën in Downloads, op de laptop en in OneDrive of SharePoint, de ontvanger vragen de kopie te verwijderen, en het item in NordPass naar de prullenbak en die legen. | Kopieën blijven anders bestaan, ook in prullenbakken. |
+| Oude versies zonder wachtwoord | Waarschuwing: zet het wachtwoord erop vóór het uploaden, of verwijder de oude versies. | Anders staan er versies zonder wachtwoord in de versiegeschiedenis van OneDrive, SharePoint of Teams. |
+| Mac | Stap 3 en een waarschuwing: **File > Passwords**, veld **Password to open**. Niet Review > Protect Workbook. | Review > Protect Workbook beschermt alleen de structuur en versleutelt het bestand niet. |
+| Wat persoonsgegevens zijn | Opmerking met voorbeelden: naam, mailadres, telefoonnummer, adres, geboortedatum, klant- of CRM-nummer. | Zo kan de chat ook vragen als "telt alleen een lijst mailadressen ook?" beantwoorden. |
+| Samen in het bestand werken | Opmerking: een bestand met wachtwoord kun je niet tegelijk met anderen bewerken. | Voorkomt verwarring als co-authoring niet werkt. |
+| Aanspreekpunt | Opmerking: vragen naar het Digital Marketing-team, net als bij de andere kennisbankpagina's. | De chat moet ergens naar kunnen verwijzen. |
 
-Gesorteerd op belang. De eerste drie zijn nodig voordat de procedure echt
-sluitend is.
+## Open punt
 
-| # | Open punt | Waarom het telt | Voorstel |
-|---|---|---|---|
-| 1 | **Hoe krijgt de ontvanger het wachtwoord?** | Zonder deze stap kan de ontvanger het bestand niet openen. Collega's gaan dan zelf iets bedenken, vaak het wachtwoord in dezelfde taak. | Collega's: deel het item in NordPass via de drie puntjes > **Share**, met het recht *Can view* en een einddatum. De ontvanger moet de share eerst accepteren. |
-| 2 | **Ontvanger buiten PSV of zonder NordPass** | In NordPass Business staat delen buiten de organisatie standaard uit, en dat is een instelling van de beheerder. | Kies één route, bijvoorbeeld het wachtwoord telefonisch doorgeven. De AP noemt bellen als apart kanaal. Een sms is niet versleuteld (NCSC). |
-| 3 | **Wat als het misgaat?** Bijvoorbeeld een verkeerde ontvanger of een gelekt wachtwoord. | Dan is er een datalek. Een melding bij de AP moet binnen 72 uur. | Meld het direct bij [naam of mailadres privacy officer/FG]. Vraag de ontvanger het bestand te verwijderen en dat te bevestigen. |
-| 4 | **Alleen delen wat nodig is** | Dataminimalisatie (AVG). Vaak zitten er meer kolommen in een export dan de ontvanger nodig heeft. | Stap toevoegen vóór stap 1: verwijder kolommen en rijen die de ontvanger niet nodig heeft. |
-| 5 | **Opruimen is breder dan "het bestand"** | Kopieën blijven bestaan in Downloads, mail, Asana-bijlagen, de prullenbak van OneDrive (ongeveer 93 dagen), de Asana-prullenbak (30 dagen) en de prullenbak van NordPass. De ontvanger heeft ook een kopie. | Een opruimlijst: Asana-bijlage verwijderen (per bijlage), lokale kopieën verwijderen, de ontvanger vragen zijn of haar kopie te verwijderen, en de share in NordPass intrekken. Zet het item daarna in de prullenbak van NordPass en leeg die. |
-| 6 | **Wanneer is "niet meer nodig"?** | De AVG vraagt om een vaste bewaartermijn. "Als het niet meer nodig is" heeft geen datum en geen eigenaar. | Gebruik de einddatum van de Asana-taak als verwijderdatum. De maker van de taak ruimt op. |
-| 7 | **Oude versies zonder wachtwoord** | Stond het bestand al op OneDrive, SharePoint of Teams vóór het wachtwoord erop kwam? Dan staan in de versiegeschiedenis versies zonder wachtwoord. | Zet het wachtwoord erop voordat je het bestand uploadt. Is dat niet gelukt, verwijder dan de oude versies. |
-| 8 | **Mac** | Op een Mac zit de optie op een andere plek. Ook noemt een oude Microsoft-pagina een maximum van 15 tekens op de Mac, terwijl NordPass langere wachtwoorden maakt. | Test het op een Mac en voeg het Mac-pad toe. |
-| 9 | **Samen in het bestand werken** | Een bestand met wachtwoord kun je niet tegelijk met anderen bewerken. | Vraag IT of gevoeligheidslabels (Microsoft Purview) beschikbaar zijn voor bestanden waar meerdere mensen in werken. |
-| 10 | **Knopnamen in NordPass controleren** | Volgens de NordPass-helppagina's heet de knop *Add item* en niet *Create item*. *Fill password* kwam in geen enkele bron voor. Die pagina's waren alleen via zoekresultaten te zien. | Klik de stappen één keer door in NordPass en neem de knopnamen exact over. |
-| 11 | **Welke gegevens en bestanden vallen eronder?** | De tekst noemt "mailadressen en andere gevoelige data" en alleen Excel. | Noem voorbeelden (naam, mailadres, telefoonnummer, CRM-nummer, adres) en zeg of dit ook geldt voor .csv, Word en pdf. |
-| 12 | **Aanspreekpunt** | De chat moet ergens naar kunnen verwijzen bij twijfel. | Naam of team dat vragen over deze procedure beantwoordt. |
+| Open punt | Waarom het telt | Voorstel |
+|---|---|---|
+| **Wat als het misgaat?** Bijvoorbeeld een verkeerde ontvanger of een gelekt wachtwoord. | Dan is er een datalek. Een melding bij de AP moet binnen 72 uur. | Meld het direct bij [naam of mailadres privacy officer/FG]. Vraag de ontvanger het bestand te verwijderen en dat te bevestigen. |
 
-Optioneel, over de volgorde: in de huidige volgorde moet het venster in Excel
-openblijven terwijl je in NordPass werkt. Maak je eerst het wachtwoord aan in
-NordPass (stap 3 t/m 7) en open je daarna Excel, dan hoeft dat niet.
+## Nog te controleren in de app
+
+Dit zijn geen open punten, maar namen die niet op de bronpagina zelf te
+controleren waren.
+
+- **Knopnamen in NordPass.** De pagina gebruikt *Create item* en *Fill password*,
+  zoals in de originele tekst. De helppagina's van NordPass noemen de knop *Add
+  item*, en *Fill password* kwam daar niet voor. Klik de stappen één keer door
+  en neem de namen exact over.
+- **Share in NordPass.** Volgens de helppagina's van NordPass: drie puntjes >
+  *Share*, rechten *Can view*, *Can edit* of *Can share*, en een einddatum. De
+  exacte naam van het veld voor de einddatum is niet bevestigd.
+- **Mac.** *File > Passwords* en *Password to open* komen uit Engelstalige
+  handleidingen. De Nederlandse namen op de Mac zijn niet getest. Een oude
+  Microsoft-pagina noemt ook een maximum van 15 tekens voor wachtwoorden op de
+  Mac. Test of een wachtwoord uit NordPass op een Mac werkt.
+- **Volgorde (optioneel).** In de huidige volgorde moet het venster in Excel
+  openblijven terwijl je in NordPass werkt. Maak je eerst het wachtwoord aan in
+  NordPass (stap 4 t/m 8) en open je daarna Excel, dan hoeft dat niet.
 
 ## Testvragen voor de kennisbank-chat
 
@@ -61,15 +69,19 @@ kennisbank dit nog niet beschrijft.
 
 | Vraag | Verwacht antwoord |
 |---|---|
-| Hoe zet ik een wachtwoord op een Excel-bestand? | Stap 1 t/m 8 op volgorde, met Bestand > Info > Werkmap beveiligen > Versleutelen met wachtwoord. |
+| Hoe zet ik een wachtwoord op een Excel-bestand? | Stap 2 t/m 9 op volgorde, met Bestand > Info > Werkmap beveiligen > Versleutelen met wachtwoord. |
 | Mijn Excel is Engelstalig, waar vind ik het? | File > Info > Protect Workbook > Encrypt with Password. |
+| Ik werk op een Mac. | File > Passwords, veld Password to open. Niet Review > Protect Workbook. |
 | Kan dit ook in Excel online? | Nee, gebruik de Excel-app op je laptop. |
-| Ik heb een csv-export met mailadressen, hoe deel ik die? | Eerst opslaan als .xlsx, dan de stappen. |
-| Mag ik het wachtwoord in de Asana-taak zetten? | Nee, nooit in dezelfde taak, opmerking of mail als het bestand. |
-| Hoe geef ik het wachtwoord aan mijn collega? | Staat er niet (open punt 1). |
-| Ik heb het bestand naar de verkeerde persoon gestuurd. | Staat er niet (open punt 3). |
+| Ik heb een csv-export met mailadressen, hoe deel ik die? | Eerst overbodige kolommen weghalen en opslaan als .xlsx, dan de stappen. |
+| Mag ik het wachtwoord in de Asana-taak zetten? | Nee. Deel het via NordPass, of telefonisch als de ontvanger geen NordPass van PSV heeft. |
+| Hoe geef ik het wachtwoord aan mijn collega? | NordPass > drie puntjes > Share, Can view, einddatum. De collega accepteert de share. |
+| Het bureau dat de mailing maakt heeft geen NordPass. | Telefonisch doorgeven, niet per sms of mail. |
+| Wanneer moet ik het bestand verwijderen? | Als de gegevens verwerkt of niet meer nodig zijn, en uiterlijk op de einddatum van de Asana-taak. |
+| Wat moet ik allemaal opruimen? | Stap 12 en 13: Asana-bijlage, eigen kopieën, de ontvanger vragen te verwijderen, NordPass-item naar de prullenbak en die legen. |
+| Telt een lijst met alleen mailadressen ook? | Ja, een mailadres is een persoonsgegeven. |
 | Ik ben het wachtwoord kwijt. | Excel kan het niet herstellen. Het staat in NordPass onder de bestandsnaam. |
-| Wanneer moet ik het bestand verwijderen? | Als de gegevens verwerkt zijn of niet meer nodig zijn: het bestand en het wachtwoord in NordPass. |
+| Ik heb het bestand naar de verkeerde persoon gestuurd. | Staat er niet (open punt). |
 
 ## Gebruikte richtlijnen
 
@@ -86,7 +98,6 @@ Hoe de pagina is geschreven, en waar dat vandaan komt:
 - **Een verbod met het waarom erbij en met wat je wél doet.** Uit Anthropic's
   [skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
   en [prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices).
-  Daarom is het "wat je wél doet" bij open punt 1 nog niet ingevuld.
 - **Geen tijdgebonden zinnen, één vaste term per begrip.** Bijvoorbeeld altijd
   "wachtwoord", nooit ook "code" of "sleutel". Bron: Anthropic best practices.
 - **Gaten markeren in plaats van stappen verzinnen.** Uit
@@ -119,7 +130,12 @@ pagina zelf. Knopnamen check je het best in de app.
   [Protect a file with a password](https://support.microsoft.com/en-gb/office/protect-a-file-with-a-password-9cfa52c9-737d-4f9c-bbad-80bc52c67b8c)
 - Wachtwoord weer verwijderen:
   [Remove password protection](https://support.microsoft.com/en-au/office/remove-password-protection-on-a-file-04f75487-4942-429e-8eeb-4c23064a0d2f)
-- Mac-pad en de grens van 15 tekens:
+- Mac, File > Passwords en Password to open:
+  [Tufts IT](https://it.tufts.edu/guides/password-protecting-and-encrypting-files/password-protecting-and-encrypting-ms-excel-files),
+  [UW-Madison](https://kb.wisc.edu/helpdesk/17333).
+  Dat Protect Workbook geen versleuteling is:
+  [Office-Watch](https://office-watch.com/2025/protect-or-encrypt-your-excel-workbooks/).
+  De grens van 15 tekens:
   [Require a password to open or modify a workbook](https://support.microsoft.com/en-us/excel/require-a-password-to-open-or-modify-a-workbook)
 - NordPass, item toevoegen:
   [How to add items](https://support.nordpass.com/hc/en-us/articles/40612713367569-How-to-add-items-to-NordPass-browser-extension)
