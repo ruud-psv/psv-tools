@@ -38,7 +38,17 @@ test("verzenddatum en DMID worden gecontroleerd", () => {
   assert.match(validateNameInput(undefined, undefined) ?? "", /verzenddatum/);
 });
 
-test("filter: leeg beginnen, relatienummers uit de lijst toevoegen, zonder dubbelen", () => {
+const ticketingRule = {
+  operation: "intersection",
+  selection: {
+    selection_base: "contactpreference",
+    criterion: { category_name: "Email", preference_name: "Ticketing", operation: "equals", value: true },
+  },
+};
+
+type RelationRule = { startset?: string; operation: string; selection: { criterion: { value: string[] } } };
+
+test("filter: leeg beginnen, relatienummers uit de lijst toevoegen, zonder dubbelen, alleen met Ticketing", () => {
   const body = contactFilterBody("Naam", ["300", " 100", "200", "100", ""]);
   assert.deepEqual(body, {
     name: "Naam",
@@ -51,6 +61,7 @@ test("filter: leeg beginnen, relatienummers uit de lijst toevoegen, zonder dubbe
           criterion: { field_name: RELATION_NUMBER_FIELD, operation: "includedin", value: ["100", "200", "300"] },
         },
       },
+      ticketingRule,
     ],
   });
 });
@@ -58,16 +69,23 @@ test("filter: leeg beginnen, relatienummers uit de lijst toevoegen, zonder dubbe
 test("filter: hooguit 100 relatienummers per regel, alleen de eerste regel met startset", () => {
   const numbers = Array.from({ length: 250 }, (_, i) => String(100000 + i));
   const { rules } = contactFilterBody("Naam", numbers);
+  assert.deepEqual(rules.at(-1), ticketingRule);
+  const relationRules = rules.slice(0, -1) as RelationRule[];
   assert.deepEqual(
-    rules.map((rule) => rule.selection.criterion.value.length),
+    relationRules.map((rule) => rule.selection.criterion.value.length),
     [100, 100, 50]
   );
-  assert.equal(rules[0].startset, "empty");
-  assert.ok(rules.slice(1).every((rule) => !("startset" in rule) && rule.operation === "add"));
+  assert.equal(relationRules[0].startset, "empty");
+  assert.ok(relationRules.slice(1).every((rule) => !("startset" in rule) && rule.operation === "add"));
   assert.deepEqual(
-    rules.flatMap((rule) => rule.selection.criterion.value),
+    relationRules.flatMap((rule) => rule.selection.criterion.value),
     numbers
   );
+});
+
+test("filter: met de Ticketing-regel erbij nooit meer dan 100 regels", () => {
+  const numbers = Array.from({ length: MAX_RELATION_NUMBERS }, (_, i) => String(i + 1));
+  assert.equal(contactFilterBody("Naam", numbers).rules.length, 100);
 });
 
 test("filter: geen lege lijst en niet meer dan Maileon aankan", () => {

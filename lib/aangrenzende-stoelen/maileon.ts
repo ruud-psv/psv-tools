@@ -29,13 +29,22 @@ export const RELATION_NUMBER_FIELD = "MEMBERNUMBERPRIOR";
  */
 export const IN_LIST_OPERATION = "includedin";
 
+/**
+ * Alleen contacten met deze preference op ja mogen mail over kaartverkoop
+ * krijgen. Op de voorkeurenpagina (`psv-voorkeuren-algemeen`) heet hij "PSV
+ * Kaartverkoop thuiswedstrijden"; het veld daar is `Email###Ticketing`, dus
+ * categorie `Email`, preference `Ticketing`.
+ */
+export const TICKETING_PREFERENCE = { category_name: "Email", preference_name: "Ticketing" } as const;
+
 /** Het schema staat hooguit 100 waarden per regel toe; meer gaat in extra regels. */
 export const MAX_VALUES_PER_RULE = 100;
 
 /** Maileon staat hooguit 100 regels per filter toe. */
 export const MAX_RULES = 100;
 
-export const MAX_RELATION_NUMBERS = MAX_VALUES_PER_RULE * MAX_RULES;
+/** Eén regel gaat op aan de Ticketing-preference; de rest is voor relatienummers. */
+export const MAX_RELATION_NUMBERS = MAX_VALUES_PER_RULE * (MAX_RULES - 1);
 
 const SEND_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DMID = /^[A-Za-z0-9-]{2,30}$/;
@@ -78,6 +87,8 @@ export function maileonName({ sendDate, eventName, dmid }: MaileonNameInput): st
 /**
  * Het contactfilter: begin leeg en voeg iedereen toe met een relatienummer uit
  * de lijst, in blokken van 100. Alleen de eerste regel heeft een `startset`.
+ * De laatste regel houdt daarvan alleen de contacten over met de
+ * Ticketing-preference op ja.
  */
 export function contactFilterBody(name: string, relationNumbers: readonly string[]) {
   const values = [...new Set(relationNumbers.map((value) => value.trim()).filter(Boolean))].sort();
@@ -88,9 +99,9 @@ export function contactFilterBody(name: string, relationNumbers: readonly string
     );
   }
 
-  const rules = [];
+  const relationRules = [];
   for (let start = 0; start < values.length; start += MAX_VALUES_PER_RULE) {
-    rules.push({
+    relationRules.push({
       ...(start === 0 ? { startset: "empty" } : {}),
       operation: "add",
       selection: {
@@ -103,7 +114,14 @@ export function contactFilterBody(name: string, relationNumbers: readonly string
       },
     });
   }
-  return { name, rules };
+  const ticketingRule = {
+    operation: "intersection",
+    selection: {
+      selection_base: "contactpreference",
+      criterion: { ...TICKETING_PREFERENCE, operation: "equals", value: true },
+    },
+  };
+  return { name, rules: [...relationRules, ticketingRule] };
 }
 
 /** De doelgroep op een filter, als XML voor `POST /targetgroups`. */
