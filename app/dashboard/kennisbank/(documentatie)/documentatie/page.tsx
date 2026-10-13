@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { kennisbankTools, kennisbankCategories } from "@/lib/kennisbank";
-import { Meldingen } from "./Meldingen";
 
 export const metadata = {
   title: "Documentatie | Kennisbank | PSV Tools",
@@ -53,8 +52,6 @@ export default function KennisbankDocumentatiePage() {
           Stel een vraag
         </Link>
       </div>
-
-      <Meldingen />
 
       <div className="space-y-10">
         {kennisbankCategories.map((category) => {

@@ -12,7 +12,6 @@ import Link from "next/link";
 import {
   ArrowUp,
   BookOpen,
-  Check,
   FileText,
   Flag,
   Loader2,
@@ -116,17 +115,7 @@ function formatAnswer(text: string) {
   return blocks;
 }
 
-function Antwoord({
-  raw,
-  bezig,
-  gemeld,
-  onMeld,
-}: {
-  raw: string;
-  bezig: boolean;
-  gemeld: boolean;
-  onMeld: () => void;
-}) {
+function Antwoord({ raw, bezig }: { raw: string; bezig: boolean }) {
   const { tekst, bronnen, geen } = splitAntwoord(raw);
 
   if (!tekst && bezig) {
@@ -169,20 +158,17 @@ function Antwoord({
       )}
 
       {!bezig &&
-        (gemeld ? (
-          <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Check className="h-3.5 w-3.5 text-success" />
-            Gemeld, dank je
-          </p>
-        ) : ontbreekt ? (
-          <button
-            type="button"
-            onClick={onMeld}
+        (ontbreekt ? (
+          <a
+            href={FEEDBACK_FORM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 font-heading text-xs uppercase tracking-wide transition-colors hover:border-warning"
           >
             <Flag className="h-3.5 w-3.5 text-warning" />
             Meld als ontbrekend
-          </button>
+            <span className="sr-only">(opent het feedbackformulier in een nieuw tabblad)</span>
+          </a>
         ) : (
           <a
             href={FEEDBACK_FORM_URL}
@@ -232,7 +218,6 @@ export function KennisbankChat() {
   const [bezig, setBezig] = useState(false);
   const [laden, setLaden] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [gemeld, setGemeld] = useState<Set<number>>(new Set());
 
   const abortRef = useRef<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -340,7 +325,6 @@ export function KennisbankChat() {
     setBeurten([]);
     setFout(null);
     setInvoer("");
-    setGemeld(new Set());
     invoerRef.current?.focus();
   }
 
@@ -349,7 +333,6 @@ export function KennisbankChat() {
     stop();
     setLaden(true);
     setFout(null);
-    setGemeld(new Set());
     try {
       const res = await fetch(`/api/kennisbank/gesprekken/${id}`);
       const data = await res.json();
@@ -373,27 +356,6 @@ export function KennisbankChat() {
     }
     setGesprekken((huidig) => huidig.filter((g) => g.id !== id));
     if (id === gesprekId) nieuwGesprek();
-  }
-
-  async function meld(index: number) {
-    const vraag = beurten[index - 1]?.content;
-    if (!vraag) return;
-    setGemeld((huidig) => new Set(huidig).add(index));
-    try {
-      const res = await fetch("/api/kennisbank/meldingen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vraag, antwoord: splitAntwoord(beurten[index].content).tekst }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      setGemeld((huidig) => {
-        const volgende = new Set(huidig);
-        volgende.delete(index);
-        return volgende;
-      });
-      setFout("Melden mislukt. Probeer het opnieuw.");
-    }
   }
 
   function onSubmit(e: FormEvent) {
@@ -518,8 +480,6 @@ export function KennisbankChat() {
                     key={i}
                     raw={b.content}
                     bezig={bezig && i === beurten.length - 1}
-                    gemeld={gemeld.has(i)}
-                    onMeld={() => meld(i)}
                   />
                 )
               )}
