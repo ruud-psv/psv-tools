@@ -220,6 +220,7 @@ export async function GET(req: NextRequest) {
   const adSets: PaidAdsResponse["adSets"] = [];
   const ads: PaidAdsResponse["ads"] = [];
   const demographics: PaidAdsResponse["demographics"] = [];
+  const warnings: PaidAdsResponse["warnings"] = [];
   const campaignDaily: PaidAdsResponse["campaignDaily"] = [];
   let previousCampaigns: PaidAdsCampaign[] | null = null;
   let yearAgoCampaigns: PaidAdsCampaign[] | null = null;
@@ -257,6 +258,9 @@ export async function GET(req: NextRequest) {
       adSets.push(...result.data.adSets);
       ads.push(...result.data.ads);
       demographics.push(...(result.data.demographics ?? []));
+      for (const warning of result.data.warnings ?? []) {
+        warnings.push({ ...warning, platform: result.platform });
+      }
       for (const point of result.data.daily) {
         campaignDaily.push({ ...point, platform: result.platform });
       }
@@ -288,6 +292,7 @@ export async function GET(req: NextRequest) {
     connectedPlatforms: connected,
     revenuePlatforms: connected.filter((p) => CONNECTORS[p]?.reportsRevenue),
     platformErrors: errors,
+    warnings,
     fetchedAt: new Date().toISOString(),
   };
 

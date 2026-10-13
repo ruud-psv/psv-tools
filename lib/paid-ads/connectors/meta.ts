@@ -661,17 +661,35 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
 
   // De extra's pas na de kerncijfers: Meta knijpt af bij te veel zware
   // aanvragen tegelijk. Elk mag mislukken zonder de rest mee te nemen — dan
-  // ontbreekt alleen die laag in het dashboard.
+  // ontbreekt alleen die laag in het dashboard, met de reden erbij.
+  const warnings: Warning[] = [];
+  const softFail =
+    <T>(part: Warning["part"], fallback: T) =>
+    (error: unknown): T => {
+      console.error(`[paid-ads] meta ${part} niet opgehaald`, error);
+      warnings.push({ part, message: failureMessage(error, signal) });
+      return fallback;
+    };
+  const partial =
+    (part: Warning["part"], total: number) =>
+    <T>(result: NodeResult<T>): Map<string, T> => {
+      if (result.error) {
+        console.error(`[paid-ads] meta ${part} deels niet opgehaald`, result.error);
+        warnings.push({
+          part,
+          message: `${result.failed} van ${total} niet opgehaald — ${failureMessage(result.error, signal)}`,
+        });
+      }
+      return result.nodes;
+    };
+
   const [demographicRows, targetings] = await Promise.all([
     fetchInsights(config, "adset", DEMOGRAPHIC_FIELDS, window, { breakdowns: "age,gender", signal }).catch(
-      softFail("leeftijd en geslacht", [] as MetaInsightRow[])
+      softFail("demographics", [] as MetaInsightRow[])
     ),
-    fetchNodes<{ targeting?: MetaTargeting }>(
-      config,
-      adSets.map((s) => s.id),
-      "targeting",
-      signal
-    ).catch(softFail("targeting", new Map())),
+    fetchFromAccount<{ targeting?: MetaTargeting }>(config, "adsets", adSets.map((s) => s.id), "targeting", signal)
+      .then(partial("targeting", adSets.length))
+      .catch(softFail("targeting", new Map<string, { targeting?: MetaTargeting }>())),
   ]);
 
   for (const adSet of adSets) {
@@ -697,15 +715,15 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
     });
   }
 
-  return { campaigns, adSets, ads, daily, demographics };
+  return { campaigns, adSets, ads, daily, demographics, warnings };
 }
 
-/** Logt een mislukte extra laag en gaat door met een lege waarde. */
-function softFail<T>(what: string, fallback: T): (error: unknown) => T {
-  return (error) => {
-    console.error(`[paid-ads] meta ${what} niet opgehaald`, error);
-    return fallback;
-  };
+type Warning = NonNullable<ConnectorResult["warnings"]>[number];
+
+/** De reden dat een extra laag ontbreekt, zoals het dashboard hem toont. */
+function failureMessage(error: unknown, signal?: AbortSignal): string {
+  if (signal?.aborted) return "de tijdslimiet van het dashboard was bereikt.";
+  return error instanceof Error ? error.message : String(error);
 }
 
 /* ------------------------------------------------------- creatives -- */
@@ -806,49 +824,102 @@ export async function fetchMetaAdPreview(
   };
 }
 
-/** Hoeveel objecten Graph per `?ids=`-aanvraag toestaat. */
-const NODE_BATCH = 50;
+/**
+ * Zoveel objecten per aanvraag. Het filter op id gaat in de URL mee, dus niet
+ * eindeloos veel tegelijk.
+ */
+const ACCOUNT_BATCH = 50;
+
+/** Wat `fetchFromAccount` oplevert: de objecten die binnenkwamen, en waarom de rest niet. */
+interface NodeResult<T> {
+  nodes: Map<string, T>;
+  /** Hoeveel gevraagde objecten ontbreken doordat hun blok mislukte. */
+  failed: number;
+  /** De fout van het eerste mislukte blok; `null` als alles binnenkwam. */
+  error: unknown;
+}
 
 /**
- * Haalt velden op van losse objecten (advertenties, advertentiesets) via
- * `?ids=a,b,c`: vijftig per aanvraag, twee aanvragen tegelijk.
+ * Haalt velden op van advertentiesets (of andere objecten onder het account)
+ * via de lijst van het account, gefilterd op id: vijftig per aanvraag, twee
+ * aanvragen tegelijk.
+ *
+ * Losse objecten per `?ids=a,b,c` opvragen kan sinds Graph v26 niet meer. De
+ * lijst van het account slaat een verwijderd object gewoon over, in plaats van
+ * de hele aanvraag te weigeren.
+ *
+ * Een mislukt blok neemt de andere niet mee: wat binnenkwam blijft staan, en
+ * het resultaat zegt hoeveel er ontbreekt. Alleen als niets binnenkomt, gooit
+ * deze functie de fout zelf.
  */
-async function fetchNodes<T>(
+async function fetchFromAccount<T>(
   config: MetaConfig,
+  edge: "adsets" | "ads",
   ids: string[],
   fields: string,
   signal?: AbortSignal
-): Promise<Map<string, T>> {
+): Promise<NodeResult<T>> {
   const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += NODE_BATCH) batches.push(ids.slice(i, i + NODE_BATCH));
+  for (let i = 0; i < ids.length; i += ACCOUNT_BATCH) batches.push(ids.slice(i, i + ACCOUNT_BATCH));
+
+  const result: NodeResult<T> = { nodes: new Map(), failed: 0, error: null };
+  for (let i = 0; i < batches.length; i += CHUNK_CONCURRENCY) {
+    const group = batches.slice(i, i + CHUNK_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      group.map((batch) => fetchAccountBatch<T>(config, edge, batch, fields, signal))
+    );
+    settled.forEach((outcome, j) => {
+      if (outcome.status === "rejected") {
+        result.failed += group[j].length;
+        result.error ??= outcome.reason;
+        return;
+      }
+      for (const [id, node] of outcome.value) result.nodes.set(id, node);
+    });
+  }
+
+  if (result.error && result.nodes.size === 0) throw result.error;
+  return result;
+}
+
+/** Eén blok id's uit de lijst van het account, met alle pagina's. */
+async function fetchAccountBatch<T>(
+  config: MetaConfig,
+  edge: "adsets" | "ads",
+  batch: string[],
+  fields: string,
+  signal?: AbortSignal
+): Promise<Map<string, T>> {
+  const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/${config.accountPath}/${edge}`);
+  url.searchParams.set("fields", `id,${fields}`);
+  url.searchParams.set("filtering", JSON.stringify([{ field: "id", operator: "IN", value: batch }]));
+  url.searchParams.set("limit", String(ACCOUNT_BATCH));
 
   const out = new Map<string, T>();
-  for (let i = 0; i < batches.length; i += CHUNK_CONCURRENCY) {
-    const results = await Promise.all(
-      batches.slice(i, i + CHUNK_CONCURRENCY).map(async (batch) => {
-        const url = new URL(`${GRAPH_HOST}/${config.apiVersion}/`);
-        url.searchParams.set("ids", batch.join(","));
-        url.searchParams.set("fields", fields);
-        const res = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
-          cache: "no-store",
-          signal,
-        });
-        const text = await res.text();
-        const body = JSON.parse(text) as Record<string, T> & { error?: { message?: string } };
-        if (!res.ok || body.error) {
-          throw new ConnectorRequestError(
-            `Meta Graph API — ${res.status}: ${redact(body.error?.message ?? text.slice(0, 300), config.token)}`,
-            res.status,
-            redact(text.slice(0, 300), config.token)
-          );
-        }
-        return body;
-      })
-    );
-    for (const body of results) {
-      for (const [id, node] of Object.entries(body)) out.set(id, node as T);
+  let next: string | undefined = url.toString();
+  for (let page = 0; next && page < MAX_PAGES; page++) {
+    const res = await fetch(next, {
+      headers: { Authorization: `Bearer ${config.token}`, Accept: "application/json" },
+      cache: "no-store",
+      signal,
+    });
+    const text = await res.text();
+    let body: { data?: (T & { id?: string })[]; paging?: { next?: string }; error?: { message?: string } };
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new ConnectorRequestError(
+        `Meta gaf een onleesbaar antwoord (${res.status}).`,
+        res.status,
+        redact(text.slice(0, 300), config.token)
+      );
     }
+    if (!res.ok || body.error) {
+      const detail = redact(body.error?.message ?? text.slice(0, 300), config.token);
+      throw new ConnectorRequestError(`Meta Graph API — ${res.status}: ${detail}`, res.status, detail);
+    }
+    for (const node of body.data ?? []) if (node.id) out.set(node.id, node);
+    next = body.paging?.next;
   }
   return out;
 }

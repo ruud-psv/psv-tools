@@ -203,7 +203,19 @@ export interface PaidAdsResponse {
   revenuePlatforms: PaidPlatform[];
   /** Per platform de reden dat er geen data is. Leeg wanneer alles is opgehaald. */
   platformErrors: Partial<Record<PaidPlatform, string>>;
+  /** Onderdelen die ontbreken terwijl de cijfers van dat platform er wel zijn. */
+  warnings: PaidAdsWarning[];
   fetchedAt: string;
+}
+
+/**
+ * Een aanvullend onderdeel dat niet binnenkwam, zoals de afbeeldingen. De
+ * kerncijfers van het platform staan er dan wel; alleen die laag ontbreekt.
+ */
+export interface PaidAdsWarning {
+  platform: PaidPlatform;
+  part: "creatives" | "demographics" | "targeting";
+  message: string;
 }
 
 export const PLATFORM_LABELS: Record<PaidPlatform, string> = {

@@ -75,6 +75,9 @@ interface MaileonPush {
   targetGroupId: number | null;
   targetGroupError: string | null;
   filterUrl: string;
+  ticketingForm: string;
+  relationFilterId: number | null;
+  rejectedForms: string[];
   pushed: number;
 }
 
@@ -505,7 +508,8 @@ export function AangrenzendeStoelen() {
                   <h3 className="text-base font-heading">Doorzetten naar Maileon</h3>
                   <p className="text-xs text-muted-foreground max-w-3xl">
                     Maakt in Maileon een contactfilter en een doelgroep op relatienummer
-                    (MEMBERNUMBERPRIOR). De lijst wordt daarvoor opnieuw uitgerekend met de nieuwste stand.
+                    (MEMBERNUMBERPRIOR), alleen met contacten die de preference Ticketing ("PSV Kaartverkoop
+                    thuiswedstrijden") op ja hebben. De lijst wordt daarvoor opnieuw uitgerekend met de nieuwste stand.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-4">
@@ -566,6 +570,11 @@ export function AangrenzendeStoelen() {
                       {number.format(pushed.pushed)} relatienummers · filter {pushed.contactFilterId}
                       {pushed.targetGroupId && ` · doelgroep ${pushed.targetGroupId}`}
                     </p>
+                    <p className="text-xs text-muted-foreground break-words">
+                      Ticketing-regel in de vorm &ldquo;{pushed.ticketingForm}&rdquo;
+                      {pushed.relationFilterId && `, met hulpfilter ${pushed.relationFilterId} (alleen relatienummers)`}
+                      {pushed.rejectedForms.length > 0 && `. Maileon wees eerst af: ${pushed.rejectedForms.join(" · ")}`}
+                    </p>
                     {!pushed.targetGroupId && (
                       <p className="flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 mt-0.5 text-primary" />
@@ -580,7 +589,7 @@ export function AangrenzendeStoelen() {
                       <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                         {groupStatus?.state === "uptodate" && groupStatus.countContacts !== null ? (
                           <span>
-                            Maileon vond {number.format(groupStatus.countContacts)} contacten, waarvan{" "}
+                            Maileon vond {number.format(groupStatus.countContacts)} contacten met Ticketing op ja, waarvan{" "}
                             {number.format(groupStatus.countActiveContacts ?? 0)} te mailen
                             {groupStatus.evaluated && ` (stand van ${groupStatus.evaluated})`}.
                           </span>
