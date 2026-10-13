@@ -439,6 +439,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       // TikTok rapporteert videoweergaven niet los in deze reportage-endpoint.
       videoViews3s: null,
       thumbnailUrl: null,
+      active: null,
       metrics,
     });
   }

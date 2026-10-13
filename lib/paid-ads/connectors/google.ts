@@ -82,7 +82,7 @@ interface GoogleRow {
     biddingStrategyType?: string;
   };
   adGroup?: { id?: string; name?: string };
-  adGroupAd?: { ad?: { id?: string; name?: string; type?: string } };
+  adGroupAd?: { status?: string; ad?: { id?: string; name?: string; type?: string } };
   metrics?: {
     costMicros?: string;
     impressions?: string;
@@ -563,6 +563,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
           "ad_group_ad.ad.id",
           "ad_group_ad.ad.name",
           "ad_group_ad.ad.type",
+          "ad_group_ad.status",
           ...METRIC_FIELDS,
         ],
         "ad_group_ad",
@@ -628,6 +629,8 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       // advertentietype bestaat; die blijft hier leeg.
       videoViews3s: null,
       thumbnailUrl: null,
+      // ENABLED, PAUSED of REMOVED: de schakelaar van de advertentie zelf.
+      active: row.adGroupAd?.status ? row.adGroupAd.status === "ENABLED" : null,
       metrics,
     });
   }

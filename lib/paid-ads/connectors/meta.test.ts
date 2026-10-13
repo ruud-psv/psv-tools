@@ -4,6 +4,8 @@ import { fetchMetaCreativeImageUrls, isMetaId, metaConnector } from "./meta";
 
 /** 60 advertentiesets: twee blokken voor de targeting, van 50 en van 10. */
 const ADSET_IDS = Array.from({ length: 60 }, (_, i) => String(2001 + i));
+/** Vier advertenties, voor de aan/uit-status. */
+const AD_IDS = ["1001", "1002", "1003", "1004"];
 const WINDOW = { from: "2026-09-14", to: "2026-10-13" };
 
 const realFetch = globalThis.fetch;
@@ -36,7 +38,11 @@ const row = { campaign_id: "c1", objective: "OUTCOME_TRAFFIC", spend: "10", impr
  * advertentiesets van het account wat `adsets` ervan maakt. Houdt elke
  * aanvraag buiten Insights bij.
  */
-function mockGraph(adsets: (ids: string[], url: URL) => Response) {
+function mockGraph(
+  adsets: (ids: string[], url: URL) => Response,
+  ads: (ids: string[]) => Response = (ids) =>
+    json({ data: ids.map((id) => ({ id, status: "ACTIVE", effective_status: "ACTIVE" })) })
+) {
   const calls: URL[] = [];
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = new URL(String(input));
@@ -49,7 +55,14 @@ function mockGraph(adsets: (ids: string[], url: URL) => Response) {
       if (level === "adset") {
         return json({ data: ADSET_IDS.map((id) => ({ ...row, adset_id: id, adset_name: `Set ${id}` })) });
       }
-      return json({ data: [{ ...row, adset_id: ADSET_IDS[0], ad_id: "1001", ad_name: "Ad" }] });
+      return json({
+        data: AD_IDS.map((id) => ({ ...row, adset_id: ADSET_IDS[0], ad_id: id, ad_name: `Ad ${id}` })),
+      });
+    }
+    // De aan/uit-status van advertenties telt hier niet mee als aanvraag.
+    if (url.pathname.endsWith("/act_123/ads")) {
+      const filtering = JSON.parse(url.searchParams.get("filtering")!) as { value: string[] }[];
+      return ads(filtering[0].value);
     }
     calls.push(url);
     if (url.searchParams.has("ids")) return graphError("The ids query parameter is deprecated in v26.0+.", 500);
@@ -198,4 +211,33 @@ test("een 400 op Insights wordt niet opnieuw geprobeerd", async () => {
 
   await assert.rejects(metaConnector.fetchCampaigns(WINDOW), /Invalid parameter/);
   assert.equal(calls, 1);
+});
+
+test("aan/uit-status per advertentie: zelf uit, via set uit, gearchiveerd", async () => {
+  mockGraph(found, () =>
+    json({
+      data: [
+        { id: "1001", status: "ACTIVE", effective_status: "ACTIVE" },
+        { id: "1002", status: "PAUSED", effective_status: "PAUSED" },
+        { id: "1003", status: "ACTIVE", effective_status: "ADSET_PAUSED" },
+        // 1004 ontbreekt: gearchiveerd of verwijderd.
+      ],
+    })
+  );
+
+  const result = await metaConnector.fetchAll(WINDOW);
+
+  const active = Object.fromEntries(result.ads.map((a) => [a.id, a.active]));
+  assert.deepEqual(active, { "1001": true, "1002": false, "1003": false, "1004": false });
+  assert.deepEqual(result.warnings, []);
+});
+
+test("lukt de status niet, dan is hij onbekend en komt de reden mee", async () => {
+  mockGraph(found, () => graphError("(#2) Service temporarily unavailable", 503));
+
+  const result = await metaConnector.fetchAll(WINDOW);
+
+  assert.ok(result.ads.every((a) => a.active === null));
+  assert.equal(result.warnings?.length, 1);
+  assert.equal(result.warnings?.[0].part, "status");
 });

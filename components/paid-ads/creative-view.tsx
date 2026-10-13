@@ -47,11 +47,21 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
     [formats]
   );
   const saturated = useMemo(() => saturation(scored), [scored]);
-  const idle = useMemo(
-    () => adsWithoutResults(data.ads, data.adSets, data.campaigns),
-    [data.ads, data.adSets, data.campaigns]
+
+  // Uitgezette advertenties standaard weg uit de galerij en de lijsten per
+  // set. Advertenties waarvan de status onbekend is, blijven staan.
+  const [onlyActive, setOnlyActive] = useState(true);
+  const inactiveCount = useMemo(() => data.ads.filter((a) => a.active === false).length, [data.ads]);
+  const shownAds = useMemo(
+    () => (onlyActive ? data.ads.filter((a) => a.active !== false) : data.ads),
+    [data.ads, onlyActive]
   );
-  const sets = useMemo(() => adsByAdSet(data.adSets, data.ads), [data.adSets, data.ads]);
+
+  const idle = useMemo(
+    () => adsWithoutResults(shownAds, data.adSets, data.campaigns),
+    [shownAds, data.adSets, data.campaigns]
+  );
+  const sets = useMemo(() => adsByAdSet(data.adSets, shownAds), [data.adSets, shownAds]);
   const [showAllSets, setShowAllSets] = useState(false);
   const imageWarnings = useMemo(
     () => data.warnings.filter((w) => w.part === "creatives"),
@@ -60,7 +70,24 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
 
   return (
     <div className="space-y-6">
-      <AdGallery ads={data.ads} adSets={data.adSets} warnings={imageWarnings} />
+      {inactiveCount > 0 && (
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={onlyActive}
+            onChange={(e) => setOnlyActive(e.target.checked)}
+            className="h-4 w-4 accent-psv-red-primary"
+          />
+          <span>Alleen advertenties die aan staan</span>
+          <span className="text-xs text-muted-foreground">
+            {onlyActive
+              ? `${nl(inactiveCount)} uitgezet ${inactiveCount === 1 ? "is" : "zijn"} verborgen`
+              : `inclusief ${nl(inactiveCount)} uitgezet`}
+          </span>
+        </label>
+      )}
+
+      <AdGallery ads={shownAds} adSets={data.adSets} warnings={imageWarnings} />
 
       {/* Format performance */}
       <SectionCard title="Format performance" hint="welk format levert het resultaat op">

@@ -690,6 +690,7 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       // Via de eigen route: die haalt de afbeelding pas op als hij in beeld
       // komt, met een verse URL — die van Meta verlopen na een paar uur.
       thumbnailUrl: `/api/paid-ads/meta/${encodeURIComponent(id)}/image`,
+      active: null,
       metrics,
     });
   }
@@ -738,14 +739,21 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
       return result.nodes;
     };
 
-  const [demographicRows, targetings] = await Promise.all([
+  const [demographicRows, targetings, statuses] = await Promise.all([
     fetchInsights(config, "adset", DEMOGRAPHIC_FIELDS, window, { breakdowns: "age,gender", signal }).catch(
       softFail("demographics", [] as MetaInsightRow[])
     ),
     fetchFromAccount<{ targeting?: MetaTargeting }>(config, "adsets", adSets.map((s) => s.id), "targeting", signal)
       .then(partial("targeting", adSets.length))
       .catch(softFail("targeting", new Map<string, { targeting?: MetaTargeting }>())),
+    fetchFromAccount<MetaAdStatus>(config, "ads", ads.map((a) => a.id), "status,effective_status", signal)
+      .then((result) => ({ nodes: partial("status", ads.length)(result), error: result.error }))
+      .catch((error: unknown) => ({ nodes: softFail("status", null)(error), error })),
   ]);
+
+  for (const ad of ads) {
+    ad.active = adIsActive(ad.id, statuses);
+  }
 
   for (const adSet of adSets) {
     const targeting = targetings.get(adSet.id)?.targeting;
@@ -774,6 +782,30 @@ async function fetchAll(window: FetchWindow, signal?: AbortSignal): Promise<Conn
 }
 
 type Warning = NonNullable<ConnectorResult["warnings"]>[number];
+
+interface MetaAdStatus {
+  /** De schakelaar van de advertentie zelf: ACTIVE, PAUSED, ARCHIVED, DELETED. */
+  status?: string;
+  /** Wat er werkelijk draait, inclusief een uitgezette set of campagne. */
+  effective_status?: string;
+}
+
+/**
+ * Staat de advertentie aan: zelf aan, en niet stilgelegd via set of campagne
+ * (ADSET_PAUSED, CAMPAIGN_PAUSED). Een advertentie die niet in de lijst van
+ * het account staat, is gearchiveerd of verwijderd — tenzij er een blok
+ * mislukte; dan is het onbekend.
+ */
+function adIsActive(
+  id: string,
+  statuses: { nodes: Map<string, MetaAdStatus> | null; error: unknown }
+): boolean | null {
+  if (!statuses.nodes) return null;
+  const found = statuses.nodes.get(id);
+  if (!found) return statuses.error ? null : false;
+  if (found.status !== "ACTIVE") return false;
+  return !/PAUSED|ARCHIVED|DELETED/.test(found.effective_status ?? "");
+}
 
 /** De reden dat een extra laag ontbreekt, zoals het dashboard hem toont. */
 function failureMessage(error: unknown, signal?: AbortSignal): string {
