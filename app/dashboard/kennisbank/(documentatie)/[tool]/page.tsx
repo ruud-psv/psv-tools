@@ -212,7 +212,7 @@ export default async function KennisbankToolPage({
           {tool.steps && tool.steps.length > 0 && (
             <section id="aan-de-slag">
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
-                Aan de slag
+                {tool.stepsCaption ?? "Aan de slag"}
               </h2>
               <div className="relative space-y-6">
                 {/* connecting timeline line */}

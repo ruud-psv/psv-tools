@@ -105,6 +105,8 @@ export interface KennisbankTool {
   docsUrl?: string;
   features: KennisbankFeature[];
   steps?: KennisbankStep[];
+  /** Kop boven de stappen, bijvoorbeeld "Doelgroepen delen met Meta". Standaard "Aan de slag". */
+  stepsCaption?: string;
   tips?: KennisbankTip[];
   tables?: KennisbankTable[];
   checklists?: KennisbankChecklist[];
@@ -309,9 +311,94 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "E-mail & Data",
     logo: "/images/kennisbank/blueconic.jpeg",
     description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
+    accessNote:
+      "Toegang tot BlueConic vraag je aan bij het Digital Marketing-team. Iedereen met toegang tot BlueConic kan de connecties gebruiken, ook de connectie met Meta.",
     docsUrl: "https://support.blueconic.com",
-    comingSoon: true,
     features: [],
+    stepsCaption: "Doelgroepen delen met Meta",
+    steps: [
+      {
+        title: "BlueConic — open Connections",
+        description:
+          "Ga in BlueConic naar Connections. Daar staan alle connecties van BlueConic, ook de connectie met Meta: Ads - Facebook - PSV.",
+      },
+      {
+        title: "BlueConic — voeg de connectie met Meta toe als die er nog niet is",
+        description:
+          "Staat de connectie met het juiste Meta Ads-account er nog niet bij? Klik dan bij Connections op Add connection en koppel het Meta Ads-account waarin je wilt adverteren: PSV (1062594023819316) of PSV FANstore (1038583669553685). Staat de connectie Ads - Facebook - PSV er al, dan sla je deze stap over.",
+      },
+      {
+        title: "BlueConic — open de connectie Ads - Facebook - PSV",
+        description: "Klik bij Connections op de connectie Ads - Facebook - PSV.",
+      },
+      {
+        title: "BlueConic — kies het audience goal Create Facebook Custom Audiences",
+        description:
+          "Selecteer in de connectie Ads - Facebook - PSV het juiste audience goal. Create Facebook Custom Audiences is het goal om lijsten in bulk van BlueConic naar Meta door te zetten, op basis van een identifier zoals het e-mailadres.",
+      },
+      {
+        title: "BlueConic — koppel de identifiers van BlueConic en Meta",
+        description:
+          "Koppel bij Link identifiers between BlueConic and Meta (Facebook and Instagram) een identifier uit BlueConic aan dezelfde identifier in Meta. Zo koppelt Meta de profielen van Facebook en Instagram aan de profielen in BlueConic. Kies bij voorkeur een unieke identifier: e-mailadres, telefoonnummer of de advanced Meta (Facebook and Instagram) ID. Koppelen op een combinatie van profielgegevens, zoals woonplaats, leeftijd en naam, kan ook. Gebruik alleen identifiers die met de juiste toestemming (consent) zijn verkregen.",
+      },
+      {
+        title: "BlueConic — koppel het segment aan een Custom Audience in Meta",
+        description:
+          "Kies bij Map BlueConic segments to Meta (Facebook and Instagram) Custom Audiences een segment uit BlueConic, en daarnaast de Custom Audience in Meta waar dat segment naartoe moet. De profielen uit het segment komen dan samen in die Custom Audience, zodat je er in Meta op kunt adverteren.",
+      },
+      {
+        title: "BlueConic — maak een nieuwe Custom Audience aan als die nog niet bestaat",
+        description:
+          "Bestaat de Custom Audience in Meta nog niet? Typ dan in de dropdown van de mapping de naam van de nieuwe doelgroep en klik op Create [naam doelgroep]. Geef de Custom Audience een naam volgens de naamgeving van Meta Ads. De nieuwe Custom Audience verschijnt pas in Meta nadat de connectie voor het eerst heeft gedraaid.",
+      },
+      {
+        title: "BlueConic — stel in hoe vaak de connectie draait",
+        description:
+          "De connectie draait standaard elke nacht om 3.00 uur. Wil je een andere frequentie? Klik in de sectie Set up and run op het tandwiel en pas de frequentie aan.",
+      },
+      {
+        title: "BlueConic — draai de connectie direct met Run now",
+        description:
+          "Wil je niet wachten tot de connectie 's nachts draait? Klik in de sectie Set up and run op Run now. De connectie draait dan meteen.",
+      },
+      {
+        title: "Meta — controleer de Custom Audience",
+        description:
+          "Na de eerste run staat een nieuwe Custom Audience in het Meta Ads-account als custom audience die door BlueConic is aangemaakt. Staat de Custom Audience er nog niet? Controleer dan in BlueConic of de connectie Ads - Facebook - PSV al heeft gedraaid.",
+      },
+    ],
+    tips: [
+      {
+        type: "warning",
+        text: "Gebruik in de connectie met Meta alleen identifiers, zoals e-mailadres en telefoonnummer, die met de juiste toestemming (consent) zijn verkregen. Met een Custom Audience deel je persoonsgegevens van fans met Meta.",
+      },
+      {
+        type: "note",
+        text: "Meta herkent niet elk profiel uit BlueConic. Alleen profielen met een identifier die Meta kan koppelen, komen in de Custom Audience. Een Custom Audience in Meta is daarom meestal kleiner dan het segment in BlueConic.",
+      },
+      {
+        type: "note",
+        text: "Een nieuwe Custom Audience verschijnt pas in Meta nadat de connectie voor het eerst heeft gedraaid. Standaard is dat de eerstvolgende nacht om 3.00 uur. Met Run now in de sectie Set up and run gaat het meteen.",
+      },
+      {
+        type: "note",
+        text: "Gaat een profiel uit een segment in BlueConic, dan haalt BlueConic dat profiel bij de volgende run ook uit de gekoppelde Custom Audience in Meta. Standaard gebeurt dat elke nacht om 3.00 uur.",
+      },
+      {
+        type: "note",
+        text: "Vragen over deze werkwijze? Neem contact op met het Digital Marketing-team.",
+      },
+    ],
+    tables: [
+      {
+        caption: "Meta Ads-accounts",
+        headers: ["Account", "ID"],
+        rows: [
+          ["PSV", "1062594023819316"],
+          ["PSV FANstore", "1038583669553685"],
+        ],
+      },
+    ],
   },
   {
     slug: "custom-landingspaginas",
@@ -755,7 +842,7 @@ export function buildKennisbankContext(): string {
         tool.features.forEach((f) => lines.push(`- ${f.title}: ${f.description}`));
       }
       if (tool.steps?.length) {
-        lines.push(`Aan de slag ${bron("aan-de-slag")}`);
+        lines.push(`${tool.stepsCaption ?? "Aan de slag"} ${bron("aan-de-slag")}`);
         tool.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
       }
       tool.checklists?.forEach((c) => {
@@ -849,7 +936,7 @@ export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
   if (tool.features.length > 0)
     sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
   if (tool.steps && tool.steps.length > 0)
-    sections.push({ label: "Aan de slag", id: "aan-de-slag" });
+    sections.push({ label: tool.stepsCaption ?? "Aan de slag", id: "aan-de-slag" });
   tool.flows?.forEach((f) => {
     if (f.caption) sections.push({ label: f.caption, id: slugify(f.caption) });
   });
