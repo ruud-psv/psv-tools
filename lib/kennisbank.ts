@@ -311,6 +311,8 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "E-mail & Data",
     logo: "/images/kennisbank/blueconic.jpeg",
     description: "Verzamel first-party data, bouw doelgroepsegmenten en activeer ze in je campagnes.",
+    accessNote:
+      "Toegang tot BlueConic vraag je aan bij het Digital Marketing-team. Iedereen met toegang tot BlueConic kan de connecties gebruiken, ook de connectie met Meta.",
     docsUrl: "https://support.blueconic.com",
     features: [],
     stepsCaption: "Doelgroepen delen met Meta",
@@ -323,7 +325,7 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "BlueConic — voeg de connectie met Meta toe als die er nog niet is",
         description:
-          "Staat de connectie met het juiste Meta Ads-account er nog niet bij? Klik dan bij Connections op Add connection en koppel het juiste Meta Ads-account. Staat de connectie Ads - Facebook - PSV er al, dan sla je deze stap over.",
+          "Staat de connectie met het juiste Meta Ads-account er nog niet bij? Klik dan bij Connections op Add connection en koppel het Meta Ads-account waarin je wilt adverteren: PSV (1062594023819316) of PSV FANstore (1038583669553685). Staat de connectie Ads - Facebook - PSV er al, dan sla je deze stap over.",
       },
       {
         title: "BlueConic — open de connectie Ads - Facebook - PSV",
@@ -332,7 +334,7 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "BlueConic — kies het audience goal Create Facebook Custom Audiences",
         description:
-          "Selecteer in de connectie Ads - Facebook - PSV het juiste audience goal. Om lijsten van BlueConic naar Meta door te zetten op basis van een identifier, zoals het e-mailadres, kies je Create Facebook Custom Audiences.",
+          "Selecteer in de connectie Ads - Facebook - PSV het juiste audience goal. Create Facebook Custom Audiences is het goal om lijsten in bulk van BlueConic naar Meta door te zetten, op basis van een identifier zoals het e-mailadres.",
       },
       {
         title: "BlueConic — koppel de identifiers van BlueConic en Meta",
@@ -347,7 +349,7 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "BlueConic — maak een nieuwe Custom Audience aan als die nog niet bestaat",
         description:
-          "Bestaat de Custom Audience in Meta nog niet? Typ dan in de dropdown van de mapping de naam van de nieuwe doelgroep en klik op Create [naam doelgroep]. De nieuwe Custom Audience verschijnt pas in Meta nadat de connectie voor het eerst heeft gedraaid.",
+          "Bestaat de Custom Audience in Meta nog niet? Typ dan in de dropdown van de mapping de naam van de nieuwe doelgroep en klik op Create [naam doelgroep]. Geef de Custom Audience een naam volgens de naamgeving van Meta Ads. De nieuwe Custom Audience verschijnt pas in Meta nadat de connectie voor het eerst heeft gedraaid.",
       },
       {
         title: "BlueConic — stel in hoe vaak de connectie draait",
@@ -380,7 +382,21 @@ export const kennisbankTools: KennisbankTool[] = [
       },
       {
         type: "note",
+        text: "Gaat een profiel uit een segment in BlueConic, dan haalt BlueConic dat profiel bij de volgende run ook uit de gekoppelde Custom Audience in Meta. Standaard gebeurt dat elke nacht om 3.00 uur.",
+      },
+      {
+        type: "note",
         text: "Vragen over deze werkwijze? Neem contact op met het Digital Marketing-team.",
+      },
+    ],
+    tables: [
+      {
+        caption: "Meta Ads-accounts",
+        headers: ["Account", "ID"],
+        rows: [
+          ["PSV", "1062594023819316"],
+          ["PSV FANstore", "1038583669553685"],
+        ],
       },
     ],
   },

@@ -32,23 +32,35 @@ de testvragen opnieuw in de kennisbank-chat.
   Audiences*, *Create [naam doelgroep]*, *Set up and run*, *Run now*. De
   uitleg eromheen is vertaald.
 - **"Selecteer bijvoorbeeld Create Facebook Custom Audiences"** staat op de
-  pagina zonder "bijvoorbeeld": voor het doorzetten van een lijst op basis van een
-  identifier is dat het goal. Zie ook het open punt over andere goals.
+  pagina zonder "bijvoorbeeld": dat is het goal om lijsten in bulk door te zetten.
+  Zie ook het open punt over andere goals.
 - **Consent** staat zowel in stap 5 als in een waarschuwing, met het waarom
   erbij. De chat leest een stap soms los van de rest.
 - **Toegevoegd:** stap 10 (controleren in Meta) en een opmerking dat een Custom
   Audience in Meta meestal kleiner is dan het segment. Volgens BlueConic komen
   alleen profielen met een koppelbare identifier in de audience.
 
+## Aangevuld na vragen
+
+| Onderwerp | Wat er op de pagina staat |
+|---|---|
+| Toegang | Toegang: toegang tot BlueConic vraag je aan bij het Digital Marketing-team. Iedereen met toegang tot BlueConic kan de connecties gebruiken. |
+| Welk Meta Ads-account | Stap 2 en de tabel Meta Ads-accounts: PSV (1062594023819316) en PSV FANstore (1038583669553685). |
+| Goal | Stap 4: *Create Facebook Custom Audiences* is het goal om lijsten in bulk door te zetten. |
+| Naamgeving | Stap 7: de naam van een Custom Audience volgt de naamgeving van Meta Ads. |
+| Uit het segment | Opmerking: BlueConic haalt het profiel bij de volgende run uit de Custom Audience, standaard elke nacht. |
+
 ## Open punten
 
 | Open punt | Waarom het telt | Voorstel |
 |---|---|---|
 | **Welke toestemming telt?** De pagina zegt "alleen identifiers met de juiste toestemming", maar niet welk veld of welke objective in BlueConic dat bepaalt. | Zonder dat kan een collega niet controleren of een segment mag. Het gaat om persoonsgegevens die naar Meta gaan. | Noem het consentveld of de objective, en of het segment daar al op filtert. |
-| **Naamgeving van Custom Audiences.** | Bij Maileon, Typeform, Playable en Azerion staat een taxonomie met DMID. | Bijvoorbeeld `[EXPLOITATIE] - [DOELGROEP] - [DMID]`. |
-| **Eén goal of een nieuw goal per doelgroep?** En welke andere goals zijn er naast *Create Facebook Custom Audiences*? | De originele tekst zegt "selecteer bijvoorbeeld". | Beschrijf wanneer je een bestaand goal gebruikt en wanneer een nieuw. |
-| **Wat gebeurt er als iemand uit het segment gaat?** | Haalt BlueConic het profiel dan ook uit de Custom Audience? Anders blijf je adverteren op mensen die er niet meer in horen. | Controleer in BlueConic of in de Custom Audience na een run. |
-| **Wie geeft toegang?** Tot BlueConic en het juiste Meta Ads-account. | "Koppel het juiste Meta Ads-account" zegt niet welk account dat is. | Noem de naam of de ID van het account, en bij wie je toegang aanvraagt. |
+| **Naamgeving van Meta Ads.** Stap 7 verwijst ernaar, maar de pagina Meta Ads is nog "binnenkort". | Tot die pagina er is, kan de chat de naamgeving niet geven. | Zet de taxonomie op de pagina Meta Ads, net als bij Maileon en Typeform. |
+| **Andere goals.** Welke goals zijn er naast *Create Facebook Custom Audiences*, en wanneer gebruik je ze? | Nu staat alleen het bulk-goal op de pagina. | Vul aan op de BlueConic-pagina. |
+| **Connectie voor PSV FANstore.** De stappen noemen de connectie Ads - Facebook - PSV. | Heeft PSV FANstore een eigen connectie, dan klopt stap 3 en 4 niet voor FANstore. | Noem de naam van de connectie voor PSV FANstore, of bevestig dat het dezelfde is. |
+
+Zodra de pagina Meta Ads inhoud krijgt: zet daar een opmerking die naar de
+stappen op de BlueConic-pagina verwijst.
 
 ## Nog te controleren in de app
 
@@ -69,8 +81,11 @@ de testvragen opnieuw in de kennisbank-chat.
 | Hoe vaak draait de connectie? | Standaard elke nacht om 3.00 uur. Aan te passen via het tandwiel bij Set up and run. |
 | Waarom is mijn audience in Meta kleiner dan het segment? | Meta herkent niet elk profiel. Alleen profielen met een koppelbare identifier komen erin. |
 | Er staat geen connectie met ons Meta-account. | Connections > Add connection en koppel het juiste Meta Ads-account. |
+| Welk Meta Ads-account is van de FANstore? | PSV FANstore, 1038583669553685. PSV is 1062594023819316. |
+| Iemand zit niet meer in het segment, blijft die in de audience? | Nee, BlueConic haalt het profiel bij de volgende run eruit, standaard elke nacht om 3.00 uur. |
+| Hoe kom ik in BlueConic? | Vraag toegang aan bij het Digital Marketing-team. |
+| Hoe noem ik de Custom Audience? | Volgens de naamgeving van Meta Ads. Die staat er nog niet (open punt). |
 | Welk consentveld moet ik controleren? | Staat er niet (open punt). |
-| Hoe noem ik de Custom Audience? | Staat er niet (open punt). |
 
 ## Bronnen
 
