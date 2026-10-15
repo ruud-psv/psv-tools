@@ -19,6 +19,10 @@ import type { BlockProps } from "@/components/mail-builder/shared/block-props";
 export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" | "onChange">) {
   const aanhefInputRef = useRef<HTMLInputElement>(null);
   const dragIndex = useRef<number | null>(null);
+  // Het kaartverkoop-template kent een titel per blok, alleen wit en grijs, en
+  // geen tekstlink onder de knop.
+  const kaartverkoop = state.template === "kaartverkoop";
+  const achtergronden = kaartverkoop ? (["wit", "grijs"] as const) : (["wit", "grijs", "rood", "zwart"] as const);
 
   function set<K extends keyof MailBuilderState>(key: K, value: MailBuilderState[K]) {
     onChange({ [key]: value } as Partial<MailBuilderState>);
@@ -106,7 +110,7 @@ export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" |
                   <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
                   <span className="text-xs font-medium text-muted-foreground">Blok {i + 1}</span>
                   <div className="ml-auto flex items-center gap-2">
-                    {(["wit", "grijs", "rood", "zwart"] as const).map((bg) => {
+                    {achtergronden.map((bg) => {
                       const cfg = BLOCK_BG_CONFIG[bg];
                       return (
                         <button
@@ -135,6 +139,14 @@ export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" |
                   </div>
                 </div>
 
+                {kaartverkoop && (
+                  <Input
+                    placeholder="Titel (optioneel)"
+                    value={block.titel ?? ""}
+                    onChange={(e) => updateBlock(i, "titel", e.target.value)}
+                    className="h-8 text-xs font-semibold"
+                  />
+                )}
                 <RichTextEditor
                   value={block.content}
                   onChange={(v) => updateBlock(i, "content", v)}
@@ -180,6 +192,7 @@ export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" |
                   )}
                 </div>
 
+                {!kaartverkoop && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium">Secundaire link</span>
@@ -202,6 +215,7 @@ export function TextBlocksEditor({ state, onChange }: Pick<BlockProps, "state" |
                     </div>
                   )}
                 </div>
+                )}
               </div>
             ))}
 

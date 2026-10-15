@@ -38,4 +38,5 @@ export const TEMPLATE_BLOCKS: Record<Template, BlockType[]> = {
   phoxy:        ["hero", "phoxy-cta", "text-blocks", "footer"],
   psvplay:      ["hero", "psvplay-video", "footer"],
   prematch:     ["hero", "prematch-blocks", "footer"],
+  prematchvrouwen: ["hero", "prematch-blocks", "footer"],
 };
