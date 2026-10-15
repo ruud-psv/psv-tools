@@ -29,9 +29,9 @@ function checkUrl(problemen: string[], waar: string, url: string | undefined) {
  * met alt-tekst en klik-link, elke knop met een geldige link, en een mailnaam
  * voor het overzicht.
  *
- * De regels zijn geschreven voor het pre-match template; de overige templates
- * staan uit. Komen die terug, dan hebben hun eigen blokken hier ook een
- * controle nodig.
+ * Regels bestaan voor de templates die in de keuzelijst staan: pre-match (PSV 1
+ * en Vrouwen) en kaartverkoop. Komt een ander template terug, dan hebben zijn
+ * eigen blokken hier ook een controle nodig.
  */
 export function mailProblemen(state: MailBuilderState): string[] {
   const problemen: string[] = [];
@@ -40,9 +40,28 @@ export function mailProblemen(state: MailBuilderState): string[] {
 
   if (!(state.heroPreviewUrl ?? "").trim()) problemen.push("Headerbeeld: afbeelding ontbreekt");
   if (!(state.heroAlt ?? "").trim()) problemen.push("Headerbeeld: alt-tekst ontbreekt");
-  checkUrl(problemen, "Headerbeeld", state.heroLink);
+  // De header van de verstuurde Vrouwen pre-match heeft geen link; daar is hij
+  // optioneel, maar een ingevulde link moet wel kloppen.
+  if (state.template !== "prematchvrouwen" || (state.heroLink ?? "").trim()) {
+    checkUrl(problemen, "Headerbeeld", state.heroLink);
+  }
 
-  if (state.template !== "prematch") return problemen;
+  if (state.template === "kaartverkoop") {
+    state.blocks.forEach((block, i) => {
+      const waar = `Blok ${i + 1}`;
+      if (!(block.titel ?? "").trim() && !block.content.trim() && !block.heeftCta) {
+        problemen.push(`${waar}: blok is leeg`);
+      }
+      if (block.heeftCta) {
+        if (!block.ctaLabel.trim()) problemen.push(`${waar}: knoptekst ontbreekt`);
+        checkUrl(problemen, `${waar} knop`, block.ctaUrl);
+      }
+    });
+    if (state.heeftAfsluitRegel && !state.afsluitRegel.trim()) problemen.push("Afsluitende regel: tekst ontbreekt");
+    return problemen;
+  }
+
+  if (state.template !== "prematch" && state.template !== "prematchvrouwen") return problemen;
 
   if (state.prematchHeeftCta) {
     if (!(state.prematchCtaLabel ?? "").trim()) problemen.push("Knop onder de header: tekst ontbreekt");

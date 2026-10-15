@@ -49,7 +49,7 @@ import { PrematchBlocksBlock } from "@/components/mail-builder/blocks/PrematchBl
 // Types
 // ---------------------------------------------------------------------------
 
-export type Template = "business" | "enquete" | "fanstore" | "fcpsvo12" | "fcpsvo16" | "kaartverkoop" | "partnerships" | "phoxy" | "prematch" | "psvplay" | "soccerschool" | "tours";
+export type Template = "business" | "enquete" | "fanstore" | "fcpsvo12" | "fcpsvo16" | "kaartverkoop" | "partnerships" | "phoxy" | "prematch" | "prematchvrouwen" | "psvplay" | "soccerschool" | "tours";
 
 export type BlockBg = "wit" | "grijs" | "rood" | "zwart";
 
@@ -62,6 +62,8 @@ export const BLOCK_BG_CONFIG: Record<BlockBg, { bg: string; text: string; link: 
 
 export interface BodyBlock {
   id: string;
+  /** Vette kop boven de tekst; alleen het kaartverkoop-template gebruikt hem. */
+  titel?: string;
   content: string;
   blockBg: BlockBg;
   heeftCta: boolean;
@@ -448,17 +450,23 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     ...PSVPLAY_DEFAULTS,
     businessSponsorPreviewUrl: PSVBUSINESS_SPONSOR_PREVIEW,
   },
+  // Opbouw van het Maileon-template "PSV Kaartverkoop" (okt 2026): intro met
+  // knop, grijs blok met titel, nog een alinea en een afsluiting.
   kaartverkoop: {
     heroUrl: "",
-    heroAlt: "Scoor nu je tickets",
-    heroPreviewUrl: "https://psveindhoven.b-cdn.net/mail-builder/1789651503378-0ql0o-default-e-mailheader.png",
+    heroAlt: "Scoor je tickets!",
+    heroPreviewUrl: `${PREVIEW_CDN_HOST}/c/GfgrpmiLOdRwMsaOx_wrWQ/media/Mail%20-%20Header%20-%20Slab%20-%20Rechts_3.jpg`,
     heroLink: "https://ticketshop.psv.nl/nl-NL/categories/PSV-1",
     aanhefText: "Hi {VOORNAAM}",
-    blocks: [newBlock({ heeftCta: true, ctaLabel: "SCOOR DE ALLERLAATSTE TICKETS", heeftSecLink: true, secLinkLabel: "Bekijk alle wedstrijden >" })],
+    blocks: [
+      newBlock({ content: "Schrijf hier de eerste alinea.<br><br>Schrijf hier de tweede alinea.", heeftCta: true, ctaLabel: "SCOOR JE TICKETS", ctaUrl: "" }),
+      newBlock({ blockBg: "grijs", titel: "Titel", content: "Schrijf hier de tekst in het grijze blok." }),
+      newBlock({ content: "Schrijf hier de laatste alinea." }),
+    ],
     heeftAfsluitRegel: true,
-    afsluitRegel: "Tot ziens in het Philips Stadion!",
+    afsluitRegel: "Schrijf hier de afsluiting.",
     disclaimerTekst:
-      "Je ontvangt deze mail omdat je hebt aangegeven interesse te hebben in PSV Kaartverkoop. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+      "Je ontvangt deze e-mail omdat je hebt aangegeven dat je interesse hebt in PSV Kaartverkoop. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
     misNiksEmail: "email@newsletter.psv.nl",
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
@@ -539,6 +547,34 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
     utmCampaign: "",
     ...FANSTORE_NAV_DEFAULTS,
     ...PREMATCH_DEFAULTS,
+    ...PSVPLAY_DEFAULTS,
+  },
+  // Opbouw van de verstuurde PSV Vrouwen pre-match (AZ - PSV, 13 sep 2026):
+  // header zonder knop, dan om en om een content- en een banmail-blok op wit.
+  prematchvrouwen: {
+    heroUrl: "",
+    heroAlt: "",
+    heroPreviewUrl: "",
+    heroLink: "",
+    aanhefText: "Hi {VOORNAAM}",
+    blocks: [],
+    heeftAfsluitRegel: false,
+    afsluitRegel: "",
+    disclaimerTekst:
+      "Je ontvangt deze e-mail omdat je bent ingeschreven voor e-mails over PSV Vrouwen. Let op, wanneer je je afmeldt word je voor alle e-mails van PSV afgemeld. Het kan zijn dat je belangrijke informatie mist.",
+    misNiksEmail: "email@newsletter.psv.nl",
+    utmCampaign: "",
+    ...FANSTORE_NAV_DEFAULTS,
+    ...PREMATCH_DEFAULTS,
+    prematchHeeftCta: false,
+    prematchBlocks: [
+      newPrematchBlock({ bg: "wit", titel: "Titel van dit blok", ctaLabel: "VOORBESCHOUWING" }),
+      newPrematchBlock({ type: "banmail", bg: "wit", titel: "", tekst: "", heeftCta: false }),
+      newPrematchBlock({ bg: "wit", titel: "Titel van dit blok", ctaLabel: "MATCHCENTER" }),
+      newPrematchBlock({ type: "banmail", bg: "wit", titel: "", tekst: "", heeftCta: false }),
+    ],
+    prematchFooterPreviewUrl: `${PREVIEW_CDN_HOST}/c/fZNMSaAO5w_NR8-gcAG6yw/media/0000%20Pre-Match%20-%2029%20PSVHERA7.jpg`,
+    prematchFooterAlt: "Footer",
     ...PSVPLAY_DEFAULTS,
   },
   psvplay: {
@@ -768,8 +804,33 @@ function resolveAanhef(text: string, forExport: boolean): string {
 // HTML generators
 // ---------------------------------------------------------------------------
 
+// Knop zo breed als zijn tekst, zoals in de Maileon-templates. Op een telefoon
+// loopt hij over de volle breedte; Maileon doet dat met max-device-width, dus de
+// mobiele preview van de Mail Builder (een verkleinde 600px-weergave) toont het niet.
+const KNOP_MOBIEL_CSS = `
+  <style type="text/css">
+    @media only screen and (max-device-width: 600px) {
+      .knop-mobiel-vol { width:100% !important; }
+      .knop-mobiel-vol a { display:block !important; }
+    }
+  </style>`;
+
+function compacteKnop(label: string, href: string, kleur: string, align: "left" | "center", padding: string): string {
+  return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" class="knop-mobiel-vol"${align === "center" ? ` align="center" style="margin:0 auto;"` : ""}>
+                <tr>
+                  <td bgcolor="${kleur}" align="center" style="background-color:${kleur};mso-padding-alt:${padding};">
+                    <a href="${href}" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-block;padding:${padding};border:1px solid ${kleur};font-family:'Titillium Web',Verdana,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;letter-spacing:1px;text-align:center;line-height:120%;mso-line-height-rule:exactly;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;"
+                    >${label}</a>
+                  </td>
+                </tr>
+              </table>`;
+}
+
 function generatePrematchHTML(state: MailBuilderState, forExport = false): string {
-  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
+  // PSV Vrouwen volgt de verstuurde Vrouwen-mail: knoppen zo breed als hun tekst
+  // en minder lucht tussen titel, tekst en knop dan bij PSV 1.
+  const vrouwen = state.template === "prematchvrouwen";
   const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
 
   const toExportSrc = (previewUrl: string) =>
@@ -796,8 +857,13 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
           </tr>`;
   };
 
-  // Knop over de volle breedte, zoals in de verstuurde pre-match mails.
-  const ctaRow = (label: string, href: string, bg: string) => `
+  // PSV 1: knop over de volle breedte, zoals in de verstuurde pre-match mails.
+  const ctaRow = (label: string, href: string, bg: string) => vrouwen ? `
+          <tr>
+            <td bgcolor="${bg}" align="center" style="background-color:${bg};padding:20px 40px 25px;">
+              ${compacteKnop(label, href, "#E30613", "center", "12px 13px")}
+            </td>
+          </tr>` : `
           <tr>
             <td bgcolor="${bg}" style="background-color:${bg};padding:20px 40px;">
               <!--[if mso]>
@@ -850,22 +916,137 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
       const tekstRow = block.tekst
         ? `
           <tr>
-            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:10px 40px 0;text-align:center;">
+            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};padding:${vrouwen ? 5 : 10}px 40px 0;text-align:center;">
               <div style="font-family:'Titillium Web',Verdana,sans-serif;font-size:14px;color:${cfg.text};line-height:180%;text-align:center;">${richToInline(block.tekst)}</div>
             </td>
           </tr>`
         : "";
       const cta = block.heeftCta && block.ctaLabel ? ctaRow(block.ctaLabel, link(block.ctaUrl) || "#", cfg.bg) : "";
-      const spacer = `
+      // Bij Vrouwen sluit de knop het blok af met 25px; zonder knop houdt de
+      // tekst dezelfde ruimte eronder.
+      const spacerHoogte = vrouwen ? (cta ? 0 : 25) : 20;
+      const spacer = spacerHoogte ? `
           <tr>
-            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:20px;font-size:20px;line-height:20px;">&nbsp;</td>
-          </tr>`;
+            <td bgcolor="${cfg.bg}" style="background-color:${cfg.bg};height:${spacerHoogte}px;font-size:${spacerHoogte}px;line-height:${spacerHoogte}px;">&nbsp;</td>
+          </tr>` : "";
       return rows + titelRow + tekstRow + cta + spacer;
     })
     .join("\n");
 
   const footerSrc = imgSrc(state.prematchFooterPreviewUrl);
   const titleText = forExport ? "[[MAILING|SUBJECT|]]" : "Pre-Match preview";
+
+  return renderStandaardMail(state, forExport, {
+    titleText,
+    extraHead: vrouwen ? KNOP_MOBIEL_CSS : "",
+    bodyRows: `${heroRow}
+          ${headerCtaRow}
+          ${contentRows}
+
+          <!-- Footer image -->
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <img src="${footerSrc}" width="600" alt="${state.prematchFooterAlt}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>`,
+  });
+}
+
+// Maten uit het Maileon-template "PSV Kaartverkoop" (okt 2026): links
+// uitgelijnd, 30px marge, blokken op wit of grijs, knop zo breed als zijn tekst.
+const KAARTVERKOOP_BG = { wit: "#FFFFFF", grijs: "#F1F1F1" } as const;
+const KAARTVERKOOP_PATROON = "/c/dF1ELngs71b8asmA4Jnn0Q/media/0000%20Pre-Match%20VR%20-%2013%20ADOPSV%2008.jpg";
+
+function generateKaartverkoopHTML(state: MailBuilderState, forExport = false): string {
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
+  const utm = (url: string) => forExport ? applyUtm(url, state.utmCampaign) : url;
+  const link = (url: string) => {
+    const u = normalizeUrl(url);
+    return u ? (forExport ? wrapLink(utm(u)) : u) : "";
+  };
+  const font = "font-family:'Titillium Web',Verdana,sans-serif;";
+
+  const heroPreview = state.heroPreviewUrl || state.heroUrl.replace(MAILEON_CDN_HOST, PREVIEW_CDN_HOST);
+  const heroSrc = forExport && heroPreview.startsWith(PREVIEW_CDN_HOST)
+    ? heroPreview.replace(PREVIEW_CDN_HOST, MAILEON_CDN_HOST)
+    : heroPreview;
+  const heroImg = `<img src="${heroSrc}" width="600" alt="${state.heroAlt || ""}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">`;
+  const heroHref = link(state.heroLink);
+  const heroRow = heroSrc ? `
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              ${heroHref ? `<a href="${heroHref}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;">${heroImg}</a>` : heroImg}
+            </td>
+          </tr>` : "";
+
+  const aanhefRow = `
+          <tr>
+            <td bgcolor="#FFFFFF" align="left" style="background-color:#FFFFFF;padding:30px 30px 20px;text-align:left;">
+              <p style="margin:0;${font}font-size:16px;font-weight:bold;color:#ED1C24;letter-spacing:0.65px;line-height:20px;">${resolveAanhef(state.aanhefText || "Hi {VOORNAAM}", forExport)},</p>
+            </td>
+          </tr>`;
+
+  const blockRows = state.blocks.map((block, i) => {
+    const bgKey = block.blockBg === "grijs" ? "grijs" : "wit";
+    const bg = KAARTVERKOOP_BG[bgKey];
+    // Een wit eerste blok sluit aan op de aanhef, die de 20px al geeft.
+    const top = i === 0 && bgKey === "wit" ? 0 : 20;
+    const titel = (block.titel ?? "").trim();
+    const heeftCta = block.heeftCta && !!block.ctaLabel;
+    const titelRow = titel ? `
+          <tr>
+            <td bgcolor="${bg}" align="left" style="background-color:${bg};padding:${top}px 30px ${block.content || heeftCta ? 0 : 20}px;text-align:left;">
+              <p style="margin:0;${font}font-size:16px;font-weight:bold;color:#000000;line-height:20px;">${titel}</p>
+            </td>
+          </tr>` : "";
+    const tekstRow = block.content ? `
+          <tr>
+            <td bgcolor="${bg}" align="left" style="background-color:${bg};padding:${titel ? 10 : top}px 30px 20px;text-align:left;">
+              <div style="${font}font-size:14px;color:#000000;line-height:20px;text-align:left;">${richToInline(block.content)}</div>
+            </td>
+          </tr>` : "";
+    const ctaRow = heeftCta ? `
+          <tr>
+            <td bgcolor="${bg}" align="left" style="background-color:${bg};padding:${block.content ? 0 : titel ? 20 : top}px 30px 30px;">
+              ${compacteKnop(block.ctaLabel, link(block.ctaUrl) || "#", "#ED1B24", "left", "12px 14px")}
+            </td>
+          </tr>` : "";
+    return titelRow + tekstRow + ctaRow;
+  }).join("");
+
+  // Met de 20px onder de laatste alinea samen 30px, zoals in het template.
+  const afsluitRow = state.heeftAfsluitRegel && state.afsluitRegel ? `
+          <tr>
+            <td bgcolor="#FFFFFF" align="left" style="background-color:#FFFFFF;padding:10px 30px 30px;text-align:left;">
+              <p style="margin:0;${font}font-size:14px;color:#000000;line-height:20px;">${state.afsluitRegel}</p>
+            </td>
+          </tr>` : "";
+
+  const patroonRow = `
+          <tr>
+            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
+              <img src="${cdn}${KAARTVERKOOP_PATROON}" width="600" alt="Eendracht maakt macht" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
+            </td>
+          </tr>`;
+
+  return renderStandaardMail(state, forExport, {
+    titleText: forExport ? "[[MAILING|SUBJECT|]]" : "Kaartverkoop preview",
+    extraHead: KNOP_MOBIEL_CSS,
+    bodyRows: heroRow + aanhefRow + blockRows + afsluitRow + patroonRow,
+  });
+}
+
+/**
+ * Kop, "Bekijk online"-balk en de standaard footer (feedback, social, contact,
+ * disclaimer, afmelden, juridische links) rond de rijen van een template.
+ * Komt uit het pre-match template en wordt ook door kaartverkoop gebruikt.
+ */
+function renderStandaardMail(
+  state: MailBuilderState,
+  forExport: boolean,
+  { titleText, extraHead, bodyRows }: { titleText: string; extraHead: string; bodyRows: string },
+): string {
+  const cdn = forExport ? MAILEON_CDN_HOST : PREVIEW_CDN_HOST;
   const preheader = preheaderHtml(state, forExport);
   const openPixelHtml = forExport
     ? `<img src="[[OPEN-PIXEL]]" width="1" height="1" alt="" style="width:1px;height:1px;display:block;">`
@@ -921,7 +1102,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
   <meta name="robots" content="noindex">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${titleText}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">${EMAIL_HEAD_EXTRAS}${extraHead}
   <style type="text/css">
     html,body{width:100%;height:100%;margin:0;padding:0;border:0;hyphens:none;-moz-hyphens:none;-webkit-hyphens:none;-webkit-text-size-adjust:none;word-break:normal;word-wrap:break-word;overflow-wrap:break-word;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     h1,h2,h3,h4,h5,h6,div,b,u,i,p,br,font,strike,sub,sup,img{padding:0;margin:0;border:0;}
@@ -950,16 +1131,7 @@ function generatePrematchHTML(state: MailBuilderState, forExport = false): strin
             </td>
           </tr>
 
-          ${heroRow}
-          ${headerCtaRow}
-          ${contentRows}
-
-          <!-- Footer image -->
-          <tr>
-            <td bgcolor="#000000" style="background-color:#000000;padding:0;">
-              <img src="${footerSrc}" width="600" alt="${state.prematchFooterAlt}" style="display:block;width:100%;max-width:600px;height:auto;border:0;">
-            </td>
-          </tr>
+          ${bodyRows}
 
           <!-- Feedback -->
           <tr>
@@ -2210,7 +2382,8 @@ ${legalRow(state.template, forExport, "#F1F1F1", "#6E6E6E")}
 }
 
 function generateEmailHTML(state: MailBuilderState, forExport = false): string {
-  if (state.template === "prematch") return generatePrematchHTML(state, forExport);
+  if (state.template === "prematch" || state.template === "prematchvrouwen") return generatePrematchHTML(state, forExport);
+  if (state.template === "kaartverkoop") return generateKaartverkoopHTML(state, forExport);
   if (state.template === "psvplay") return generatePsvPlayHTML(state, forExport);
   if (state.template === "business") return generatePsvBusinessHTML(state, forExport);
   if (state.template === "enquete") return generateEnqueteHTML(state, forExport);
@@ -2566,6 +2739,12 @@ export function Toggle({
 
 const PREVIEW_HEIGHT = 820;
 
+// Kaartverkoop is in okt 2026 opnieuw opgebouwd naar het Maileon-template; een
+// concept van de oude versie hoort daar niet in terug te komen.
+function draftKey(t: Template): string {
+  return `mail-builder-draft-${t === "kaartverkoop" ? "kaartverkoop-2026-10" : t}`;
+}
+
 export function MailBuilderForm({
   onOpgeslagen,
 }: {
@@ -2574,7 +2753,7 @@ export function MailBuilderForm({
   const [state, setState] = useState<MailBuilderState>(() => {
     if (typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem("mail-builder-draft-prematch");
+        const saved = localStorage.getItem(draftKey("prematch"));
         if (saved) return migrateState(JSON.parse(saved));
       } catch {}
     }
@@ -2598,7 +2777,7 @@ export function MailBuilderForm({
   // Persist draft
   useEffect(() => {
     try {
-      localStorage.setItem(`mail-builder-draft-${state.template}`, JSON.stringify(state));
+      localStorage.setItem(draftKey(state.template), JSON.stringify(state));
     } catch {}
   }, [state]);
 
@@ -2630,7 +2809,7 @@ export function MailBuilderForm({
   function handleTemplateChange(t: Template) {
     if (typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem(`mail-builder-draft-${t}`);
+        const saved = localStorage.getItem(draftKey(t));
         if (saved) {
           setState(migrateState(JSON.parse(saved)));
           return;
@@ -2643,7 +2822,7 @@ export function MailBuilderForm({
   function handleReset() {
     if (!window.confirm(`Weet je zeker dat je alle wijzigingen voor "${state.template}" wilt wissen en terugzetten naar standaard?`)) return;
     setState(makeInitialState(state.template));
-    try { localStorage.removeItem(`mail-builder-draft-${state.template}`); } catch {}
+    try { localStorage.removeItem(draftKey(state.template)); } catch {}
   }
 
   function handleDownload() {
@@ -2676,7 +2855,9 @@ export function MailBuilderForm({
           template: state.template,
           previewTekst: state.preheaderTekst ?? "",
           aantalBlokken:
-            state.template === "prematch" ? state.prematchBlocks.length : state.blocks.length,
+            state.template === "prematch" || state.template === "prematchvrouwen"
+              ? state.prematchBlocks.length
+              : state.blocks.length,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2835,6 +3016,8 @@ export function MailBuilderForm({
                   {/* De overige templates staan tijdelijk uit; de code blijft staan.
                       Terugzetten is een regel per template. */}
                   <SelectItem value="prematch">PSV 1 Pre-match</SelectItem>
+                  <SelectItem value="prematchvrouwen">PSV Vrouwen Pre-match</SelectItem>
+                  <SelectItem value="kaartverkoop">PSV Kaartverkoop</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2853,7 +3036,7 @@ export function MailBuilderForm({
               </p>
             </div>
 
-            {state.template !== "prematch" && state.template !== "psvplay" && (
+            {state.template !== "prematch" && state.template !== "prematchvrouwen" && state.template !== "psvplay" && (
               <div className="space-y-2">
                 <Label>UTM-campagne</Label>
                 <Input
