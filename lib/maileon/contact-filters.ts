@@ -1,16 +1,18 @@
 /**
- * Contactfilters in Maileon maken via de API. Gedeeld door de tools die een
- * lijst naar Maileon doorzetten: Aangrenzende stoelen en Contact Filter Import.
+ * Contactfilters en doelgroepen in Maileon maken via de API. Gedeeld door de
+ * tools die een lijst naar Maileon doorzetten: Aangrenzende stoelen (alleen het
+ * filter) en Contact Filter Import (filter en doelgroep).
  *
  * Een filter begint leeg en voegt iedereen toe van wie een veld in de lijst
- * staat. Er komt bewust geen doelgroep bij: welke preference-regel erbij hoort
- * (bijvoorbeeld Ticketing voor kaartverkoop), bepaalt Digital Marketing in
- * Maileon zelf. De API wijst filters met een `contactpreference`-regel af (zie
+ * staat. Welke preference-regel erbij hoort (bijvoorbeeld Ticketing voor
+ * kaartverkoop), bepaalt Digital Marketing in Maileon zelf. De API wijst
+ * filters met een `contactpreference`-regel af (zie
  * `lib/aangrenzende-stoelen/maileon.ts`), dus die regel kan er niet vanaf hier bij.
  *
- * API: `POST /contactfilters/v2`. De regels moeten voldoen aan het JSON-schema
- * in de XQueue-wiki ("Creating and Updating Contactfilters Using the REST
- * API"), niet aan de losse documentatiepagina's: die spreken elkaar tegen.
+ * API: `POST /contactfilters/v2` voor het filter, `POST /targetgroups` voor een
+ * doelgroep erop. De regels moeten voldoen aan het JSON-schema in de
+ * XQueue-wiki ("Creating and Updating Contactfilters Using the REST API"), niet
+ * aan de losse documentatiepagina's: die spreken elkaar tegen.
  */
 
 export const MAILEON_API = "https://api.maileon.com/1.0";
@@ -185,4 +187,75 @@ export async function refreshContactFilter(contactFilterId: number): Promise<voi
     cache: "no-store",
   });
   if (!res.ok) throw new MaileonError(await maileonError(res), res.status);
+}
+
+/* ---------- Doelgroep ---------- */
+
+/** De doelgroep op een filter, als XML voor `POST /targetgroups`. */
+export function targetGroupXml(name: string, contactFilterId: number): string {
+  const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<targetgroup><name>${escaped}</name><type>regular</type>` +
+    `<contact_filter_id>${contactFilterId}</contact_filter_id></targetgroup>`
+  );
+}
+
+function xmlTag(xml: string, tag: string): string | null {
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`));
+  if (!match) return null;
+  return match[1].replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, "").trim();
+}
+
+function xmlNumber(xml: string, tag: string): number | null {
+  const value = xmlTag(xml, tag);
+  return value !== null && /^\d+$/.test(value) ? Number(value) : null;
+}
+
+/** Het ID uit het antwoord op `POST /targetgroups`: `<id>` in XML, of alleen het getal. */
+export function parseTargetGroupId(text: string): number | null {
+  const id = xmlNumber(text, "id") ?? (/^\s*\d+\s*$/.test(text) ? Number(text) : null);
+  return id && id > 0 ? id : null;
+}
+
+export async function createTargetGroup(name: string, contactFilterId: number): Promise<number> {
+  const res = await fetch(`${MAILEON_API}/targetgroups`, {
+    method: "POST",
+    headers: {
+      Authorization: authorization(),
+      "Content-Type": `${MAILEON_XML}; charset=utf-8`,
+      Accept: MAILEON_XML,
+    },
+    body: targetGroupXml(name, contactFilterId),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new MaileonError(`Maileon maakte de doelgroep niet. ${await maileonError(res)}`, res.status);
+  const id = parseTargetGroupId(await res.text());
+  if (!id) throw new Error("Maileon gaf geen ID van de doelgroep terug.");
+  return id;
+}
+
+export interface TargetGroupStatus {
+  /** `outofdate`, `updating` of `uptodate`. */
+  state: string;
+  countContacts: number | null;
+  countActiveContacts: number | null;
+}
+
+export function parseTargetGroup(xml: string): TargetGroupStatus {
+  return {
+    state: xmlTag(xml, "state") ?? "",
+    countContacts: xmlNumber(xml, "count_contacts"),
+    countActiveContacts: xmlNumber(xml, "count_active_contacts"),
+  };
+}
+
+/** De stand van een doelgroep. Maileon rekent hem op de achtergrond door. */
+export async function getTargetGroup(targetGroupId: number): Promise<TargetGroupStatus> {
+  const res = await fetch(`${MAILEON_API}/targetgroups/targetgroup/${targetGroupId}`, {
+    headers: { Authorization: authorization(), Accept: MAILEON_XML },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new MaileonError(await maileonError(res), res.status);
+  return parseTargetGroup(await res.text());
 }

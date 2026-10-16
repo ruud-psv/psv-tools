@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ExternalLink, FileUp, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,9 +25,20 @@ interface MaileonPush {
   name: string;
   contactFilterId: number;
   filterUrl: string;
+  targetGroupId: number | null;
+  targetGroupError: string | null;
   pushed: number;
   field: string;
 }
+
+interface TargetGroupStatus {
+  state: string;
+  countContacts: number | null;
+  countActiveContacts: number | null;
+}
+
+/** Hoe vaak de pagina de doelgroep opvraagt terwijl Maileon rekent: elke 5 s, 2 minuten lang. */
+const STATUS_POLLS = 24;
 
 /** Groot genoeg voor elke lijst die in één filter past, klein genoeg om de browser niet te laten haperen. */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -74,6 +85,9 @@ export function ContactFilterImport() {
   const [pushing, setPushing] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const [pushed, setPushed] = useState<MaileonPush | null>(null);
+  const [groupStatus, setGroupStatus] = useState<TargetGroupStatus | null>(null);
+  const [groupStatusError, setGroupStatusError] = useState<string | null>(null);
+  const [polling, setPolling] = useState(false);
 
   const type = ID_TYPES[idType];
 
@@ -95,7 +109,45 @@ export function ContactFilterImport() {
   useEffect(() => {
     setPushed(null);
     setPushError(null);
+    setGroupStatus(null);
+    setGroupStatusError(null);
   }, [summary]);
+
+  const loadGroupStatus = useCallback(async (targetGroupId: number) => {
+    try {
+      const res = await fetch(`/api/contact-filter-import?targetGroupId=${targetGroupId}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
+      setGroupStatus(data);
+      setGroupStatusError(null);
+      return data as TargetGroupStatus;
+    } catch (caught) {
+      setGroupStatusError(caught instanceof Error ? caught.message : String(caught));
+      return null;
+    }
+  }, []);
+
+  // Maileon rekent de doelgroep op de achtergrond door; vraag de stand op tot hij bij is.
+  useEffect(() => {
+    const targetGroupId = pushed?.targetGroupId;
+    if (!targetGroupId) return;
+    let polls = 0;
+    let stopped = false;
+    setPolling(true);
+    const poll = async () => {
+      const status = await loadGroupStatus(targetGroupId);
+      polls += 1;
+      if (stopped) return;
+      if (polls < STATUS_POLLS && status?.state !== "uptodate") timer = setTimeout(poll, 5000);
+      else setPolling(false);
+    };
+    let timer = setTimeout(poll, 3000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      setPolling(false);
+    };
+  }, [pushed, loadGroupStatus]);
 
   async function readFile(picked: File) {
     setFileError(null);
@@ -285,9 +337,9 @@ export function ContactFilterImport() {
           <div>
             <h2 className="text-xl">Doorzetten naar Maileon</h2>
             <p className="text-sm text-muted-foreground max-w-3xl">
-              Maakt in Maileon een contactfilter met iedereen uit de lijst. Er komt nog geen doelgroep: de
-              preference-regel die bij je mailing hoort, voeg je in Maileon zelf toe, want de API van Maileon
-              accepteert die regel niet.
+              Maakt in Maileon een contactfilter met iedereen uit de lijst, en een doelgroep op dat filter met
+              dezelfde naam. De preference-regel die bij je mailing hoort, voeg je daarna in Maileon zelf aan het
+              filter toe, want de API van Maileon accepteert die regel niet.
             </p>
           </div>
 
@@ -337,7 +389,8 @@ export function ContactFilterImport() {
 
           {!pushed && sendDate && title.trim() && (
             <p className="text-xs text-muted-foreground break-words">
-              Naam in Maileon: {filterName({ sendDate, title, dmid: dmid.trim() || defaultDmid(sendDate) })}
+              Naam van filter en doelgroep:{" "}
+              {filterName({ sendDate, title, dmid: dmid.trim() || defaultDmid(sendDate) })}
             </p>
           )}
           {!summary && <p className="text-xs text-muted-foreground">Vul eerst hierboven een lijst in.</p>}
@@ -347,13 +400,49 @@ export function ContactFilterImport() {
             <div className="space-y-3 text-sm">
               <div className="space-y-1">
                 <p>
-                  Filter {pushed.contactFilterId} gemaakt:{" "}
+                  {pushed.targetGroupId
+                    ? `Filter ${pushed.contactFilterId} en doelgroep ${pushed.targetGroupId} gemaakt: `
+                    : `Filter ${pushed.contactFilterId} gemaakt: `}
                   <span className="font-medium break-words select-all">{pushed.name}</span>
                 </p>
                 <p className="text-muted-foreground">
                   {number.format(pushed.pushed)} {type.plural}, gefilterd op {pushed.field}
                 </p>
+                {pushed.targetGroupId && (
+                  <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                    {groupStatus?.state === "uptodate" && groupStatus.countContacts !== null ? (
+                      <span>
+                        Maileon vond {number.format(groupStatus.countContacts)} contacten in de doelgroep, waarvan{" "}
+                        {number.format(groupStatus.countActiveContacts ?? 0)} te mailen.
+                      </span>
+                    ) : polling ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Maileon rekent de doelgroep door…
+                      </span>
+                    ) : (
+                      <span>Maileon is nog niet klaar met rekenen.</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => pushed.targetGroupId && loadGroupStatus(pushed.targetGroupId)}
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Ververs
+                    </button>
+                  </p>
+                )}
+                {groupStatusError && (
+                  <p className="text-xs text-muted-foreground">De stand van de doelgroep kwam niet door: {groupStatusError}</p>
+                )}
               </div>
+              {!pushed.targetGroupId && (
+                <Problem>
+                  Het filter staat in Maileon, maar de doelgroep niet
+                  {pushed.targetGroupError ? ` (${pushed.targetGroupError})` : ""}. Maak de doelgroep zelf aan op dit
+                  filter, met dezelfde naam.
+                </Problem>
+              )}
               <div className="space-y-2 rounded-md border border-primary/40 p-3">
                 <p className="flex items-start gap-2 font-medium">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
@@ -369,18 +458,22 @@ export function ContactFilterImport() {
                     >
                       Open het filter in Maileon
                       <ExternalLink className="h-3.5 w-3.5" />
-                    </a>{" "}
-                    en controleer het aantal contacten. Minder contacten dan ID&apos;s is normaal: niet iedereen staat
-                    in Maileon.
+                    </a>
+                    .
                   </li>
                   <li>
                     Voeg onderaan de regel toe voor de preference die bij je mailing hoort, bijvoorbeeld{" "}
-                    <span className="font-medium">Email › Ticketing = ja</span> voor kaartverkoop.
+                    <span className="font-medium">Email › Ticketing = ja</span> voor kaartverkoop. De doelgroep is
+                    gebaseerd op dit filter.
                   </li>
-                  <li>Maak een doelgroep op dit filter, met dezelfde naam.</li>
+                  <li>
+                    Controleer daarna het aantal contacten in de doelgroep. Minder contacten dan ID&apos;s is normaal:
+                    niet iedereen staat in Maileon of heeft toestemming gegeven.
+                  </li>
                 </ol>
                 <p className="text-xs text-muted-foreground">
-                  Zonder stap 2 krijgen ook mensen die geen toestemming gaven voor dit soort mail de mailing.
+                  De doelgroep staat al klaar om te mailen. Zonder stap 2 krijgen ook mensen die geen toestemming
+                  gaven voor dit soort mail de mailing.
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={startOver}>

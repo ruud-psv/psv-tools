@@ -139,7 +139,8 @@ contactfilter op relatienummer. De doelgroep maakt Digital Marketing daarna zelf
 Maileon, nadat die de Ticketing-regel heeft toegevoegd (zie hieronder). Code:
 `lib/aangrenzende-stoelen/maileon.ts` en `app/api/aangrenzende-stoelen/maileon/route.ts`. Het
 filter zelf maakt `lib/maileon/contact-filters.ts`, dat ook
-[Contact Filter Import](contact-filter-import.md) gebruikt.
+[Contact Filter Import](contact-filter-import.md) gebruikt. Die tool maakt wel meteen een
+doelgroep; deze bewust niet, vanwege de Ticketing-regel hieronder.
 
 - **Naam** (filter, en later de doelgroep), volgens de conventie van Digital Marketing:
   `2026.10.31 PSV Kaartverkoop - Aangrenzende stoelen PSV - Willem II - DMID26-12345`.
