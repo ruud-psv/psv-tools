@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StadiumMap, type AreaNumbers } from "@/components/stadium-map";
 import { isPsvHomeMatch } from "@/lib/aangrenzende-stoelen/events";
-import { defaultDmid, maileonName } from "@/lib/aangrenzende-stoelen/maileon";
+import { maileonName } from "@/lib/aangrenzende-stoelen/maileon";
+import { defaultDmid } from "@/lib/maileon/contact-filters";
 import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
 import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 
