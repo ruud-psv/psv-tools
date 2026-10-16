@@ -14,9 +14,9 @@ export default function ContactFilterImportPage() {
           <span className="tag tag--gold">Maileon</span>
         </div>
         <p className="text-muted-foreground max-w-3xl">
-          Zet een lijst relatienummers, SSO-ID&apos;s of GroupID&apos;s als contactfilter in Maileon. Maileon kent de
-          contacten zelf al; alleen de ID&apos;s gaan erheen. De tool is nog in de testfase: controleer in Maileon of
-          het aantal contacten klopt voordat je het filter gebruikt.
+          Zet een lijst relatienummers, SSO-ID&apos;s of GroupID&apos;s als contactfilter en doelgroep in Maileon.
+          Maileon kent de contacten zelf al; alleen de ID&apos;s gaan erheen. De tool is nog in de testfase:
+          controleer in Maileon of het aantal contacten klopt voordat je de doelgroep gebruikt.
         </p>
       </div>
       <ContactFilterImport />

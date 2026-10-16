@@ -1,8 +1,9 @@
 # Contact Filter Import (beta)
 
-Zet een lijst relatienummers, SSO-ID's of GroupID's als contactfilter in Maileon. Het is
-dezelfde "Doorzetten naar Maileon" als bij [Aangrenzende stoelen](aangrenzende-stoelen.md),
-maar dan met een lijst die je zelf aanlevert.
+Zet een lijst relatienummers, SSO-ID's of GroupID's als contactfilter in Maileon, met een
+doelgroep op dat filter onder dezelfde naam. Het is dezelfde "Doorzetten naar Maileon" als bij
+[Aangrenzende stoelen](aangrenzende-stoelen.md), maar dan met een lijst die je zelf aanlevert,
+en met de doelgroep er meteen bij.
 
 Pagina: `/dashboard/contact-filter-import`, in de sidebar onder "Beta tools".
 
@@ -11,13 +12,21 @@ Pagina: `/dashboard/contact-filter-import`, in de sidebar onder "Beta tools".
 1. Kies het soort ID: relatienummer, SSO-ID of GroupID.
 2. Plak de lijst, of upload een bestand (Excel .xlsx, CSV of TXT, hooguit 10 MB).
 3. Controleer de tellers: uniek, dubbel en overgeslagen.
-4. Vul verzenddatum, naam en DMID in en klik "Doorzetten naar Maileon".
-5. In Maileon: open het filter, controleer het aantal contacten, voeg de preference-regel
-   toe die bij de mailing hoort (bijvoorbeeld Email › Ticketing = ja voor kaartverkoop) en
-   maak een doelgroep op het filter met dezelfde naam.
+4. Vul verzenddatum, naam en DMID in en klik "Doorzetten naar Maileon". Dat maakt het filter
+   en de doelgroep, allebei met dezelfde naam. De pagina toont daarna hoeveel contacten
+   Maileon in de doelgroep vond, en hoeveel daarvan te mailen zijn.
+5. In Maileon: open het filter, voeg de preference-regel toe die bij de mailing hoort
+   (bijvoorbeeld Email › Ticketing = ja voor kaartverkoop) en controleer het aantal
+   contacten in de doelgroep.
 
-Er komt bewust geen doelgroep bij, net als bij Aangrenzende stoelen: de API van Maileon
-wijst filters met een preference-regel af, en zonder die regel mag je niet mailen.
+**Let op:** de doelgroep staat meteen klaar om te mailen, maar nog zonder preference-regel.
+De API van Maileon wijst filters met een preference-regel af, dus die kan er vanaf hier niet
+bij. Zonder die regel kunnen ook mensen de mailing krijgen die geen toestemming gaven voor
+dit soort mail. Aangrenzende stoelen maakt daarom bewust geen doelgroep; deze tool wel, op
+verzoek van Digital Marketing (oktober 2026).
+
+Lukt de doelgroep niet, dan blijft het filter staan en toont de pagina de reden. Maak de
+doelgroep dan zelf in Maileon, op het filter en met dezelfde naam.
 
 ## Invoer
 
@@ -69,6 +78,19 @@ velden: Contacts › Contact fields in Maileon (oktober 2026).
   veldnaam die niet bestaat, dan is het filter leeg. Minder contacten dan ID's is wel
   normaal: niet iedereen staat in Maileon, en lang niet iedereen heeft een SSO-ID.
 
+## API
+
+Code: `app/api/contact-filter-import/route.ts`, met de Maileon-aanroepen in
+`lib/maileon/contact-filters.ts`.
+
+- `POST /contactfilters/v2`: het filter (zie hierboven voor de velden).
+- `POST /targetgroups`: de doelgroep, als XML met `name`, `type` = `regular` en
+  `contact_filter_id`. Dezelfde aanroep als de eerste versie van Aangrenzende stoelen.
+- Daarna een refresh van het filter, zodat Maileon meteen gaat rekenen.
+- De pagina vraagt de doelgroep op (`GET /targetgroups/targetgroup/{id}`, via `GET
+  /api/contact-filter-import?targetGroupId=`) tot de stand `uptodate` is: elke 5 seconden,
+  hooguit 2 minuten. Daarna kan het met "Ververs".
+
 ## Grenzen
 
 - Hooguit 100 waarden per regel en 100 regels per filter. Eén regel blijft vrij voor de
@@ -76,13 +98,12 @@ velden: Contacts › Contact fields in Maileon (oktober 2026).
   splitsen.
 - De naam: `2026.10.31 <naam> - DMID26-12345`, de naam hooguit 150 tekens. Zonder DMID wordt
   het `DMID26-XXXX` (het jaar van de verzenddatum).
-- Iedereen met een login kan doorzetten. Het maakt alleen een filter; mailen kan pas na een
-  doelgroep, en die maak je in Maileon zelf.
-- Elke keer doorzetten maakt een nieuw filter; opruimen gaat in Maileon zelf.
+- Iedereen met een login kan doorzetten.
+- Elke keer doorzetten maakt een nieuw filter en een nieuwe doelgroep; opruimen gaat in
+  Maileon zelf.
 - Sleutel: `MAILEON_API_KEY`, dezelfde als bij Aangrenzende stoelen.
 
 ## Later
 
 - De schrijfwijze van de External ID vastleggen zodra Maileon er een accepteerde.
-- Het aantal gevonden contacten op de pagina tonen (filter opvragen na de refresh).
 - Lijsten boven de 9.900 ID's automatisch over meer filters verdelen.

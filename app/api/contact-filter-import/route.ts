@@ -4,7 +4,9 @@ import { checkIds, ID_TYPES, isIdType } from "@/lib/contact-filter-import/ids";
 import { createFilterOnFirstField, MAILEON_FIELDS } from "@/lib/contact-filter-import/maileon";
 import {
   contactFilterUrl,
+  createTargetGroup,
   filterName,
+  getTargetGroup,
   isMaileonConfigured,
   MAX_FILTER_VALUES,
   refreshContactFilter,
@@ -13,12 +15,14 @@ import {
 
 /**
  * Contact Filter Import (beta): een lijst relatienummers, SSO-ID's of GroupID's
- * als contactfilter in Maileon. Net als bij Aangrenzende stoelen komt er geen
- * doelgroep bij; die maakt Digital Marketing in Maileon, met de preference-regel
- * die bij de mailing hoort.
+ * als contactfilter in Maileon, met een doelgroep erop onder dezelfde naam. De
+ * preference-regel die bij de mailing hoort, voegt Digital Marketing in Maileon
+ * zelf aan het filter toe: de API accepteert die regel niet.
  *
- * De ID's komen hier uit de browser (het is de lijst van de gebruiker zelf),
- * dus elke waarde wordt opnieuw gecontroleerd.
+ * POST maakt filter en doelgroep. De ID's komen hier uit de browser (het is de
+ * lijst van de gebruiker zelf), dus elke waarde wordt opnieuw gecontroleerd.
+ * GET geeft de stand van de doelgroep: Maileon rekent hem op de achtergrond
+ * door, de pagina vraagt dit op tot hij klaar is.
  */
 
 export const dynamic = "force-dynamic";
@@ -71,8 +75,19 @@ export async function POST(req: NextRequest) {
   try {
     const name = filterName({ sendDate: body.sendDate as string, title, dmid: body.dmid as string });
     const { contactFilterId, field } = await createFilterOnFirstField(name, MAILEON_FIELDS[body.idType].fields, values);
+
+    // Lukt de doelgroep niet, dan blijft het filter staan: daar kan iemand in
+    // Maileon zelf een doelgroep op maken.
+    let targetGroupId: number | null = null;
+    let targetGroupError: string | null = null;
+    try {
+      targetGroupId = await createTargetGroup(name, contactFilterId);
+    } catch (error) {
+      targetGroupError = error instanceof Error ? error.message : String(error);
+    }
     console.info(
-      `[contact-filter-import] Maileon: filter ${contactFilterId}, ${values.length} ${type.plural} op ${field}, door ${session.email}`
+      `[contact-filter-import] Maileon: filter ${contactFilterId}, doelgroep ${targetGroupId ?? `mislukt (${targetGroupError})`}, ` +
+        `${values.length} ${type.plural} op ${field}, door ${session.email}`
     );
 
     // Een nieuw filter rekent Maileon meestal vanzelf door; dit duwt het aan.
@@ -81,12 +96,40 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json(
-      { name, contactFilterId, filterUrl: contactFilterUrl(contactFilterId), pushed: values.length, field },
+      {
+        name,
+        contactFilterId,
+        filterUrl: contactFilterUrl(contactFilterId),
+        targetGroupId,
+        targetGroupError,
+        pushed: values.length,
+        field,
+      },
       { headers: NO_STORE }
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[contact-filter-import] doorzetten naar Maileon mislukt:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const session = requireEmail(req);
+  if ("error" in session) return session.error;
+
+  const targetGroupId = Number(req.nextUrl.searchParams.get("targetGroupId"));
+  if (!Number.isInteger(targetGroupId) || targetGroupId <= 0) {
+    return NextResponse.json({ error: "Geen geldige doelgroep." }, { status: 400 });
+  }
+  if (!isMaileonConfigured()) {
+    return NextResponse.json({ error: "Maileon is niet gekoppeld (MAILEON_API_KEY ontbreekt)." }, { status: 503 });
+  }
+
+  try {
+    return NextResponse.json(await getTargetGroup(targetGroupId), { headers: NO_STORE });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

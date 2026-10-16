@@ -6,6 +6,9 @@ import {
   filterName,
   maileonMessage,
   MAX_FILTER_VALUES,
+  parseTargetGroup,
+  parseTargetGroupId,
+  targetGroupXml,
   validateNameInput,
 } from "./contact-filters";
 
@@ -83,4 +86,31 @@ test("foutmeldingen van Maileon in alle vormen", () => {
   assert.equal(maileonMessage('{"message":"kapot"}'), "kapot");
   assert.equal(maileonMessage("<error><message>no such api key</message></error>"), "no such api key");
   assert.equal(maileonMessage(" iets anders "), "iets anders");
+});
+
+test("doelgroep: XML met naam en filter, tekens in de naam ontsnapt", () => {
+  assert.equal(
+    targetGroupXml("2026.10.31 A & B <test> - DMID26-1", 6303),
+    '<?xml version="1.0" encoding="UTF-8"?><targetgroup><name>2026.10.31 A &amp; B &lt;test&gt; - DMID26-1</name>' +
+      "<type>regular</type><contact_filter_id>6303</contact_filter_id></targetgroup>"
+  );
+});
+
+test("doelgroep: ID uit het antwoord, als XML of als getal", () => {
+  assert.equal(parseTargetGroupId('<?xml version="1.0"?><id>812</id>'), 812);
+  assert.equal(parseTargetGroupId("812\n"), 812);
+  assert.equal(parseTargetGroupId("<result>ok</result>"), null);
+  assert.equal(parseTargetGroupId("<id>0</id>"), null);
+});
+
+test("doelgroep: stand en aantallen", () => {
+  const xml =
+    "<targetgroup><id>812</id><name><![CDATA[Naam]]></name><state>uptodate</state>" +
+    "<count_active_contacts>950</count_active_contacts><count_contacts>1000</count_contacts></targetgroup>";
+  assert.deepEqual(parseTargetGroup(xml), { state: "uptodate", countContacts: 1000, countActiveContacts: 950 });
+  assert.deepEqual(parseTargetGroup("<targetgroup><state>updating</state></targetgroup>"), {
+    state: "updating",
+    countContacts: null,
+    countActiveContacts: null,
+  });
 });
