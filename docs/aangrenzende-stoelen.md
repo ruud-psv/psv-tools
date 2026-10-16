@@ -137,7 +137,9 @@ Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom alti
 Onder een gemaakte lijst staat "Doorzetten naar Maileon". Dat maakt in Maileon een
 contactfilter op relatienummer. De doelgroep maakt Digital Marketing daarna zelf in
 Maileon, nadat die de Ticketing-regel heeft toegevoegd (zie hieronder). Code:
-`lib/aangrenzende-stoelen/maileon.ts` en `app/api/aangrenzende-stoelen/maileon/route.ts`.
+`lib/aangrenzende-stoelen/maileon.ts` en `app/api/aangrenzende-stoelen/maileon/route.ts`. Het
+filter zelf maakt `lib/maileon/contact-filters.ts`, dat ook
+[Contact Filter Import](contact-filter-import.md) gebruikt.
 
 - **Naam** (filter, en later de doelgroep), volgens de conventie van Digital Marketing:
   `2026.10.31 PSV Kaartverkoop - Aangrenzende stoelen PSV - Willem II - DMID26-12345`.

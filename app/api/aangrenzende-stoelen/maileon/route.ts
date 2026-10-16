@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { buildNeighborList, ListError, parseListRequest } from "@/lib/aangrenzende-stoelen/build-list";
+import { maileonName } from "@/lib/aangrenzende-stoelen/maileon";
 import {
   contactFilterUrl,
   createContactFilter,
   isMaileonConfigured,
-  maileonName,
   refreshContactFilter,
+  RELATION_NUMBER_FIELD,
   validateNameInput,
-} from "@/lib/aangrenzende-stoelen/maileon";
+} from "@/lib/maileon/contact-filters";
 
 /**
  * Doorzetten naar Maileon.
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const name = maileonName({ sendDate: body.sendDate as string, eventName: event.name, dmid: body.dmid as string });
-    const contactFilterId = await createContactFilter(name, relationNumbers);
+    const contactFilterId = await createContactFilter(name, RELATION_NUMBER_FIELD, relationNumbers);
     console.info(
       `[aangrenzende-stoelen] Maileon: filter ${contactFilterId}, ${relationNumbers.length} relatienummers, door ${session.email}`
     );

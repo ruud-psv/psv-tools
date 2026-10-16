@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Link2,
+  ListFilter,
   Mail,
   MailPlus,
   Megaphone,
@@ -179,4 +180,5 @@ export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Ringside", href: "/dashboard/ticket-inzichten-new", icon: Ticket },
   { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
+  { name: "Contact Filter Import", href: "/dashboard/contact-filter-import", icon: ListFilter },
 ];
