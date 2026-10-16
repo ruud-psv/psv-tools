@@ -48,29 +48,26 @@ De log noemt alleen aantallen, nooit ID's.
 
 ## Velden in Maileon
 
-Code: `lib/contact-filter-import/maileon.ts`. Het filter zelf maakt
-`lib/maileon/contact-filters.ts`, dat ook Aangrenzende stoelen gebruikt.
+Code: `lib/contact-filter-import/maileon.ts` (getest in `maileon.test.ts`). Het filter zelf
+maakt `lib/maileon/contact-filters.ts`, dat ook Aangrenzende stoelen gebruikt. Bron voor de
+velden: Contacts › Contact fields in Maileon (oktober 2026).
 
-| Soort | Veld in Maileon | Status |
-|---|---|---|
-| Relatienummer | custom veld `MEMBERNUMBERPRIOR` | werkt (zelfde als Aangrenzende stoelen) |
-| GroupID | de External ID van het contact | schrijfwijze nog niet bevestigd |
-| SSO-ID | custom veld, opgezocht in Maileon | veldnaam nog niet bevestigd |
+| Soort | Veld in Maileon | Gevuld bij | Status |
+|---|---|---|---|
+| Relatienummer | custom veld `MEMBERNUMBERPRIOR` | ongeveer de helft | werkt (zelfde als Aangrenzende stoelen) |
+| SSO-ID | custom veld `SSOID` (tekst) | ongeveer 20% | veld bevestigd |
+| GroupID | External ID (standaardveld, "system defined") | bijna iedereen (98,7%) | schrijfwijze in het filter nog niet bevestigd |
 
 - **GroupID = External ID.** De Mail Builder geeft de External ID ook als `groupid` door
-  aan Typeform. De External ID is geen custom veld maar een vast gegeven van het contact.
+  aan Typeform. De External ID is geen custom veld maar een standaardveld van Maileon zelf.
   Hoe het contactfilter-schema dat veld noemt, staat niet in de documentatie die we hebben.
   De tool probeert daarom `EXTERNAL_ID`, `external_id` en `EXTERNAL-ID` op volgorde. Alleen
-  bij een 400 van Maileon gaat hij naar de volgende. De pagina en de log
-  (`[contact-filter-import] ... op <veld>`) noemen welke schrijfwijze Maileon accepteerde.
-  Zet die daarna vooraan in `EXTERNAL_ID_FIELDS`, of als enige.
-- **SSO-ID.** De tool vraagt de custom velden op (`GET /contacts/fields/custom`) en neemt het
-  veld dat zonder hoofdletters en leestekens `ssoid` heet (`SSO_ID`, `SsoId`, `SSO-ID`, ...).
-  Vindt hij er geen of meer dan één, dan kan SSO-ID niet en toont de pagina waarom, met de
-  velden die erop lijken.
+  bij een 400 van Maileon gaat hij naar de volgende; elke andere fout stopt meteen. De pagina
+  en de log (`[contact-filter-import] ... op <veld>`) noemen welke schrijfwijze Maileon
+  accepteerde. Zet die daarna vooraan in `EXTERNAL_ID_FIELDS`, of als enige.
 - **Controleer het aantal contacten in Maileon** na het doorzetten. Accepteert Maileon een
   veldnaam die niet bestaat, dan is het filter leeg. Minder contacten dan ID's is wel
-  normaal: niet iedereen staat in Maileon.
+  normaal: niet iedereen staat in Maileon, en lang niet iedereen heeft een SSO-ID.
 
 ## Grenzen
 

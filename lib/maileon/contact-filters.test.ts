@@ -6,7 +6,6 @@ import {
   filterName,
   maileonMessage,
   MAX_FILTER_VALUES,
-  parseCustomFieldNames,
   validateNameInput,
 } from "./contact-filters";
 
@@ -84,20 +83,4 @@ test("foutmeldingen van Maileon in alle vormen", () => {
   assert.equal(maileonMessage('{"message":"kapot"}'), "kapot");
   assert.equal(maileonMessage("<error><message>no such api key</message></error>"), "no such api key");
   assert.equal(maileonMessage(" iets anders "), "iets anders");
-});
-
-test("custom velden: naam als attribuut of als element", () => {
-  assert.deepEqual(
-    parseCustomFieldNames(
-      '<?xml version="1.0"?><custom_fields><field name="MEMBERNUMBERPRIOR" type="string"/><field type="string" name="SSOID"></field></custom_fields>'
-    ),
-    ["MEMBERNUMBERPRIOR", "SSOID"]
-  );
-  assert.deepEqual(
-    parseCustomFieldNames(
-      "<custom_fields><field><name>SSO_ID</name><type>string</type></field><field><name><![CDATA[Stad]]></name></field></custom_fields>"
-    ),
-    ["SSO_ID", "Stad"]
-  );
-  assert.deepEqual(parseCustomFieldNames("<custom_fields/>"), []);
 });

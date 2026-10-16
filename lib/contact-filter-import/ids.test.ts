@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkIds, ID_TYPES, IdListError, parseIdSheet, parseIdText } from "./ids";
-import { ssoFieldPlan } from "./maileon";
 
 test("relatienummers: cijfers, zonder voorloopnullen, dubbelen en fouten geteld", () => {
   assert.equal(ID_TYPES.relatienummer.normalize(" 00123 "), "123");
@@ -71,15 +70,4 @@ test("server: elke waarde moet kloppen, dubbelen vallen weg", () => {
   assert.match((checkIds("relatienummer", ["123", "abc"]) as { error: string }).error, /1 waarden/);
   assert.ok("error" in checkIds("relatienummer", []));
   assert.ok("error" in checkIds("relatienummer", "123"));
-});
-
-test("SSO-veld in Maileon: precies één veld dat ssoid heet", () => {
-  assert.deepEqual(ssoFieldPlan(["MEMBERNUMBERPRIOR", "SSO_ID"]), { ok: true, fields: ["SSO_ID"], label: "SSO_ID" });
-  assert.deepEqual(ssoFieldPlan(["MEMBERNUMBERPRIOR", "SSO_STATE"]), {
-    ok: false,
-    reason: "Maileon heeft geen custom veld voor het SSO-ID.",
-    similar: ["SSO_STATE"],
-  });
-  const twice = ssoFieldPlan(["SSOID", "sso-id"]);
-  assert.equal(twice.ok, false);
 });

@@ -186,28 +186,3 @@ export async function refreshContactFilter(contactFilterId: number): Promise<voi
   });
   if (!res.ok) throw new MaileonError(await maileonError(res), res.status);
 }
-
-/**
- * De namen uit het antwoord van `GET /contacts/fields/custom`. Maileon zet de
- * naam als attribuut (`<field name="X"/>`) of als element
- * (`<field><name>X</name></field>`); beide worden gelezen.
- */
-export function parseCustomFieldNames(xml: string): string[] {
-  const names = new Set<string>();
-  for (const [, attributes, body] of xml.matchAll(/<field\b([^>]*?)(?:\/>|>([\s\S]*?)<\/field>)/g)) {
-    const name = attributes.match(/\bname="([^"]*)"/)?.[1] ?? body?.match(/<name>([\s\S]*?)<\/name>/)?.[1];
-    const trimmed = name?.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, "").trim();
-    if (trimmed) names.add(trimmed);
-  }
-  return [...names];
-}
-
-/** De namen van alle custom velden in het account. */
-export async function getCustomFieldNames(): Promise<string[]> {
-  const res = await fetch(`${MAILEON_API}/contacts/fields/custom`, {
-    headers: { Authorization: authorization(), Accept: MAILEON_XML },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new MaileonError(`Maileon gaf de custom velden niet. ${await maileonError(res)}`, res.status);
-  return parseCustomFieldNames(await res.text());
-}

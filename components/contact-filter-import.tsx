@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ExternalLink, FileUp, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,13 +15,8 @@ import {
   type IdListSummary,
   type IdType,
 } from "@/lib/contact-filter-import/ids";
-import type { FieldStatus } from "@/lib/contact-filter-import/maileon";
+import { MAILEON_FIELDS } from "@/lib/contact-filter-import/maileon";
 import { defaultDmid, filterName, MAX_FILTER_VALUES } from "@/lib/maileon/contact-filters";
-
-interface Status {
-  configured: boolean;
-  fields: Record<IdType, FieldStatus> | null;
-}
 
 /** Een ingelezen bestand: een werkblad (Excel) of tekst (CSV/TXT). */
 type LoadedFile = { name: string; table: unknown[][] } | { name: string; text: string };
@@ -66,9 +61,6 @@ function Problem({ children }: { children: React.ReactNode }) {
 }
 
 export function ContactFilterImport() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
-
   const [idType, setIdType] = useState<IdType>("relatienummer");
   const [text, setText] = useState("");
   const [file, setFile] = useState<LoadedFile | null>(null);
@@ -83,24 +75,7 @@ export function ContactFilterImport() {
   const [pushError, setPushError] = useState<string | null>(null);
   const [pushed, setPushed] = useState<MaileonPush | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/contact-filter-import", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
-      setStatus(data);
-      setStatusError(null);
-    } catch (caught) {
-      setStatusError(caught instanceof Error ? caught.message : String(caught));
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   const type = ID_TYPES[idType];
-  const field = status?.fields?.[idType] ?? null;
 
   const parsed = useMemo((): { summary: IdListSummary } | { error: string } | null => {
     if (!file && !text.trim()) return null;
@@ -185,8 +160,7 @@ export function ContactFilterImport() {
     setTitle("");
     setDmid("");
   }
-  const canPush =
-    Boolean(summary) && !tooMany && Boolean(status?.configured) && field?.ok === true && Boolean(sendDate) && Boolean(title.trim());
+  const canPush = Boolean(summary) && !tooMany && Boolean(sendDate) && Boolean(title.trim());
 
   return (
     <div className="space-y-6">
@@ -220,19 +194,9 @@ export function ContactFilterImport() {
                 </Button>
               ))}
             </div>
-            {statusError && <Problem>De velden in Maileon konden niet worden opgevraagd: {statusError}</Problem>}
-            {status && !status.configured && <Problem>Maileon is niet gekoppeld (MAILEON_API_KEY ontbreekt).</Problem>}
-            {field?.ok === true && (
-              <p className="text-xs text-muted-foreground">
-                Maileon-veld: <span className="font-medium">{field.label}</span>
-              </p>
-            )}
-            {field?.ok === false && (
-              <Problem>
-                {type.plural} kunnen nog niet naar Maileon: {field.reason}
-                {field.similar.length > 0 && ` Velden die erop lijken: ${field.similar.join(", ")}.`}
-              </Problem>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Maileon-veld: <span className="font-medium">{MAILEON_FIELDS[idType].label}</span>
+            </p>
           </div>
 
           {file ? (

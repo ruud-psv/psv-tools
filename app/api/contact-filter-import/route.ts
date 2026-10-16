@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
-import { checkIds, ID_TYPE_KEYS, ID_TYPES, isIdType, type IdType } from "@/lib/contact-filter-import/ids";
-import { createFilterOnFirstField, fieldPlan, type FieldStatus } from "@/lib/contact-filter-import/maileon";
+import { checkIds, ID_TYPES, isIdType } from "@/lib/contact-filter-import/ids";
+import { createFilterOnFirstField, MAILEON_FIELDS } from "@/lib/contact-filter-import/maileon";
 import {
   contactFilterUrl,
   filterName,
@@ -17,9 +17,8 @@ import {
  * doelgroep bij; die maakt Digital Marketing in Maileon, met de preference-regel
  * die bij de mailing hoort.
  *
- * GET: welk Maileon-veld bij elk soort ID hoort, voor de pagina.
- * POST: maakt het filter. De ID's komen hier uit de browser (het is de lijst van
- * de gebruiker zelf), dus elke waarde wordt opnieuw gecontroleerd.
+ * De ID's komen hier uit de browser (het is de lijst van de gebruiker zelf),
+ * dus elke waarde wordt opnieuw gecontroleerd.
  */
 
 export const dynamic = "force-dynamic";
@@ -29,21 +28,6 @@ const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
 
 /** Langer dan dit wordt de naam in de lijst van Maileon onleesbaar. */
 const MAX_TITLE_LENGTH = 150;
-
-export async function GET(req: NextRequest) {
-  const session = requireEmail(req);
-  if ("error" in session) return session.error;
-
-  if (!isMaileonConfigured()) return NextResponse.json({ configured: false, fields: null }, { headers: NO_STORE });
-
-  // Alleen het SSO-ID vraagt iets op bij Maileon; de rest staat vast.
-  const fields: Partial<Record<IdType, FieldStatus>> = {};
-  for (const type of ID_TYPE_KEYS) {
-    const plan = await fieldPlan(type);
-    fields[type] = plan.ok ? { ok: true, label: plan.label } : plan;
-  }
-  return NextResponse.json({ configured: true, fields }, { headers: NO_STORE });
-}
 
 export async function POST(req: NextRequest) {
   const session = requireEmail(req);
@@ -84,12 +68,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const plan = await fieldPlan(body.idType);
-  if (!plan.ok) return NextResponse.json({ error: plan.reason }, { status: 409 });
-
   try {
     const name = filterName({ sendDate: body.sendDate as string, title, dmid: body.dmid as string });
-    const { contactFilterId, field } = await createFilterOnFirstField(name, plan.fields, values);
+    const { contactFilterId, field } = await createFilterOnFirstField(name, MAILEON_FIELDS[body.idType].fields, values);
     console.info(
       `[contact-filter-import] Maileon: filter ${contactFilterId}, ${values.length} ${type.plural} op ${field}, door ${session.email}`
     );
