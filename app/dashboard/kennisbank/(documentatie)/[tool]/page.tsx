@@ -15,6 +15,7 @@ import {
   getToolBySlug,
   slugify,
   figmaEmbedUrl,
+  KennisbankStep,
   KennisbankTip,
   KennisbankChecklistGroup,
   KennisbankFlowBadgeTone,
@@ -63,6 +64,33 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+function StepList({ steps }: { steps: KennisbankStep[] }) {
+  return (
+    <div className="relative space-y-6">
+      {/* connecting timeline line */}
+      {steps.length > 1 && (
+        <div
+          aria-hidden
+          className="absolute left-[13px] top-3 bottom-3 w-px bg-border"
+        />
+      )}
+      {steps.map((step, i) => (
+        <div key={i} className="relative flex gap-4">
+          <div className="relative z-10 flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-psv-red-primary text-white text-xs font-heading font-bold ring-4 ring-background">
+            {i + 1}
+          </div>
+          <div className="pt-0.5">
+            <p className="text-sm font-semibold">{step.title}</p>
+            <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+              {step.description}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function generateStaticParams() {
   return kennisbankTools.map((tool) => ({ tool: tool.slug }));
@@ -214,30 +242,19 @@ export default async function KennisbankToolPage({
               <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
                 {tool.stepsCaption ?? "Aan de slag"}
               </h2>
-              <div className="relative space-y-6">
-                {/* connecting timeline line */}
-                {tool.steps.length > 1 && (
-                  <div
-                    aria-hidden
-                    className="absolute left-[13px] top-3 bottom-3 w-px bg-border"
-                  />
-                )}
-                {tool.steps.map((step, i) => (
-                  <div key={i} className="relative flex gap-4">
-                    <div className="relative z-10 flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-psv-red-primary text-white text-xs font-heading font-bold ring-4 ring-background">
-                      {i + 1}
-                    </div>
-                    <div className="pt-0.5">
-                      <p className="text-sm font-semibold">{step.title}</p>
-                      <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
-                        {step.description}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <StepList steps={tool.steps} />
             </section>
           )}
+
+          {/* More step groups */}
+          {tool.stepGroups?.map((group) => (
+            <section key={group.caption} id={slugify(group.caption)}>
+              <h2 className="text-xl font-heading uppercase tracking-tight mb-3">
+                {group.caption}
+              </h2>
+              <StepList steps={group.steps} />
+            </section>
+          ))}
 
           {/* Flows */}
           {tool.flows && tool.flows.length > 0 &&

@@ -1,10 +1,12 @@
-# Redirect aanmaken voor psv.nl (Xperience Central)
+# Redirects voor psv.nl (Xperience Central)
 
-Brondocument voor het stappenplan **Redirect aanmaken voor psv.nl** op de
-kennisbankpagina **Xperience Central** (`lib/kennisbank.ts`, slug
-`xperience-central`, sectie `#aan-de-slag`). De kennisbank-chat beantwoordt
-vragen alleen met wat in de kennisbank staat. Wat hier als **open** staat, kan de
-chat dus niet beantwoorden. De chat zegt dan dat het ontbreekt en verzint niets.
+Brondocument voor de stappenplannen **Redirect aanmaken voor psv.nl**,
+**Redirect wijzigen** en **Redirect verwijderen** op de kennisbankpagina
+**Xperience Central** (`lib/kennisbank.ts`, slug `xperience-central`, secties
+`#aan-de-slag`, `#redirect-wijzigen` en `#redirect-verwijderen`). De
+kennisbank-chat beantwoordt vragen alleen met wat in de kennisbank staat. Wat
+hier als **open** staat, kan de chat dus niet beantwoorden. De chat zegt dan dat
+het ontbreekt en verzint niets.
 
 De chat stelt "Hoe maak ik een redirect aan?" al voor als voorbeeldvraag
 (`app/dashboard/kennisbank/KennisbankChat.tsx`). Met deze pagina kan de chat die
@@ -17,10 +19,15 @@ de testvragen opnieuw in de kennisbank-chat.
 
 - **Xperience Central (XC) is het CMS van psv.nl.** De redirects staan daar, onder
   Configuratie > Serverconfiguratie.
-- **De pagina was "binnenkort".** Met dit stappenplan heeft de pagina inhoud. De
-  kop boven de stappen is "Redirect aanmaken voor psv.nl" (`stepsCaption`), zodat
-  duidelijk blijft waar de stappen over gaan als er later meer onderwerpen bij
-  komen.
+- **De pagina was "binnenkort".** Met deze stappenplannen heeft de pagina inhoud.
+- **Drie stappenplannen, elk met een eigen kop.** Aanmaken staat in `steps` met
+  `stepsCaption`; wijzigen en verwijderen staan in `stepGroups`. Elk stappenplan
+  heeft een eigen anker, dus de inhoudsopgave en de bronlinks van de chat gaan
+  direct naar het juiste stappenplan. Iemand die alleen iets wil wijzigen, hoeft
+  de elf stappen van aanmaken niet door.
+- **Wijzigen en verwijderen beginnen met inloggen en Redirects zoeken.** Die stap
+  staat in elk stappenplan opnieuw, omdat de chat een stappenplan soms los van de
+  rest leest.
 - **Toegang** staat bovenaan de pagina: de loginpagina
   `https://psv.gxcloud.net/web/login`, en dat je voor toegang bij het Digital
   Marketing-team terechtkunt.
@@ -30,10 +37,11 @@ de testvragen opnieuw in de kennisbank-chat.
 - **Eén handeling per stap**, met de app vooraan (Xperience Central of Browser).
 - **Schermteksten staan er precies zoals in XC:** *Configuratie*,
   *Serverconfiguratie*, *Redirects zoeken*, *Redirect toevoegen*, *Naam*,
-  *Alias URL*, *Doel URL*, *Toepassen*, *Dump nu*.
+  *Alias URL*, *Doel URL*, *Toepassen*, *Dump nu*, *Verwijder*.
 - **"Zoek bestaande of maak een nieuwe aan"** is twee stappen geworden: eerst
   zoeken (stap 4), dan toevoegen (stap 5). Zo maakt niemand een redirect dubbel
-  aan.
+  aan. Stap 4 verwijst naar Redirect wijzigen als een bestaande redirect naar een
+  andere pagina moet.
 - **Het voorbeeld psv.nl/winactie** staat in elke stap waar het helpt. De chat
   leest een stap soms los van de rest.
 - **"PSV.nl"** is overal **psv.nl**: de hoofdletters in het domein doen er niet
@@ -42,23 +50,35 @@ de testvragen opnieuw in de kennisbank-chat.
   net als op de andere kennisbankpagina's.
 - **De twee regels** (één Doel URL per redirect; meerdere redirects standaard
   niet naar dezelfde Doel URL) staan als opmerking en waarschuwing bij de tips.
-- **Toegevoegd:** stap 11 (de redirect testen in een privévenster) en een tip
-  voor als de redirect nog niet werkt. Een browser onthoudt een redirect; in een
-  privévenster zie je wat een nieuwe bezoeker ziet.
+- **Toegevoegd:** de laatste stap van aanmaken en wijzigen (de redirect testen in
+  de browser), een tip voor als de redirect nog niet werkt, en een waarschuwing om
+  een redirect die nog in een mail, op social, op drukwerk of in een QR-code staat
+  niet te verwijderen maar de Doel URL te wijzigen.
+
+## Aangevuld na vragen
+
+| Onderwerp | Wat er op de pagina staat |
+|---|---|
+| Wijzigen | Redirect wijzigen: bij Redirects zoeken zoeken op Naam, met het deel na psv.nl/. Daarna aanpassen, Toepassen en Dump nu. |
+| Verwijderen | Redirect verwijderen: zoeken op Naam, het vinkje in de linkerkolom aanvinken en op Verwijder klikken. Daarna Dump nu. |
+| Zonder Dump nu | Stap 10 en de tip: zonder Dump nu duurt het langer voordat de redirect live staat. |
+| Vorm van de Doel URL | Stap 7: de volledige URL, met https:// ervoor, bijvoorbeeld https://www.psv.nl/fanstore. |
+| 301 of 302 | Opmerking: een redirect in XC is tijdelijk (302). Een browser onthoudt die niet, dus een gewijzigde Doel URL geldt ook voor eerdere bezoekers. Daarom is "test in een privévenster" weggehaald. |
+| GX Support en IT | Blijft zoals het staat: neem contact op met GX Support of de IT-afdeling van PSV. |
+| Naamgeving van Naam | Naam is het deel van de link na psv.nl/, net als Alias URL. Je zoekt een redirect ook op Naam. |
 
 ## Open punten
 
-| Open punt | Waarom het telt | Voorstel |
-|---|---|---|
-| **Een bestaande redirect wijzigen of verwijderen.** De originele tekst zegt alleen hoe je een redirect zoekt en toevoegt. | "De winactie is voorbij, waar moet psv.nl/winactie nu heen?" kan de chat niet beantwoorden. | Voeg toe hoe je bij *Redirects zoeken* een redirect aanpast of verwijdert, en of daarna weer *Dump nu* nodig is. |
-| **Wat zonder Dump nu gebeurt.** *Dump nu* zet de redirect "snel" live. | Onduidelijk of de redirect zonder *Dump nu* later vanzelf live gaat (bijvoorbeeld 's nachts) of nooit. | Noem wanneer de dump anders draait. |
-| **Vorm van de Doel URL.** Een volledige URL met `https://www.psv.nl/...`, of mag ook een pad zoals `/fanstore`? | Een verkeerde vorm geeft een redirect die nergens heen gaat. | Noem de vorm met een voorbeeld, ook voor een URL buiten psv.nl. |
-| **Permanent of tijdelijk (301 of 302).** Staat niet in de originele tekst. | Een browser onthoudt een permanente redirect lang. Verwijst psv.nl/winactie later ergens anders heen, dan komen eerdere bezoekers nog op de oude pagina. | Noem welk type XC maakt en of je dat kunt kiezen. |
-| **Uitzondering via GX Support of IT.** Voor meerdere redirects naar dezelfde Doel URL. | De chat kan niet zeggen hoe je GX Support of de IT-afdeling bereikt. | Zet het mailadres, portaal of de route via IT op de pagina. |
-| **Naamgeving van Naam.** Nu is Naam gelijk aan de alias. | Maileon, Typeform en Playable hebben een vaste naamgeving met DMID. | Bevestig dat Naam gelijk is aan de alias, of geef een naamgeving. |
+Geen. Zie hieronder wat nog in de app te controleren is.
 
 ## Nog te controleren in de app
 
+- **Opslaan bij wijzigen.** De pagina zegt dat je een gewijzigde redirect opslaat
+  met *Toepassen*, net als bij toevoegen. Dat staat niet letterlijk in de
+  antwoorden. Controleer de naam van de knop.
+- **Dump nu na wijzigen en verwijderen.** De pagina zegt dat je ook na wijzigen
+  en verwijderen op *Dump nu* klikt, omdat het anders langer duurt. Dat is
+  afgeleid van de regel bij aanmaken.
 - **Schuine streep in Alias URL.** Het voorbeeld is `winactie`, zonder `/` ervoor.
   Controleer of XC `/winactie` ook goed verwerkt of juist een fout geeft.
 - **Hoofdletters in de alias.** Het voorbeeld psv.nl/ucl en psv.nl/UCL suggereert
@@ -74,8 +94,11 @@ de testvragen opnieuw in de kennisbank-chat.
 |---|---|
 | Hoe maak ik een redirect aan? | Stap 1 t/m 11 op volgorde: inloggen, Configuratie, Serverconfiguratie, Redirects zoeken, Redirect toevoegen, Naam, Alias URL, Doel URL, Toepassen, Dump nu, testen. |
 | Wat vul ik in bij Alias URL voor psv.nl/winactie? | `winactie`, zonder psv.nl ervoor. Bij Naam ook `winactie`. |
-| Ik heb op Toepassen geklikt, maar de redirect werkt niet. | Zoek de redirect op bij Redirects zoeken en klik op Dump nu. Controleer Alias URL en Doel URL. Test in een privévenster. |
+| Wat vul ik in bij Doel URL? | De volledige URL met https:// ervoor, bijvoorbeeld https://www.psv.nl/fanstore. |
+| psv.nl/winactie moet naar een andere pagina. | Redirect wijzigen: Redirects zoeken, zoeken op Naam (winactie), Doel URL aanpassen, Toepassen, Dump nu, testen. |
+| Hoe verwijder ik een redirect? | Redirect verwijderen: zoeken op Naam, vinkje in de linkerkolom, Verwijder, Dump nu. Met de waarschuwing: staat de link nog in een mail, op drukwerk of in een QR-code, wijzig dan de Doel URL. |
+| Ik heb op Toepassen geklikt, maar de redirect werkt niet. | Klik op Dump nu; zonder Dump nu duurt het langer. Controleer Alias URL en Doel URL, en of de Doel URL volledig is. |
+| Is een redirect permanent of tijdelijk? | Tijdelijk (302). |
 | Kan psv.nl/ucl en psv.nl/UCL naar dezelfde pagina? | Standaard niet. Neem contact op met GX Support of de IT-afdeling van PSV. |
 | Kan één redirect naar twee pagina's verwijzen? | Nee, een redirect heeft maar één Doel URL. |
 | Ik kan niet inloggen in Xperience Central. | Neem contact op met het Digital Marketing-team. |
-| Hoe pas ik een bestaande redirect aan? | De chat zegt dat dit niet in de kennisbank staat (open punt) en verwijst naar het Digital Marketing-team. |

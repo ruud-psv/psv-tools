@@ -8,6 +8,12 @@ export interface KennisbankStep {
   description: string;
 }
 
+export interface KennisbankStepGroup {
+  /** Kop boven de stappen, bijvoorbeeld "Redirect wijzigen". Ook het anker. */
+  caption: string;
+  steps: KennisbankStep[];
+}
+
 export interface KennisbankTip {
   type: "tip" | "warning" | "note";
   text: string;
@@ -107,6 +113,8 @@ export interface KennisbankTool {
   steps?: KennisbankStep[];
   /** Kop boven de stappen, bijvoorbeeld "Doelgroepen delen met Meta". Standaard "Aan de slag". */
   stepsCaption?: string;
+  /** Meer stappenplannen onder de eerste, elk met een eigen kop. */
+  stepGroups?: KennisbankStepGroup[];
   tips?: KennisbankTip[];
   tables?: KennisbankTable[];
   checklists?: KennisbankChecklist[];
@@ -814,7 +822,7 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "Xperience Central — zoek of de redirect al bestaat",
         description:
-          "Open het tabje Redirects zoeken en zoek op het deel van de link na psv.nl/, bijvoorbeeld winactie voor psv.nl/winactie. Staat de redirect er al, dan maak je geen nieuwe redirect aan.",
+          "Open het tabje Redirects zoeken en zoek bij Naam op het deel van de link na psv.nl/, bijvoorbeeld winactie voor psv.nl/winactie. Staat de redirect er al, dan maak je geen nieuwe redirect aan. Moet een bestaande redirect naar een andere pagina, volg dan de stappen bij Redirect wijzigen.",
       },
       {
         title: "Xperience Central — open Redirect toevoegen",
@@ -829,7 +837,7 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "Xperience Central — vul de Doel URL in",
         description:
-          "Vul bij Doel URL de URL in waar de redirect naartoe moet. Voor psv.nl/winactie is dat de URL van de pagina waar bezoekers van psv.nl/winactie moeten uitkomen. Een redirect heeft maar één Doel URL.",
+          "Vul bij Doel URL de volledige URL in waar de redirect naartoe moet, met https:// ervoor, bijvoorbeeld https://www.psv.nl/fanstore. Voor psv.nl/winactie is dat de volledige URL van de pagina waar bezoekers van psv.nl/winactie moeten uitkomen. Een redirect heeft maar één Doel URL.",
       },
       {
         title: "Xperience Central — klik op Toepassen",
@@ -839,17 +847,78 @@ export const kennisbankTools: KennisbankTool[] = [
       {
         title: "Xperience Central — zoek de nieuwe redirect op",
         description:
-          "Open het tabje Redirects zoeken en zoek de redirect op die je net hebt aangemaakt, bijvoorbeeld op winactie.",
+          "Open het tabje Redirects zoeken en zoek bij Naam de redirect op die je net hebt aangemaakt, bijvoorbeeld op winactie.",
       },
       {
         title: "Xperience Central — klik op Dump nu",
         description:
-          "Klik bij Redirects zoeken op Dump nu. Dan staat de nieuwe redirect snel live op psv.nl.",
+          "Klik bij Redirects zoeken op Dump nu. Dan staat de nieuwe redirect snel live op psv.nl. Zonder Dump nu duurt het langer voordat de redirect live staat.",
       },
       {
         title: "Browser — test de redirect",
         description:
-          "Open de redirect, bijvoorbeeld psv.nl/winactie, in een privévenster van je browser. Controleer dat je uitkomt op de Doel URL. In een privévenster gebruikt de browser geen redirect die hij eerder heeft onthouden.",
+          "Open de redirect, bijvoorbeeld psv.nl/winactie, in je browser en controleer dat je uitkomt op de Doel URL.",
+      },
+    ],
+    stepGroups: [
+      {
+        caption: "Redirect wijzigen",
+        steps: [
+          {
+            title: "Xperience Central — open Redirects zoeken",
+            description:
+              "Log in op https://psv.gxcloud.net/web/login, klik rechtsboven op Configuratie, ga naar Serverconfiguratie en open het tabje Redirects zoeken.",
+          },
+          {
+            title: "Xperience Central — zoek de redirect op Naam",
+            description:
+              "Zoek bij Naam op het deel van de link na psv.nl/. Voor de redirect psv.nl/winactie zoek je op winactie.",
+          },
+          {
+            title: "Xperience Central — pas de redirect aan",
+            description:
+              "Pas de redirect aan, bijvoorbeeld de Doel URL, en klik op Toepassen. Vul de Doel URL volledig in, met https:// ervoor. De nieuwe Doel URL vervangt de oude: een redirect heeft maar één Doel URL.",
+          },
+          {
+            title: "Xperience Central — klik op Dump nu",
+            description:
+              "Klik bij Redirects zoeken op Dump nu. Dan staat de wijziging snel live op psv.nl. Zonder Dump nu duurt het langer voordat de wijziging live staat.",
+          },
+          {
+            title: "Browser — test de redirect",
+            description:
+              "Open de redirect, bijvoorbeeld psv.nl/winactie, in je browser en controleer dat je uitkomt op de nieuwe Doel URL.",
+          },
+        ],
+      },
+      {
+        caption: "Redirect verwijderen",
+        steps: [
+          {
+            title: "Xperience Central — open Redirects zoeken",
+            description:
+              "Log in op https://psv.gxcloud.net/web/login, klik rechtsboven op Configuratie, ga naar Serverconfiguratie en open het tabje Redirects zoeken.",
+          },
+          {
+            title: "Xperience Central — zoek de redirect op Naam",
+            description:
+              "Zoek bij Naam op het deel van de link na psv.nl/. Voor de redirect psv.nl/winactie zoek je op winactie.",
+          },
+          {
+            title: "Xperience Central — vink de redirect aan",
+            description:
+              "Vink in de linkerkolom het vinkje aan bij de redirect die weg moet. Controleer of je de juiste redirect hebt aangevinkt.",
+          },
+          {
+            title: "Xperience Central — klik op Verwijder",
+            description: "Klik op Verwijder. De aangevinkte redirect wordt verwijderd.",
+          },
+          {
+            title: "Xperience Central — klik op Dump nu",
+            description:
+              "Klik bij Redirects zoeken op Dump nu. Dan is de redirect snel van psv.nl af. Zonder Dump nu duurt het langer voordat de verwijderde redirect niet meer werkt.",
+          },
+        ],
       },
     ],
     tips: [
@@ -862,8 +931,16 @@ export const kennisbankTools: KennisbankTool[] = [
         text: "Meerdere redirects kunnen standaard niet naar dezelfde Doel URL verwijzen, bijvoorbeeld psv.nl/ucl en psv.nl/UCL. Heb je dat toch nodig? Neem dan contact op met GX Support of met de IT-afdeling van PSV.",
       },
       {
+        type: "warning",
+        text: "Wordt een redirect nog gebruikt, bijvoorbeeld in een mail, op social, op drukwerk of in een QR-code? Verwijder de redirect dan niet, want dan werkt die link niet meer. Wijzig in dat geval de Doel URL.",
+      },
+      {
+        type: "note",
+        text: "Een redirect in Xperience Central is tijdelijk (302). Een browser onthoudt een tijdelijke redirect niet, zoals bij een permanente redirect (301). Wijzig je de Doel URL, dan komen ook bezoekers die de link eerder openden op de nieuwe pagina.",
+      },
+      {
         type: "tip",
-        text: "Werkt de redirect nog niet? Zoek de redirect op bij Redirects zoeken en controleer of Alias URL en Doel URL kloppen en of je na Toepassen op Dump nu hebt geklikt. Test de redirect in een privévenster.",
+        text: "Werkt de redirect nog niet? Zoek de redirect bij Redirects zoeken op Naam en controleer of Alias URL en Doel URL kloppen, en of de Doel URL volledig is, met https:// ervoor. Klik daarna op Dump nu: zonder Dump nu duurt het langer voordat de redirect live staat.",
       },
       {
         type: "note",
@@ -922,6 +999,10 @@ export function buildKennisbankContext(): string {
         lines.push(`${tool.stepsCaption ?? "Aan de slag"} ${bron("aan-de-slag")}`);
         tool.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
       }
+      tool.stepGroups?.forEach((g) => {
+        lines.push(`${g.caption} ${bron(slugify(g.caption))}`);
+        g.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
+      });
       tool.checklists?.forEach((c) => {
         lines.push(`Checklist: ${c.caption ?? ""} ${c.caption ? bron(slugify(c.caption)) : bron()}`);
         if (c.intro) lines.push(c.intro);
@@ -1014,6 +1095,9 @@ export function getToolSections(tool: KennisbankTool): KennisbankSection[] {
     sections.push({ label: "Mogelijkheden", id: "mogelijkheden" });
   if (tool.steps && tool.steps.length > 0)
     sections.push({ label: tool.stepsCaption ?? "Aan de slag", id: "aan-de-slag" });
+  tool.stepGroups?.forEach((g) => {
+    sections.push({ label: g.caption, id: slugify(g.caption) });
+  });
   tool.flows?.forEach((f) => {
     if (f.caption) sections.push({ label: f.caption, id: slugify(f.caption) });
   });
