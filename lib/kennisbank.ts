@@ -790,9 +790,86 @@ export const kennisbankTools: KennisbankTool[] = [
     category: "Design & Content",
     logo: "/images/kennisbank/xperience-central.png",
     description: "Beheer en publiceer content op PSV-kanalen via dit CMS-platform.",
+    accessUrl: "https://psv.gxcloud.net/web/login",
+    accessNote:
+      "Log in met je eigen inloggegevens. Geen toegang tot Xperience Central? Neem contact op met het Digital Marketing-team.",
     docsUrl: "https://wiki.gxsoftware.com",
-    comingSoon: true,
     features: [],
+    stepsCaption: "Redirect aanmaken voor psv.nl",
+    steps: [
+      {
+        title: "Xperience Central — log in",
+        description:
+          "Ga naar https://psv.gxcloud.net/web/login en log in met je eigen inloggegevens. Geen toegang tot Xperience Central? Neem contact op met het Digital Marketing-team.",
+      },
+      {
+        title: "Xperience Central — open Configuratie",
+        description: "Klik in Xperience Central rechtsboven op Configuratie.",
+      },
+      {
+        title: "Xperience Central — open Serverconfiguratie",
+        description:
+          "Ga bij Configuratie naar Serverconfiguratie. Daar staan de tabjes Redirects zoeken en Redirect toevoegen.",
+      },
+      {
+        title: "Xperience Central — zoek of de redirect al bestaat",
+        description:
+          "Open het tabje Redirects zoeken en zoek op het deel van de link na psv.nl/, bijvoorbeeld winactie voor psv.nl/winactie. Staat de redirect er al, dan maak je geen nieuwe redirect aan.",
+      },
+      {
+        title: "Xperience Central — open Redirect toevoegen",
+        description:
+          "Open het tabje Redirect toevoegen. Er verschijnt een kopje Redirect toevoegen met de velden Naam, Alias URL en Doel URL.",
+      },
+      {
+        title: "Xperience Central — vul Naam en Alias URL in",
+        description:
+          "Vul bij Naam en bij Alias URL het deel van de link na psv.nl/ in. Voor de redirect psv.nl/winactie vul je bij Naam en bij Alias URL allebei winactie in, zonder psv.nl ervoor.",
+      },
+      {
+        title: "Xperience Central — vul de Doel URL in",
+        description:
+          "Vul bij Doel URL de URL in waar de redirect naartoe moet. Voor psv.nl/winactie is dat de URL van de pagina waar bezoekers van psv.nl/winactie moeten uitkomen. Een redirect heeft maar één Doel URL.",
+      },
+      {
+        title: "Xperience Central — klik op Toepassen",
+        description:
+          "Klik onder Redirect toevoegen op Toepassen. Daarna zet je de redirect live met Dump nu bij Redirects zoeken.",
+      },
+      {
+        title: "Xperience Central — zoek de nieuwe redirect op",
+        description:
+          "Open het tabje Redirects zoeken en zoek de redirect op die je net hebt aangemaakt, bijvoorbeeld op winactie.",
+      },
+      {
+        title: "Xperience Central — klik op Dump nu",
+        description:
+          "Klik bij Redirects zoeken op Dump nu. Dan staat de nieuwe redirect snel live op psv.nl.",
+      },
+      {
+        title: "Browser — test de redirect",
+        description:
+          "Open de redirect, bijvoorbeeld psv.nl/winactie, in een privévenster van je browser. Controleer dat je uitkomt op de Doel URL. In een privévenster gebruikt de browser geen redirect die hij eerder heeft onthouden.",
+      },
+    ],
+    tips: [
+      {
+        type: "note",
+        text: "Een redirect in Xperience Central heeft maar één Doel URL. Moet een link naar een andere pagina verwijzen, dan heb je een andere redirect nodig.",
+      },
+      {
+        type: "warning",
+        text: "Meerdere redirects kunnen standaard niet naar dezelfde Doel URL verwijzen, bijvoorbeeld psv.nl/ucl en psv.nl/UCL. Heb je dat toch nodig? Neem dan contact op met GX Support of met de IT-afdeling van PSV.",
+      },
+      {
+        type: "tip",
+        text: "Werkt de redirect nog niet? Zoek de redirect op bij Redirects zoeken en controleer of Alias URL en Doel URL kloppen en of je na Toepassen op Dump nu hebt geklikt. Test de redirect in een privévenster.",
+      },
+      {
+        type: "note",
+        text: "Vragen over redirects of over Xperience Central? Neem contact op met het Digital Marketing-team.",
+      },
+    ],
   },
 ];
 
