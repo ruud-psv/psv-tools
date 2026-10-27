@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { state, result, error, progressed } = outcome;
-  const done = state.manifestsComplete && state.salesComplete;
+  const done = state.manifestsComplete && state.salesComplete && state.capacityComplete;
 
   // `chain=0` zet de ketting uit; niet op falsy testen, anders valt juist die
   // stand terug op de standaard.
@@ -130,6 +130,7 @@ export async function GET(req: NextRequest) {
         seconds: Math.round(((Date.now() - startedAt) / 1000) * 10) / 10,
         manifestsRead: result?.manifestsRead ?? 0,
         salesRead: result?.salesRead ?? 0,
+        capacityRead: result?.capacityRead ?? 0,
         eventsChanged: result?.eventsChanged ?? 0,
         resets: result?.resets ?? [],
       },
@@ -138,6 +139,8 @@ export async function GET(req: NextRequest) {
         salesRead: state.salesRead,
         manifestsComplete: state.manifestsComplete,
         salesComplete: state.salesComplete,
+        capacityRead: state.capacityRead,
+        capacityComplete: state.capacityComplete,
         events: result?.events ?? null,
         runs: state.runs,
       },

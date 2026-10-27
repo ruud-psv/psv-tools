@@ -1,10 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyManifestCapacity,
   applyManifestRow,
   applySalesRow,
   ownerFingerprint,
   prunePastEvents,
+  SEAT_GA,
+  SEAT_SELLABLE,
   todayInAmsterdam,
   toNeighborInput,
   type EventStates,
@@ -142,4 +145,25 @@ test("toNeighborInput gebruikt de stoel uit de stoelenkaart en slaat staanvakken
 test("vandaag in Nederland", () => {
   // 23:30 UTC op 12 oktober is al 13 oktober in Amsterdam.
   assert.equal(todayInAmsterdam(new Date("2026-10-12T23:30:00Z")), "2026-10-13");
+});
+
+test("staanvak: capaciteit wordt bewaard en later aangevuld", () => {
+  const events: EventStates = new Map();
+  applyManifestRow(events, manifest("ga", { area: "Noord", row: "", seat: "", is_ga: true, capacity: 703 }), CUTOFF);
+  const event = events.get(EVENT)!;
+  assert.deepEqual(event.seats.ga, ["Noord", "", "", SEAT_SELLABLE | SEAT_GA, 703]);
+
+  // Een gewone stoel krijgt geen capaciteit mee.
+  applyManifestRow(events, manifest("m9"), CUTOFF);
+  assert.equal(event.seats.m9.length, 4);
+
+  // Tweede ronde: alleen capaciteit en "telt niet mee", niet of hij te koop is.
+  event.seats.ga = ["Noord", "", "", SEAT_GA];
+  const changed = applyManifestCapacity(
+    events,
+    manifest("ga", { area: "Noord", row: "", seat: "", is_ga: true, capacity: 650, is_counted_as_available: true })
+  );
+  assert.equal(changed, EVENT);
+  assert.deepEqual(event.seats.ga, ["Noord", "", "", SEAT_GA, 650]);
+  assert.equal(applyManifestCapacity(events, manifest("onbekend", { capacity: 5 })), null);
 });

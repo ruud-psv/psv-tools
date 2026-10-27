@@ -15,6 +15,7 @@
 import { ringsideFetch, RingsideRequestError, type RingsidePage } from "./client";
 import { readEventSales } from "./store";
 import {
+  applyManifestCapacity,
   applyManifestRow,
   applySalesRow,
   prunePastEvents,
@@ -136,6 +137,7 @@ async function readFeed<T>(
 export interface SeatIngestResult {
   manifestsRead: number;
   salesRead: number;
+  capacityRead: number;
   eventsChanged: number;
   events: number;
   resets: string[];
@@ -210,6 +212,39 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   const manifests = manifestsResult.status === "fulfilled" ? manifestsResult.value : empty;
   const sales = salesResult.status === "fulfilled" ? salesResult.value : empty;
 
+  // De capaciteit aanvullen, alleen met de tijd die over is als beide stromen
+  // bij zijn: actuele stoelen en tickets gaan voor. Niet in de korte run van
+  // "Maak lijst" (25 seconden): die moet snel antwoord geven.
+  const capacity = { cursor: state.capacityCursor, rows: 0, reachedEnd: false, failure: null as unknown };
+  const fetchCapacity =
+    !state.capacityComplete &&
+    manifests.reachedEnd &&
+    sales.reachedEnd &&
+    !manifests.reset &&
+    deadline - Date.now() > 30_000;
+  if (fetchCapacity) {
+    try {
+      const result = await readFeed<ManifestFeedRow>(
+        "/v1/manifests",
+        capacity.cursor,
+        deadline,
+        (rows) => {
+          for (const row of rows) {
+            const eventId = applyManifestCapacity(events, row);
+            if (eventId) changed.add(eventId);
+          }
+        },
+        (cursor) => (capacity.cursor = cursor)
+      );
+      capacity.rows = result.rows;
+      // Een ververste dataset wordt in de gewone stroom opgepakt; daar komt de
+      // capaciteit dan vanzelf mee.
+      capacity.reachedEnd = result.reachedEnd || result.reset;
+    } catch (error) {
+      capacity.failure = error;
+    }
+  }
+
   if (manifests.reset) {
     resets.push("manifests");
     cursors.manifests = null;
@@ -253,16 +288,23 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   else if (sales.reachedEnd) state.salesComplete = true;
   state.manifestsRead += manifests.rows;
   state.salesRead += sales.rows;
+  state.capacityCursor = capacity.cursor;
+  state.capacityRead += capacity.rows;
+  // Na een ververste stoelenkaart leest de gewone stroom alles opnieuw, met
+  // capaciteit: dan is de tweede ronde niet meer nodig.
+  if (capacity.reachedEnd || manifests.reset) state.capacityComplete = true;
   if (manifests.reachedEnd && sales.reachedEnd) state.caughtUpAt = new Date().toISOString();
 
   // Een fout in één van de stromen pas melden nu het gelezen werk bewaard is.
   for (const result of [manifestsResult, salesResult]) {
     if (result.status === "rejected") throw result.reason;
   }
+  if (capacity.failure) throw capacity.failure;
 
   return {
     manifestsRead: manifests.rows,
     salesRead: sales.rows,
+    capacityRead: capacity.rows,
     eventsChanged: changed.size,
     events: events.size,
     resets,
@@ -301,7 +343,7 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.runningUntil = new Date(deadline + 60_000).toISOString();
   await writeSeatState(state);
 
-  const readBefore = state.manifestsRead + state.salesRead;
+  const readBefore = state.manifestsRead + state.salesRead + state.capacityRead;
   let result: SeatIngestResult | null = null;
   let error: string | null = null;
   try {
@@ -315,5 +357,5 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.lastError = error;
   state.runningUntil = null;
   await writeSeatState(state);
-  return { ran: true, state, result, error, progressed: state.manifestsRead + state.salesRead > readBefore };
+  return { ran: true, state, result, error, progressed: state.manifestsRead + state.salesRead + state.capacityRead > readBefore };
 }

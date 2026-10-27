@@ -2,6 +2,7 @@ import {
   Armchair,
   BarChart2,
   BookOpen,
+  Building2,
   ClipboardCheck,
   Database,
   FileText,
@@ -179,6 +180,7 @@ export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Kleurplaat Creator", href: "/dashboard/kleurplaat", icon: Palette },
   { name: "Ringside", href: "/dashboard/ticket-inzichten-new", icon: Ticket },
   { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
+  { name: "Ticketing Herdgang", href: "/dashboard/ticketing-herdgang", icon: Building2 },
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
   { name: "Contact Filter Import", href: "/dashboard/contact-filter-import", icon: ListFilter },
 ];

@@ -23,14 +23,24 @@
 import { createHash } from "node:crypto";
 import { seatKey, toSeatNumber, type SeatInfo, type TicketInfo } from "../aangrenzende-stoelen/neighbors";
 
-/** `[vak, rij, stoel, vlaggen]`; vlag 1 = niet geblokkeerd, 2 = staanvak. */
-export type SeatTuple = [area: string, row: string, seat: string, flags: number];
+/**
+ * `[vak, rij, stoel, vlaggen, capaciteit]`; vlag 1 = niet geblokkeerd,
+ * 2 = staanvak, 4 = telt niet mee in de capaciteit. De capaciteit staat er
+ * alleen als hij niet 1 is: een staanvak is één rij met bijvoorbeeld 703 plaatsen.
+ */
+export type SeatTuple = [area: string, row: string, seat: string, flags: number, capacity?: number];
 
 /** `[manifest_id, vak, rij, stoel, in resale (1/0), gehashte eigenaar]`. */
 export type TicketTuple = [manifestId: string, area: string, row: string, seat: string, posted: number, owner: string];
 
 export const SEAT_SELLABLE = 1;
 export const SEAT_GA = 2;
+export const SEAT_EXCLUDED = 4;
+
+/** Capaciteit van een rij uit de stoelenkaart; zonder waarde is dat 1. */
+export function seatCapacity(seat: SeatTuple): number {
+  return seat[4] ?? 1;
+}
 
 export interface EventSeatState {
   eventId: string;
@@ -56,6 +66,8 @@ export interface ManifestFeedRow {
   seat?: unknown;
   is_ga?: unknown;
   is_counted_as_available?: unknown;
+  capacity?: unknown;
+  is_excluded_from_reported_capacity?: unknown;
 }
 
 /** De velden uit `/v1/sales` die hier nodig zijn. */
@@ -165,9 +177,45 @@ export function applyManifestRow(events: EventStates, row: ManifestFeedRow, cuto
   event.eventDate = eventDate;
   if (!event.name && text(row.event_name)) event.name = text(row.event_name);
 
-  const flags = (isTrue(row.is_counted_as_available) ? SEAT_SELLABLE : 0) | (isTrue(row.is_ga) ? SEAT_GA : 0);
-  event.seats[manifestId] = [text(row.area), text(row.row), text(row.seat), flags];
+  const flags =
+    (isTrue(row.is_counted_as_available) ? SEAT_SELLABLE : 0) |
+    (isTrue(row.is_ga) ? SEAT_GA : 0) |
+    (isTrue(row.is_excluded_from_reported_capacity) ? SEAT_EXCLUDED : 0);
+  const tuple: SeatTuple = [text(row.area), text(row.row), text(row.seat), flags];
+  const capacity = capacityOf(row);
+  if (capacity !== 1) tuple.push(capacity);
+  event.seats[manifestId] = tuple;
   return eventId;
+}
+
+function capacityOf(row: ManifestFeedRow): number {
+  const value = Number(row.capacity);
+  return Number.isInteger(value) && value >= 0 ? value : 1;
+}
+
+/**
+ * Vult de capaciteit aan op een stoel die al bekend is.
+ *
+ * Voor de eenmalige tweede ronde door `/v1/manifests`: de capaciteit werd
+ * eerst niet bewaard. Verandert alleen capaciteit en de vlag "telt niet mee";
+ * of een stoel geblokkeerd is blijft zoals de gewone stroom hem zette. Geeft
+ * het event-id terug als er iets veranderde.
+ */
+export function applyManifestCapacity(events: EventStates, row: ManifestFeedRow): string | null {
+  const manifestId = id(row.manifest_id);
+  if (!manifestId || isDelete(row)) return null;
+  const eventId = id(row.event_id);
+  const event = eventId ? events.get(eventId) : undefined;
+  const seat = event?.seats[manifestId];
+  if (!event || !seat) return null;
+
+  const flags = (seat[3] & ~SEAT_EXCLUDED) | (isTrue(row.is_excluded_from_reported_capacity) ? SEAT_EXCLUDED : 0);
+  const capacity = capacityOf(row);
+  if (flags === seat[3] && capacity === seatCapacity(seat)) return null;
+  const updated: SeatTuple = [seat[0], seat[1], seat[2], flags];
+  if (capacity !== 1) updated.push(capacity);
+  event.seats[manifestId] = updated;
+  return event.eventId;
 }
 
 /**

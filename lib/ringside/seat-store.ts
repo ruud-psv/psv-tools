@@ -40,6 +40,14 @@ export interface SeatIngestState {
   /** Slot tegen twee runs tegelijk; zie `isSeatIngestLocked()`. */
   runningUntil: string | null;
   /**
+   * Tweede ronde door `/v1/manifests` om de capaciteit aan te vullen, die eerst
+   * niet bewaard werd (nodig voor staanvakken). Eenmalig: daarna houdt de
+   * gewone stroom hem bij. Zie `applyManifestCapacity()`.
+   */
+  capacityCursor: string | null;
+  capacityComplete: boolean;
+  capacityRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -58,6 +66,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   lastError: null,
   runningUntil: null,
   caughtUpAt: null,
+  capacityCursor: null,
+  capacityComplete: false,
+  capacityRead: 0,
 };
 
 export interface SeatIndexEntry {
