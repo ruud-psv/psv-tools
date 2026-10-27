@@ -40,10 +40,26 @@ die over is als de gewone stromen bij zijn, dus Aangrenzende stoelen merkt er ni
 van. Tot die ronde klaar is (`capacityComplete` in de toestand), toont de pagina een
 waarschuwing: een staanvak kan dan op capaciteit 1 staan.
 
+## Plattegrond
+
+Na "Toon bezetting" toont de pagina de plattegrond van De Herdgang met per vak de
+bezetting (`components/herdgang-map.tsx`). De vakken zijn nagetekend van de officiële
+plattegrond (`lib/ticketing-herdgang/herdgang.ts`, oktober 2026): Noord A t/m J, Oost
+K t/m O, Zuid P t/m V (V is het bezoekersvak). Vak E ligt aan twee kanten van de
+rolstoelplaatsen en staat er twee keer op. De rolstoelplaatsen en het blok in Zuid
+zonder vak zijn alleen decor.
+
+- **Kleur:** bezetting (verkocht gedeeld door capaciteit) in vier klassen van licht-
+  naar donkerrood: tot 25%, 25–50%, 50–80% en 80% of meer. Lichtgrijs is niets verkocht.
+  Het percentage staat altijd als getal in het vak.
+- **Cijfers:** wijs een vak aan en ernaast verschijnen capaciteit, verkocht, resale,
+  vrij en bezetting. Klikken zet het vak vast.
+- **Vaknamen:** Ringside mag `Vak A` of `a` geven; op de kaart wordt dat `A`
+  (`mapArea()`). Vakken die niet op de kaart passen, worden eronder genoemd en staan
+  wel in de tabel ("Als tabel").
+
 ## Nog te doen
 
-- **Plattegrond** van De Herdgang, per vak gekleurd naar bezetting. Wacht op de
-  officiële kaart.
 - **Lijst seizoenkaarthouders** voor De Herdgang: wat de pagina daarmee moet doen, is
   nog open.
 - Nagaan met `/api/ringside/probe?path=/v1/catalog&rows=0&distinct=venue` of Ringside

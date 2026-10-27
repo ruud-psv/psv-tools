@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BarChart3, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HerdgangMap } from "@/components/herdgang-map";
 import { isHerdgangMatch } from "@/lib/ticketing-herdgang/events";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
 
@@ -243,43 +244,50 @@ export function TicketingHerdgang() {
                 <Stat label="In de resale" value={number.format(result.total.resale)} hint="aangeboden door de houder" />
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      {["Vak", "Capaciteit", "Verkocht", "In de resale", "Vrij", "Bezetting", ""].map((label, i) => (
-                        <th
-                          key={i}
-                          className={`py-2 pr-4 text-xs font-heading uppercase tracking-wide text-muted-foreground ${i > 0 && i < 6 ? "text-right" : ""}`}
-                        >
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.areas.map((row) => (
-                      <tr key={row.area} className="border-b border-border last:border-0">
-                        <td className="py-2 pr-4 font-medium">
-                          {row.area}
-                          {!row.standing && <span className="ml-2 text-xs text-muted-foreground">genummerd</span>}
-                          {row.sellable === 0 && row.capacity > 0 && (
-                            <span className="ml-2 text-xs text-muted-foreground">niet te koop</span>
-                          )}
-                        </td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.capacity)}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.sold)}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.resale)}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.free)}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{share(row.sold, row.capacity)}</td>
-                        <td className="py-2 w-40 min-w-[8rem]">
-                          <OccupancyBar row={row} />
-                        </td>
+              <HerdgangMap areas={result.areas} />
+
+              <details className="text-sm">
+                <summary className="cursor-pointer text-xs font-heading uppercase tracking-wide text-muted-foreground">
+                  Als tabel
+                </summary>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        {["Vak", "Capaciteit", "Verkocht", "In de resale", "Vrij", "Bezetting", ""].map((label, i) => (
+                          <th
+                            key={i}
+                            className={`py-2 pr-4 text-xs font-heading uppercase tracking-wide text-muted-foreground ${i > 0 && i < 6 ? "text-right" : ""}`}
+                          >
+                            {label}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {result.areas.map((row) => (
+                        <tr key={row.area} className="border-b border-border last:border-0">
+                          <td className="py-2 pr-4 font-medium">
+                            {row.area}
+                            {!row.standing && <span className="ml-2 text-xs text-muted-foreground">genummerd</span>}
+                            {row.sellable === 0 && row.capacity > 0 && (
+                              <span className="ml-2 text-xs text-muted-foreground">niet te koop</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.capacity)}</td>
+                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.sold)}</td>
+                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.resale)}</td>
+                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.free)}</td>
+                          <td className="py-2 pr-4 text-right tabular-nums">{share(row.sold, row.capacity)}</td>
+                          <td className="py-2 w-40 min-w-[8rem]">
+                            <OccupancyBar row={row} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
 
               <p className="text-xs text-muted-foreground">
                 Rood is verkocht, goud verkocht maar in de resale aangeboden. Stand van {formatDateTime(result.dataAsOf)}
