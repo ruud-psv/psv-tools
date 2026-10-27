@@ -30,8 +30,25 @@ import { seatKey, toSeatNumber, type SeatInfo, type TicketInfo } from "../aangre
  */
 export type SeatTuple = [area: string, row: string, seat: string, flags: number, capacity?: number];
 
-/** `[manifest_id, vak, rij, stoel, in resale (1/0), gehashte eigenaar]`. */
-export type TicketTuple = [manifestId: string, area: string, row: string, seat: string, posted: number, owner: string];
+/**
+ * `[manifest_id, vak, rij, stoel, in resale (1/0), gehashte eigenaar, reservering]`.
+ * De laatste staat er alleen bij een openstaande reservering (1): de plaats is
+ * bezet, maar nog niet afgenomen.
+ */
+export type TicketTuple = [
+  manifestId: string,
+  area: string,
+  row: string,
+  seat: string,
+  posted: number,
+  owner: string,
+  reservation?: number,
+];
+
+/** Een openstaande reservering: `sale_type = 'Reservation'`, nog niet bevestigd. */
+export function isReservation(row: SalesFeedRow): boolean {
+  return row.sale_type === "Reservation";
+}
 
 export const SEAT_SELLABLE = 1;
 export const SEAT_GA = 2;
@@ -258,7 +275,7 @@ export function applySalesRow(
     event = emptyEvent(productId);
     events.set(productId, event);
   }
-  event.tickets[salesItemId] = [
+  const tuple: TicketTuple = [
     id(row.manifest_id) ?? "",
     text(row.area),
     text(row.row),
@@ -266,7 +283,33 @@ export function applySalesRow(
     row.resale_status === "Posted" ? 1 : 0,
     ownerFingerprint(row.own_client_guid),
   ];
+  if (isReservation(row)) tuple.push(1);
+  event.tickets[salesItemId] = tuple;
   return productId;
+}
+
+/**
+ * Vult bij een ticket dat al bekend is aan of het een openstaande reservering
+ * is.
+ *
+ * Voor de eenmalige tweede ronde door `/v1/sales`: dat onderscheid werd eerst
+ * niet bewaard. Verandert verder niets; of een ticket bestaat, bepaalt de
+ * gewone stroom. Geeft het event-id terug als er iets veranderde.
+ */
+export function applySalesReservation(events: EventStates, row: SalesFeedRow): string | null {
+  const salesItemId = id(row.sales_item_id);
+  const productId = id(row.product_id);
+  if (!salesItemId || !productId || isDelete(row) || !isOccupyingTicket(row)) return null;
+  const event = events.get(productId);
+  const ticket = event?.tickets[salesItemId];
+  if (!event || !ticket) return null;
+
+  const reservation = isReservation(row);
+  if (reservation === (ticket[6] === 1)) return null;
+  const updated: TicketTuple = [ticket[0], ticket[1], ticket[2], ticket[3], ticket[4], ticket[5]];
+  if (reservation) updated.push(1);
+  event.tickets[salesItemId] = updated;
+  return event.eventId;
 }
 
 /**

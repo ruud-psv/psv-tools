@@ -48,6 +48,13 @@ export interface SeatIngestState {
   capacityComplete: boolean;
   capacityRead: number;
   /**
+   * Net zo een tweede ronde door `/v1/sales`, om aan te vullen welke tickets een
+   * openstaande reservering zijn. Zie `applySalesReservation()`.
+   */
+  reservationCursor: string | null;
+  reservationComplete: boolean;
+  reservationRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -69,6 +76,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   capacityCursor: null,
   capacityComplete: false,
   capacityRead: 0,
+  reservationCursor: null,
+  reservationComplete: false,
+  reservationRead: 0,
 };
 
 export interface SeatIndexEntry {

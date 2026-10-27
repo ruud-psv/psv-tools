@@ -4,6 +4,7 @@ import { CATCH_UP_SECONDS } from "@/lib/aangrenzende-stoelen/settings";
 import { isRingsideConfigured } from "@/lib/ringside/auth";
 import { runLockedSeatIngest } from "@/lib/ringside/seat-ingest";
 import { readEventSeats, readSeatState } from "@/lib/ringside/seat-store";
+import { HERDGANG_AREAS, mapArea } from "@/lib/ticketing-herdgang/herdgang";
 import { occupancyByArea } from "@/lib/ticketing-herdgang/occupancy";
 
 /**
@@ -14,6 +15,10 @@ import { occupancyByArea } from "@/lib/ticketing-herdgang/occupancy";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Tribunevakken: wat op de plattegrond staat. Parkeren en de rest tellen apart. */
+const STANDS = new Set(HERDGANG_AREAS.map((shape) => shape.area));
+const isStand = (area: string) => STANDS.has(mapArea(area));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -48,8 +53,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         event: { eventId: event.eventId, name: event.name, eventDate: event.eventDate },
-        ...occupancyByArea(event),
+        ...occupancyByArea(event, isStand),
         capacityComplete: state.capacityComplete,
+        reservationComplete: state.reservationComplete,
         dataAsOf: state.caughtUpAt,
         catchUp,
       },

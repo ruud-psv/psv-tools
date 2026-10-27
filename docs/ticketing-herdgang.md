@@ -22,23 +22,35 @@ uit Ringside bij; alleen de capaciteit wordt nu ook bewaard.
   naar die rij.
 - **Capaciteit:** de som van `capacity` per vak, zonder rijen met
   `is_excluded_from_reported_capacity`.
-- **Verkocht:** geldige tickets, met dezelfde regel als bij Aangrenzende stoelen. Een
-  openstaande reservering telt dus mee, en een ticket dat in de resale staat ook.
+- **Verkocht:** afgenomen tickets: geldig volgens dezelfde regel als bij Aangrenzende
+  stoelen, maar zonder openstaande reserveringen. Een ticket in de resale telt mee.
+- **Gereserveerd:** openstaande reserveringen (`sale_type = 'Reservation'`). Ze houden
+  een plaats bezet, maar zijn nog niet afgenomen, dus apart.
 - **In de resale:** het deel van verkocht met `resale_status = 'Posted'`.
-- **Vrij:** per rij die te koop is (`is_counted_as_available`) de capaciteit min de
-  tickets erop. Een geblokkeerd vak heeft dus 0 vrij.
+- **Vrij:** per rij die te koop is (`is_counted_as_available`) de capaciteit min alle
+  tickets erop, reserveringen inbegrepen. Een geblokkeerd vak heeft dus 0 vrij.
 - **Bezetting:** verkocht gedeeld door capaciteit.
+- **Parkeren en overige vakken:** alleen de tribunevakken van de plattegrond (A t/m V)
+  tellen mee in de totalen. Alles wat Ringside verder als vak heeft, zoals
+  parkeerplaatsen, staat apart onder "Niet meegeteld". Dat was een vraag van Ticketing:
+  geprinte parkeerkaarten maakten de verkoopcijfers te hoog. Past geen enkel vak op de
+  plattegrond (een evenement elders, via "Toon alle evenementen"), dan telt alles mee.
 
 De berekening staat in `lib/ticketing-herdgang/occupancy.ts` en is getest.
 
-## Capaciteit aanvullen
+## Capaciteit en reserveringen aanvullen
 
-De stoelstatus bewaarde eerst geen capaciteit. Na deze wijziging leest de cron
-(`/api/ringside/stoelen`) `/v1/manifests` nog één keer helemaal door, alleen om de
-capaciteit aan te vullen (`applyManifestCapacity()`). Dat gebeurt alleen met de tijd
-die over is als de gewone stromen bij zijn, dus Aangrenzende stoelen merkt er niets
-van. Tot die ronde klaar is (`capacityComplete` in de toestand), toont de pagina een
-waarschuwing: een staanvak kan dan op capaciteit 1 staan.
+De stoelstatus bewaarde eerst geen capaciteit, en niet of een ticket een openstaande
+reservering is. Nieuwe en gewijzigde regels krijgen dat nu vanzelf mee. Voor wat al
+binnen was, leest de cron (`/api/ringside/stoelen`) beide stromen nog één keer helemaal
+door: `/v1/manifests` voor de capaciteit (`applyManifestCapacity()`) en `/v1/sales`
+voor de reserveringen (`applySalesReservation()`). Die rondes vullen alleen aan; of een
+stoel of ticket bestaat, bepaalt de gewone stroom. Ze krijgen alleen de tijd die over is
+als de gewone stromen bij zijn, dus Aangrenzende stoelen merkt er niets van.
+
+Tot beide rondes klaar zijn (`capacityComplete` en `reservationComplete` in de
+toestand), toont de pagina een waarschuwing: een staanvak kan dan op capaciteit 1
+staan, en reserveringen kunnen nog als verkocht meetellen.
 
 ## Plattegrond
 
@@ -59,6 +71,11 @@ zonder vak zijn alleen decor.
   wel in de tabel ("Als tabel").
 
 ## Nog te doen
+
+- **Geblokte plaatsen en SCC:** Ticketing wil alleen SCC-tickets en echt afgenomen
+  tickets zien. Een geblokkeerde plaats zonder ticket telt al niet als verkocht. Of
+  geblokte plaatsen in Ringside soms wél als ticket staan (bijvoorbeeld op een intern
+  account), en hoe SCC-tickets te herkennen zijn, moet nog uit de echte data blijken.
 
 - **Lijst seizoenkaarthouders** voor De Herdgang: wat de pagina daarmee moet doen, is
   nog open.

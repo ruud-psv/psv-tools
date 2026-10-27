@@ -30,8 +30,11 @@ interface OccupancyResponse {
   event: EventEntry;
   areas: AreaOccupancy[];
   total: Occupancy;
+  other: AreaOccupancy[];
+  otherTotal: Occupancy;
   ticketsWithoutManifest: number;
   capacityComplete: boolean;
+  reservationComplete: boolean;
   dataAsOf: string | null;
   catchUp: "bijgewerkt" | "overgeslagen" | "mislukt";
 }
@@ -67,13 +70,62 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-/** Balk: verkocht in rood, daarvan in de resale in goud, de rest van de capaciteit grijs. */
+/**
+ * Balk: verkocht in rood, daarvan in de resale in goud, gereserveerd in
+ * donkergrijs, de rest van de capaciteit lichtgrijs.
+ */
 function OccupancyBar({ row }: { row: Occupancy }) {
   const width = (value: number) => `${row.capacity > 0 ? Math.min((value / row.capacity) * 100, 100) : 0}%`;
   return (
     <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
       <div className="bg-psv-red-primary" style={{ width: width(row.sold - row.resale) }} />
       <div className="bg-psv-gold" style={{ width: width(row.resale) }} />
+      <div className="bg-muted-foreground/50" style={{ width: width(row.reserved) }} />
+    </div>
+  );
+}
+
+const COLUMNS = ["Vak", "Capaciteit", "Verkocht", "Gereserveerd", "In de resale", "Vrij", "Bezetting", ""];
+
+function AreaTable({ rows }: { rows: AreaOccupancy[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left">
+            {COLUMNS.map((label, i) => (
+              <th
+                key={i}
+                className={`py-2 pr-4 text-xs font-heading uppercase tracking-wide text-muted-foreground ${i > 0 && i < COLUMNS.length - 1 ? "text-right" : ""}`}
+              >
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.area} className="border-b border-border last:border-0">
+              <td className="py-2 pr-4 font-medium">
+                {row.area}
+                {!row.standing && <span className="ml-2 text-xs text-muted-foreground">genummerd</span>}
+                {row.sellable === 0 && row.capacity > 0 && (
+                  <span className="ml-2 text-xs text-muted-foreground">niet te koop</span>
+                )}
+              </td>
+              <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.capacity)}</td>
+              <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.sold)}</td>
+              <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.reserved)}</td>
+              <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.resale)}</td>
+              <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.free)}</td>
+              <td className="py-2 pr-4 text-right tabular-nums">{share(row.sold, row.capacity)}</td>
+              <td className="py-2 w-40 min-w-[8rem]">
+                <OccupancyBar row={row} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -229,17 +281,20 @@ export function TicketingHerdgang() {
 
           {result && (
             <div className="space-y-5 border-t border-border pt-5">
-              {!result.capacityComplete && (
+              {(!result.capacityComplete || !result.reservationComplete) && (
                 <div className="alert alert--warning text-sm">
-                  De capaciteit van de staanvakken wordt nog ingelezen. Tot dat klaar is, kan een staanvak met
-                  capaciteit 1 verschijnen en kloppen vrij en bezetting niet.
+                  Nog niet alle cijfers zijn betrouwbaar. De tool vult eenmalig gegevens aan voor tickets en vakken
+                  die al waren ingelezen; dat duurt een paar uur en gaat vanzelf.
+                  {!result.capacityComplete && " Tot dat klaar is, kan een vak op capaciteit 1 staan; dan kloppen vrij en bezetting niet."}
+                  {!result.reservationComplete && " Reserveringen kunnen tot dan nog als verkocht meetellen."}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Stat label="Capaciteit" value={number.format(result.total.capacity)} hint={`${number.format(result.total.sellable)} te koop`} />
-                <Stat label="Verkocht" value={number.format(result.total.sold)} hint="incl. reserveringen" />
+                <Stat label="Verkocht" value={number.format(result.total.sold)} hint="afgenomen tickets, zonder reserveringen en parkeren" />
                 <Stat label="Bezetting" value={share(result.total.sold, result.total.capacity)} hint="verkocht van capaciteit" />
+                <Stat label="Gereserveerd" value={number.format(result.total.reserved)} hint="openstaand, nog niet afgenomen" />
                 <Stat label="Vrij" value={number.format(result.total.free)} hint="nog te koop" />
                 <Stat label="In de resale" value={number.format(result.total.resale)} hint="aangeboden door de houder" />
               </div>
@@ -250,47 +305,28 @@ export function TicketingHerdgang() {
                 <summary className="cursor-pointer text-xs font-heading uppercase tracking-wide text-muted-foreground">
                   Als tabel
                 </summary>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left">
-                        {["Vak", "Capaciteit", "Verkocht", "In de resale", "Vrij", "Bezetting", ""].map((label, i) => (
-                          <th
-                            key={i}
-                            className={`py-2 pr-4 text-xs font-heading uppercase tracking-wide text-muted-foreground ${i > 0 && i < 6 ? "text-right" : ""}`}
-                          >
-                            {label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.areas.map((row) => (
-                        <tr key={row.area} className="border-b border-border last:border-0">
-                          <td className="py-2 pr-4 font-medium">
-                            {row.area}
-                            {!row.standing && <span className="ml-2 text-xs text-muted-foreground">genummerd</span>}
-                            {row.sellable === 0 && row.capacity > 0 && (
-                              <span className="ml-2 text-xs text-muted-foreground">niet te koop</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.capacity)}</td>
-                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.sold)}</td>
-                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.resale)}</td>
-                          <td className="py-2 pr-4 text-right tabular-nums">{number.format(row.free)}</td>
-                          <td className="py-2 pr-4 text-right tabular-nums">{share(row.sold, row.capacity)}</td>
-                          <td className="py-2 w-40 min-w-[8rem]">
-                            <OccupancyBar row={row} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="mt-2">
+                  <AreaTable rows={result.areas} />
                 </div>
               </details>
 
+              {result.other.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border p-4">
+                  <div>
+                    <h3 className="text-base font-heading uppercase">Niet meegeteld: parkeren en overige vakken</h3>
+                    <p className="text-xs text-muted-foreground max-w-3xl">
+                      Vakken die niet op de plattegrond staan, zoals parkeerplaatsen. Ze staan in Ringside als vak met
+                      tickets, maar tellen niet mee in de cijfers hierboven: samen{" "}
+                      {number.format(result.otherTotal.sold)} verkocht en {number.format(result.otherTotal.reserved)}{" "}
+                      gereserveerd.
+                    </p>
+                  </div>
+                  <AreaTable rows={result.other} />
+                </div>
+              )}
+
               <p className="text-xs text-muted-foreground">
-                Rood is verkocht, goud verkocht maar in de resale aangeboden. Stand van {formatDateTime(result.dataAsOf)}
+                In de balken: rood is verkocht, goud verkocht maar in de resale aangeboden, donkergrijs gereserveerd. Stand van {formatDateTime(result.dataAsOf)}
                 {result.catchUp === "overgeslagen" && " (er liep al een update; dit is de stand daarvoor)"}
                 {result.catchUp === "mislukt" && " (bijwerken mislukte; dit is de vorige stand)"}.
                 {result.ticketsWithoutManifest > 0 &&

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   applyManifestCapacity,
   applyManifestRow,
+  applySalesReservation,
   applySalesRow,
   ownerFingerprint,
   prunePastEvents,
@@ -166,4 +167,23 @@ test("staanvak: capaciteit wordt bewaard en later aangevuld", () => {
   assert.equal(changed, EVENT);
   assert.deepEqual(event.seats.ga, ["Noord", "", "", SEAT_GA, 650]);
   assert.equal(applyManifestCapacity(events, manifest("onbekend", { capacity: 5 })), null);
+});
+
+test("openstaande reservering wordt bewaard en later aangevuld", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("r1", { sale_type: "Reservation" }), neverPast);
+  applySalesRow(events, sale("s1"), neverPast);
+  const event = events.get(EVENT)!;
+  assert.equal(event.tickets.r1[6], 1);
+  assert.equal(event.tickets.s1.length, 6);
+
+  // Bevestigd: geen reservering meer.
+  applySalesRow(events, sale("r1", { _ringside_operation: "U", sale_type: "Reservation Confirmation" }), neverPast);
+  assert.equal(event.tickets.r1.length, 6);
+
+  // Tweede ronde: alleen de vlag, en alleen op een ticket dat al bekend is.
+  assert.equal(applySalesReservation(events, sale("s1", { sale_type: "Reservation" })), EVENT);
+  assert.equal(event.tickets.s1[6], 1);
+  assert.equal(applySalesReservation(events, sale("s1", { sale_type: "Reservation" })), null);
+  assert.equal(applySalesReservation(events, sale("onbekend", { sale_type: "Reservation" })), null);
 });

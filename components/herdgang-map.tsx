@@ -188,6 +188,8 @@ export function HerdgangMap({ areas }: { areas: AreaOccupancy[] }) {
                   <dd className="text-right tabular-nums">{number.format(active.capacity)}</dd>
                   <dt className="text-muted-foreground">Verkocht</dt>
                   <dd className="text-right tabular-nums">{number.format(active.sold)}</dd>
+                  <dt className="text-muted-foreground">Gereserveerd</dt>
+                  <dd className="text-right tabular-nums">{number.format(active.reserved)}</dd>
                   <dt className="text-muted-foreground">In de resale</dt>
                   <dd className="text-right tabular-nums">{number.format(active.resale)}</dd>
                   <dt className="text-muted-foreground">Vrij</dt>
