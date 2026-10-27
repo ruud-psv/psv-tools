@@ -126,6 +126,58 @@ test("zonder eigenaar uit Ringside valt de vergelijking terug op het relatienumm
   assert.deepEqual(relations(findNeighbors(seats, tickets, holders)), ["111"]);
 });
 
+test("wie één van meerdere kaarten aanbiedt, valt ook af naast een andere vrije stoel", () => {
+  // 222 heeft C8-2, C8-3 en C8-4 en biedt alleen C8-2 aan. C8-5 is leeg: daar
+  // grenst C8-4 aan, maar 222 hoort ook daar niet op de lijst.
+  const seats = block("C", [8], [1, 2, 3, 4, 5, 6]);
+  const holders: Holder[] = [
+    { relationNumber: "111", area: "C", row: 8, seat: 1 },
+    { relationNumber: "222", area: "C", row: 8, seat: 2 },
+    { relationNumber: "222", area: "C", row: 8, seat: 3 },
+    { relationNumber: "222", area: "C", row: 8, seat: 4 },
+    { relationNumber: "333", area: "C", row: 8, seat: 6 },
+  ];
+  const tickets = [
+    ticket("C", 8, 1, { owner: "eigenaar-111" }),
+    ticket("C", 8, 2, { owner: "eigenaar-222", resalePosted: true }),
+    ticket("C", 8, 3, { owner: "eigenaar-222" }),
+    ticket("C", 8, 4, { owner: "eigenaar-222" }),
+    ticket("C", 8, 6, { owner: "eigenaar-333" }),
+  ];
+  const result = findNeighbors(seats, tickets, holders);
+  assert.deepEqual(relations(result), ["111", "333"]);
+  assert.equal(result.stats.skippedOwnResale, 1);
+});
+
+test("wie in een ander vak een kaart aanbiedt, valt ook af", () => {
+  const seats = [...block("G", [1], [1, 2, 3]), ...block("H", [1], [1, 2, 3])];
+  const holders: Holder[] = [
+    { relationNumber: "444", area: "G", row: 1, seat: 1 },
+    { relationNumber: "444", area: "H", row: 1, seat: 1 },
+    { relationNumber: "555", area: "G", row: 1, seat: 3 },
+  ];
+  const tickets = [
+    ticket("G", 1, 1, { owner: "eigenaar-444" }),
+    ticket("G", 1, 3, { owner: "eigenaar-555" }),
+    ticket("H", 1, 1, { owner: "eigenaar-444", resalePosted: true }),
+    ticket("H", 1, 2, { owner: "iemand" }),
+    ticket("H", 1, 3, { owner: "iemand" }),
+  ];
+  // G1-2 is leeg; 444 zit ernaast maar biedt H1-1 aan.
+  assert.deepEqual(relations(findNeighbors(seats, tickets, holders)), ["555"]);
+});
+
+test("wie een kaart aanbiedt valt af, ook als de eigenaar alleen in Ringside overeenkomt", () => {
+  // De aangeboden stoel staat niet op de lijst, maar de eigenaar is dezelfde.
+  const seats = block("J", [1], [1, 2, 3, 4, 5]);
+  const holders: Holder[] = [{ relationNumber: "666", area: "J", row: 1, seat: 2 }];
+  const tickets = [
+    ticket("J", 1, 2, { owner: "eigenaar-666" }),
+    ticket("J", 1, 5, { owner: "eigenaar-666", resalePosted: true }),
+  ];
+  assert.deepEqual(findNeighbors(seats, tickets, holders).rows, []);
+});
+
 test("alleen wie er deze wedstrijd ook zit", () => {
   const seats = block("D", [4], [1, 2, 3, 4, 5]);
   const holders: Holder[] = [1, 2, 4, 5].map((seat) => ({ relationNumber: `r${seat}`, area: "D", row: 4, seat }));

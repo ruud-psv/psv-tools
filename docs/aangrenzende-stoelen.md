@@ -27,9 +27,11 @@ De regels staan in `lib/aangrenzende-stoelen/neighbors.ts` en zijn getest in
   stoelnummer), altijd binnen hetzelfde vak. Waar een trap of gat in de rij zit, slaat
   de nummering over; ±1 klopt daar dus vanzelf.
 - **Op de lijst.** Een seizoenkaarthouder op een buurstoel, met een geldig ticket voor
-  deze wedstrijd dat niet in de resale staat. Wie zelf de vrije stoel ernaast in de
-  resale heeft gezet, valt af. Dat wordt vergeleken op eigenaar, en anders op het
-  relatienummer uit de lijst.
+  deze wedstrijd dat niet in de resale staat. Wie voor deze wedstrijd zelf een kaart in
+  de resale heeft staan, valt helemaal af, ook met meerdere seizoenkaarten en maar één
+  aangeboden, en ook als die kaart ergens anders in het stadion zit. Dat wordt vergeleken
+  op eigenaar uit Ringside én op het relatienummer dat volgens de lijst op de aangeboden
+  stoel zit. De teller "Zelf aanbieder" telt die relatienummers.
 - **Eén regel per relatienummer.** In de testkolommen staan alleen de stoelen die aan
   een vrije stoel grenzen. Zijn dat er meer, dan staan ze met een komma achter elkaar.
 - **Grens per relatienummer.** Optioneel in de interface: relatienummers met meer dan

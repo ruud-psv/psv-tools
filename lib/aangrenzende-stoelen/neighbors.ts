@@ -14,7 +14,8 @@
  *   in de rij zit slaat de nummering over, dus ±1 klopt daar vanzelf.
  * - **Op de lijst**: een seizoenkaarthouder op zo'n buurstoel, die voor deze
  *   wedstrijd een geldig ticket heeft dat niet in de resale staat. Behalve als
- *   hij zelf de aanbieder is van de vrije stoel ernaast.
+ *   hij voor deze wedstrijd zelf een kaart in de resale heeft staan, welke dan
+ *   ook: ook met meerdere seizoenkaarten en maar één aangeboden.
  * - **Groepjes**: vrije stoelen met opeenvolgende stoelnummers in dezelfde rij
  *   vormen samen een groepje. Geteld als los, twee, of drie of meer.
  *
@@ -140,7 +141,7 @@ export interface NeighborStats {
   listedSeatsByArea: Record<string, number>;
   /** Seizoenkaartstoelen die in de stoelenkaart van deze wedstrijd ontbreken. */
   holderSeatsUnknown: number;
-  /** Buren die afvielen omdat ze zelf de stoel ernaast aanbieden. */
+  /** Relatienummers die afvielen omdat ze zelf een kaart in de resale hebben staan. */
   skippedOwnResale: number;
   /** Relatienummers die afvielen op de grens van `maxSeatsPerRelation`. */
   skippedTooManySeats: number;
@@ -277,6 +278,22 @@ export function findNeighbors(
     for (const key of holderByKey.keys()) if (!seatByKey.has(key)) stats.holderSeatsUnknown++;
   }
 
+  // Wie heeft voor deze wedstrijd zelf een kaart in de resale staan? Op
+  // eigenaar uit Ringside, en op het relatienummer dat volgens de lijst op
+  // die stoel zit. Beide, zodat iemand met meerdere seizoenkaarten ook afvalt
+  // als hij er maar één aanbiedt, en ook als de eigenaar ontbreekt.
+  const resaleOwners = new Set<string>();
+  const resaleRelations = new Set<string>();
+  for (const [key, list] of ticketsByKey) {
+    for (const ticket of list) {
+      if (!ticket.resalePosted) continue;
+      if (ticket.owner) resaleOwners.add(ticket.owner);
+      const holder = holderByKey.get(key);
+      if (holder) resaleRelations.add(holder.relationNumber);
+    }
+  }
+  const skippedResale = new Set<string>();
+
   const found = new Map<string, Map<string, SeatRef>>();
   const freeSeats: SeatRef[] = [];
 
@@ -295,11 +312,6 @@ export function findNeighbors(
     stats.freeByArea[area] = (stats.freeByArea[area] ?? 0) + 1;
     if (fromResale) stats.freeFromResaleByArea[area] = (stats.freeFromResaleByArea[area] ?? 0) + 1;
 
-    // Wie biedt deze stoel aan? Eerst op eigenaar uit Ringside, en als die
-    // ontbreekt op het relatienummer dat volgens de lijst op deze stoel zit.
-    const sellers = new Set(here.map((ticket) => ticket.owner).filter((owner): owner is string => Boolean(owner)));
-    const sellerRelation = fromResale ? holderByKey.get(freeKey)?.relationNumber : undefined;
-
     for (const key of neighborKeys(free)) {
       const holder = holderByKey.get(key);
       if (!holder || tooMany.has(holder.relationNumber)) continue;
@@ -309,15 +321,12 @@ export function findNeighbors(
       const attending = (ticketsByKey.get(key) ?? []).filter((ticket) => !ticket.resalePosted);
       if (attending.length === 0) continue;
 
-      if (fromResale) {
-        const sameOwner =
-          sellers.size > 0
-            ? attending.some((ticket) => ticket.owner !== null && sellers.has(ticket.owner))
-            : sellerRelation === holder.relationNumber;
-        if (sameOwner) {
-          stats.skippedOwnResale++;
-          continue;
-        }
+      const offersResale =
+        resaleRelations.has(holder.relationNumber) ||
+        attending.some((ticket) => ticket.owner !== null && resaleOwners.has(ticket.owner));
+      if (offersResale) {
+        skippedResale.add(holder.relationNumber);
+        continue;
       }
 
       let seatsOfRelation = found.get(holder.relationNumber);
@@ -328,6 +337,8 @@ export function findNeighbors(
       seatsOfRelation.set(key, { area: normalizeArea(holder.area), row: holder.row, seat: holder.seat });
     }
   }
+
+  stats.skippedOwnResale = skippedResale.size;
 
   const rows: NeighborRow[] = [...found]
     .map(([relationNumber, seatsOfRelation]) => ({

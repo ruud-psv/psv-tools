@@ -433,7 +433,7 @@ export function AangrenzendeStoelen() {
                 <Stat
                   label="Zelf aanbieder"
                   value={number.format(result.stats.skippedOwnResale)}
-                  hint="niet benaderd: bieden de stoel ernaast zelf aan"
+                  hint="relatienummers niet benaderd: hebben zelf een kaart in de resale"
                 />
                 <Stat
                   label="Boven de grens"
