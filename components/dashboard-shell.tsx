@@ -6,7 +6,15 @@ import { Menu } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { FeedbackTab } from "@/components/feedback-tab";
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function DashboardShell({
+  children,
+  allowedPages,
+  isAdmin,
+}: {
+  children: React.ReactNode;
+  allowedPages: string[];
+  isAdmin: boolean;
+}) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -40,7 +48,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <AppSidebar onMobileClose={() => setMobileOpen(false)} />
+        <AppSidebar
+          allowedPages={allowedPages}
+          isAdmin={isAdmin}
+          onMobileClose={() => setMobileOpen(false)}
+        />
       </div>
 
       {/* Main content — top padding on mobile to clear the fixed header */}

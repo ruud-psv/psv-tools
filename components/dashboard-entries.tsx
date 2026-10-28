@@ -46,10 +46,12 @@ function ToolCard({ entry }: { entry: ToolEntry }) {
  * staan bewust alleen in de sidebar — het dashboard is een startpunt, geen
  * volledige inhoudsopgave.
  */
-export function DashboardEntries() {
+export function DashboardEntries({ allowedPages }: { allowedPages: string[] }) {
+  const entries = makeTools.filter((entry) => allowedPages.includes(entry.href));
+  if (entries.length === 0) return null;
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {makeTools.map((entry) => (
+      {entries.map((entry) => (
         <ToolCard key={entry.href} entry={entry} />
       ))}
     </div>

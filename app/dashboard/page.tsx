@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
+import { getAccess } from "@/lib/access-store";
 import { firstNameFrom, greetingFor } from "@/lib/greeting";
 import { DashboardEntries } from "@/components/dashboard-entries";
 
@@ -8,9 +9,16 @@ import { DashboardEntries } from "@/components/dashboard-entries";
 // dagdeel.
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const token = (await cookies()).get("psv_session")?.value;
   const session = token ? verifySession(token) : null;
+  const access = session ? await getAccess(session.email) : null;
+  // De middleware stuurt je hierheen als je een pagina opent waar je geen recht op hebt.
+  const noAccess = (await searchParams)["geen-toegang"] !== undefined;
   const firstName = firstNameFrom(session);
   const greeting = greetingFor();
 
@@ -35,7 +43,13 @@ export default async function DashboardPage() {
           </p>
         </header>
 
-        <DashboardEntries />
+        {noAccess && (
+          <div className="alert alert--warning mb-6" role="alert">
+            Je hebt geen toegang tot die pagina. Vraag een admin om je toegang te geven.
+          </div>
+        )}
+
+        <DashboardEntries allowedPages={access?.pages ?? []} />
       </div>
     </div>
   );
