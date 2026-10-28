@@ -134,6 +134,14 @@ export const insightTools: ToolEntry[] = [
     icon: Ticket,
   },
   {
+    name: "Ticketing Herdgang",
+    title: "Bezetting De Herdgang bekijken",
+    description:
+      "Capaciteit, verkocht en vrij per vak bij thuiswedstrijden van Jong PSV en PSV Vrouwen.",
+    href: "/dashboard/ticketing-herdgang",
+    icon: Building2,
+  },
+  {
     name: "DM Performance",
     title: "DM performance bekijken",
     description:
@@ -180,7 +188,6 @@ export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Kleurplaat Creator", href: "/dashboard/kleurplaat", icon: Palette },
   { name: "Ringside", href: "/dashboard/ticket-inzichten-new", icon: Ticket },
   { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
-  { name: "Ticketing Herdgang", href: "/dashboard/ticketing-herdgang", icon: Building2 },
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
   { name: "Contact Filter Import", href: "/dashboard/contact-filter-import", icon: ListFilter },
 ];

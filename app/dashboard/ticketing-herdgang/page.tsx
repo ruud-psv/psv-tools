@@ -10,7 +10,6 @@ export default function TicketingHerdgangPage() {
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
           <h1 className="text-3xl">Ticketing Herdgang</h1>
-          <span className="tag">Beta</span>
           <span className="tag tag--gold">Ringside</span>
         </div>
         <p className="text-muted-foreground max-w-3xl">
