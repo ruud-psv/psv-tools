@@ -71,10 +71,10 @@ elk genummerd vak er precies één keer op staat.
   Klikken zet het vak vast, zodat je met de muis naar de stoelen kunt; nog een keer
   klikken of "Vastgezet" maakt het weer los.
 - **Schema op nummer:** Ringside kent alleen vak, rij en stoelnummer, niet de echte vorm
-  van het vak. Kolommen zijn dus stoelnummers (laag links) en rijen rijnummers (laag aan
-  het veld), net als bij de regels voor buren. Waar de nummering in alle rijen
-  overslaat, staat een smalle opening; meestal is dat een trap. Of stoel 1 in het echt
-  links of rechts zit, kan per vak verschillen.
+  van het vak. Kolommen zijn dus stoelnummers en rijen rijnummers (laag aan het veld),
+  net als bij de regels voor buren. Het hoogste stoelnummer staat links, zoals in de
+  ticketshop (vastgesteld in vak PR, november 2026). Waar de nummering in alle rijen
+  overslaat, staat een smalle opening; meestal is dat een trap.
 - **Data:** "Maak lijst" stuurt per vak de stoelen mee, compact: per rij het eerste
   stoelnummer en één teken per stoel (`lib/aangrenzende-stoelen/seat-map.ts`). Voor het
   hele stadion is dat zo'n 45 kB. Uitgesloten vakken zitten er niet in.

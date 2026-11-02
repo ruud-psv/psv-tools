@@ -74,20 +74,21 @@ function Swatch({ code }: { code: ShownCode }) {
 /**
  * Waar elke stoel komt. Kolommen zijn stoelnummers en rijen rijnummers, net als
  * in de regels voor buren: wat recht achter elkaar staat heeft hetzelfde
- * stoelnummer. Nummers die in geen enkele rij voorkomen worden een smalle
- * opening in plaats van lege kolommen.
+ * stoelnummer. Het hoogste stoelnummer staat links, zoals in de ticketshop.
+ * Nummers die in geen enkele rij voorkomen worden een smalle opening in plaats
+ * van lege kolommen.
  */
 function layout(rows: SeatMapRow[]) {
   const numbers = new Set<number>();
   for (const [, first, codes] of rows) {
     for (let i = 0; i < codes.length; i++) if (codes[i] !== SEAT_CODE.geen) numbers.add(first + i);
   }
-  const columns = [...numbers].sort((a, b) => a - b);
+  const columns = [...numbers].sort((a, b) => b - a);
 
   const x = new Map<number, number>();
   let cursorX = LABEL;
   columns.forEach((seat, i) => {
-    if (i > 0 && seat - columns[i - 1] > 1) cursorX += GAP;
+    if (i > 0 && columns[i - 1] - seat > 1) cursorX += GAP;
     x.set(seat, cursorX);
     cursorX += CELL;
   });
@@ -295,8 +296,8 @@ export function AreaSeatView({
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Schema op nummer: de laagste rij ligt aan het veld, lage stoelnummers links. Een smalle opening is
-            een sprong in de nummering, meestal een trap.
+            Schema op nummer, zoals in de ticketshop: de laagste rij ligt aan het veld, het hoogste stoelnummer
+            links. Een smalle opening is een sprong in de nummering, meestal een trap.
           </p>
         </>
       )}
