@@ -130,8 +130,8 @@ function MatchDetail({ match }: { match: MatchRow }) {
             "Geen vrije plaatsen meer."
           )}
         </p>
-        <Link href={`/dashboard/ticketing-stadion/${match.eventId}`} className="btn btn--medium">
-          Plattegrond en verkoop
+        <Link href={`/dashboard/ticketing-stadion/${match.eventId}`} className="btn btn--medium inline-flex items-center justify-center gap-2 whitespace-nowrap">
+          Meer info
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>

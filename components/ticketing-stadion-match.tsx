@@ -273,7 +273,7 @@ function ShareButton({ eventId }: { eventId: string }) {
 
   return (
     <div className="space-y-2">
-      <button type="button" onClick={share} disabled={state === "busy"} className="btn btn--medium btn--outlined">
+      <button type="button" onClick={share} disabled={state === "busy"} className="btn btn--medium btn--outlined inline-flex items-center justify-center gap-2 whitespace-nowrap">
         {state === "busy" ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : state === "copied" ? (

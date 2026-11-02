@@ -53,7 +53,7 @@ Code: `lib/ticketing-stadion/summary.ts` (rekenwerk, getest in `summary.test.ts`
 
 ## Fase 2: wedstrijdpagina
 
-Pagina: `/dashboard/ticketing-stadion/<eventId>`, via "Plattegrond en verkoop" in de
+Pagina: `/dashboard/ticketing-stadion/<eventId>`, via "Meer info" in de
 opengeklapte rij van het overzicht.
 
 - **Cijfers:** bezetting, vrij, gereserveerd, resale, verkocht in de laatste 7 dagen,
