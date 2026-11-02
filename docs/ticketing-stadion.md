@@ -8,7 +8,7 @@ Pagina: `/dashboard/ticketing-stadion`.
 
 ## Fase 1: overzicht (nu)
 
-Per komende thuiswedstrijd:
+Een tabel van de komende thuiswedstrijden, de eerstvolgende bovenaan. Per wedstrijd verkocht, vrij, bezetting, verkocht in de laatste 7 dagen en het verschil met eerder; klik op een rij voor de details:
 
 - **Bezetting:** verkocht gedeeld door de capaciteit, met vrij, gereserveerd en in de resale.
   Dezelfde definities als [Ticketing Herdgang](ticketing-herdgang.md)

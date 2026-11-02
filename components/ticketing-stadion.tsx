@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Armchair, Loader2, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  Armchair,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
@@ -107,7 +116,8 @@ function Delta({ label, own, reference, detail }: { label: string; own: number; 
   );
 }
 
-function MatchCard({ match }: { match: MatchRow }) {
+/** Het opengeklapte deel van een rij: alles wat niet in de kolommen past. */
+function MatchDetail({ match }: { match: MatchRow }) {
   const { total, pace, comparison } = match;
   const mostFree = match.areas
     .filter((area) => area.free > 0)
@@ -116,89 +126,168 @@ function MatchCard({ match }: { match: MatchRow }) {
   const { sameOpponent, previousSeason } = comparison;
 
   return (
-    <Card>
-      <CardContent className="p-6 space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-xl font-heading uppercase">{match.name ?? "Onbekende wedstrijd"}</h3>
-            <p className="text-sm text-muted-foreground">{formatEventDate(match.eventDate)}</p>
-          </div>
-          <span className={`tag ${match.daysOut <= 7 ? "" : "tag--outlined"}`}>{daysLabel(match.daysOut)}</span>
-        </div>
+    <div className="space-y-4 bg-muted/30 px-4 py-4">
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {number.format(total.sold)} van {number.format(total.capacity)} verkocht
+        </p>
+        <OccupancyBar row={total} />
+      </div>
 
-        <div className="space-y-2">
-          <div className="flex items-baseline justify-between gap-4">
-            <p className="text-3xl font-heading tabular-nums">{share(total.sold, total.capacity)}</p>
-            <p className="text-sm text-muted-foreground tabular-nums">
-              {number.format(total.sold)} van {number.format(total.capacity)} verkocht
-            </p>
-          </div>
-          <OccupancyBar row={total} />
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Stat label="Vrij" value={number.format(total.free)} hint="nog te koop" />
+        <Stat label="Gereserveerd" value={number.format(total.reserved)} hint="nog niet afgenomen" />
+        <Stat label="In de resale" value={number.format(total.resale)} hint="aangeboden door de houder" />
+        <Stat
+          label="Laatste 7 dagen"
+          value={pace ? number.format(pace.last7Days) : "–"}
+          hint={pace ? `${number.format(pace.today)} vandaag` : "nog geen verkoop per dag"}
+        />
+      </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Stat label="Vrij" value={number.format(total.free)} hint="nog te koop" />
-          <Stat label="Gereserveerd" value={number.format(total.reserved)} hint="nog niet afgenomen" />
-          <Stat label="In de resale" value={number.format(total.resale)} hint="aangeboden door de houder" />
-          <Stat
-            label="Laatste 7 dagen"
-            value={pace ? number.format(pace.last7Days) : "–"}
-            hint={pace ? `${number.format(pace.today)} vandaag` : "nog geen verkoop per dag"}
-          />
-        </div>
-
-        {(sameOpponent || previousSeason) && (
-          <div className="space-y-3 border-t border-border pt-4">
-            <p className="label text-xs text-muted-foreground">
-              Vergeleken met eerder, {match.daysOut === 0 ? "op de wedstrijddag" : `${match.daysOut} dagen voor de aftrap`}
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {sameOpponent && (
-                <Delta
-                  label={`${sameOpponent.name} (${sameOpponent.season})`}
-                  own={comparison.soldBy}
-                  reference={sameOpponent.soldBy}
-                  detail={`Toen ${number.format(sameOpponent.soldBy)} verkocht op dit moment, eindstand ${number.format(sameOpponent.total)}.`}
-                />
-              )}
-              {previousSeason && (
-                <Delta
-                  label={`Gemiddelde ${previousSeason.season}`}
-                  own={comparison.soldBy}
-                  reference={previousSeason.soldBy}
-                  detail={`Gemiddeld ${number.format(previousSeason.soldBy)} op dit moment over ${previousSeason.matches} thuiswedstrijden, eindstand ${number.format(previousSeason.total)}.`}
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-sm">
-          <p className="text-muted-foreground">
-            {mostFree.length > 0 ? (
-              <>
-                Meeste vrije plaatsen:{" "}
-                {mostFree.map((area, i) => (
-                  <span key={area.area}>
-                    {i > 0 && ", "}
-                    <span className="font-medium text-foreground">{area.area}</span> ({number.format(area.free)})
-                  </span>
-                ))}
-              </>
-            ) : (
-              "Geen vrije plaatsen meer."
-            )}
+      {(sameOpponent || previousSeason) && (
+        <div className="space-y-3 border-t border-border pt-4">
+          <p className="label text-xs text-muted-foreground">
+            Vergeleken met eerder, {match.daysOut === 0 ? "op de wedstrijddag" : `${match.daysOut} dagen voor de aftrap`}
           </p>
-          <Link
-            href="/dashboard/aangrenzende-stoelen"
-            className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Armchair className="h-3.5 w-3.5" />
-            Aangrenzende stoelen
-          </Link>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {sameOpponent && (
+              <Delta
+                label={`${sameOpponent.name} (${sameOpponent.season})`}
+                own={comparison.soldBy}
+                reference={sameOpponent.soldBy}
+                detail={`Toen ${number.format(sameOpponent.soldBy)} verkocht op dit moment, eindstand ${number.format(sameOpponent.total)}.`}
+              />
+            )}
+            {previousSeason && (
+              <Delta
+                label={`Gemiddelde ${previousSeason.season}`}
+                own={comparison.soldBy}
+                reference={previousSeason.soldBy}
+                detail={`Gemiddeld ${number.format(previousSeason.soldBy)} op dit moment over ${previousSeason.matches} thuiswedstrijden, eindstand ${number.format(previousSeason.total)}.`}
+              />
+            )}
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-sm">
+        <p className="text-muted-foreground">
+          {mostFree.length > 0 ? (
+            <>
+              Meeste vrije plaatsen:{" "}
+              {mostFree.map((area, i) => (
+                <span key={area.area}>
+                  {i > 0 && ", "}
+                  <span className="font-medium text-foreground">{area.area}</span> ({number.format(area.free)})
+                </span>
+              ))}
+            </>
+          ) : (
+            "Geen vrije plaatsen meer."
+          )}
+        </p>
+        <Link
+          href="/dashboard/aangrenzende-stoelen"
+          className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Armchair className="h-3.5 w-3.5" />
+          Aangrenzende stoelen
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/** Verschil met de vorige keer tegen deze tegenstander, of anders met vorig seizoen. */
+function TrendCell({ comparison }: { comparison: Comparison }) {
+  const reference = comparison.sameOpponent ?? comparison.previousSeason;
+  if (!reference || reference.soldBy <= 0) return <span className="text-xs text-muted-foreground">–</span>;
+  const diff = (comparison.soldBy - reference.soldBy) / reference.soldBy;
+  const ahead = diff >= 0;
+  const Icon = ahead ? TrendingUp : TrendingDown;
+  return (
+    <span
+      className={`inline-flex items-center justify-end gap-1 text-sm font-medium tabular-nums ${ahead ? "text-success" : "text-error"}`}
+      title={comparison.sameOpponent ? `t.o.v. ${comparison.sameOpponent.name} (${comparison.sameOpponent.season})` : `t.o.v. gemiddelde ${comparison.previousSeason?.season}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {ahead ? "+" : "−"}
+      {percent.format(Math.abs(diff))}
+    </span>
+  );
+}
+
+const GRID = "grid grid-cols-[minmax(12rem,1fr)_7rem_6rem_5.5rem_9rem_6.5rem_6rem_1rem] gap-x-4 items-center";
+
+function MatchTable({ matches }: { matches: MatchRow[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  return (
+    <div className="border border-border rounded-md overflow-hidden overflow-x-auto bg-background">
+      <div className="min-w-[880px]">
+        <div
+          className={`${GRID} px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-heading uppercase tracking-wide text-muted-foreground`}
+        >
+          <span>Wedstrijd</span>
+          <span>Datum</span>
+          <span className="text-right">Verkocht</span>
+          <span className="text-right">Vrij</span>
+          <span>Bezetting</span>
+          <span className="text-right">Laatste 7 dagen</span>
+          <span className="text-right" title="Verkocht op dit moment, vergeleken met de vorige keer tegen deze tegenstander (of anders het gemiddelde van vorig seizoen)">
+            T.o.v. eerder
+          </span>
+          <span />
+        </div>
+
+        <div className="divide-y divide-border">
+          {matches.map((match) => {
+            const expanded = expandedId === match.eventId;
+            const { total } = match;
+            const pct = total.capacity > 0 ? total.sold / total.capacity : 0;
+            return (
+              <div key={match.eventId}>
+                <button
+                  className={`${GRID} px-4 py-3 w-full text-left hover:bg-muted/30 transition-colors`}
+                  onClick={() => setExpandedId(expanded ? null : match.eventId)}
+                  aria-expanded={expanded}
+                >
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{match.name ?? "Onbekende wedstrijd"}</span>
+                      {pct >= NEARLY_SOLD_OUT && <span className="tag shrink-0 text-[10px] px-1.5 py-0">{total.free === 0 ? "Uitverkocht" : "Bijna vol"}</span>}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">{daysLabel(match.daysOut)}</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{formatEventDate(match.eventDate)}</span>
+                  <span className="text-sm text-right tabular-nums">{number.format(total.sold)}</span>
+                  <span className="text-sm text-right tabular-nums font-medium">{number.format(total.free)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="flex-1">
+                      <OccupancyBar row={total} />
+                    </span>
+                    <span className="text-xs text-muted-foreground w-9 text-right tabular-nums">{share(total.sold, total.capacity)}</span>
+                  </span>
+                  <span className="text-sm text-right tabular-nums">
+                    {match.pace ? number.format(match.pace.last7Days) : "–"}
+                  </span>
+                  <span className="text-right">
+                    <TrendCell comparison={match.comparison} />
+                  </span>
+                  {expanded ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+                {expanded && <MatchDetail match={match} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -319,16 +408,12 @@ export function TicketingStadion() {
         </Card>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        {matches.map((match) => (
-          <MatchCard key={match.eventId} match={match} />
-        ))}
-      </div>
+      {matches.length > 0 && <MatchTable matches={matches} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <p className="max-w-3xl">
           Bezetting is verkocht gedeeld door de capaciteit van de vakken op de plattegrond; parkeren telt niet mee. In de
-          balk: rood verkocht, goud verkocht maar in de resale, grijs gereserveerd. Stoelstatus van{" "}
+          balk: rood verkocht, goud verkocht maar in de resale, grijs gereserveerd. Klik op een wedstrijd voor de details. Stoelstatus van{" "}
           {formatDateTime(seats.caughtUpAt)}
           {seats.running && " (er loopt nu een update)"}, verkoop per dag van {formatDateTime(sales.updatedAt)}. De
           vergelijking gebruikt voor beide wedstrijden de verkoop per dag, zonder reserveringen.
