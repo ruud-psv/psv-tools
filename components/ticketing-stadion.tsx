@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
-  Armchair,
+  ArrowRight,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -15,6 +15,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
+import {
+  daysLabel,
+  Delta,
+  formatDateTime,
+  formatEventDate,
+  number,
+  OccupancyBar,
+  percent,
+  share,
+  Stat,
+} from "@/components/ticketing-stadion-parts";
 import type { Comparison, SalesPace } from "@/lib/ticketing-stadion/summary";
 
 interface MatchRow {
@@ -45,76 +56,6 @@ interface Overview {
 
 /** Vanaf deze bezetting heet een wedstrijd (bijna) uitverkocht. */
 const NEARLY_SOLD_OUT = 0.95;
-
-const number = new Intl.NumberFormat("nl-NL");
-const percent = new Intl.NumberFormat("nl-NL", { style: "percent", maximumFractionDigits: 0 });
-
-function share(part: number, whole: number): string {
-  return whole > 0 ? percent.format(part / whole) : "–";
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "onbekend";
-  const parsed = new Date(value);
-  if (isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
-function formatEventDate(value: string | null): string {
-  if (!value) return "datum onbekend";
-  const parsed = new Date(value.replace(" ", "T"));
-  if (isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("nl-NL", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
-function daysLabel(days: number): string {
-  if (days === 0) return "Vandaag";
-  if (days === 1) return "Morgen";
-  return `Over ${days} dagen`;
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div>
-      <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-2xl font-heading tabular-nums">{value}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-/** Verkocht in rood, daarvan in de resale in goud, gereserveerd in grijs. */
-function OccupancyBar({ row }: { row: Occupancy }) {
-  const width = (value: number) => `${row.capacity > 0 ? Math.min((value / row.capacity) * 100, 100) : 0}%`;
-  return (
-    <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-      <div className="bg-psv-red-primary" style={{ width: width(row.sold - row.resale) }} />
-      <div className="bg-psv-gold" style={{ width: width(row.resale) }} />
-      <div className="bg-muted-foreground/50" style={{ width: width(row.reserved) }} />
-    </div>
-  );
-}
-
-/** Verschil met een eerdere wedstrijd op hetzelfde aantal dagen voor de aftrap. */
-function Delta({ label, own, reference, detail }: { label: string; own: number; reference: number; detail: string }) {
-  const diff = own - reference;
-  const ahead = diff >= 0;
-  const Icon = ahead ? TrendingUp : TrendingDown;
-  return (
-    <div className="flex items-start gap-2 text-sm">
-      <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${ahead ? "text-success" : "text-error"}`} />
-      <div>
-        <span className="font-medium">{label}: </span>
-        <span className={`tabular-nums font-medium ${ahead ? "text-success" : "text-error"}`}>
-          {ahead ? "+" : "−"}
-          {number.format(Math.abs(diff))}
-          {reference > 0 && ` (${ahead ? "+" : "−"}${percent.format(Math.abs(diff) / reference)})`}
-        </span>
-        <p className="text-xs text-muted-foreground">{detail}</p>
-      </div>
-    </div>
-  );
-}
 
 /** Het opengeklapte deel van een rij: alles wat niet in de kolommen past. */
 function MatchDetail({ match }: { match: MatchRow }) {
@@ -187,12 +128,9 @@ function MatchDetail({ match }: { match: MatchRow }) {
             "Geen vrije plaatsen meer."
           )}
         </p>
-        <Link
-          href="/dashboard/aangrenzende-stoelen"
-          className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Armchair className="h-3.5 w-3.5" />
-          Aangrenzende stoelen
+        <Link href={`/dashboard/ticketing-stadion/${match.eventId}`} className="btn btn--medium">
+          Plattegrond en verkoop
+          <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     </div>

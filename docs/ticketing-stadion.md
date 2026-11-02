@@ -51,10 +51,32 @@ Code: `lib/ticketing-stadion/summary.ts` (rekenwerk, getest in `summary.test.ts`
 `lib/ticketing-stadion/store.ts`, `app/api/ticketing-stadion/route.ts` en
 `components/ticketing-stadion.tsx`.
 
+## Fase 2: wedstrijdpagina
+
+Pagina: `/dashboard/ticketing-stadion/<eventId>`, via "Plattegrond en verkoop" in de
+opengeklapte rij van het overzicht.
+
+- **Cijfers:** bezetting, vrij, gereserveerd, resale, verkocht in de laatste 7 dagen,
+  vrije stoelen naast elkaar en de vergelijking met eerder, zoals in het overzicht.
+- **Plattegrond:** het Philips Stadion met per vak de bezetting, in dezelfde vier
+  kleurklassen als De Herdgang (`components/stadium-occupancy-map.tsx`). Wijs een vak aan
+  voor de cijfers en de stoelen, net als bij Aangrenzende stoelen
+  (`components/area-seat-view.tsx`). Hier tellen alle vakken mee, ook de sfeervakken en
+  rolstoelvakken die Aangrenzende stoelen uitsluit. Onder "Als tabel" staan de cijfers per
+  vak.
+- **Groepjes vrije stoelen:** vrije stoelen (of alleen in de resale) met opeenvolgende
+  nummers in dezelfde rij, voor het hele stadion en per vak (`countFreeGroups()`).
+- **Verkoop per dag:** de grafiek van de Ringside-pagina (`components/ticket-sales-chart.tsx`),
+  afgezet tegen het aantal dagen tot de aftrap. Standaard staat dezelfde tegenstander de
+  vorige keer ernaast; er kunnen tot drie eerdere thuiswedstrijden naast. "Tempo" zet de
+  lijnen om naar het aandeel van de eigen eindstand.
+
+API: `GET /api/ticketing-stadion/<eventId>` leest één stoelenkaart en de verkoop per dag;
+`GET /api/ticketing-stadion/verkoop?ids=…` geeft de verkoop per dag van de gekozen
+eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
+
 ## Volgende fases
 
-2. **Wedstrijddetail:** plattegrond met bezetting per vak, verkoopcurve met vergelijkingen
-   en groepjes vrije stoelen.
 3. **Seizoen, AI-analyse en deellinks.** Seizoenkaart tegenover losse verkoop, als de data
    dat toelaat (eerst nagaan met `/api/ringside/probe`).
 4. **Vervangen:** menu, doorverwijzing van `/dashboard/ticket-inzichten`, de Ringside-pagina

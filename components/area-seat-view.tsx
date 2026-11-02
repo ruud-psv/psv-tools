@@ -235,7 +235,10 @@ export function AreaSeatView({
   rows,
   pinned,
   onUnpin,
+  showListed = true,
 }: {
+  /** Of de legenda "seizoenkaarthouder op de lijst" toont; alleen zinvol bij Aangrenzende stoelen. */
+  showListed?: boolean;
   area: StadiumArea | null;
   name: string;
   summary: string;
@@ -284,7 +287,7 @@ export function AreaSeatView({
           {/* Per vak opnieuw, zodat een aangewezen stoel niet meeverhuist. */}
           <SeatGrid key={area.area} rows={rows} label={`Stoelen van ${name}. ${summary}`} />
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {LEGEND.map(({ code, label }) => (
+            {LEGEND.filter(({ code }) => showListed || code !== SEAT_CODE.lijst).map(({ code, label }) => (
               <span key={code} className="inline-flex items-center gap-1.5">
                 <Swatch code={code} />
                 {label}

@@ -58,6 +58,47 @@ function Shape({ area, fill }: { area: StadiumArea; fill: string }) {
   return <path d={area.path} fill={fill} />;
 }
 
+/** Omloop, binnenring, veld en windrichtingen: alleen decor, gedeeld door de plattegronden van het stadion. */
+export function StadiumBackdrop() {
+  return (
+    <>
+      {/* Omloop, binnenring en veld: alleen decor. */}
+      <path
+        d="M418 505 V430 L530 318 H1467 L1578 430 V997 H1607 V1075 L1467 1215 H530 L390 1075 V997 H418 Z"
+        fill="#555555"
+      />
+      <path d="M452 400 L500 352 H1490 L1545 407 V1060 L1455 1150 H545 L452 1057 Z" fill="#ffffff" />
+      <rect x="587" y="492" width="823" height="491" fill={FIELD_FILL} />
+      <g fill="none" stroke="#ffffff" strokeWidth="3" opacity="0.8">
+        <rect x="622" y="527" width="753" height="421" />
+        <line x1="998" y1="527" x2="998" y2="948" />
+        <circle cx="998" cy="737" r="70" />
+        <rect x="622" y="598" width="118" height="279" />
+        <rect x="1257" y="598" width="118" height="279" />
+      </g>
+      <text x="998" y="1192" textAnchor="middle" fill="#ffffff" fontSize="26" className="font-heading" letterSpacing="2">
+        PSV BUSINESS
+      </text>
+
+      {/* Windrichtingen. */}
+      <g className="font-heading" fill="#e82026" fontSize="44" textAnchor="middle">
+        <text x="998" y="170">
+          Noord
+        </text>
+        <text x="998" y="1395">
+          Zuid
+        </text>
+        <text x="262" y="750" transform="rotate(-90 262 750)">
+          West
+        </text>
+        <text x="1738" y="750" transform="rotate(90 1738 750)">
+          Oost
+        </text>
+      </g>
+    </>
+  );
+}
+
 /**
  * De plattegrond met per vak het aantal vrije stoelen.
  *
@@ -115,39 +156,7 @@ export function StadiumMap({ numbers, seatMaps }: { numbers: Record<string, Area
               </pattern>
             </defs>
 
-            {/* Omloop, binnenring en veld: alleen decor. */}
-            <path
-              d="M418 505 V430 L530 318 H1467 L1578 430 V997 H1607 V1075 L1467 1215 H530 L390 1075 V997 H418 Z"
-              fill="#555555"
-            />
-            <path d="M452 400 L500 352 H1490 L1545 407 V1060 L1455 1150 H545 L452 1057 Z" fill="#ffffff" />
-            <rect x="587" y="492" width="823" height="491" fill={FIELD_FILL} />
-            <g fill="none" stroke="#ffffff" strokeWidth="3" opacity="0.8">
-              <rect x="622" y="527" width="753" height="421" />
-              <line x1="998" y1="527" x2="998" y2="948" />
-              <circle cx="998" cy="737" r="70" />
-              <rect x="622" y="598" width="118" height="279" />
-              <rect x="1257" y="598" width="118" height="279" />
-            </g>
-            <text x="998" y="1192" textAnchor="middle" fill="#ffffff" fontSize="26" className="font-heading" letterSpacing="2">
-              PSV BUSINESS
-            </text>
-
-            {/* Windrichtingen. */}
-            <g className="font-heading" fill="#e82026" fontSize="44" textAnchor="middle">
-              <text x="998" y="170">
-                Noord
-              </text>
-              <text x="998" y="1395">
-                Zuid
-              </text>
-              <text x="262" y="750" transform="rotate(-90 262 750)">
-                West
-              </text>
-              <text x="1738" y="750" transform="rotate(90 1738 750)">
-                Oost
-              </text>
-            </g>
+            <StadiumBackdrop />
 
             {STADIUM_AREAS.map((area) => {
               const n = numbers[area.area];

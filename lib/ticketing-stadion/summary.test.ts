@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  comparableMatches,
   compareMatch,
   daysUntil,
+  freeSeatsFromMaps,
   isStadiumStand,
   opponentOf,
   previousSeasonOf,
@@ -80,4 +82,27 @@ test("bezetting: alleen vakken op de plattegrond, parkeren apart", () => {
   assert.equal(match.total.free, 1);
   assert.equal(match.otherTotal.sold, 1);
   assert.deepEqual(match.areas.map((area) => area.area), ["A"]);
+});
+
+test("vrije stoelen uit de stoelenkaart: vrij en resale, de rest niet", () => {
+  const free = freeSeatsFromMaps({ A: [[1, 4, "vvb.rg"]], B: [[2, 1, "bb"]] });
+  assert.deepEqual(free, [
+    { area: "A", row: 1, seat: 4 },
+    { area: "A", row: 1, seat: 5 },
+    { area: "A", row: 1, seat: 8 },
+  ]);
+});
+
+test("vergelijkbare wedstrijden: alleen eerdere thuiswedstrijden met verkoop, nieuwste eerst", () => {
+  const all = {
+    a: sales("a", "PSV - Ajax", "2025-02-01 14:30", "24/25", { "3": 10 }),
+    b: sales("b", "PSV - AZ", "2026-03-01 14:30", "25/26", { "3": 10 }),
+    c: sales("c", "PSV - Feyenoord", "2026-04-01 14:30", "25/26", {}),
+    d: sales("d", "Ajax - PSV", "2026-04-02 14:30", "25/26", { "3": 1 }),
+    now: sales("now", "PSV - NEC", "2026-11-08 14:30", "26/27", { "3": 1 }),
+  };
+  assert.deepEqual(
+    comparableMatches(all, "now", "2026-11-08 14:30").map((m) => m.productId),
+    ["b", "a"]
+  );
 });

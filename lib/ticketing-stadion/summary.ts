@@ -12,7 +12,8 @@
  */
 
 import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
-import { normalizeArea } from "../aangrenzende-stoelen/neighbors";
+import { normalizeArea, type SeatRef } from "../aangrenzende-stoelen/neighbors";
+import { SEAT_CODE, type SeatMaps } from "../aangrenzende-stoelen/seat-map";
 import { STADIUM_AREAS } from "../aangrenzende-stoelen/stadium";
 import { seasonOf } from "../ringside/daily-sales";
 import type { EventSeatState } from "../ringside/seat-state";
@@ -151,7 +152,7 @@ export interface Comparison {
   previousSeason: SeasonAverage | null;
 }
 
-function isHomeMatchSales(sales: EventSales): boolean {
+export function isHomeMatchSales(sales: EventSales): boolean {
   return sales.category === "Wedstrijden" && isPsvHomeMatch(sales.name);
 }
 
@@ -211,4 +212,47 @@ export function compareMatch(
         }
       : null,
   };
+}
+
+/* ---------- Wedstrijddetail ---------- */
+
+/**
+ * De vrije stoelen uit de stoelenkaart per vak (`buildSeatMaps()`): vrij, of
+ * alleen bezet door een ticket dat in de resale staat. Voor de groepjes
+ * vrije stoelen naast elkaar (`countFreeGroups()`).
+ */
+export function freeSeatsFromMaps(maps: SeatMaps): SeatRef[] {
+  const free: SeatRef[] = [];
+  for (const [area, rows] of Object.entries(maps)) {
+    for (const [row, firstSeat, codes] of rows) {
+      for (let i = 0; i < codes.length; i++) {
+        if (codes[i] === SEAT_CODE.vrij || codes[i] === SEAT_CODE.resale) free.push({ area, row, seat: firstSeat + i });
+      }
+    }
+  }
+  return free;
+}
+
+/** Een eerdere thuiswedstrijd die je naast deze kunt leggen. */
+export interface ComparableMatch {
+  productId: string;
+  name: string;
+  eventDate: string;
+  season: string;
+  total: number;
+}
+
+/** Eerdere thuiswedstrijden van PSV 1 met verkoop, nieuwste eerst. */
+export function comparableMatches(sales: Record<string, EventSales>, exceptId: string, before: string): ComparableMatch[] {
+  return Object.values(sales)
+    .filter(
+      (other) =>
+        other.productId !== exceptId &&
+        isHomeMatchSales(other) &&
+        other.total > 0 &&
+        Boolean(other.eventDate) &&
+        other.eventDate < before
+    )
+    .sort((a, b) => b.eventDate.localeCompare(a.eventDate))
+    .map(({ productId, name, eventDate, season, total }) => ({ productId, name, eventDate, season, total }));
 }

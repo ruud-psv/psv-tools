@@ -397,11 +397,14 @@ function ComparisonLegend({
   liveName,
   mode,
   filtered,
+  sameSource,
 }: {
   series: ComparisonSeries[];
   liveName: string;
   mode: ComparisonMode;
   filtered: boolean;
+  /** Alle lijnen komen uit de transacties (Ringside), ook die van deze wedstrijd. */
+  sameSource: boolean;
 }) {
   return (
     <div className="mt-2 space-y-1.5">
@@ -422,8 +425,9 @@ function ComparisonLegend({
         {mode === "tempo"
           ? "Tempo: aandeel van de eigen totale verkoop, dus onderling vergelijkbaar. "
           : ""}
-        Live cijfers komen uit de ticketfeed (netto stand, retouren eraf); historische cijfers
-        zijn transacties per aankoopdag (bruto).
+        {sameSource
+          ? "Alle lijnen: verkochte tickets per aankoopdag, uit de transacties in Ringside."
+          : "Live cijfers komen uit de ticketfeed (netto stand, retouren eraf); historische cijfers zijn transacties per aankoopdag (bruto)."}
         {filtered && (
           <>
             {" "}
@@ -444,7 +448,9 @@ function ComparisonChart({
   window: windowMode,
   compact,
   chartWidth,
+  sameSource,
 }: {
+  sameSource: boolean;
   livePoints: DailySalesPoint[];
   comparisons: ComparisonInput[];
   liveName: string;
@@ -585,7 +591,7 @@ function ComparisonChart({
       </ResponsiveContainer>
 
       {!compact && (
-        <ComparisonLegend series={series} liveName={liveLabel} mode={mode} filtered={filtered} />
+        <ComparisonLegend series={series} liveName={liveLabel} mode={mode} filtered={filtered} sameSource={sameSource} />
       )}
 
       {/* Eén getal per wedstrijd zegt meer dan honderd extra kolommen. */}
@@ -721,6 +727,7 @@ export function TicketSalesChart({
           window={comparisonWindow}
           compact={compact}
           chartWidth={chartWidth}
+          sameSource={providedPoints !== undefined}
         />
       </div>
     );

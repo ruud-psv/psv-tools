@@ -37,7 +37,9 @@ export type SeatMaps = Record<string, SeatMapRow[]>;
 export function buildSeatMaps(
   seats: Iterable<SeatInfo>,
   tickets: Iterable<TicketInfo>,
-  listed: readonly NeighborRow[]
+  listed: readonly NeighborRow[],
+  /** Ook de vakken die Aangrenzende stoelen uitsluit (sfeervakken, rolstoelvakken). */
+  { includeExcluded = false }: { includeExcluded?: boolean } = {}
 ): SeatMaps {
   const ticketsByKey = new Map<string, TicketInfo[]>();
   for (const ticket of tickets) {
@@ -57,7 +59,7 @@ export function buildSeatMaps(
   // vak → rij → stoelnummer → teken
   const areas = new Map<string, Map<number, Map<number, SeatCode>>>();
   for (const seat of seats) {
-    if (isExcludedArea(seat.area)) continue;
+    if (!includeExcluded && isExcludedArea(seat.area)) continue;
     const key = seatKey(seat.area, seat.row, seat.seat);
     if (!key) continue;
     const status = seatStatus(seat, ticketsByKey.get(key) ?? []);
