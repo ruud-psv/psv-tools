@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Armchair, ArrowLeft, Check, Link2, Loader2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Armchair,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  Link2,
+  Loader2,
+  X,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StadiumOccupancyMap } from "@/components/stadium-occupancy-map";
 import { StadionChat } from "@/components/stadion-chat";
@@ -71,23 +82,71 @@ function formatShortDate(value: string): string {
   return parsed.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
 }
 
+type AreaSortKey = "area" | "capacity" | "sold" | "reserved" | "resale" | "free" | "occupancy";
+
+const AREA_COLUMNS: { key: AreaSortKey; label: string; value: (row: AreaOccupancy) => number | string }[] = [
+  { key: "area", label: "Vak", value: (row) => row.area },
+  { key: "capacity", label: "Capaciteit", value: (row) => row.capacity },
+  { key: "sold", label: "Verkocht", value: (row) => row.sold },
+  { key: "reserved", label: "Gereserveerd", value: (row) => row.reserved },
+  { key: "resale", label: "In de resale", value: (row) => row.resale },
+  { key: "free", label: "Vrij", value: (row) => row.free },
+  { key: "occupancy", label: "Bezetting", value: (row) => (row.capacity > 0 ? row.sold / row.capacity : -1) },
+];
+
+/** Klik op een kolomkop: eerst A→Z of laag→hoog, nog een keer andersom. */
 function AreaTable({ rows }: { rows: AreaOccupancy[] }) {
+  const [sort, setSort] = useState<{ key: AreaSortKey; ascending: boolean }>({ key: "area", ascending: true });
+
+  const sorted = useMemo(() => {
+    const column = AREA_COLUMNS.find((c) => c.key === sort.key) ?? AREA_COLUMNS[0];
+    const direction = sort.ascending ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const x = column.value(a);
+      const y = column.value(b);
+      const order =
+        typeof x === "string" || typeof y === "string"
+          ? String(x).localeCompare(String(y), "nl", { numeric: true })
+          : x - y;
+      // Bij gelijke waarden op vaknaam, zodat de volgorde vast ligt.
+      return order * direction || a.area.localeCompare(b.area, "nl", { numeric: true });
+    });
+  }, [rows, sort]);
+
+  const toggle = (key: AreaSortKey) =>
+    setSort((current) => (current.key === key ? { key, ascending: !current.ascending } : { key, ascending: true }));
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full max-w-3xl text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
-            <th className="py-2 pr-4 font-normal">Vak</th>
-            <th className="py-2 pr-4 font-normal text-right">Capaciteit</th>
-            <th className="py-2 pr-4 font-normal text-right">Verkocht</th>
-            <th className="py-2 pr-4 font-normal text-right">Gereserveerd</th>
-            <th className="py-2 pr-4 font-normal text-right">In de resale</th>
-            <th className="py-2 pr-4 font-normal text-right">Vrij</th>
-            <th className="py-2 font-normal text-right">Bezetting</th>
+            {AREA_COLUMNS.map((column, i) => {
+              const active = sort.key === column.key;
+              const Icon = !active ? ArrowUpDown : sort.ascending ? ArrowUp : ArrowDown;
+              return (
+                <th
+                  key={column.key}
+                  aria-sort={active ? (sort.ascending ? "ascending" : "descending") : "none"}
+                  className={`py-2 font-normal ${i < AREA_COLUMNS.length - 1 ? "pr-4" : ""} ${i > 0 ? "text-right" : ""}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggle(column.key)}
+                    className={`inline-flex items-center gap-1 uppercase tracking-wide hover:text-foreground transition-colors ${
+                      active ? "text-foreground" : ""
+                    }`}
+                  >
+                    {column.label}
+                    <Icon className={`h-3 w-3 ${active ? "text-primary" : "opacity-40"}`} aria-hidden="true" />
+                  </button>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {sorted.map((row) => (
             <tr key={row.area} className="border-b border-border last:border-0">
               <td className="py-1.5 pr-4 font-medium">{row.area}</td>
               <td className="py-1.5 pr-4 text-right tabular-nums">{number.format(row.capacity)}</td>
