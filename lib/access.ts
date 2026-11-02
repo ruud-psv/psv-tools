@@ -78,6 +78,7 @@ const API_PAGES: Record<string, string[]> = {
   "/api/submit": ["/dashboard/copy-generator", "/dashboard/huisstijl-checker"],
   "/api/ticket-insights": ["/dashboard/ticket-inzichten"],
   "/api/ticketing-herdgang": ["/dashboard/ticketing-herdgang"],
+  "/api/ticketing-stadion": ["/dashboard/ticketing-stadion"],
   "/api/utm-links": ["/dashboard/utm-builder"],
   "/api/utm-taxonomy": ["/dashboard/utm-builder"],
 };

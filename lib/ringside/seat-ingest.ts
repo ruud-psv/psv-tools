@@ -14,6 +14,7 @@
 
 import { ringsideFetch, RingsideRequestError, type RingsidePage } from "./client";
 import { readEventSales } from "./store";
+import { refreshStadionSummary } from "../ticketing-stadion/store";
 import {
   applyManifestCapacity,
   applyManifestRow,
@@ -329,6 +330,8 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   }
 
   if (changed.size || removed.length) await writeEventSeats(events, changed, removed);
+  // Ticketing Stadion leest een kleine samenvatting in plaats van de stoelenkaarten.
+  await refreshStadionSummary(events, changed, removed);
 
   // Pas nu de data veilig staat, mag de voortgang mee.
   state.manifestsCursor = cursors.manifests;

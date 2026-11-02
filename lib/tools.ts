@@ -134,6 +134,15 @@ export const insightTools: ToolEntry[] = [
     icon: Ticket,
   },
   {
+    name: "Ticketing Stadion",
+    title: "Ticketverkoop Philips Stadion volgen",
+    description:
+      "Bezetting, verkooptempo en vergelijking met eerdere thuiswedstrijden van PSV.",
+    href: "/dashboard/ticketing-stadion",
+    icon: Ticket,
+    badge: "Beta",
+  },
+  {
     name: "Ticketing Herdgang",
     title: "Bezetting De Herdgang bekijken",
     description:
