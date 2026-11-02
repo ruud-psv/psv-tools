@@ -3,9 +3,8 @@
  *
  * Het parsen gebeurt hier en niet op de server omdat een bronexport 100.000 tot
  * een miljoen regels telt (tientallen MB's) en een serverless function maximaal
- * ~4,5 MB request body aanneemt. Hetzelfde patroon als
- * `app/dashboard/ticket-inzichten/upload/page.tsx`: streamend lezen, en alleen
- * de compacte index gaat over de lijn.
+ * ~4,5 MB request body aanneemt. Dus streamend lezen, en alleen de compacte
+ * index gaat over de lijn.
  *
  * Bijkomend: het bestand zelf verlaat dit apparaat nooit. Wat wordt verstuurd
  * zijn 48-bits hashes van de ID's met een datum — niet terug te rekenen.

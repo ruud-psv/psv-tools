@@ -74,9 +74,8 @@ const API_PAGES: Record<string, string[]> = {
   "/api/paid-ads": ["/dashboard/paid-ads"],
   "/api/playable": ["/dashboard/landingspaginas"],
   "/api/playable-insights": ["/dashboard/landingspaginas"],
-  "/api/ringside": ["/dashboard/ticket-inzichten-new", "/dashboard/aangrenzende-stoelen"],
+  "/api/ringside": ["/dashboard/aangrenzende-stoelen", "/dashboard/ticketing-stadion"],
   "/api/submit": ["/dashboard/copy-generator", "/dashboard/huisstijl-checker"],
-  "/api/ticket-insights": ["/dashboard/ticket-inzichten"],
   "/api/ticketing-herdgang": ["/dashboard/ticketing-herdgang"],
   "/api/ticketing-stadion": ["/dashboard/ticketing-stadion"],
   "/api/utm-links": ["/dashboard/utm-builder"],
@@ -101,6 +100,15 @@ export function parseAdminEmails(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Pagina's die zijn opgegaan in een andere. Wie bij "specifieke pagina's" de
+ * oude had aangevinkt, houdt zo toegang tot de nieuwe.
+ */
+const REPLACED_PAGES: Record<string, string> = {
+  "/dashboard/ticket-inzichten": "/dashboard/ticketing-stadion",
+  "/dashboard/ticket-inzichten-new": "/dashboard/ticketing-stadion",
+};
+
 export function pagesForLevel(level: AccessLevel, custom: string[] = []): string[] {
   switch (level) {
     case "admin":
@@ -108,8 +116,10 @@ export function pagesForLevel(level: AccessLevel, custom: string[] = []): string
       return [...ALL_PAGES];
     case "all":
       return [...REGULAR_PAGES];
-    case "custom":
-      return ALL_PAGES.filter((href) => custom.includes(href));
+    case "custom": {
+      const chosen = custom.map((href) => REPLACED_PAGES[href] ?? href);
+      return ALL_PAGES.filter((href) => chosen.includes(href));
+    }
   }
 }
 
@@ -159,7 +169,9 @@ export function sanitizeUserAccess(input: unknown): Omit<UserAccess, "updatedAt"
   const { email, level, pages } = input as Record<string, unknown>;
   if (typeof email !== "string" || !isValidEmail(normalizeEmail(email))) return null;
   if (!ACCESS_LEVELS.some((l) => l.value === level)) return null;
-  const chosen = Array.isArray(pages) ? pages.filter((p): p is string => typeof p === "string") : [];
+  const chosen = Array.isArray(pages)
+    ? pages.filter((p): p is string => typeof p === "string").map((p) => REPLACED_PAGES[p] ?? p)
+    : [];
   return {
     email: normalizeEmail(email),
     level: level as AccessLevel,

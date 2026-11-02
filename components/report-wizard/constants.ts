@@ -74,11 +74,8 @@ export const WEB_SITES: PresetOption[] = [
 
 export const TICKET_CATEGORIES: PresetOption[] = [
   { value: "all", label: "Alle categorieën" },
+  // Sinds de overstap naar Ringside alleen thuiswedstrijden van PSV 1.
   { value: "Wedstrijden", label: "Wedstrijden" },
-  { value: "Tours", label: "Tours" },
-  { value: "Museum", label: "Museum" },
-  { value: "Jeugd", label: "Jeugd" },
-  { value: "Evenementen", label: "Evenementen" },
 ];
 
 export interface SourceMeta {

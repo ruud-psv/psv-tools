@@ -560,6 +560,10 @@ Wat de probe teruggeeft:
 
 ## 5. Vervolg: van XML-feed naar Ringside
 
+> **Afgerond (november 2026).** Ticket Inzichten is vervangen door Ticketing Stadion en
+> `/api/ticket-feed` leest nu Ringside; de snapshot-cron is weg. Zie
+> [ticketing-stadion.md](ticketing-stadion.md). Hieronder het oorspronkelijke plan.
+
 `/api/ticket-feed` is het enige punt waar de XML-feed de applicatie binnenkomt.
 Alle vijf de consumenten (het Ticket Inzichten-dashboard, de rapportagewizard,
 het dashboard-overzicht en twee share-pagina's) lezen dezelfde vorm:

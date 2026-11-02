@@ -126,21 +126,12 @@ export const insightTools: ToolEntry[] = [
     icon: Megaphone,
   },
   {
-    name: "Ticket Inzichten",
-    title: "Ticketverkoop volgen",
-    description:
-      "Real-time beschikbaarheid voor wedstrijden, tours, museum en andere evenementen.",
-    href: "/dashboard/ticket-inzichten",
-    icon: Ticket,
-  },
-  {
     name: "Ticketing Stadion",
     title: "Ticketverkoop Philips Stadion volgen",
     description:
       "Bezetting, verkooptempo en vergelijking met eerdere thuiswedstrijden van PSV.",
     href: "/dashboard/ticketing-stadion",
     icon: Ticket,
-    badge: "Beta",
   },
   {
     name: "Ticketing Herdgang",
@@ -195,7 +186,6 @@ export const insightTools: ToolEntry[] = [
 /** Het BETA-blok in de footer van de sidebar: verschijnt bij hover op "Beta tools". */
 export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Kleurplaat Creator", href: "/dashboard/kleurplaat", icon: Palette },
-  { name: "Ringside", href: "/dashboard/ticket-inzichten-new", icon: Ticket },
   { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
   { name: "Contact Filter Import", href: "/dashboard/contact-filter-import", icon: ListFilter },

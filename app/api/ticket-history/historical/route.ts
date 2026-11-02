@@ -22,8 +22,9 @@ import {
  * en checken daarom zélf de sessie: `middleware.ts` laat `/api/*` ongemoeid
  * door, dus daarop vertrouwen zou de route openzetten.
  *
- * Het aggregeren gebeurt in de browser (zie
- * `app/dashboard/ticket-inzichten/upload/page.tsx`): een export van ~450.000
+ * Het aggregeren gebeurde in de browser, op de uploadpagina van Ticket
+ * Inzichten (verwijderd bij de overstap naar Ticketing Stadion; de opgeslagen
+ * historie blijft voor bestaande deellinks): een export van ~450.000
  * regels is 60-90 MB en past niet in de ~4,5 MB request body van een
  * serverless function. Wat hier binnenkomt is de samenvatting — gemeten enkele
  * tientallen kB, ook met de uitsplitsing per prijstype erbij.

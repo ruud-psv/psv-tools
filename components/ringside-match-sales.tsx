@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TicketSalesChart } from "@/components/ticket-sales-chart";
 import { offsetsToDailyPoints } from "@/lib/ringside/daily-sales";
+import { isPsvHomeMatch } from "@/lib/aangrenzende-stoelen/events";
 import { filterMatches, seasonsOf } from "@/lib/ringside/match-filter";
 import type { ComparisonInput, ComparisonMode } from "@/lib/ticket-sales-comparison";
 
@@ -60,7 +61,7 @@ function soldWithin(perOffset: Record<string, number>, offset: number): number {
   return total;
 }
 
-export function RingsideMatchSales() {
+export function RingsideMatchSales({ onlyPsvHome = false }: { onlyPsvHome?: boolean } = {}) {
   const [matches, setMatches] = useState<MatchSummary[]>([]);
   const [status, setStatus] = useState<IngestStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,13 +77,14 @@ export function RingsideMatchSales() {
     fetch("/api/ringside/matches", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        setMatches(data.matches ?? []);
+        const all: MatchSummary[] = data.matches ?? [];
+        setMatches(onlyPsvHome ? all.filter((match) => isPsvHomeMatch(match.name)) : all);
         setStatus(data.status ?? null);
         setError(data.error ?? null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Ophalen mislukt"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [onlyPsvHome]);
 
   // Alleen de geselecteerde wedstrijden hebben hun verkoopreeks nodig; de lijst
   // zelf blijft daardoor klein, ook met duizenden wedstrijden.

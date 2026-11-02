@@ -1,12 +1,12 @@
 # Ticketing Stadion
 
-De ticketverkoop van de thuiswedstrijden van PSV 1 in het Philips Stadion. Vervangt straks
-Ticket Inzichten, dat op de XML-feed van de ticketshop draait. Overige events (tours,
-museum, jeugd) vallen daarmee weg.
+De ticketverkoop van de thuiswedstrijden van PSV 1 in het Philips Stadion. Vervangt Ticket
+Inzichten, dat op de XML-feed van de ticketshop draaide, en de Ringside-pagina. Overige
+events (tours, museum, jeugd) zijn daarmee weggevallen.
 
 Pagina: `/dashboard/ticketing-stadion`.
 
-## Fase 1: overzicht (nu)
+## Fase 1: overzicht
 
 Een tabel van de komende thuiswedstrijden, de eerstvolgende bovenaan. Per wedstrijd verkocht, vrij, bezetting, verkocht in de laatste 7 dagen en het verschil met eerder; klik op een rij voor de details:
 
@@ -75,13 +75,31 @@ API: `GET /api/ticketing-stadion/<eventId>` leest één stoelenkaart en de verko
 `GET /api/ticketing-stadion/verkoop?ids=…` geeft de verkoop per dag van de gekozen
 eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
 
-## Volgende fases
+## Fase 4: Ticket Inzichten vervangen
 
-3. **Seizoen, AI-analyse en deellinks.** Seizoenkaart tegenover losse verkoop, als de data
-   dat toelaat (eerst nagaan met `/api/ringside/probe`).
-4. **Vervangen:** menu, doorverwijzing van `/dashboard/ticket-inzichten`, de Ringside-pagina
-   erin laten opgaan, de rapportagewizard en de deelpagina's omzetten, en de XML-feed, de
-   snapshot-cron en de upload van historie weghalen.
+- **Menu:** Ticket Inzichten en de beta-pagina Ringside zijn weg; Ticketing Stadion staat
+  op hun plek, zonder Beta-label. `/dashboard/ticket-inzichten` (ook `/upload`) en
+  `/dashboard/ticket-inzichten-new` verwijzen door (`next.config.ts`).
+- **Toegang:** wie bij "specifieke pagina's" Ticket Inzichten of Ringside had
+  aangevinkt, mag Ticketing Stadion zien (`REPLACED_PAGES` in `lib/access.ts`).
+- **Gespeelde wedstrijden vergelijken:** de zoekfunctie van de Ringside-pagina staat onder
+  het overzicht (`components/ringside-match-sales.tsx`, alleen thuiswedstrijden van PSV 1).
+- **`/api/ticket-feed`** leest niet meer de XML-feed maar de samenvatting van Ticketing
+  Stadion, in dezelfde vorm (`lib/ticketing-stadion/feed.ts`). Daardoor werken de
+  rapportage-generator en de deellinks door, maar alleen nog met thuiswedstrijden van
+  PSV 1. In de rapportage-generator is "Wedstrijden" de enige categorie.
+- **`/api/ticket-history`** geeft voor een wedstrijd uit Ringside het verloop uit de
+  verkoop per dag; voor oude events uit de XML-feed nog de opgeslagen metingen, zodat
+  bestaande deellinks blijven werken.
+- **Weg:** het dashboard en de uploadpagina van Ticket Inzichten, de AI-routes
+  `/api/ticket-insights`, en de cron `/api/ticket-history/snapshot` die de XML-feed elke
+  twee uur uitlas. De eerder geüploade historie (`/api/ticket-history/historical`) blijft
+  staan voor de vergelijking op bestaande deellinks, maar is niet meer aan te vullen.
+
+## Later (fase 3)
+
+Seizoensoverzicht, AI-analyse, deellinks vanuit Ticketing Stadion en seizoenkaart tegenover
+losse verkoop (eerst nagaan met `/api/ringside/probe` of de data dat toelaat).
 
 ## Open punten
 

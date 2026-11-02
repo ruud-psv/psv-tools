@@ -55,12 +55,20 @@ test("admin en ADMIN_EMAILS mogen het beheer in", () => {
 });
 
 test("paden matchen op segmentgrens en langste pagina wint", () => {
-  assert.equal(pageForPath("/dashboard/ticket-inzichten-new"), "/dashboard/ticket-inzichten-new");
-  assert.equal(pageForPath("/dashboard/ticket-inzichten"), "/dashboard/ticket-inzichten");
+  assert.equal(pageForPath("/dashboard/ticketing-stadion/123"), "/dashboard/ticketing-stadion");
   assert.equal(pageForPath("/dashboard/auth/google/callback"), null);
-  const access = resolveAccess("x@psv.nl", [{ email: "x@psv.nl", level: "custom", pages: ["/dashboard/ticket-inzichten"] }], []);
-  assert.ok(!canAccessPath(access, "/dashboard/ticket-inzichten-new"));
+  const access = resolveAccess("x@psv.nl", [{ email: "x@psv.nl", level: "custom", pages: ["/dashboard/playable"] }], []);
   assert.ok(!canAccessApi(access, "/api/playable-insights"));
+});
+
+test("wie Ticket Inzichten of Ringside mocht zien, mag Ticketing Stadion zien", () => {
+  for (const old of ["/dashboard/ticket-inzichten", "/dashboard/ticket-inzichten-new"]) {
+    const access = resolveAccess("x@psv.nl", [{ email: "x@psv.nl", level: "custom", pages: [old] }], []);
+    assert.ok(canAccessPath(access, "/dashboard/ticketing-stadion"));
+    assert.ok(canAccessPath(access, "/dashboard/ticketing-stadion/abc"));
+    assert.ok(canAccessApi(access, "/api/ticketing-stadion"));
+    assert.ok(canAccessApi(access, "/api/ringside/matches"));
+  }
 });
 
 test("sanitizeUserAccess normaliseert en filtert onbekende pagina's", () => {

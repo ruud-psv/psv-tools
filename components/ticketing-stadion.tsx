@@ -12,6 +12,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
+import { RingsideMatchSales } from "@/components/ringside-match-sales";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
@@ -361,6 +362,17 @@ export function TicketingStadion() {
           Vernieuwen
         </Button>
       </div>
+
+      <section className="space-y-4 pt-4">
+        <div>
+          <h2 className="text-xl">Gespeelde wedstrijden vergelijken</h2>
+          <p className="text-sm text-muted-foreground max-w-3xl">
+            Zoek een eerdere thuiswedstrijd en zie de verkoop per dag tot de aftrap. Leg er tot drie andere naast, zoals
+            dezelfde tegenstander in een ander seizoen.
+          </p>
+        </div>
+        <RingsideMatchSales onlyPsvHome />
+      </section>
 
       {(seats.lastError || sales.lastError) && (
         <p className="flex items-start gap-2 text-sm text-muted-foreground">
