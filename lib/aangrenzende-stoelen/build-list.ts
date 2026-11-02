@@ -3,7 +3,7 @@ import { buildSeatMaps, type SeatMaps } from "@/lib/aangrenzende-stoelen/seat-ma
 import { CATCH_UP_SECONDS } from "@/lib/aangrenzende-stoelen/settings";
 import { readHolderList, type HolderListMeta } from "@/lib/aangrenzende-stoelen/store";
 import { isRingsideConfigured } from "@/lib/ringside/auth";
-import { runLockedSeatIngest } from "@/lib/ringside/seat-ingest";
+import { catchUpSeatIngest } from "@/lib/ringside/seat-ingest";
 import { toNeighborInput } from "@/lib/ringside/seat-state";
 import { readEventSeats, readSeatState } from "@/lib/ringside/seat-store";
 
@@ -68,11 +68,9 @@ export async function buildNeighborList({ eventId, maxSeatsPerRelation }: ListRe
   let catchUp: CatchUp = "overgeslagen";
   let dataAsOf = before.caughtUpAt;
   if (isRingsideConfigured()) {
-    const outcome = await runLockedSeatIngest(CATCH_UP_SECONDS * 1000);
-    if (outcome.ran) {
-      catchUp = outcome.error ? "mislukt" : "bijgewerkt";
-      dataAsOf = outcome.state.caughtUpAt;
-    }
+    const outcome = await catchUpSeatIngest(CATCH_UP_SECONDS * 1000);
+    catchUp = outcome.catchUp;
+    if (outcome.catchUp !== "overgeslagen" && outcome.state) dataAsOf = outcome.state.caughtUpAt;
   }
 
   const [event, list] = await Promise.all([readEventSeats(eventId), readHolderList()]);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { CATCH_UP_SECONDS } from "@/lib/aangrenzende-stoelen/settings";
 import { isRingsideConfigured } from "@/lib/ringside/auth";
-import { runLockedSeatIngest } from "@/lib/ringside/seat-ingest";
+import { catchUpSeatIngest, type CatchUp } from "@/lib/ringside/seat-ingest";
 import { readEventSeats, readSeatState } from "@/lib/ringside/seat-store";
 import { HERDGANG_AREAS, mapArea } from "@/lib/ticketing-herdgang/herdgang";
 import { occupancyByArea } from "@/lib/ticketing-herdgang/occupancy";
@@ -39,12 +39,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let catchUp: "bijgewerkt" | "overgeslagen" | "mislukt" = "overgeslagen";
+    let catchUp: CatchUp = "overgeslagen";
     let state = before;
     if (isRingsideConfigured()) {
-      const outcome = await runLockedSeatIngest(CATCH_UP_SECONDS * 1000);
-      state = outcome.state;
-      if (outcome.ran) catchUp = outcome.error ? "mislukt" : "bijgewerkt";
+      const outcome = await catchUpSeatIngest(CATCH_UP_SECONDS * 1000);
+      catchUp = outcome.catchUp;
+      state = outcome.state ?? before;
     }
 
     const event = await readEventSeats(eventId);
@@ -64,6 +64,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ticketing-herdgang] bezetting mislukt:", message);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: `De bezetting kon niet worden geladen: ${message}` }, { status: 500 });
   }
 }

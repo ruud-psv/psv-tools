@@ -39,6 +39,20 @@ import {
 const PAGE_TIMEOUT_MS = 60_000;
 
 /**
+ * Hoe lang één pagina mag duren: nooit langer dan `PAGE_TIMEOUT_MS`, en niet
+ * veel langer dan het budget nog toelaat. Zonder die tweede grens kan één
+ * hangende pagina de korte run van een knop (25 seconden budget) tot voorbij
+ * de limiet van de functie (60 seconden) rekken; dan breekt Vercel het verzoek
+ * af en krijgt de gebruiker een kale 502/504.
+ */
+function pageTimeout(deadline: number): number {
+  return Math.min(PAGE_TIMEOUT_MS, Math.max(deadline - Date.now(), 0) + PAGE_GRACE_MS);
+}
+
+/** Speling boven het budget voor een pagina die al onderweg is. */
+const PAGE_GRACE_MS = 10_000;
+
+/**
  * Wachttijden voor een nieuwe poging na een tijdelijke fout. Ringside gaf bij
  * de eerste vulling een `503 Connection reset by peer` op de allereerste pagina;
  * zoiets is meestal na een paar seconden voorbij.
@@ -61,7 +75,7 @@ async function fetchPage(path: string, cursor: string | null, deadline: number):
     try {
       res = await ringsideFetch(path, {
         searchParams: cursor ? { cursor } : {},
-        signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(pageTimeout(deadline)),
       });
     } catch (error) {
       failure = error;
@@ -400,4 +414,25 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   await writeSeatState(state);
   const readAfter = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead;
   return { ran: true, state, result, error, progressed: readAfter > readBefore };
+}
+
+export type CatchUp = "bijgewerkt" | "overgeslagen" | "mislukt";
+
+/**
+ * Korte inhaalslag vóór het tonen van data, voor de knoppen "Maak lijst" en
+ * "Toon bezetting". Gooit nooit: lukt het bijwerken niet — Ringside traag of
+ * onbereikbaar, of een fout bij het opslaan — dan rekent de pagina met de
+ * stoelstatus die er al lag, en zegt dat via `catchUp`.
+ */
+export async function catchUpSeatIngest(
+  budgetMs: number
+): Promise<{ catchUp: CatchUp; state: SeatIngestState | null }> {
+  try {
+    const outcome = await runLockedSeatIngest(budgetMs);
+    if (!outcome.ran) return { catchUp: "overgeslagen", state: outcome.state };
+    return { catchUp: outcome.error ? "mislukt" : "bijgewerkt", state: outcome.state };
+  } catch (error) {
+    console.error("[ringside/stoelen] inhaalslag mislukt:", error instanceof Error ? error.message : error);
+    return { catchUp: "mislukt", state: null };
+  }
 }

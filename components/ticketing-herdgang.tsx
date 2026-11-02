@@ -185,8 +185,17 @@ export function TicketingHerdgang() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
+      // Een time-out of crash van de functie geeft Vercel terug als HTML, niet
+      // als JSON; dan een leesbare melding in plaats van een parse-fout.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.error ??
+            (res.status === 502 || res.status === 504
+              ? "De server deed er te lang over of liep vast. Probeer het over een minuut opnieuw."
+              : `Status ${res.status}`)
+        );
+      }
       setResult(data);
     } catch (caught) {
       setResultError(caught instanceof Error ? caught.message : String(caught));
