@@ -13,6 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { RingsideMatchSales } from "@/components/ringside-match-sales";
+import { StadionChat } from "@/components/stadion-chat";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
@@ -348,6 +349,17 @@ export function TicketingStadion() {
       )}
 
       {matches.length > 0 && <MatchTable matches={matches} />}
+
+      {matches.length > 0 && (
+        <StadionChat
+          suggestions={[
+            "Welke wedstrijd loopt het meest achter op vorig seizoen?",
+            "Hoeveel is er de afgelopen week verkocht?",
+            "Waar zijn nog de meeste plaatsen vrij?",
+          ]}
+        />
+      )}
+
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <p className="max-w-3xl">

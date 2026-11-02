@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Armchair, ArrowLeft, Loader2, X } from "lucide-react";
+import { AlertTriangle, Armchair, ArrowLeft, Check, Link2, Loader2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StadiumOccupancyMap } from "@/components/stadium-occupancy-map";
+import { StadionChat } from "@/components/stadion-chat";
 import { TicketSalesChart } from "@/components/ticket-sales-chart";
 import {
   daysLabel,
@@ -104,24 +105,33 @@ function AreaTable({ rows }: { rows: AreaOccupancy[] }) {
 }
 
 /** De verkoop per dag van deze wedstrijd, met eerdere thuiswedstrijden ernaast. */
-function SalesSection({ data }: { data: MatchResponse }) {
-  const { match, sales, comparable, comparison } = data;
-  const [selected, setSelected] = useState<string[]>(() =>
-    comparison.sameOpponent ? [comparison.sameOpponent.eventId] : comparable.slice(0, 1).map((m) => m.productId)
-  );
-  const [series, setSeries] = useState<Record<string, SalesSeries>>({});
+function SalesSection({
+  data,
+  salesUrl,
+  selected,
+  setSelected,
+}: {
+  data: MatchResponse;
+  salesUrl: (ids: string[]) => string;
+  selected: string[];
+  setSelected: (update: (current: string[]) => string[]) => void;
+}) {
+  const { match, sales, comparable } = data;
+  // `null`: opgevraagd, maar geen verkoop gevonden. Zo wordt hij niet steeds opnieuw opgevraagd.
+  const [series, setSeries] = useState<Record<string, SalesSeries | null>>({});
   const [mode, setMode] = useState<ComparisonMode>("perDag");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const missing = selected.filter((id) => !series[id]);
+    const missing = selected.filter((id) => series[id] === undefined);
     if (missing.length === 0) return;
     let cancelled = false;
-    fetchJson<{ matches: SalesSeries[] }>(`/api/ticketing-stadion/verkoop?ids=${missing.join(",")}`)
+    fetchJson<{ matches: SalesSeries[] }>(salesUrl(missing))
       .then(({ matches }) => {
         if (cancelled) return;
         setSeries((current) => {
           const next = { ...current };
+          for (const id of missing) next[id] = null;
           for (const m of matches) next[m.productId] = m;
           return next;
         });
@@ -131,7 +141,7 @@ function SalesSection({ data }: { data: MatchResponse }) {
     return () => {
       cancelled = true;
     };
-  }, [selected, series]);
+  }, [selected, series, salesUrl]);
 
   const points = useMemo(
     () => (sales && match.eventDate ? offsetsToDailyPoints(sales.perOffset, match.eventDate) : []),
@@ -234,21 +244,101 @@ function SalesSection({ data }: { data: MatchResponse }) {
   );
 }
 
-export function TicketingStadionMatch({ eventId }: { eventId: string }) {
+/** Maakt een deellink en zet hem op het klembord. */
+function ShareButton({ eventId }: { eventId: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "copied" | "shown">("idle");
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function share() {
+    setState("busy");
+    setError(null);
+    try {
+      const res = await fetch(`/api/ticketing-stadion/${encodeURIComponent(eventId)}/deel`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error ?? `Status ${res.status}`);
+      setUrl(data.url);
+      try {
+        await navigator.clipboard.writeText(data.url);
+        setState("copied");
+      } catch {
+        // Geen toegang tot het klembord: dan de link tonen om zelf te kopiëren.
+        setState("shown");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+      setState("idle");
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <button type="button" onClick={share} disabled={state === "busy"} className="btn btn--medium btn--outlined">
+        {state === "busy" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : state === "copied" ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Link2 className="h-4 w-4" />
+        )}
+        {state === "copied" ? "Link gekopieerd" : "Deel link"}
+      </button>
+      {url && (
+        <p className="text-xs text-muted-foreground max-w-md break-all">
+          Iedereen met deze link ziet de pagina, zonder in te loggen:{" "}
+          <a href={url} target="_blank" rel="noreferrer" className="text-foreground underline">
+            {url}
+          </a>
+        </p>
+      )}
+      {error && <p className="text-xs text-error">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * De wedstrijdpagina. Met `eventId` de interne pagina (met deellink en chat),
+ * met `shareToken` de openbare versie via een deellink.
+ */
+export function TicketingStadionMatch(props: { eventId: string } | { shareToken: string }) {
+  const shared = "shareToken" in props;
+  const token = shared ? props.shareToken : "";
+  const internalId = shared ? "" : props.eventId;
+  const dataUrl = shared
+    ? `/api/share/stadion?token=${encodeURIComponent(token)}`
+    : `/api/ticketing-stadion/${encodeURIComponent(internalId)}`;
+  const salesUrl = useCallback(
+    (ids: string[]) =>
+      shared
+        ? `/api/share/stadion/verkoop?token=${encodeURIComponent(token)}&ids=${ids.join(",")}`
+        : `/api/ticketing-stadion/verkoop?ids=${ids.join(",")}`,
+    [shared, token]
+  );
+
   const [data, setData] = useState<MatchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    fetchJson<MatchResponse>(`/api/ticketing-stadion/${encodeURIComponent(eventId)}`)
-      .then((result) => !cancelled && setData(result))
+    fetchJson<MatchResponse>(dataUrl)
+      .then((result) => {
+        if (cancelled) return;
+        setData(result);
+        // Standaard dezelfde tegenstander de vorige keer, anders de laatste thuiswedstrijd.
+        setCompareIds(
+          result.comparison.sameOpponent
+            ? [result.comparison.sameOpponent.eventId]
+            : result.comparable.slice(0, 1).map((m) => m.productId)
+        );
+      })
       .catch((caught) => !cancelled && setError(caught instanceof Error ? caught.message : String(caught)));
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [dataUrl]);
 
-  const back = (
+  const back = shared ? null : (
     <Link
       href="/dashboard/ticketing-stadion"
       className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
@@ -292,11 +382,17 @@ export function TicketingStadionMatch({ eventId }: { eventId: string }) {
     <div className="space-y-6">
       <div className="space-y-3">
         {back}
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl">{match.name ?? "Onbekende wedstrijd"}</h1>
-          <span className={`tag ${match.daysOut <= 7 ? "" : "tag--outlined"}`}>{daysLabel(match.daysOut)}</span>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            {shared && <p className="label text-xs text-muted-foreground">PSV · Ticketing Stadion</p>}
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl">{match.name ?? "Onbekende wedstrijd"}</h1>
+              <span className={`tag ${match.daysOut <= 7 ? "" : "tag--outlined"}`}>{daysLabel(match.daysOut)}</span>
+            </div>
+            <p className="text-muted-foreground">{formatEventDate(match.eventDate)}</p>
+          </div>
+          {!shared && <ShareButton eventId={match.eventId} />}
         </div>
-        <p className="text-muted-foreground">{formatEventDate(match.eventDate)}</p>
       </div>
 
       {(!seats.capacityComplete || !seats.reservationComplete) && (
@@ -361,6 +457,19 @@ export function TicketingStadionMatch({ eventId }: { eventId: string }) {
         </CardContent>
       </Card>
 
+      {!shared && (
+        <StadionChat
+          eventId={match.eventId}
+          compareIds={compareIds}
+          suggestions={[
+            "Hoeveel tweetjes zijn er nog?",
+            "Welke vakken zijn het minst vol?",
+            "Loopt de verkoop voor of achter op de vorige keer?",
+            "Waar zitten nog 4 stoelen naast elkaar?",
+          ]}
+        />
+      )}
+
       <Card>
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -372,13 +481,15 @@ export function TicketingStadionMatch({ eventId }: { eventId: string }) {
                 {number.format(groups.threeOrMore)}× drie of meer ({number.format(groups.seatsInThreeOrMore)} stoelen).
               </p>
             </div>
-            <Link
-              href="/dashboard/aangrenzende-stoelen"
-              className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Armchair className="h-3.5 w-3.5" />
-              Aangrenzende stoelen
-            </Link>
+            {!shared && (
+              <Link
+                href="/dashboard/aangrenzende-stoelen"
+                className="inline-flex items-center gap-1.5 text-xs font-heading uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Armchair className="h-3.5 w-3.5" />
+                Aangrenzende stoelen
+              </Link>
+            )}
           </div>
           <StadiumOccupancyMap areas={match.areas} seatMaps={data.seatMaps} groupsByArea={freeGroups.byArea} />
           <details className="text-sm">
@@ -408,7 +519,7 @@ export function TicketingStadionMatch({ eventId }: { eventId: string }) {
               {!salesStatus.complete && " De verkoop per dag is nog niet helemaal ingelezen; de lijnen zijn ondergrenzen."}
             </p>
           </div>
-          <SalesSection data={data} />
+          <SalesSection data={data} salesUrl={salesUrl} selected={compareIds} setSelected={setCompareIds} />
         </CardContent>
       </Card>
 

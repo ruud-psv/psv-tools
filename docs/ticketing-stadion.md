@@ -96,10 +96,44 @@ eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
   twee uur uitlas. De eerder geüploade historie (`/api/ticket-history/historical`) blijft
   staan voor de vergelijking op bestaande deellinks, maar is niet meer aan te vullen.
 
+## Deellink
+
+"Deel link" op de wedstrijdpagina maakt een link naar `/share/stadion?token=…`. Wie die
+heeft, ziet de wedstrijdpagina zonder in te loggen: dezelfde cijfers, plattegrond en
+grafiek, zonder de chat, de deelknop en links naar interne pagina's.
+
+- **Token:** alleen het wedstrijd-id, ondertekend met een sleutel afgeleid van
+  `SESSION_SECRET` (`lib/ticketing-stadion/share.ts`). Een verzonnen of aangepast token
+  geeft "Deze link is ongeldig". Wordt `SESSION_SECRET` vervangen, dan werken alle
+  deellinks niet meer.
+- **Geen vervaldatum:** na de wedstrijd verdwijnt hij uit de stoelstatus en meldt de link
+  dat hij niet meer beschikbaar is.
+- **Routes:** `POST /api/ticketing-stadion/<id>/deel` (met login) maakt de link;
+  `GET /api/share/stadion` en `/api/share/stadion/verkoop` (zonder login, met token) geven de
+  data. Ze gebruiken dezelfde `loadStadionMatch()` als de pagina zelf.
+
+## Vraag het de data (chat)
+
+Op het overzicht en de wedstrijdpagina staat een chat: vragen over wat op de pagina staat,
+zoals "hoeveel tweetjes zijn er nog?" of "loopt de verkoop voor op de vorige keer?". Niet
+op de deellink.
+
+- **Data:** de browser stuurt alleen de vragen en welke pagina hij toont (wedstrijd en de
+  wedstrijden in de grafiek). De server rekent de data opnieuw uit met dezelfde functies
+  als de pagina en zet die als tekst in de prompt (`lib/ticketing-stadion/context.ts`).
+  Voor een wedstrijd zijn dat de cijfers, per vak de bezetting en elk groepje vrije stoelen
+  met rij en stoelnummers, en de verkoop per dag. Bij een vol stadion is dat zo'n 6.500
+  tokens.
+- **Model:** `claude-opus-5-5` op effort `low`, met de refusal-fallback van de API
+  (`fallbacks: "default"`). De data staat in een gecachet deel van de systeemprompt, zodat
+  vervolgvragen goedkoper zijn.
+- **Sleutel:** `ANTHROPIC_API_KEY` in Vercel, dezelfde als de andere AI-functies.
+- Route: `POST /api/ticketing-stadion/vraag` (met login).
+
 ## Later (fase 3)
 
-Seizoensoverzicht, AI-analyse, deellinks vanuit Ticketing Stadion en seizoenkaart tegenover
-losse verkoop (eerst nagaan met `/api/ringside/probe` of de data dat toelaat).
+Seizoensoverzicht en seizoenkaart tegenover losse verkoop (eerst nagaan met
+`/api/ringside/probe` of de data dat toelaat).
 
 ## Open punten
 
