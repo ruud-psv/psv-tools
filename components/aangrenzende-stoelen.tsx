@@ -127,6 +127,19 @@ function downloadCsv(result: ListResult) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * De melding bij een mislukt verzoek. Een time-out of crash van de functie
+ * geeft Vercel terug als HTML, niet als JSON; dan een leesbare melding in
+ * plaats van een parse-fout.
+ */
+function responseError(res: Response, data: { error?: string }): string {
+  if (data.error) return data.error;
+  if (res.status === 502 || res.status === 504) {
+    return "De server deed er te lang over of liep vast. Probeer het over een minuut opnieuw.";
+  }
+  return `Status ${res.status}`;
+}
+
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div>
@@ -227,8 +240,8 @@ export function AangrenzendeStoelen() {
           dmid: dmid.trim() || defaultDmid(sendDate),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(responseError(res, data));
       setPushed(data);
     } catch (caught) {
       setPushError(caught instanceof Error ? caught.message : String(caught));
@@ -247,8 +260,8 @@ export function AangrenzendeStoelen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId, maxSeatsPerRelation: maxSeats ? Number(maxSeats) : null }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Status ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(responseError(res, data));
       setResult(data);
     } catch (caught) {
       setMakeError(caught instanceof Error ? caught.message : String(caught));

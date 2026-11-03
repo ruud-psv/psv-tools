@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { buildNeighborList, ListError, parseListRequest } from "@/lib/aangrenzende-stoelen/build-list";
 import { maileonName } from "@/lib/aangrenzende-stoelen/maileon";
+import { BlobReadError } from "@/lib/blob/read";
 import {
   contactFilterUrl,
   createContactFilter,
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
     }
     const message = error instanceof Error ? error.message : String(error);
     console.error("[aangrenzende-stoelen] doorzetten naar Maileon mislukt:", message);
-    return NextResponse.json({ error: message }, { status: 502 });
+    const retry = error instanceof BlobReadError ? " Probeer het over een minuut opnieuw." : "";
+    return NextResponse.json({ error: `${message}${retry}` }, { status: 502 });
   }
 }

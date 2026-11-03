@@ -14,7 +14,8 @@
  */
 
 import { gunzipSync, gzipSync } from "node:zlib";
-import { get, put, del } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
+import { readPrivateBlob } from "../blob/read";
 import { summarizeEvent, type EventSeatState, type EventStates } from "./seat-state";
 
 const PREFIX = "ringside/stoelen";
@@ -104,14 +105,8 @@ export function isSeatIngestLocked(state: SeatIngestState, now = Date.now()): bo
   return Number.isFinite(until) && until > now;
 }
 
-async function readBytes(path: string): Promise<Buffer | null> {
-  const result = await get(path, { access: "private", useCache: false });
-  if (!result || !result.stream) return null;
-  return Buffer.from(await new Response(result.stream).arrayBuffer());
-}
-
 async function readJson<T>(path: string): Promise<T | null> {
-  const bytes = await readBytes(path);
+  const bytes = await readPrivateBlob(path);
   if (!bytes) return null;
   try {
     return JSON.parse(bytes.toString("utf8")) as T;
@@ -144,7 +139,7 @@ export async function readSeatIndex(): Promise<SeatIndex> {
 }
 
 export async function readEventSeats(eventId: string): Promise<EventSeatState | null> {
-  const bytes = await readBytes(eventPath(eventId));
+  const bytes = await readPrivateBlob(eventPath(eventId));
   if (!bytes) return null;
   try {
     return JSON.parse(gunzipSync(bytes).toString("utf8")) as EventSeatState;

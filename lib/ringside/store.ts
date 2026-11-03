@@ -22,7 +22,8 @@
  * helemaal door te lopen; daarna volstaat bijhouden vanaf de cursor.
  */
 
-import { get, put } from "@vercel/blob";
+import { put } from "@vercel/blob";
+import { readPrivateBlob } from "../blob/read";
 
 const STATE_PATH = "ringside/ingest-state.json";
 const EVENTS_PATH = "ringside/sales-by-event.json";
@@ -97,10 +98,10 @@ export function isLocked(state: IngestState, now = Date.now()): boolean {
 }
 
 async function readJson<T>(path: string): Promise<T | null> {
-  const result = await get(path, { access: "private", useCache: false });
-  if (!result || !result.stream) return null;
+  const bytes = await readPrivateBlob(path);
+  if (!bytes) return null;
   try {
-    return JSON.parse(await new Response(result.stream).text()) as T;
+    return JSON.parse(bytes.toString("utf8")) as T;
   } catch {
     // Een stukgelopen bestand mag de ingest niet blokkeren: dan begint hij
     // opnieuw, wat traag is maar wel tot een juist resultaat leidt.

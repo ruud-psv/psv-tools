@@ -8,7 +8,8 @@
  * stoelenkaarten van tienduizenden stoelen te openen.
  */
 
-import { get, put } from "@vercel/blob";
+import { put } from "@vercel/blob";
+import { readPrivateBlob } from "../blob/read";
 import type { EventStates } from "../ringside/seat-state";
 import { readEventSeats, type SeatIndex } from "../ringside/seat-store";
 import { isPsvHomeMatch, summarizeMatch, type StadionMatch } from "./summary";
@@ -21,10 +22,10 @@ export interface StadionSummary {
 }
 
 export async function readStadionSummary(): Promise<StadionSummary | null> {
-  const result = await get(SUMMARY_PATH, { access: "private", useCache: false });
-  if (!result || !result.stream) return null;
+  const bytes = await readPrivateBlob(SUMMARY_PATH);
+  if (!bytes) return null;
   try {
-    return JSON.parse(await new Response(result.stream).text()) as StadionSummary;
+    return JSON.parse(bytes.toString("utf8")) as StadionSummary;
   } catch {
     console.error(`[ticketing-stadion] ${SUMMARY_PATH} niet te lezen.`);
     return null;

@@ -10,7 +10,8 @@
  * variabele leeg is, staat het open.
  */
 
-import { get, put } from "@vercel/blob";
+import { put } from "@vercel/blob";
+import { readPrivateBlob } from "../blob/read";
 import type { Holder } from "./neighbors";
 import type { HolderListSummary } from "./holders";
 
@@ -48,10 +49,10 @@ export function canUploadHolders(email: string): boolean {
 }
 
 async function readStored(): Promise<StoredHolderList | null> {
-  const result = await get(LIST_PATH, { access: "private", useCache: false });
-  if (!result || !result.stream) return null;
+  const bytes = await readPrivateBlob(LIST_PATH);
+  if (!bytes) return null;
   try {
-    return JSON.parse(await new Response(result.stream).text()) as StoredHolderList;
+    return JSON.parse(bytes.toString("utf8")) as StoredHolderList;
   } catch {
     console.error("[aangrenzende-stoelen] lijst seizoenkaarthouders niet te lezen.");
     return null;
