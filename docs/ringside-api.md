@@ -146,12 +146,18 @@ vertaling naar de bestaande `TicketEvent` grotendeels af te leiden:
 |---|---|---|
 | `eventId` | `manifests.event_id` / `products.product_id` | welke van de twee stabiel is, moet blijken |
 | `eventName` | `getProductDisplayName()` uit `lib/ringside/products.ts` | `Display_Name` uit `product_details`, anders `product_description` |
-| `eventDate` | `Catalog.event_datetime_local` | `products.event_date` is een string, `manifests.event_date` een timestamp |
+| `eventDate` | `Catalog.event_datetime_local` | `products.event_date` is een string, `manifests.event_date` een timestamp in **UTC** zonder tijdzone (zie hieronder) |
 | `saleStatus` | `products.event_sales_status` | |
 | `totalCapacity` | **som** van `manifests.capacity` | exclusief `is_excluded_from_reported_capacity`; een staanvak is één rij met capaciteit 703 |
 | `soldTickets` | `countSoldTickets()` uit `lib/ringside/sales.ts` | officiële definitie uit de sample queries |
 | `availableCapacity` | `totalCapacity − soldTickets` | of direct uit `is_counted_as_available` |
 | `lastUpdate` | `last_touched_at` | |
+
+**`manifests.event_date` staat in UTC.** Het type is `timestamp` zonder tijdzone, dus dat
+staat er niet bij. Vastgesteld op 2026-11-04: PSV - Real Sociedad (16-09-2021, aftrap
+21:00 zomertijd) staat er als `19:00`, PSV - Go Ahead Eagles (28-11-2026, aftrap 18:45
+wintertijd) als `17:45`. De stoelstatus zet hem bij het inlezen om naar Nederlandse
+tijd (`manifestDateToAmsterdam()` in `lib/ringside/seat-state.ts`).
 
 Twee dingen die `manifests` biedt en de XML-feed niet had: de capaciteit is
 uit te splitsen naar vak, rij en prijsniveau (`section`, `stand`, `price_level`,

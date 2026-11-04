@@ -154,6 +154,10 @@ Unify zijn, is nog te controleren met de resale-export (zie hieronder).
   `lib/ringside/seat-ingest.ts` (lezen) en `lib/ringside/seat-store.ts` (opslag).
 - **Opslag:** Vercel Blob onder `ringside/stoelen/`: per wedstrijd één gzip-bestand,
   plus een index en de toestand met cursors.
+- **Aftrap:** `manifests.event_date` staat in UTC. Bij het inlezen wordt hij Nederlandse
+  tijd, met de offset erbij (`2026-11-28T18:45:00+01:00`). Tijden die al in de opslag
+  stonden, zet de eerstvolgende run één keer om. Daarvoor stond de aftrap een uur te vroeg
+  (in de zomer twee). Ticketing Stadion en De Herdgang lezen dezelfde opslag.
 - **Eigenaar:** van `own_client_guid` bewaren we alleen een korte SHA-256-hash. Die is
   genoeg om te zien of twee tickets van dezelfde persoon zijn.
 - **Cron:** `/api/ringside/stoelen`, elk kwartier. Met een ingelogde sessie is de route

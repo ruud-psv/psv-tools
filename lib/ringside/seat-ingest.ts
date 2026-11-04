@@ -21,6 +21,7 @@ import {
   applySalesReservation,
   applySalesVenueResale,
   applySalesRow,
+  localizeStoredEventDates,
   prunePastEvents,
   todayInAmsterdam,
   type EventStates,
@@ -238,6 +239,9 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   };
 
   const changed = new Set<string>();
+  // Tijden die nog in UTC staan, eenmalig omzetten. Vóór de nieuwe rijen: die
+  // komen al omgezet binnen.
+  for (const eventId of localizeStoredEventDates(events)) changed.add(eventId);
   const removed = prunePastEvents(events, cutoff, productDates);
   const resets: string[] = [];
   const cursors = { manifests: state.manifestsCursor, sales: state.salesCursor };

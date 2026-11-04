@@ -75,7 +75,12 @@ export function seatCapacity(seat: SeatTuple): number {
 export interface EventSeatState {
   eventId: string;
   name: string | null;
-  /** Datum en tijd van de wedstrijd zoals Ringside hem geeft (lokale tijd). */
+  /**
+   * Datum en tijd van de wedstrijd in Nederlandse tijd, met de offset erbij
+   * (`2026-11-28T18:45:00+01:00`); zie `manifestDateToAmsterdam()`. Komt hij
+   * uit de productenlijst, dan is het tekst zonder offset
+   * (`2026-11-28 18:45:00`).
+   */
   eventDate: string | null;
   seats: Record<string, SeatTuple>;
   tickets: Record<string, TicketTuple>;
@@ -182,6 +187,64 @@ export function todayInAmsterdam(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(now);
 }
 
+const AMSTERDAM_PARTS = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Amsterdam",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  timeZoneName: "longOffset",
+});
+
+/**
+ * Zet `manifests.event_date` om naar Nederlandse tijd.
+ *
+ * Ringside levert dat veld als `timestamp` zonder tijdzone, en het staat in
+ * UTC. Vastgesteld op 2026-11-04: PSV - Real Sociedad (16-09-2021, aftrap
+ * 21:00 zomertijd) staat er als 19:00, PSV - Go Ahead Eagles (28-11-2026,
+ * aftrap 18:45 wintertijd) als 17:45. De uitkomst krijgt de offset erbij,
+ * zodat zichtbaar is dat hij al is omgezet en elke `new Date()` hem goed leest.
+ * Geeft `null` als de waarde geen tijdstip is.
+ */
+export function manifestDateToAmsterdam(value: string): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(value.trim());
+  if (!match) return null;
+  const zone = match[3] ? (match[3] === "Z" ? "Z" : match[3].replace(/^([+-]\d{2})(\d{2})$/, "$1:$2")) : "Z";
+  const instant = new Date(`${match[1]}T${match[2]}${zone}`);
+  if (isNaN(instant.getTime())) return null;
+
+  const parts: Record<string, string> = {};
+  for (const part of AMSTERDAM_PARTS.formatToParts(instant)) parts[part.type] = part.value;
+  // `longOffset` geeft "GMT+01:00"; precies op UTC alleen "GMT".
+  const offset = parts.timeZoneName.replace("GMT", "") || "+00:00";
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${offset}`;
+}
+
+/**
+ * Eenmalig: tijden van vóór `manifestDateToAmsterdam()` staan nog in UTC.
+ *
+ * Die zijn te herkennen: een `T` en geen offset. Een tijd met offset is al
+ * omgezet, en een tijd uit de productenlijst heeft een spatie; die blijven
+ * staan. Daardoor kan dit gerust bij elke run draaien. Geeft de event-ids
+ * terug die veranderden.
+ */
+export function localizeStoredEventDates(events: EventStates): string[] {
+  const changed: string[] = [];
+  for (const event of events.values()) {
+    const value = event.eventDate;
+    if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(value)) continue;
+    const local = manifestDateToAmsterdam(value);
+    if (local && local !== value) {
+      event.eventDate = local;
+      changed.push(event.eventId);
+    }
+  }
+  return changed;
+}
+
 function emptyEvent(eventId: string): EventSeatState {
   return { eventId, name: null, eventDate: null, seats: {}, tickets: {} };
 }
@@ -209,7 +272,8 @@ export function applyManifestRow(events: EventStates, row: ManifestFeedRow, cuto
   // Een seizoenkaart heeft ook een stoelenkaart (`Series`); die is niet per wedstrijd.
   if (row.product_type !== "Event") return null;
   const eventId = id(row.event_id);
-  const eventDate = text(row.event_date);
+  const raw = text(row.event_date);
+  const eventDate = raw ? (manifestDateToAmsterdam(raw) ?? raw) : "";
   if (!eventId || !eventDate || eventDate.slice(0, 10) < cutoff) return null;
 
   let event = events.get(eventId);

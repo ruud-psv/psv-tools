@@ -6,6 +6,8 @@ import {
   applySalesReservation,
   applySalesRow,
   applySalesVenueResale,
+  localizeStoredEventDates,
+  manifestDateToAmsterdam,
   ownerFingerprint,
   prunePastEvents,
   RESALE_BOUGHT,
@@ -247,4 +249,37 @@ test("via de resale gekocht wordt later aangevuld, zonder de rest te raken", () 
   // Onbekend of niet meer geldig: niets.
   assert.equal(applySalesVenueResale(events, sale("onbekend", { is_venue_resale: true })), null);
   assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true, current_status: false })), null);
+});
+
+test("de tijd uit de stoelenkaart is UTC en wordt Nederlandse tijd", () => {
+  // Gemeten op 2026-11-04: zo stonden deze wedstrijden in /v1/manifests.
+  assert.equal(manifestDateToAmsterdam("2021-09-16T19:00:00"), "2021-09-16T21:00:00+02:00"); // zomertijd
+  assert.equal(manifestDateToAmsterdam("2026-11-28T17:45:00"), "2026-11-28T18:45:00+01:00"); // wintertijd
+  // Over middernacht heen schuift ook de datum.
+  assert.equal(manifestDateToAmsterdam("2026-12-31T23:30:00"), "2027-01-01T00:30:00+01:00");
+  // Met een eigen tijdzone wordt die gevolgd.
+  assert.equal(manifestDateToAmsterdam("2026-11-28T17:45:00Z"), "2026-11-28T18:45:00+01:00");
+  assert.equal(manifestDateToAmsterdam("2026-11-28T18:45:00+01:00"), "2026-11-28T18:45:00+01:00");
+  assert.equal(manifestDateToAmsterdam("geen datum"), null);
+});
+
+test("de stoelenkaart bewaart de aftrap in Nederlandse tijd", () => {
+  const events: EventStates = new Map();
+  applyManifestRow(events, manifest("m1", { event_date: "2026-11-28T17:45:00" }), CUTOFF);
+  assert.equal(events.get(EVENT)!.eventDate, "2026-11-28T18:45:00+01:00");
+});
+
+test("tijden van vóór de omzetting worden één keer omgezet", () => {
+  const events: EventStates = new Map([
+    ["a", { eventId: "a", name: null, eventDate: "2026-11-28T17:45:00", seats: {}, tickets: {} }],
+    ["b", { eventId: "b", name: null, eventDate: "2026-12-05T20:00:00+01:00", seats: {}, tickets: {} }],
+    // Uit de productenlijst: tekst met een spatie, die blijft staan.
+    ["c", { eventId: "c", name: null, eventDate: "2026-12-12 14:30:00", seats: {}, tickets: {} }],
+    ["d", { eventId: "d", name: null, eventDate: null, seats: {}, tickets: {} }],
+  ]);
+  assert.deepEqual(localizeStoredEventDates(events), ["a"]);
+  assert.equal(events.get("a")!.eventDate, "2026-11-28T18:45:00+01:00");
+  assert.equal(events.get("c")!.eventDate, "2026-12-12 14:30:00");
+  // Nog een keer: niets meer te doen.
+  assert.deepEqual(localizeStoredEventDates(events), []);
 });
