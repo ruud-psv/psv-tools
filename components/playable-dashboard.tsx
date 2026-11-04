@@ -294,6 +294,9 @@ function CampaignDetailPanel({
 
 /* ---------- Campaign Table ---------- */
 
+/** Rows shown at first, and added per "Toon meer" click. */
+const TABLE_PAGE_SIZE = 10;
+
 function CampaignTable({
   campaigns,
   onSelect,
@@ -307,6 +310,17 @@ function CampaignTable({
   const [sortKey, setSortKey] = useState<SortKey>("created_on");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [visibleCount, setVisibleCount] = useState(TABLE_PAGE_SIZE);
+
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setVisibleCount(TABLE_PAGE_SIZE);
+  };
+
+  const updateStatusFilter = (value: StatusFilter) => {
+    setStatusFilter(value);
+    setVisibleCount(TABLE_PAGE_SIZE);
+  };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -333,6 +347,9 @@ function CampaignTable({
       return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     });
   }, [campaigns, search, sortKey, sortDir, statusFilter]);
+
+  const visible = filtered.slice(0, visibleCount);
+  const remaining = filtered.length - visible.length;
 
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortKey !== column) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
@@ -364,7 +381,7 @@ function CampaignTable({
       <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
         <CardTitle className="text-base">Alle campagnes ({filtered.length})</CardTitle>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+          <Select value={statusFilter} onValueChange={(v) => updateStatusFilter(v as StatusFilter)}>
             <SelectTrigger className="w-36">
               <SelectValue />
             </SelectTrigger>
@@ -379,13 +396,13 @@ function CampaignTable({
             <Input
               placeholder="Zoek op naam of type..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => updateSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           {search && (
             <button
-              onClick={() => setSearch("")}
+              onClick={() => updateSearch("")}
               className="inline-flex items-center rounded-md px-2 py-2 text-sm border hover:bg-muted transition-colors"
             >
               <X className="h-3.5 w-3.5" />
@@ -418,7 +435,7 @@ function CampaignTable({
                   </td>
                 </tr>
               )}
-              {filtered.map((c) => (
+              {visible.map((c) => (
                 <tr
                   key={c.id}
                   className={`border-b border-border cursor-pointer transition-colors ${
@@ -451,6 +468,42 @@ function CampaignTable({
             </tbody>
           </table>
         </div>
+        {filtered.length > TABLE_PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-3 border-t border-border">
+            <span className="text-xs text-muted-foreground">
+              {formatNumber(visible.length)} van {formatNumber(filtered.length)} getoond
+            </span>
+            <div className="flex items-center gap-2">
+              {remaining > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((n) => n + TABLE_PAGE_SIZE)}
+                    className="rounded-md px-3 py-1.5 text-xs border hover:bg-muted transition-colors font-heading uppercase tracking-wide"
+                  >
+                    Toon {Math.min(TABLE_PAGE_SIZE, remaining)} meer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount(filtered.length)}
+                    className="rounded-md px-3 py-1.5 text-xs border hover:bg-muted transition-colors font-heading uppercase tracking-wide"
+                  >
+                    Toon alle ({formatNumber(filtered.length)})
+                  </button>
+                </>
+              )}
+              {visible.length > TABLE_PAGE_SIZE && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount(TABLE_PAGE_SIZE)}
+                  className="rounded-md px-3 py-1.5 text-xs border hover:bg-muted transition-colors font-heading uppercase tracking-wide"
+                >
+                  Toon minder
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -703,6 +756,7 @@ export function PlayableDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [activeOpen, setActiveOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -831,37 +885,51 @@ export function PlayableDashboard() {
           {/* Active campaigns quick-list */}
           {activeCampaigns.length > 0 && (
             <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-success" />
-                  Nu actief ({activeCampaigns.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {activeCampaigns.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => setSelectedCampaign(c)}
-                      className={`text-left rounded-md border p-3 transition-colors ${
-                        selectedCampaign?.id === c.id
-                          ? "border-psv-red-primary bg-psv-red-primary/5"
-                          : "border-border hover:bg-muted/40"
-                      }`}
-                    >
-                      <p className="text-sm font-medium truncate">{c.name}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-xs text-muted-foreground">{c.type || "—"}</span>
-                        {c.active_to && (
-                          <span className="text-xs text-muted-foreground">
-                            · t/m {formatDate(c.active_to)}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
+              <button
+                type="button"
+                className="w-full text-left"
+                aria-expanded={activeOpen}
+                onClick={() => setActiveOpen((o) => !o)}
+              >
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                    Nu actief ({activeCampaigns.length})
+                  </CardTitle>
+                  {activeOpen ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </CardHeader>
+              </button>
+              {activeOpen && (
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {activeCampaigns.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelectedCampaign(c)}
+                        className={`text-left rounded-md border p-3 transition-colors ${
+                          selectedCampaign?.id === c.id
+                            ? "border-psv-red-primary bg-psv-red-primary/5"
+                            : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">{c.type || "—"}</span>
+                          {c.active_to && (
+                            <span className="text-xs text-muted-foreground">
+                              · t/m {formatDate(c.active_to)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
             </Card>
           )}
 
