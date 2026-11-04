@@ -31,7 +31,12 @@ import { seatKey, toSeatNumber, type SeatInfo, type TicketInfo } from "../aangre
 export type SeatTuple = [area: string, row: string, seat: string, flags: number, capacity?: number];
 
 /**
- * `[manifest_id, vak, rij, stoel, in resale (1/0), gehashte eigenaar, reservering]`.
+ * `[manifest_id, vak, rij, stoel, resale, gehashte eigenaar, reservering]`.
+ *
+ * `resale` is een optelling van vlaggen: `RESALE_POSTED` (1) staat nu in de
+ * resale, `RESALE_BOUGHT` (2) is via de resale gekocht. Eerder was het alleen
+ * 0 of 1; die waarden betekenen nog steeds hetzelfde.
+ *
  * De laatste staat er alleen bij een openstaande reservering (1): de plaats is
  * bezet, maar nog niet afgenomen.
  */
@@ -40,10 +45,18 @@ export type TicketTuple = [
   area: string,
   row: string,
   seat: string,
-  posted: number,
+  resale: number,
   owner: string,
   reservation?: number,
 ];
+
+/** In de resale aangeboden: `resale_status = 'Posted'`. */
+export const RESALE_POSTED = 1;
+/**
+ * Via de resale gekocht: `is_venue_resale = true`. Dit is het ticket van de
+ * koper; de kaart van de verkoper is dan vervallen (`Resold - Refunded`).
+ */
+export const RESALE_BOUGHT = 2;
 
 /** Een openstaande reservering: `sale_type = 'Reservation'`, nog niet bevestigd. */
 export function isReservation(row: SalesFeedRow): boolean {
@@ -62,7 +75,12 @@ export function seatCapacity(seat: SeatTuple): number {
 export interface EventSeatState {
   eventId: string;
   name: string | null;
-  /** Datum en tijd van de wedstrijd zoals Ringside hem geeft (lokale tijd). */
+  /**
+   * Datum en tijd van de wedstrijd in Nederlandse tijd, met de offset erbij
+   * (`2026-11-28T18:45:00+01:00`); zie `manifestDateToAmsterdam()`. Komt hij
+   * uit de productenlijst, dan is het tekst zonder offset
+   * (`2026-11-28 18:45:00`).
+   */
   eventDate: string | null;
   seats: Record<string, SeatTuple>;
   tickets: Record<string, TicketTuple>;
@@ -101,6 +119,7 @@ export interface SalesFeedRow {
   current_status?: unknown;
   forward_item_id?: unknown;
   resale_status?: unknown;
+  is_venue_resale?: unknown;
   own_client_guid?: unknown;
 }
 
@@ -141,6 +160,18 @@ export function isOccupyingTicket(row: SalesFeedRow): boolean {
 }
 
 /**
+ * De resale-vlaggen van een verkoopregel.
+ *
+ * Zo ziet een doorverkoop eruit in `/v1/sales` (gemeten op 2026-11-04):
+ * aangeboden is `Sale` met `Posted`, nog geldig. Na verkoop wordt die regel
+ * `Resold - Refunded` en ongeldig, er komt een `Return` met dezelfde status
+ * bij, en de koper krijgt een nieuw `Sale`-ticket met `is_venue_resale = true`.
+ */
+export function resaleFlags(row: SalesFeedRow): number {
+  return (row.resale_status === "Posted" ? RESALE_POSTED : 0) | (isTrue(row.is_venue_resale) ? RESALE_BOUGHT : 0);
+}
+
+/**
  * Een korte, niet terug te rekenen vingerafdruk van de eigenaar.
  *
  * De tool hoeft niet te weten wie iemand is, alleen of twee tickets van
@@ -154,6 +185,64 @@ export function ownerFingerprint(guid: unknown): string {
 /** De datum (`YYYY-MM-DD`) van vandaag in Nederland: de grens tussen voorbij en komend. */
 export function todayInAmsterdam(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(now);
+}
+
+const AMSTERDAM_PARTS = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Amsterdam",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  timeZoneName: "longOffset",
+});
+
+/**
+ * Zet `manifests.event_date` om naar Nederlandse tijd.
+ *
+ * Ringside levert dat veld als `timestamp` zonder tijdzone, en het staat in
+ * UTC. Vastgesteld op 2026-11-04: PSV - Real Sociedad (16-09-2021, aftrap
+ * 21:00 zomertijd) staat er als 19:00, PSV - Go Ahead Eagles (28-11-2026,
+ * aftrap 18:45 wintertijd) als 17:45. De uitkomst krijgt de offset erbij,
+ * zodat zichtbaar is dat hij al is omgezet en elke `new Date()` hem goed leest.
+ * Geeft `null` als de waarde geen tijdstip is.
+ */
+export function manifestDateToAmsterdam(value: string): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(value.trim());
+  if (!match) return null;
+  const zone = match[3] ? (match[3] === "Z" ? "Z" : match[3].replace(/^([+-]\d{2})(\d{2})$/, "$1:$2")) : "Z";
+  const instant = new Date(`${match[1]}T${match[2]}${zone}`);
+  if (isNaN(instant.getTime())) return null;
+
+  const parts: Record<string, string> = {};
+  for (const part of AMSTERDAM_PARTS.formatToParts(instant)) parts[part.type] = part.value;
+  // `longOffset` geeft "GMT+01:00"; precies op UTC alleen "GMT".
+  const offset = parts.timeZoneName.replace("GMT", "") || "+00:00";
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${offset}`;
+}
+
+/**
+ * Eenmalig: tijden van vóór `manifestDateToAmsterdam()` staan nog in UTC.
+ *
+ * Die zijn te herkennen: een `T` en geen offset. Een tijd met offset is al
+ * omgezet, en een tijd uit de productenlijst heeft een spatie; die blijven
+ * staan. Daardoor kan dit gerust bij elke run draaien. Geeft de event-ids
+ * terug die veranderden.
+ */
+export function localizeStoredEventDates(events: EventStates): string[] {
+  const changed: string[] = [];
+  for (const event of events.values()) {
+    const value = event.eventDate;
+    if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(value)) continue;
+    const local = manifestDateToAmsterdam(value);
+    if (local && local !== value) {
+      event.eventDate = local;
+      changed.push(event.eventId);
+    }
+  }
+  return changed;
 }
 
 function emptyEvent(eventId: string): EventSeatState {
@@ -183,7 +272,8 @@ export function applyManifestRow(events: EventStates, row: ManifestFeedRow, cuto
   // Een seizoenkaart heeft ook een stoelenkaart (`Series`); die is niet per wedstrijd.
   if (row.product_type !== "Event") return null;
   const eventId = id(row.event_id);
-  const eventDate = text(row.event_date);
+  const raw = text(row.event_date);
+  const eventDate = raw ? (manifestDateToAmsterdam(raw) ?? raw) : "";
   if (!eventId || !eventDate || eventDate.slice(0, 10) < cutoff) return null;
 
   let event = events.get(eventId);
@@ -280,7 +370,7 @@ export function applySalesRow(
     text(row.area),
     text(row.row),
     text(row.seat),
-    row.resale_status === "Posted" ? 1 : 0,
+    resaleFlags(row),
     ownerFingerprint(row.own_client_guid),
   ];
   if (isReservation(row)) tuple.push(1);
@@ -308,6 +398,31 @@ export function applySalesReservation(events: EventStates, row: SalesFeedRow): s
   if (reservation === (ticket[6] === 1)) return null;
   const updated: TicketTuple = [ticket[0], ticket[1], ticket[2], ticket[3], ticket[4], ticket[5]];
   if (reservation) updated.push(1);
+  event.tickets[salesItemId] = updated;
+  return event.eventId;
+}
+
+/**
+ * Vult bij een ticket dat al bekend is aan of het via de resale gekocht is.
+ *
+ * Voor de eenmalige derde ronde door `/v1/sales`: `is_venue_resale` werd eerst
+ * niet bewaard. Raakt alleen die ene vlag; of het ticket nu in de resale staat
+ * en of het bestaat, bepaalt de gewone stroom. Geeft het event-id terug als er
+ * iets veranderde.
+ */
+export function applySalesVenueResale(events: EventStates, row: SalesFeedRow): string | null {
+  const salesItemId = id(row.sales_item_id);
+  const productId = id(row.product_id);
+  if (!salesItemId || !productId || isDelete(row) || !isOccupyingTicket(row)) return null;
+  const event = events.get(productId);
+  const ticket = event?.tickets[salesItemId];
+  if (!event || !ticket) return null;
+
+  const bought = (resaleFlags(row) & RESALE_BOUGHT) !== 0;
+  const flags = bought ? ticket[4] | RESALE_BOUGHT : ticket[4] & ~RESALE_BOUGHT;
+  if (flags === ticket[4]) return null;
+  const updated: TicketTuple = [...ticket];
+  updated[4] = flags;
   event.tickets[salesItemId] = updated;
   return event.eventId;
 }
@@ -342,7 +457,7 @@ export function toNeighborInput(event: EventSeatState): { seats: SeatInfo[]; tic
   }
 
   const tickets: TicketInfo[] = [];
-  for (const [manifestId, area, row, seat, posted, owner] of Object.values(event.tickets)) {
+  for (const [salesItemId, [manifestId, area, row, seat, resale, owner]] of Object.entries(event.tickets)) {
     // De stoel uit de stoelenkaart is leidend; de velden op het ticket zelf
     // zijn de terugval als die stoel (nog) niet bekend is.
     const fromManifest = manifestId ? event.seats[manifestId] : undefined;
@@ -350,7 +465,13 @@ export function toNeighborInput(event: EventSeatState): { seats: SeatInfo[]; tic
       ? seatKey(fromManifest[0], fromManifest[1], fromManifest[2])
       : seatKey(area, row, seat);
     if (!key) continue;
-    tickets.push({ key, resalePosted: posted === 1, owner: owner || null });
+    tickets.push({
+      key,
+      resalePosted: (resale & RESALE_POSTED) !== 0,
+      resaleBought: (resale & RESALE_BOUGHT) !== 0,
+      owner: owner || null,
+      salesItemId,
+    });
   }
 
   return { seats, tickets };

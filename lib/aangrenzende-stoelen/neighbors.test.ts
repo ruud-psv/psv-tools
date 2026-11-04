@@ -5,6 +5,7 @@ import {
   findNeighbors,
   isExcludedArea,
   seatKey,
+  seatStatus,
   toCsv,
   type Holder,
   type SeatInfo,
@@ -268,4 +269,65 @@ test("de groepjes tellen samen op tot de vrije stoelen, resale inbegrepen", () =
   assert.deepEqual(stats.freeGroupsByArea, { P: stats.freeGroups });
   const { one, two, seatsInThreeOrMore } = stats.freeGroups;
   assert.equal(one + 2 * two + seatsInThreeOrMore, stats.freeSeats);
+});
+
+test("wie zijn kaart al via de resale verkocht, valt helemaal af", () => {
+  // 222 heeft C9-2 en C9-3. C9-2 is doorverkocht: daar zit een koper. C9-4 is
+  // leeg, en C9-3 grenst eraan, maar 222 hoort niet op de lijst.
+  const seats = block("C", [9], [1, 2, 3, 4, 5]);
+  const holders: Holder[] = [
+    { relationNumber: "111", area: "C", row: 9, seat: 1 },
+    { relationNumber: "222", area: "C", row: 9, seat: 2 },
+    { relationNumber: "222", area: "C", row: 9, seat: 3 },
+    { relationNumber: "333", area: "C", row: 9, seat: 5 },
+  ];
+  const tickets = [
+    ticket("C", 9, 1, { owner: "eigenaar-111" }),
+    ticket("C", 9, 2, { owner: "koper", resaleBought: true }),
+    ticket("C", 9, 3, { owner: "eigenaar-222" }),
+    ticket("C", 9, 5, { owner: "eigenaar-333" }),
+  ];
+  const result = findNeighbors(seats, tickets, holders);
+  assert.deepEqual(relations(result), ["333"]);
+  assert.equal(result.stats.skippedResold, 1);
+  assert.equal(result.stats.skippedOwnResale, 0);
+  assert.equal(result.stats.resoldSeats, 1);
+  // De doorverkochte stoel is bezet, niet vrij.
+  assert.equal(result.stats.freeSeats, 1);
+});
+
+test("een doorverkochte stoel naast een vrije stoel zet de verkoper niet op de lijst", () => {
+  const seats = block("K", [2], [1, 2]);
+  const holders: Holder[] = [{ relationNumber: "777", area: "K", row: 2, seat: 1 }];
+  const tickets = [ticket("K", 2, 1, { owner: "koper", resaleBought: true })];
+  const result = findNeighbors(seats, tickets, holders);
+  assert.deepEqual(result.rows, []);
+  assert.equal(result.stats.skippedResold, 1);
+});
+
+test("wie aanbiedt én al doorverkocht heeft, telt alleen bij Zelf aanbieder", () => {
+  const seats = block("L", [1], [1, 2, 3, 4]);
+  const holders: Holder[] = [
+    { relationNumber: "888", area: "L", row: 1, seat: 1 },
+    { relationNumber: "888", area: "L", row: 1, seat: 2 },
+    { relationNumber: "888", area: "L", row: 1, seat: 3 },
+  ];
+  const tickets = [
+    ticket("L", 1, 1, { owner: "koper", resaleBought: true }),
+    ticket("L", 1, 2, { owner: "eigenaar-888", resalePosted: true }),
+    ticket("L", 1, 3, { owner: "eigenaar-888" }),
+  ];
+  const result = findNeighbors(seats, tickets, holders);
+  assert.deepEqual(result.rows, []);
+  assert.equal(result.stats.skippedOwnResale, 1);
+  assert.equal(result.stats.skippedResold, 0);
+});
+
+test("stoelstatus: doorverkocht is bezet door een koper uit de resale", () => {
+  const seat: SeatInfo = { area: "M", row: 1, seat: 1, sellable: true };
+  assert.equal(seatStatus(seat, [ticket("M", 1, 1, { resaleBought: true })]), "doorverkocht");
+  // De koper biedt hem weer aan: vrij via de resale.
+  assert.equal(seatStatus(seat, [ticket("M", 1, 1, { resaleBought: true, resalePosted: true })]), "resale");
+  // Naast een gewoon ticket telt het gewone ticket.
+  assert.equal(seatStatus(seat, [ticket("M", 1, 1, { resaleBought: true }), ticket("M", 1, 1)]), "bezet");
 });

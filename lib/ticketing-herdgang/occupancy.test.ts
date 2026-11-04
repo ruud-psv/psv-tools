@@ -101,3 +101,18 @@ test("past geen enkel vak op de plattegrond, dan telt alles mee", () => {
   assert.equal(result.areas.length, 1);
   assert.deepEqual(result.other, []);
 });
+
+test("resale-vlaggen: aangeboden telt, ook als het een eerder doorverkochte kaart is", () => {
+  const result = occupancyByArea(
+    event(
+      { m1: ["Noord", "", "", 3, 10] },
+      {
+        // 2 = via de resale gekocht, 3 = gekocht en weer aangeboden.
+        t1: ["m1", "Noord", "", "", 2, ""],
+        t2: ["m1", "Noord", "", "", 3, ""],
+      }
+    )
+  );
+  assert.equal(result.total.sold, 2);
+  assert.equal(result.total.resale, 1);
+});

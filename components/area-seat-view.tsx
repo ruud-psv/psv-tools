@@ -26,6 +26,7 @@ const SEAT_LABELS: Record<ShownCode, string> = {
   [SEAT_CODE.resale]: "vrij via de resale",
   [SEAT_CODE.lijst]: "seizoenkaarthouder op de lijst",
   [SEAT_CODE.bezet]: "bezet",
+  [SEAT_CODE.doorverkocht]: "bezet, doorverkocht via de resale",
   [SEAT_CODE.geblokkeerd]: "geblokkeerd",
 };
 
@@ -34,10 +35,14 @@ const LEGEND: { code: ShownCode; label: string }[] = [
   { code: SEAT_CODE.resale, label: "Vrij via resale" },
   { code: SEAT_CODE.lijst, label: "Op de lijst" },
   { code: SEAT_CODE.bezet, label: "Bezet" },
+  { code: SEAT_CODE.doorverkocht, label: "Doorverkocht via resale" },
   { code: SEAT_CODE.geblokkeerd, label: "Geblokkeerd" },
 ];
 
-/** Eén stoel. Vrij is PSV-rood, de resale rood met een witte stip, de lijst goud. */
+/**
+ * Eén stoel. Vrij is PSV-rood, de lijst goud, bezet grijs. Een witte stip
+ * betekent resale: rood met stip is aangeboden, grijs met stip doorverkocht.
+ */
 function Seat({ code, x, y }: { code: ShownCode; x: number; y: number }) {
   const inset = (CELL - SEAT) / 2;
   if (code === SEAT_CODE.geblokkeerd) {
@@ -54,11 +59,16 @@ function Seat({ code, x, y }: { code: ShownCode; x: number; y: number }) {
     );
   }
   const fill =
-    code === SEAT_CODE.lijst ? "fill-psv-gold" : code === SEAT_CODE.bezet ? "fill-psv-gray-08" : "fill-psv-red-primary";
+    code === SEAT_CODE.lijst
+      ? "fill-psv-gold"
+      : code === SEAT_CODE.bezet || code === SEAT_CODE.doorverkocht
+        ? "fill-psv-gray-08"
+        : "fill-psv-red-primary";
+  const dot = code === SEAT_CODE.resale || code === SEAT_CODE.doorverkocht;
   return (
     <>
       <rect x={x + inset} y={y + inset} width={SEAT} height={SEAT} rx={2} className={fill} />
-      {code === SEAT_CODE.resale && <circle cx={x + CELL / 2} cy={y + CELL / 2} r={1.8} className="fill-psv-white" />}
+      {dot && <circle cx={x + CELL / 2} cy={y + CELL / 2} r={1.8} className="fill-psv-white" />}
     </>
   );
 }

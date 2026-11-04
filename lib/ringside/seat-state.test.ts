@@ -5,8 +5,13 @@ import {
   applyManifestRow,
   applySalesReservation,
   applySalesRow,
+  applySalesVenueResale,
+  localizeStoredEventDates,
+  manifestDateToAmsterdam,
   ownerFingerprint,
   prunePastEvents,
+  RESALE_BOUGHT,
+  RESALE_POSTED,
   SEAT_GA,
   SEAT_SELLABLE,
   todayInAmsterdam,
@@ -90,15 +95,49 @@ test("resale: eerst aangeboden, daarna doorverkocht", () => {
   applySalesRow(events, sale("s1", { resale_status: "Posted" }), neverPast);
   assert.equal(events.get(EVENT)!.tickets.s1[4], 1);
 
-  // Doorverkocht: het oude ticket vervalt en de koper krijgt een nieuw.
+  // Doorverkocht: het oude ticket vervalt en de koper krijgt een nieuw, met
+  // `is_venue_resale`. Zo stond het in Ringside op 2026-11-04.
   applySalesRow(
     events,
     sale("s1", { _ringside_operation: "U", resale_status: "Resold - Refunded", current_status: false }),
     neverPast
   );
-  applySalesRow(events, sale("s2", { own_client_guid: "andere-koper" }), neverPast);
+  applySalesRow(
+    events,
+    sale("r1", { sale_type: "Return", resale_status: "Resold - Refunded", current_status: false }),
+    neverPast
+  );
+  applySalesRow(events, sale("s2", { own_client_guid: "andere-koper", is_venue_resale: true }), neverPast);
   assert.deepEqual(Object.keys(events.get(EVENT)!.tickets), ["s2"]);
-  assert.equal(events.get(EVENT)!.tickets.s2[4], 0);
+  assert.equal(events.get(EVENT)!.tickets.s2[4], RESALE_BOUGHT);
+
+  // De koper zet hem zelf weer in de resale.
+  applySalesRow(
+    events,
+    sale("s2", { _ringside_operation: "U", own_client_guid: "andere-koper", is_venue_resale: true, resale_status: "Posted" }),
+    neverPast
+  );
+  assert.equal(events.get(EVENT)!.tickets.s2[4], RESALE_POSTED | RESALE_BOUGHT);
+});
+
+test("toNeighborInput geeft aangeboden, doorverkocht en het sales_item_id door", () => {
+  const events: EventStates = new Map();
+  applyManifestRow(events, manifest("m1"), CUTOFF);
+  applyManifestRow(events, manifest("m2", { seat: "13" }), CUTOFF);
+  applyManifestRow(events, manifest("m3", { seat: "14" }), CUTOFF);
+  applySalesRow(events, sale("s1", { resale_status: "Posted" }), neverPast);
+  applySalesRow(events, sale("s2", { manifest_id: "m2", is_venue_resale: true }), neverPast);
+  applySalesRow(events, sale("s3", { manifest_id: "m3", is_venue_resale: null }), neverPast);
+
+  const { tickets } = toNeighborInput(events.get(EVENT)!);
+  assert.deepEqual(
+    tickets.map(({ key, resalePosted, resaleBought, salesItemId }) => ({ key, resalePosted, resaleBought, salesItemId })),
+    [
+      { key: "N|15|12", resalePosted: true, resaleBought: false, salesItemId: "s1" },
+      { key: "N|15|13", resalePosted: false, resaleBought: true, salesItemId: "s2" },
+      { key: "N|15|14", resalePosted: false, resaleBought: false, salesItemId: "s3" },
+    ]
+  );
 });
 
 test("verkoop van een gespeelde wedstrijd valt af", () => {
@@ -186,4 +225,61 @@ test("openstaande reservering wordt bewaard en later aangevuld", () => {
   assert.equal(event.tickets.s1[6], 1);
   assert.equal(applySalesReservation(events, sale("s1", { sale_type: "Reservation" })), null);
   assert.equal(applySalesReservation(events, sale("onbekend", { sale_type: "Reservation" })), null);
+});
+
+test("via de resale gekocht wordt later aangevuld, zonder de rest te raken", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("s1", { resale_status: "Posted" }), neverPast);
+  applySalesRow(events, sale("r1", { sale_type: "Reservation" }), neverPast);
+  const event = events.get(EVENT)!;
+
+  // Derde ronde: alleen de vlag "gekocht", "aangeboden" blijft staan.
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true })), EVENT);
+  assert.equal(event.tickets.s1[4], RESALE_POSTED | RESALE_BOUGHT);
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true })), null);
+
+  // De reservering houdt zijn vlag.
+  assert.equal(applySalesVenueResale(events, sale("r1", { sale_type: "Reservation", is_venue_resale: true })), EVENT);
+  assert.deepEqual(event.tickets.r1.slice(4), [RESALE_BOUGHT, event.tickets.r1[5], 1]);
+
+  // Een latere versie zonder de vlag haalt hem weer weg; laatste versie wint.
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: false })), EVENT);
+  assert.equal(event.tickets.s1[4], RESALE_POSTED);
+
+  // Onbekend of niet meer geldig: niets.
+  assert.equal(applySalesVenueResale(events, sale("onbekend", { is_venue_resale: true })), null);
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true, current_status: false })), null);
+});
+
+test("de tijd uit de stoelenkaart is UTC en wordt Nederlandse tijd", () => {
+  // Gemeten op 2026-11-04: zo stonden deze wedstrijden in /v1/manifests.
+  assert.equal(manifestDateToAmsterdam("2021-09-16T19:00:00"), "2021-09-16T21:00:00+02:00"); // zomertijd
+  assert.equal(manifestDateToAmsterdam("2026-11-28T17:45:00"), "2026-11-28T18:45:00+01:00"); // wintertijd
+  // Over middernacht heen schuift ook de datum.
+  assert.equal(manifestDateToAmsterdam("2026-12-31T23:30:00"), "2027-01-01T00:30:00+01:00");
+  // Met een eigen tijdzone wordt die gevolgd.
+  assert.equal(manifestDateToAmsterdam("2026-11-28T17:45:00Z"), "2026-11-28T18:45:00+01:00");
+  assert.equal(manifestDateToAmsterdam("2026-11-28T18:45:00+01:00"), "2026-11-28T18:45:00+01:00");
+  assert.equal(manifestDateToAmsterdam("geen datum"), null);
+});
+
+test("de stoelenkaart bewaart de aftrap in Nederlandse tijd", () => {
+  const events: EventStates = new Map();
+  applyManifestRow(events, manifest("m1", { event_date: "2026-11-28T17:45:00" }), CUTOFF);
+  assert.equal(events.get(EVENT)!.eventDate, "2026-11-28T18:45:00+01:00");
+});
+
+test("tijden van vóór de omzetting worden één keer omgezet", () => {
+  const events: EventStates = new Map([
+    ["a", { eventId: "a", name: null, eventDate: "2026-11-28T17:45:00", seats: {}, tickets: {} }],
+    ["b", { eventId: "b", name: null, eventDate: "2026-12-05T20:00:00+01:00", seats: {}, tickets: {} }],
+    // Uit de productenlijst: tekst met een spatie, die blijft staan.
+    ["c", { eventId: "c", name: null, eventDate: "2026-12-12 14:30:00", seats: {}, tickets: {} }],
+    ["d", { eventId: "d", name: null, eventDate: null, seats: {}, tickets: {} }],
+  ]);
+  assert.deepEqual(localizeStoredEventDates(events), ["a"]);
+  assert.equal(events.get("a")!.eventDate, "2026-11-28T18:45:00+01:00");
+  assert.equal(events.get("c")!.eventDate, "2026-12-12 14:30:00");
+  // Nog een keer: niets meer te doen.
+  assert.deepEqual(localizeStoredEventDates(events), []);
 });

@@ -32,6 +32,13 @@ De regels staan in `lib/aangrenzende-stoelen/neighbors.ts` en zijn getest in
   aangeboden, en ook als die kaart ergens anders in het stadion zit. Dat wordt vergeleken
   op eigenaar uit Ringside én op het relatienummer dat volgens de lijst op de aangeboden
   stoel zit. De teller "Zelf aanbieder" telt die relatienummers.
+- **Doorverkocht.** Wie een kaart voor deze wedstrijd al via de resale heeft verkocht,
+  valt ook helemaal af, met al zijn stoelen. Op die stoel zit dan een koper: een geldig
+  ticket met `is_venue_resale = true`. Ringside noemt dan de koper als eigenaar, niet de
+  verkoper, dus dit gaat alleen via het relatienummer dat volgens de lijst op die stoel
+  zit. De teller "Doorverkocht" telt die relatienummers; wie ook nog iets aanbiedt, telt
+  alleen bij "Zelf aanbieder". Zonder deze regel kwam de verkoper op de lijst, want de
+  stoel leek bezet door hem.
 - **Eén regel per relatienummer.** In de testkolommen staan alleen de stoelen die aan
   een vrije stoel grenzen. Zijn dat er meer, dan staan ze met een komma achter elkaar.
 - **Grens per relatienummer.** Optioneel in de interface: relatienummers met meer dan
@@ -66,7 +73,8 @@ elk genummerd vak er precies één keer op staat.
   eronder) verschijnen de stoelen van dat vak, zoals in de ticketshop: het veld boven,
   per rij de stoelen, met de rijnummers aan beide kanten (`components/area-seat-view.tsx`).
   Rood is vrij, rood met een witte stip vrij via de resale, goud een seizoenkaarthouder
-  op de lijst, grijs bezet en wit met een rand geblokkeerd. Erboven staan de cijfers van
+  op de lijst, grijs bezet, grijs met een witte stip bezet door een koper uit de resale
+  (doorverkocht) en wit met een rand geblokkeerd. Erboven staan de cijfers van
   het vak en de groepjes vrije stoelen. Wijs een stoel aan voor rij en stoelnummer.
   Klikken zet het vak vast, zodat je met de muis naar de stoelen kunt; nog een keer
   klikken of "Vastgezet" maakt het weer los.
@@ -105,7 +113,7 @@ daarom zelf de stand bij voor komende wedstrijden, uit twee stromen:
 | Stroom | Wat we bewaren | Sleutel |
 |---|---|---|
 | `/v1/manifests` | elke stoel, met vak, rij, stoel en of hij geblokkeerd is | `manifest_id` |
-| `/v1/sales` | alleen tickets die nu een stoel bezet houden, met resale-status en een hash van de eigenaar | `sales_item_id` |
+| `/v1/sales` | alleen tickets die nu een stoel bezet houden, met resale-vlaggen en een hash van de eigenaar | `sales_item_id` |
 
 Een ticket houdt een stoel bezet als hij geldig is: `item_type = 'Ticket'`,
 `current_status = true`, geen `forward_item_id`, en een `sale_type` van `Sale`,
@@ -115,10 +123,41 @@ telt dus mee: die stoel is ook niet vrij te koop.
 Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom altijd
 "de laatste versie wint", nooit optellen. Een vervallen ticket verdwijnt.
 
+### Resale in Ringside
+
+Per ticket bewaren we twee vlaggen (`resaleFlags()` in `lib/ringside/seat-state.ts`):
+1 = aangeboden (`resale_status = 'Posted'`), 2 = via de resale gekocht
+(`is_venue_resale = true`). Zo ziet een doorverkoop eruit in `/v1/sales`, gemeten op
+2026-11-04 met de probe (`distinct=sale_type+resale_status+current_status` en
+`is_venue_resale+sale_type+resale_status`, eerste pagina van 5.000 regels):
+
+| Moment | Regel | Op die pagina |
+|---|---|---|
+| Aangeboden | `Sale`, `Posted`, geldig | 7 |
+| Verkocht: kaart van de verkoper | `Sale`, `Resold - Refunded`, niet meer geldig | 18 |
+| Verkocht: terugbetaling | `Return`, `Resold - Refunded`, niet meer geldig | 24 |
+| Verkocht: kaart van de koper | `Sale`, `is_venue_resale = true`, geldig | 20 |
+
+`transfer_status` was op die pagina overal leeg, en `sale_type` `Resale` of `Transfer`
+kwam niet voor.
+
+**Vergeleken met de ticketshop** (PSV - Go Ahead Eagles, 4 november 2026): per vak het
+aantal vrije stoelen in de tool naast "plaatsen beschikbaar" in de ticketshop. 38 van de
+41 vakken waren gelijk; UU, ZZ en YY scheelden samen 5 (616 tegen 611), passend bij
+verkoop tussen beide momenten. Van de 11 aangeboden stoelen zaten er 9 in vakken die
+precies klopten, dus de ticketshop telt `Posted` mee als te koop. In vak K was de enige
+vrije stoel een aangeboden stoel, en de ticketshop had daar precies 1 plaats. "Posted"
+is dus "aangeboden in de ticketshop". Of `is_venue_resale` precies de doorverkopen uit
+Unify zijn, is nog te controleren met de resale-export (zie hieronder).
+
 - **Code:** `lib/ringside/seat-state.ts` (hoe een rij de stand verandert, getest),
   `lib/ringside/seat-ingest.ts` (lezen) en `lib/ringside/seat-store.ts` (opslag).
 - **Opslag:** Vercel Blob onder `ringside/stoelen/`: per wedstrijd één gzip-bestand,
   plus een index en de toestand met cursors.
+- **Aftrap:** `manifests.event_date` staat in UTC. Bij het inlezen wordt hij Nederlandse
+  tijd, met de offset erbij (`2026-11-28T18:45:00+01:00`). Tijden die al in de opslag
+  stonden, zet de eerstvolgende run één keer om. Daarvoor stond de aftrap een uur te vroeg
+  (in de zomer twee). Ticketing Stadion en De Herdgang lezen dezelfde opslag.
 - **Eigenaar:** van `own_client_guid` bewaren we alleen een korte SHA-256-hash. Die is
   genoeg om te zien of twee tickets van dezelfde persoon zijn.
 - **Cron:** `/api/ringside/stoelen`, elk kwartier. Met een ingelogde sessie is de route
@@ -126,6 +165,11 @@ Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom alti
 - **Eerste vulling:** leest de hele historie van beide stromen, met ongeveer 3.000
   rijen per seconde. Dat duurt een paar uur. Een run start zelf de volgende, net als
   `/api/ringside/ingest`.
+- **Inhaalrondes:** velden die later zijn gaan meetellen, vult een eenmalige extra ronde
+  door de stroom aan: capaciteit, openstaande reserveringen en sinds november 2026
+  "via de resale gekocht" (`applySalesVenueResale()`). Ook dat duurt een paar uur. Tot
+  die laatste klaar is, toont de pagina onder "Maak lijst" een melding: oudere
+  doorverkopen ontbreken dan nog, dus die verkopers kunnen nog op de lijst staan.
 - **Actueel bij "Maak lijst":** eerst haalt de tool maximaal 25 seconden de nieuwste
   mutaties op, daarna rekent hij. Loopt er al een run, dan rekent hij met de vorige
   stand en zegt dat erbij.
@@ -133,6 +177,20 @@ Ringside levert elke nieuwe versie van een rij opnieuw. Bijwerken is daarom alti
   de bijbehorende data wordt weggegooid.
 - **Slot:** er draait nooit meer dan één run tegelijk, ook niet tussen de cron en
   "Maak lijst". De cursors schuiven pas op nadat de data is opgeslagen.
+
+## Resale-export
+
+Naast "Download CSV" staat de knop **Resale**, met het aantal erbij. Die levert per
+ticket in de resale één regel: `vak`, `rij`, `stoel`, `status`, `sales_item_id` en
+`relatienummer`. Bedoeld om naast Unify te leggen.
+
+- **Status:** `aangeboden`, `doorverkocht`, of `doorverkocht, opnieuw aangeboden` (de
+  koper biedt hem zelf weer aan).
+- **Relatienummer:** uit de lijst seizoenkaarthouders, op de stoel. Bij een doorverkochte
+  stoel is dat dus de verkoper. Leeg als de stoel niet op die lijst staat.
+- **Alle vakken**, ook de vakken die de lijst verder uitsluit (rolstoelvakken, BEZOEKERS).
+- Code: `lib/aangrenzende-stoelen/resale.ts`. De export komt mee met "Maak lijst", dus
+  met dezelfde stand van Ringside.
 
 ## Doorzetten naar Maileon
 

@@ -22,7 +22,7 @@
  */
 
 import { normalizeArea } from "../aangrenzende-stoelen/neighbors";
-import { SEAT_EXCLUDED, SEAT_SELLABLE, seatCapacity, type EventSeatState } from "../ringside/seat-state";
+import { RESALE_POSTED, SEAT_EXCLUDED, SEAT_SELLABLE, seatCapacity, type EventSeatState } from "../ringside/seat-state";
 
 export interface Occupancy {
   capacity: number;
@@ -87,13 +87,13 @@ export function occupancyByArea(event: EventSeatState, isStand?: (area: string) 
   // Tickets per rij van de stoelenkaart.
   const ticketsPerSeat = new Map<string, number>();
   let ticketsWithoutManifest = 0;
-  for (const [manifestId, area, , , posted, , reservation] of Object.values(event.tickets)) {
+  for (const [manifestId, area, , , resale, , reservation] of Object.values(event.tickets)) {
     const seat = manifestId ? event.seats[manifestId] : undefined;
     const target = entry(seat ? seat[0] : area);
     if (reservation === 1) target.reserved++;
     else {
       target.sold++;
-      if (posted === 1) target.resale++;
+      if (resale & RESALE_POSTED) target.resale++;
     }
     if (seat) ticketsPerSeat.set(manifestId, (ticketsPerSeat.get(manifestId) ?? 0) + 1);
     else ticketsWithoutManifest++;

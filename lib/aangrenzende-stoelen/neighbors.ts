@@ -15,7 +15,9 @@
  * - **Op de lijst**: een seizoenkaarthouder op zo'n buurstoel, die voor deze
  *   wedstrijd een geldig ticket heeft dat niet in de resale staat. Behalve als
  *   hij voor deze wedstrijd zelf een kaart in de resale heeft staan, welke dan
- *   ook: ook met meerdere seizoenkaarten en maar één aangeboden.
+ *   ook: ook met meerdere seizoenkaarten en maar één aangeboden. En behalve als
+ *   een van zijn stoelen al via de resale is doorverkocht: dan zit er een koper
+ *   en niet hij.
  * - **Groepjes**: vrije stoelen met opeenvolgende stoelnummers in dezelfde rij
  *   vormen samen een groepje. Geteld als los, twee, of drie of meer.
  *
@@ -89,8 +91,15 @@ export interface TicketInfo {
   key: string;
   /** In de resale aangeboden (`resale_status = 'Posted'`). */
   resalePosted: boolean;
+  /**
+   * Via de resale gekocht (`is_venue_resale = true`). De seizoenkaarthouder
+   * van deze stoel heeft hem dus verkocht.
+   */
+  resaleBought?: boolean;
   /** Gehashte eigenaar, om "is dit dezelfde persoon" te kunnen vragen. */
   owner: string | null;
+  /** `sales_item_id` uit Ringside, voor de resale-export. */
+  salesItemId?: string;
 }
 
 /** Een regel uit de lijst seizoenkaarthouders. */
@@ -143,6 +152,13 @@ export interface NeighborStats {
   holderSeatsUnknown: number;
   /** Relatienummers die afvielen omdat ze zelf een kaart in de resale hebben staan. */
   skippedOwnResale: number;
+  /**
+   * Relatienummers die afvielen omdat een van hun stoelen al via de resale is
+   * doorverkocht. Wie ook nog iets aanbiedt, telt bij `skippedOwnResale`.
+   */
+  skippedResold: number;
+  /** Stoelen met een geldig ticket dat via de resale gekocht is. */
+  resoldSeats: number;
   /** Relatienummers die afvielen op de grens van `maxSeatsPerRelation`. */
   skippedTooManySeats: number;
 }
@@ -156,17 +172,18 @@ function compareSeats(a: SeatRef, b: SeatRef): number {
   return a.area.localeCompare(b.area) || a.row - b.row || a.seat - b.seat;
 }
 
-export type SeatStatus = "vrij" | "resale" | "bezet" | "geblokkeerd";
+export type SeatStatus = "vrij" | "resale" | "bezet" | "doorverkocht" | "geblokkeerd";
 
 /**
  * Wat er op een stoel aan de hand is, volgens de regels bovenaan. Een geldig
- * ticket dat niet in de resale staat maakt hem bezet; anders is hij
- * geblokkeerd als Ringside hem niet meetelt, en vrij als dat wel zo is (via de
- * resale als er alleen zulke tickets op staan). Uitgesloten vakken bekijkt de
- * aanroeper zelf.
+ * ticket dat niet in de resale staat maakt hem bezet, of doorverkocht als dat
+ * ticket via de resale gekocht is; anders is hij geblokkeerd als Ringside hem
+ * niet meetelt, en vrij als dat wel zo is (via de resale als er alleen zulke
+ * tickets op staan). Uitgesloten vakken bekijkt de aanroeper zelf.
  */
 export function seatStatus(seat: SeatInfo, here: readonly TicketInfo[]): SeatStatus {
-  if (here.some((ticket) => !ticket.resalePosted)) return "bezet";
+  const attending = here.filter((ticket) => !ticket.resalePosted);
+  if (attending.length > 0) return attending.every((ticket) => ticket.resaleBought) ? "doorverkocht" : "bezet";
   if (!seat.sellable) return "geblokkeerd";
   return here.length > 0 ? "resale" : "vrij";
 }
@@ -271,6 +288,8 @@ export function findNeighbors(
     listedSeatsByArea: {},
     holderSeatsUnknown: 0,
     skippedOwnResale: 0,
+    skippedResold: 0,
+    resoldSeats: 0,
     skippedTooManySeats: tooMany.size,
   };
 
@@ -284,15 +303,24 @@ export function findNeighbors(
   // als hij er maar één aanbiedt, en ook als de eigenaar ontbreekt.
   const resaleOwners = new Set<string>();
   const resaleRelations = new Set<string>();
+  // Wie heeft een stoel die al via de resale is doorverkocht? Daar zit nu een
+  // koper. De eigenaar van het ticket is dan de koper, niet de verkoper, dus
+  // dit kan alleen via het relatienummer dat volgens de lijst op die stoel zit.
+  const resoldRelations = new Set<string>();
   for (const [key, list] of ticketsByKey) {
+    const holder = holderByKey.get(key);
+    if (list.some((ticket) => ticket.resaleBought)) {
+      if (!isExcludedArea(key.split("|")[0])) stats.resoldSeats++;
+      if (holder) resoldRelations.add(holder.relationNumber);
+    }
     for (const ticket of list) {
       if (!ticket.resalePosted) continue;
       if (ticket.owner) resaleOwners.add(ticket.owner);
-      const holder = holderByKey.get(key);
       if (holder) resaleRelations.add(holder.relationNumber);
     }
   }
   const skippedResale = new Set<string>();
+  const skippedResold = new Set<string>();
 
   const found = new Map<string, Map<string, SeatRef>>();
   const freeSeats: SeatRef[] = [];
@@ -328,6 +356,10 @@ export function findNeighbors(
         skippedResale.add(holder.relationNumber);
         continue;
       }
+      if (resoldRelations.has(holder.relationNumber)) {
+        skippedResold.add(holder.relationNumber);
+        continue;
+      }
 
       let seatsOfRelation = found.get(holder.relationNumber);
       if (!seatsOfRelation) {
@@ -339,6 +371,7 @@ export function findNeighbors(
   }
 
   stats.skippedOwnResale = skippedResale.size;
+  stats.skippedResold = [...skippedResold].filter((relation) => !skippedResale.has(relation)).length;
 
   const rows: NeighborRow[] = [...found]
     .map(([relationNumber, seatsOfRelation]) => ({
