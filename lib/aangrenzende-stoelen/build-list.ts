@@ -1,4 +1,5 @@
 import { findNeighbors, type NeighborResult } from "@/lib/aangrenzende-stoelen/neighbors";
+import { resaleRows, type ResaleRow } from "@/lib/aangrenzende-stoelen/resale";
 import { buildSeatMaps, type SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 import { CATCH_UP_SECONDS } from "@/lib/aangrenzende-stoelen/settings";
 import { readHolderList, type HolderListMeta } from "@/lib/aangrenzende-stoelen/store";
@@ -51,6 +52,13 @@ export interface BuiltList {
   result: NeighborResult;
   /** De stoelen per vak, voor de vakweergave op de pagina. */
   seatMaps: SeatMaps;
+  /** Aangeboden en doorverkochte kaarten, voor de resale-export. */
+  resale: ResaleRow[];
+  /**
+   * Of de eenmalige ronde klaar is die aanvult welke tickets via de resale
+   * gekocht zijn. Zolang dat niet zo is, missen oudere doorverkopen.
+   */
+  resaleBoughtComplete: boolean;
   listMeta: HolderListMeta;
   dataAsOf: string | null;
   catchUp: CatchUp;
@@ -67,10 +75,12 @@ export async function buildNeighborList({ eventId, maxSeatsPerRelation }: ListRe
 
   let catchUp: CatchUp = "overgeslagen";
   let dataAsOf = before.caughtUpAt;
+  let resaleBoughtComplete = before.venueResaleComplete;
   if (isRingsideConfigured()) {
     const outcome = await catchUpSeatIngest(CATCH_UP_SECONDS * 1000);
     catchUp = outcome.catchUp;
     if (outcome.catchUp !== "overgeslagen" && outcome.state) dataAsOf = outcome.state.caughtUpAt;
+    if (outcome.state) resaleBoughtComplete = outcome.state.venueResaleComplete;
   }
 
   const [event, list] = await Promise.all([readEventSeats(eventId), readHolderList()]);
@@ -88,6 +98,8 @@ export async function buildNeighborList({ eventId, maxSeatsPerRelation }: ListRe
     event: { eventId: event.eventId, name: event.name, eventDate: event.eventDate },
     result,
     seatMaps: buildSeatMaps(seats, tickets, result.rows),
+    resale: resaleRows(tickets, list.holders),
+    resaleBoughtComplete,
     listMeta: list.meta,
     dataAsOf,
     catchUp,

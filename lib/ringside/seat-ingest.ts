@@ -19,6 +19,7 @@ import {
   applyManifestCapacity,
   applyManifestRow,
   applySalesReservation,
+  applySalesVenueResale,
   applySalesRow,
   prunePastEvents,
   todayInAmsterdam,
@@ -155,6 +156,7 @@ export interface SeatIngestResult {
   salesRead: number;
   capacityRead: number;
   reservationRead: number;
+  venueResaleRead: number;
   eventsChanged: number;
   events: number;
   resets: string[];
@@ -273,12 +275,12 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   const manifests = manifestsResult.status === "fulfilled" ? manifestsResult.value : empty;
   const sales = salesResult.status === "fulfilled" ? salesResult.value : empty;
 
-  // Eenmalige tweede rondes: capaciteit en reserveringen aanvullen voor wat al
-  // bekend was. Alleen met de tijd die over is als beide stromen bij zijn:
-  // actuele stoelen en tickets gaan voor. Niet in de korte run van "Maak lijst"
-  // (25 seconden): die moet snel antwoord geven. Na een ververste dataset leest
-  // de gewone stroom alles opnieuw, met beide erbij: dan is de ronde niet meer
-  // nodig.
+  // Eenmalige extra rondes: capaciteit, reserveringen en resale-aankopen
+  // aanvullen voor wat al bekend was. Alleen met de tijd die over is als beide
+  // stromen bij zijn: actuele stoelen en tickets gaan voor. Niet in de korte run
+  // van "Maak lijst" (25 seconden): die moet snel antwoord geven. Na een
+  // ververste dataset leest de gewone stroom alles opnieuw, met alles erbij: dan
+  // is de ronde niet meer nodig.
   const caughtUp = manifests.reachedEnd && sales.reachedEnd;
   const capacity = await backfill<ManifestFeedRow>(
     "/v1/manifests",
@@ -294,6 +296,14 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
     caughtUp && !state.reservationComplete && !sales.reset && !capacity.failure,
     deadline,
     (row) => applySalesReservation(events, row),
+    changed
+  );
+  const venueResale = await backfill<SalesFeedRow>(
+    "/v1/sales",
+    state.venueResaleCursor,
+    caughtUp && !state.venueResaleComplete && !sales.reset && !capacity.failure && !reservation.failure,
+    deadline,
+    (row) => applySalesVenueResale(events, row),
     changed
   );
 
@@ -348,13 +358,16 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   state.reservationCursor = reservation.cursor;
   state.reservationRead += reservation.rows;
   if (reservation.reachedEnd || sales.reset) state.reservationComplete = true;
+  state.venueResaleCursor = venueResale.cursor;
+  state.venueResaleRead += venueResale.rows;
+  if (venueResale.reachedEnd || sales.reset) state.venueResaleComplete = true;
   if (manifests.reachedEnd && sales.reachedEnd) state.caughtUpAt = new Date().toISOString();
 
   // Een fout in één van de stromen pas melden nu het gelezen werk bewaard is.
   for (const result of [manifestsResult, salesResult]) {
     if (result.status === "rejected") throw result.reason;
   }
-  for (const pass of [capacity, reservation]) {
+  for (const pass of [capacity, reservation, venueResale]) {
     if (pass.failure) throw pass.failure;
   }
 
@@ -363,6 +376,7 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
     salesRead: sales.rows,
     capacityRead: capacity.rows,
     reservationRead: reservation.rows,
+    venueResaleRead: venueResale.rows,
     eventsChanged: changed.size,
     events: events.size,
     resets,
@@ -401,7 +415,7 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.runningUntil = new Date(deadline + 60_000).toISOString();
   await writeSeatState(state);
 
-  const readBefore = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead;
+  const readBefore = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead + state.venueResaleRead;
   let result: SeatIngestResult | null = null;
   let error: string | null = null;
   try {
@@ -415,7 +429,7 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.lastError = error;
   state.runningUntil = null;
   await writeSeatState(state);
-  const readAfter = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead;
+  const readAfter = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead + state.venueResaleRead;
   return { ran: true, state, result, error, progressed: readAfter > readBefore };
 }
 

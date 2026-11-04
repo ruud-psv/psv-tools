@@ -31,7 +31,12 @@ import { seatKey, toSeatNumber, type SeatInfo, type TicketInfo } from "../aangre
 export type SeatTuple = [area: string, row: string, seat: string, flags: number, capacity?: number];
 
 /**
- * `[manifest_id, vak, rij, stoel, in resale (1/0), gehashte eigenaar, reservering]`.
+ * `[manifest_id, vak, rij, stoel, resale, gehashte eigenaar, reservering]`.
+ *
+ * `resale` is een optelling van vlaggen: `RESALE_POSTED` (1) staat nu in de
+ * resale, `RESALE_BOUGHT` (2) is via de resale gekocht. Eerder was het alleen
+ * 0 of 1; die waarden betekenen nog steeds hetzelfde.
+ *
  * De laatste staat er alleen bij een openstaande reservering (1): de plaats is
  * bezet, maar nog niet afgenomen.
  */
@@ -40,10 +45,18 @@ export type TicketTuple = [
   area: string,
   row: string,
   seat: string,
-  posted: number,
+  resale: number,
   owner: string,
   reservation?: number,
 ];
+
+/** In de resale aangeboden: `resale_status = 'Posted'`. */
+export const RESALE_POSTED = 1;
+/**
+ * Via de resale gekocht: `is_venue_resale = true`. Dit is het ticket van de
+ * koper; de kaart van de verkoper is dan vervallen (`Resold - Refunded`).
+ */
+export const RESALE_BOUGHT = 2;
 
 /** Een openstaande reservering: `sale_type = 'Reservation'`, nog niet bevestigd. */
 export function isReservation(row: SalesFeedRow): boolean {
@@ -101,6 +114,7 @@ export interface SalesFeedRow {
   current_status?: unknown;
   forward_item_id?: unknown;
   resale_status?: unknown;
+  is_venue_resale?: unknown;
   own_client_guid?: unknown;
 }
 
@@ -138,6 +152,18 @@ export function isOccupyingTicket(row: SalesFeedRow): boolean {
   if (typeof row.sale_type !== "string" || !OCCUPYING_SALE_TYPES.has(row.sale_type)) return false;
   if (!isTrue(row.current_status)) return false;
   return row.forward_item_id === null || row.forward_item_id === undefined;
+}
+
+/**
+ * De resale-vlaggen van een verkoopregel.
+ *
+ * Zo ziet een doorverkoop eruit in `/v1/sales` (gemeten op 2026-11-04):
+ * aangeboden is `Sale` met `Posted`, nog geldig. Na verkoop wordt die regel
+ * `Resold - Refunded` en ongeldig, er komt een `Return` met dezelfde status
+ * bij, en de koper krijgt een nieuw `Sale`-ticket met `is_venue_resale = true`.
+ */
+export function resaleFlags(row: SalesFeedRow): number {
+  return (row.resale_status === "Posted" ? RESALE_POSTED : 0) | (isTrue(row.is_venue_resale) ? RESALE_BOUGHT : 0);
 }
 
 /**
@@ -280,7 +306,7 @@ export function applySalesRow(
     text(row.area),
     text(row.row),
     text(row.seat),
-    row.resale_status === "Posted" ? 1 : 0,
+    resaleFlags(row),
     ownerFingerprint(row.own_client_guid),
   ];
   if (isReservation(row)) tuple.push(1);
@@ -308,6 +334,31 @@ export function applySalesReservation(events: EventStates, row: SalesFeedRow): s
   if (reservation === (ticket[6] === 1)) return null;
   const updated: TicketTuple = [ticket[0], ticket[1], ticket[2], ticket[3], ticket[4], ticket[5]];
   if (reservation) updated.push(1);
+  event.tickets[salesItemId] = updated;
+  return event.eventId;
+}
+
+/**
+ * Vult bij een ticket dat al bekend is aan of het via de resale gekocht is.
+ *
+ * Voor de eenmalige derde ronde door `/v1/sales`: `is_venue_resale` werd eerst
+ * niet bewaard. Raakt alleen die ene vlag; of het ticket nu in de resale staat
+ * en of het bestaat, bepaalt de gewone stroom. Geeft het event-id terug als er
+ * iets veranderde.
+ */
+export function applySalesVenueResale(events: EventStates, row: SalesFeedRow): string | null {
+  const salesItemId = id(row.sales_item_id);
+  const productId = id(row.product_id);
+  if (!salesItemId || !productId || isDelete(row) || !isOccupyingTicket(row)) return null;
+  const event = events.get(productId);
+  const ticket = event?.tickets[salesItemId];
+  if (!event || !ticket) return null;
+
+  const bought = (resaleFlags(row) & RESALE_BOUGHT) !== 0;
+  const flags = bought ? ticket[4] | RESALE_BOUGHT : ticket[4] & ~RESALE_BOUGHT;
+  if (flags === ticket[4]) return null;
+  const updated: TicketTuple = [...ticket];
+  updated[4] = flags;
   event.tickets[salesItemId] = updated;
   return event.eventId;
 }
@@ -342,7 +393,7 @@ export function toNeighborInput(event: EventSeatState): { seats: SeatInfo[]; tic
   }
 
   const tickets: TicketInfo[] = [];
-  for (const [manifestId, area, row, seat, posted, owner] of Object.values(event.tickets)) {
+  for (const [salesItemId, [manifestId, area, row, seat, resale, owner]] of Object.entries(event.tickets)) {
     // De stoel uit de stoelenkaart is leidend; de velden op het ticket zelf
     // zijn de terugval als die stoel (nog) niet bekend is.
     const fromManifest = manifestId ? event.seats[manifestId] : undefined;
@@ -350,7 +401,13 @@ export function toNeighborInput(event: EventSeatState): { seats: SeatInfo[]; tic
       ? seatKey(fromManifest[0], fromManifest[1], fromManifest[2])
       : seatKey(area, row, seat);
     if (!key) continue;
-    tickets.push({ key, resalePosted: posted === 1, owner: owner || null });
+    tickets.push({
+      key,
+      resalePosted: (resale & RESALE_POSTED) !== 0,
+      resaleBought: (resale & RESALE_BOUGHT) !== 0,
+      owner: owner || null,
+      salesItemId,
+    });
   }
 
   return { seats, tickets };

@@ -5,8 +5,11 @@ import {
   applyManifestRow,
   applySalesReservation,
   applySalesRow,
+  applySalesVenueResale,
   ownerFingerprint,
   prunePastEvents,
+  RESALE_BOUGHT,
+  RESALE_POSTED,
   SEAT_GA,
   SEAT_SELLABLE,
   todayInAmsterdam,
@@ -90,15 +93,49 @@ test("resale: eerst aangeboden, daarna doorverkocht", () => {
   applySalesRow(events, sale("s1", { resale_status: "Posted" }), neverPast);
   assert.equal(events.get(EVENT)!.tickets.s1[4], 1);
 
-  // Doorverkocht: het oude ticket vervalt en de koper krijgt een nieuw.
+  // Doorverkocht: het oude ticket vervalt en de koper krijgt een nieuw, met
+  // `is_venue_resale`. Zo stond het in Ringside op 2026-11-04.
   applySalesRow(
     events,
     sale("s1", { _ringside_operation: "U", resale_status: "Resold - Refunded", current_status: false }),
     neverPast
   );
-  applySalesRow(events, sale("s2", { own_client_guid: "andere-koper" }), neverPast);
+  applySalesRow(
+    events,
+    sale("r1", { sale_type: "Return", resale_status: "Resold - Refunded", current_status: false }),
+    neverPast
+  );
+  applySalesRow(events, sale("s2", { own_client_guid: "andere-koper", is_venue_resale: true }), neverPast);
   assert.deepEqual(Object.keys(events.get(EVENT)!.tickets), ["s2"]);
-  assert.equal(events.get(EVENT)!.tickets.s2[4], 0);
+  assert.equal(events.get(EVENT)!.tickets.s2[4], RESALE_BOUGHT);
+
+  // De koper zet hem zelf weer in de resale.
+  applySalesRow(
+    events,
+    sale("s2", { _ringside_operation: "U", own_client_guid: "andere-koper", is_venue_resale: true, resale_status: "Posted" }),
+    neverPast
+  );
+  assert.equal(events.get(EVENT)!.tickets.s2[4], RESALE_POSTED | RESALE_BOUGHT);
+});
+
+test("toNeighborInput geeft aangeboden, doorverkocht en het sales_item_id door", () => {
+  const events: EventStates = new Map();
+  applyManifestRow(events, manifest("m1"), CUTOFF);
+  applyManifestRow(events, manifest("m2", { seat: "13" }), CUTOFF);
+  applyManifestRow(events, manifest("m3", { seat: "14" }), CUTOFF);
+  applySalesRow(events, sale("s1", { resale_status: "Posted" }), neverPast);
+  applySalesRow(events, sale("s2", { manifest_id: "m2", is_venue_resale: true }), neverPast);
+  applySalesRow(events, sale("s3", { manifest_id: "m3", is_venue_resale: null }), neverPast);
+
+  const { tickets } = toNeighborInput(events.get(EVENT)!);
+  assert.deepEqual(
+    tickets.map(({ key, resalePosted, resaleBought, salesItemId }) => ({ key, resalePosted, resaleBought, salesItemId })),
+    [
+      { key: "N|15|12", resalePosted: true, resaleBought: false, salesItemId: "s1" },
+      { key: "N|15|13", resalePosted: false, resaleBought: true, salesItemId: "s2" },
+      { key: "N|15|14", resalePosted: false, resaleBought: false, salesItemId: "s3" },
+    ]
+  );
 });
 
 test("verkoop van een gespeelde wedstrijd valt af", () => {
@@ -186,4 +223,28 @@ test("openstaande reservering wordt bewaard en later aangevuld", () => {
   assert.equal(event.tickets.s1[6], 1);
   assert.equal(applySalesReservation(events, sale("s1", { sale_type: "Reservation" })), null);
   assert.equal(applySalesReservation(events, sale("onbekend", { sale_type: "Reservation" })), null);
+});
+
+test("via de resale gekocht wordt later aangevuld, zonder de rest te raken", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("s1", { resale_status: "Posted" }), neverPast);
+  applySalesRow(events, sale("r1", { sale_type: "Reservation" }), neverPast);
+  const event = events.get(EVENT)!;
+
+  // Derde ronde: alleen de vlag "gekocht", "aangeboden" blijft staan.
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true })), EVENT);
+  assert.equal(event.tickets.s1[4], RESALE_POSTED | RESALE_BOUGHT);
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true })), null);
+
+  // De reservering houdt zijn vlag.
+  assert.equal(applySalesVenueResale(events, sale("r1", { sale_type: "Reservation", is_venue_resale: true })), EVENT);
+  assert.deepEqual(event.tickets.r1.slice(4), [RESALE_BOUGHT, event.tickets.r1[5], 1]);
+
+  // Een latere versie zonder de vlag haalt hem weer weg; laatste versie wint.
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: false })), EVENT);
+  assert.equal(event.tickets.s1[4], RESALE_POSTED);
+
+  // Onbekend of niet meer geldig: niets.
+  assert.equal(applySalesVenueResale(events, sale("onbekend", { is_venue_resale: true })), null);
+  assert.equal(applySalesVenueResale(events, sale("s1", { is_venue_resale: true, current_status: false })), null);
 });

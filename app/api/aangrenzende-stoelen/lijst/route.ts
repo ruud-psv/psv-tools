@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { buildNeighborList, ListError, parseListRequest } from "@/lib/aangrenzende-stoelen/build-list";
 import { toCsv } from "@/lib/aangrenzende-stoelen/neighbors";
+import { toResaleCsv } from "@/lib/aangrenzende-stoelen/resale";
 import { INCLUDE_SEAT_COLUMNS } from "@/lib/aangrenzende-stoelen/settings";
 import { BlobReadError } from "@/lib/blob/read";
 
@@ -19,7 +20,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const request = parseListRequest(await req.json().catch(() => ({})));
-    const { event, result, seatMaps, listMeta, dataAsOf, catchUp } = await buildNeighborList(request);
+    const { event, result, seatMaps, resale, resaleBoughtComplete, listMeta, dataAsOf, catchUp } =
+      await buildNeighborList(request);
 
     return NextResponse.json(
       {
@@ -28,6 +30,9 @@ export async function POST(req: NextRequest) {
         stats: result.stats,
         seatMaps,
         csv: toCsv(result.rows, INCLUDE_SEAT_COLUMNS),
+        resaleCount: resale.length,
+        resaleCsv: toResaleCsv(resale),
+        resaleBoughtComplete,
         includeSeatColumns: INCLUDE_SEAT_COLUMNS,
         maxSeatsPerRelation: request.maxSeatsPerRelation,
         dataAsOf,

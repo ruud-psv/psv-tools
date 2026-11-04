@@ -65,10 +65,17 @@ interface ListResult {
     listedSeatsByArea?: Record<string, number>;
     holderSeatsUnknown: number;
     skippedOwnResale: number;
+    skippedResold?: number;
+    resoldSeats?: number;
     skippedTooManySeats: number;
   };
   seatMaps: SeatMaps;
   csv: string;
+  /** Aangeboden en doorverkochte kaarten, om naast Unify te leggen. */
+  resaleCount?: number;
+  resaleCsv?: string;
+  /** Of oudere doorverkopen al zijn aangevuld (eenmalige ronde door Ringside). */
+  resaleBoughtComplete?: boolean;
   includeSeatColumns: boolean;
   maxSeatsPerRelation: number | null;
   dataAsOf: string | null;
@@ -109,20 +116,20 @@ function formatEventDate(value: string | null): string {
   });
 }
 
-function fileNameFor(result: ListResult): string {
+function fileNameFor(result: ListResult, prefix: string): string {
   const slug = (result.event.name ?? "wedstrijd")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   const date = (result.event.eventDate ?? "").slice(0, 10);
-  return `aangrenzende-stoelen-${slug}${date ? `-${date}` : ""}.csv`;
+  return `${prefix}-${slug}${date ? `-${date}` : ""}.csv`;
 }
 
-function downloadCsv(result: ListResult) {
-  const url = URL.createObjectURL(new Blob([result.csv], { type: "text/csv;charset=utf-8" }));
+function downloadCsv(csv: string, fileName: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = fileNameFor(result);
+  link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -449,6 +456,11 @@ export function AangrenzendeStoelen() {
                   hint="relatienummers niet benaderd: hebben zelf een kaart in de resale"
                 />
                 <Stat
+                  label="Doorverkocht"
+                  value={number.format(result.stats.skippedResold ?? 0)}
+                  hint={`relatienummers niet benaderd: kaart al via de resale verkocht (${number.format(result.stats.resoldSeats ?? 0)} stoelen doorverkocht)`}
+                />
+                <Stat
                   label="Boven de grens"
                   value={number.format(result.stats.skippedTooManySeats)}
                   hint={
@@ -475,10 +487,23 @@ export function AangrenzendeStoelen() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={() => downloadCsv(result)} disabled={result.count === 0}>
+                <Button
+                  onClick={() => downloadCsv(result.csv, fileNameFor(result, "aangrenzende-stoelen"))}
+                  disabled={result.count === 0}
+                >
                   <Download className="h-4 w-4" />
                   Download CSV
                 </Button>
+                {result.resaleCsv !== undefined && (
+                  <Button
+                    variant="outline"
+                    onClick={() => downloadCsv(result.resaleCsv ?? "", fileNameFor(result, "resale"))}
+                    disabled={!result.resaleCount}
+                  >
+                    <Download className="h-4 w-4" />
+                    Resale ({number.format(result.resaleCount ?? 0)})
+                  </Button>
+                )}
                 <span className="text-xs text-muted-foreground">
                   {result.includeSeatColumns ? "Relatienummer, vak, rij en stoel" : "Alleen relatienummers"} ·
                   stoelstatus van {formatDateTime(result.dataAsOf)}
@@ -486,6 +511,15 @@ export function AangrenzendeStoelen() {
                   {result.catchUp === "mislukt" && " (bijwerken mislukte; dit is de vorige stand)"}
                 </span>
               </div>
+
+              {result.resaleBoughtComplete === false && (
+                <p className="flex items-start gap-2 text-xs text-muted-foreground max-w-3xl">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-primary" />
+                  Doorverkopen via de resale worden nog eenmalig uit Ringside aangevuld. Tot dat klaar is, mist een
+                  deel van de oudere doorverkopen: die verkopers kunnen nog op de lijst staan, en de teller
+                  Doorverkocht en de resale-export zijn dan te laag.
+                </p>
+              )}
 
               <div className="space-y-3 rounded-md border border-border p-4">
                 <div>

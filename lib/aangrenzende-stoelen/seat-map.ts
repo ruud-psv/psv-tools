@@ -23,6 +23,8 @@ export const SEAT_CODE = {
   /** Bezet door een seizoenkaarthouder die op de lijst staat. */
   lijst: "l",
   bezet: "b",
+  /** Bezet door iemand die de kaart via de resale kocht. */
+  doorverkocht: "d",
   geblokkeerd: "g",
   geen: ".",
 } as const;

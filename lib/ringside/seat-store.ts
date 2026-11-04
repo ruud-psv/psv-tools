@@ -56,6 +56,13 @@ export interface SeatIngestState {
   reservationComplete: boolean;
   reservationRead: number;
   /**
+   * En een derde ronde door `/v1/sales`, om aan te vullen welke tickets via de
+   * resale gekocht zijn (`is_venue_resale`). Zie `applySalesVenueResale()`.
+   */
+  venueResaleCursor: string | null;
+  venueResaleComplete: boolean;
+  venueResaleRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -80,6 +87,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   reservationCursor: null,
   reservationComplete: false,
   reservationRead: 0,
+  venueResaleCursor: null,
+  venueResaleComplete: false,
+  venueResaleRead: 0,
 };
 
 export interface SeatIndexEntry {
