@@ -14,11 +14,10 @@ niet elke maand, dus de recap leunt op **cijfers**:
 - hoeveel nieuwe SSO-records erbij zijn gekomen,
 - de KPI's **Active Fans** en **Engaged Fans**.
 
-Daaronder komt een korte lijst met wat we hebben neergezet, de campagnes van de maand en wat er
-nieuw is in PSV Tools.
+Daaronder komen de nieuwe mijlpalen van de maand en wat er nieuw is in PSV Tools.
 
-**Afbakening.** Campagnestats horen bij de marketeers, en collega's lopen daarvoor via hen. Een
-campagne staat in de recap dus alleen met naam, datum en eigenaar, zonder cijfers.
+**Afbakening.** Campagnes staan niet in de recap. Campagnestats horen bij de marketeers, en
+collega's lopen daarvoor via hen.
 
 Per kalendermaand is er **één editie**. Bij het publiceren zetten we de cijfers vast, zodat de
 link over een half jaar nog steeds hetzelfde laat zien. Dat is het verschil met de Rapportage
@@ -32,10 +31,9 @@ Van boven naar beneden:
 |---|---|---|---|
 | 1 | **Kop** | "Oktober 2026" en een intro van 1 à 2 zinnen | Handmatig (later een AI-voorstel) |
 | 2 | **Fans bereikt** | Mails verstuurd, pageviews, nieuwe SSO-records, Active Fans, Engaged Fans. Per cijfer het verschil met de vorige maand | Automatisch + handmatig, zie §3 |
-| 3 | **Wat we neerzetten** | 3 à 5 regels, bv. nieuwe homepage psv.nl, redesign e-mailtemplate, platformstrategie | Handmatig |
-| 4 | **Campagnes** | Naam, datum, type (kit-release, actie, …) en eigenaar, met de regel "cijfers via de marketeer" | Handmatig |
-| 5 | **Nieuw in PSV Tools** | 3 à 6 regels in gewone taal | Voorstel uit de gemergde PR's, daarna geredigeerd |
-| 6 | **Voetnoot** | Bronnen, meetmoment en definities van de KPI's | Automatisch |
+| 3 | **Nieuwe mijlpalen** | 3 à 5 regels, bv. nieuwe homepage psv.nl, redesign e-mailtemplate, platformstrategie | Handmatig |
+| 4 | **Nieuw in PSV Tools** | 3 à 6 regels in gewone taal | Voorstel uit de gemergde PR's, daarna geredigeerd |
+| 5 | **Voetnoot** | Bronnen, meetmoment en definities van de KPI's | Automatisch |
 
 ## 3. De cijfers
 
@@ -64,8 +62,8 @@ Waar we op letten:
 
 1. Begin van de maand: iemand maakt de editie "Oktober 2026" aan. De tool haalt de automatische
    cijfers op voor 1 t/m 31 oktober, plus die van september voor de vergelijking.
-2. De redacteur vult Active Fans en Engaged Fans in, schrijft de regels voor "Wat we neerzetten",
-   zet de campagnes erin en loopt het voorstel voor "Nieuw in PSV Tools" na.
+2. De redacteur vult Active Fans en Engaged Fans in, schrijft de nieuwe mijlpalen en loopt het
+   voorstel voor "Nieuw in PSV Tools" na.
 3. Een conceptweergave laat zien hoe de editie eruitziet voor lezers.
 4. Publiceren zet de snapshot vast. Er gaan daarna geen API-calls meer uit. Corrigeren blijft
    mogelijk, en dan verschijnt "bijgewerkt op".
@@ -100,8 +98,7 @@ interface RecapEdition {
     activeFans: Kpi;
     engagedFans: Kpi;
   };
-  highlights: { title: string; text: string; href?: string }[];
-  campaigns: { name: string; date: string; type: string; owner?: string }[];
+  milestones: { title: string; text: string; href?: string }[];
   toolsNews: { title: string; text: string; href?: string }[];
   fetchedAt: string;
   publishedAt?: string;
