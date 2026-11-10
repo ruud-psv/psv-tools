@@ -55,8 +55,12 @@ export function DashboardShell({
         />
       </div>
 
-      {/* Main content — top padding on mobile to clear the fixed header */}
-      <main className="flex-1 overflow-y-auto bg-background pt-14 lg:pt-0">
+      {/* Main content — top padding on mobile to clear the fixed header.
+          `relative`: een absoluut geplaatst element in de inhoud (zoals een
+          `sr-only`-label) hoort bij deze scrollende kolom. Zonder dat hangt het
+          aan de pagina zelf en maakt het die langer dan het scherm: dan scrolt
+          de hele pagina door en schuift de zijbalk half uit beeld. */}
+      <main className="relative flex-1 overflow-y-auto bg-background pt-14 lg:pt-0">
         {children}
       </main>
 

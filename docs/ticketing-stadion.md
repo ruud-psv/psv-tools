@@ -75,10 +75,12 @@ opengeklapte rij van het overzicht.
 - **Verkoop per dag:** zonder seizoenkaarten en vrijkaarten (`readMatchSales()` in
   `lib/ringside/store.ts`), dus alleen losse verkoop en resale. Dat geldt ook
   voor het tempo, de vergelijking met eerder, de lijst met gespeelde wedstrijden en de
-  chat. De grafiek van de Ringside-pagina (`components/ticket-sales-chart.tsx`),
-  afgezet tegen het aantal dagen tot de aftrap. Standaard staat dezelfde tegenstander de
-  vorige keer ernaast; er kunnen tot drie eerdere thuiswedstrijden naast. "Tempo" zet de
-  lijnen om naar het aandeel van de eigen eindstand.
+  chat. De grafiek is een staafdiagram van de laatste 28 dagen voor de wedstrijd
+  (`components/stadion-daily-sales-chart.tsx`, rekenwerk in
+  `lib/ticketing-stadion/daily-bars.ts`); wat eerder verkocht is, staat als getal in de
+  legenda. Standaard alleen deze wedstrijd. Kies je een eerdere thuiswedstrijd (tot drie),
+  dan krijgt die per dag een eigen staaf ernaast, op hetzelfde aantal dagen voor de aftrap.
+  Dagen die nog moeten komen, blijven leeg.
 
 API: `GET /api/ticketing-stadion/<eventId>` leest één stoelenkaart en de verkoop per dag;
 `GET /api/ticketing-stadion/verkoop?ids=…` geeft de verkoop per dag van de gekozen
@@ -141,7 +143,9 @@ op de deellink.
 
 ## Instroom (eerste versie)
 
-Pagina: `/dashboard/ticketing-stadion/instroom`, via de knop boven het overzicht. Het
+Pagina: `/dashboard/ticketing-stadion/instroom`. Er staat geen knop meer naar toe (alleen via
+het adres): de scans van het Philips Stadion staan niet in Ringside, zie
+[ringside-api.md](ringside-api.md). Het
 Philips Stadion met elke stoel als punt, en een tijdlijn die de stoelen laat oplichten op
 het moment dat de kaart is gescand.
 

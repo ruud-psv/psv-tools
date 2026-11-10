@@ -18,7 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StadiumOccupancyMap } from "@/components/stadium-occupancy-map";
 import { StadionChat } from "@/components/stadion-chat";
 import { StadionSupplyChart } from "@/components/stadion-supply-chart";
-import { TicketSalesChart } from "@/components/ticket-sales-chart";
+import { StadionDailySalesChart, type DailySalesSeries } from "@/components/stadion-daily-sales-chart";
 import {
   daysLabel,
   Delta,
@@ -31,8 +31,6 @@ import {
 } from "@/components/ticketing-stadion-parts";
 import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
 import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
-import { offsetsToDailyPoints } from "@/lib/ringside/daily-sales";
-import type { ComparisonInput, ComparisonMode } from "@/lib/ticket-sales-comparison";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
 import type { ComparableMatch, Comparison, SalesPace } from "@/lib/ticketing-stadion/summary";
 
@@ -164,7 +162,7 @@ function AreaTable({ rows }: { rows: AreaOccupancy[] }) {
   );
 }
 
-/** De verkoop per dag van deze wedstrijd, met eerdere thuiswedstrijden ernaast. */
+/** De verkoop per dag van deze wedstrijd als staven; eerdere thuiswedstrijden kun je ernaast zetten. */
 function SalesSection({
   data,
   salesUrl,
@@ -179,7 +177,6 @@ function SalesSection({
   const { match, sales, comparable } = data;
   // `null`: opgevraagd, maar geen verkoop gevonden. Zo wordt hij niet steeds opnieuw opgevraagd.
   const [series, setSeries] = useState<Record<string, SalesSeries | null>>({});
-  const [mode, setMode] = useState<ComparisonMode>("perDag");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -203,27 +200,24 @@ function SalesSection({
     };
   }, [selected, series, salesUrl]);
 
-  const points = useMemo(
-    () => (sales && match.eventDate ? offsetsToDailyPoints(sales.perOffset, match.eventDate) : []),
-    [sales, match.eventDate]
-  );
-
-  const comparisons = useMemo<ComparisonInput[]>(
-    () =>
-      selected
+  // Deze wedstrijd eerst; daarna, per dag ernaast, de wedstrijden waarmee vergeleken wordt.
+  const chartSeries = useMemo<DailySalesSeries[]>(() => {
+    if (!sales || !match.eventDate) return [];
+    return [
+      {
+        id: match.eventId,
+        name: match.name ?? "Deze wedstrijd",
+        season: sales.season,
+        eventDate: match.eventDate,
+        perOffset: sales.perOffset,
+        daysOut: match.daysOut,
+      },
+      ...selected
         .map((id) => series[id])
         .filter((m): m is SalesSeries => Boolean(m))
-        .map((m) => ({
-          id: m.productId,
-          name: m.name,
-          season: m.season,
-          eventDate: m.eventDate,
-          perOffset: new Map(Object.entries(m.perOffset).map(([offset, count]) => [Number(offset), count])),
-          total: m.total,
-          unfilteredTotal: m.total,
-        })),
-    [selected, series]
-  );
+        .map((m) => ({ id: m.productId, name: m.name, season: m.season, eventDate: m.eventDate, perOffset: m.perOffset })),
+    ];
+  }, [match, sales, selected, series]);
 
   const byId = new Map(comparable.map((m) => [m.productId, m]));
   const options = comparable.filter((m) => !selected.includes(m.productId));
@@ -270,18 +264,6 @@ function SalesSection({
             )}
           </div>
         </div>
-        <div className="flex gap-2">
-          {(["perDag", "tempo"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setMode(option)}
-              className={`btn btn--medium ${mode === option ? "" : "btn--outlined"}`}
-            >
-              {option === "perDag" ? "Per dag" : "Tempo"}
-            </button>
-          ))}
-        </div>
       </div>
 
       {error && (
@@ -291,15 +273,7 @@ function SalesSection({
         </p>
       )}
 
-      <TicketSalesChart
-        eventId={match.eventId}
-        eventDate={match.eventDate}
-        points={points}
-        comparisons={comparisons}
-        liveName={match.name ?? "Deze wedstrijd"}
-        comparisonMode={mode}
-        comparisonWindow="full"
-      />
+      <StadionDailySalesChart series={chartSeries} />
     </div>
   );
 }
@@ -385,12 +359,8 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
       .then((result) => {
         if (cancelled) return;
         setData(result);
-        // Standaard dezelfde tegenstander de vorige keer, anders de laatste thuiswedstrijd.
-        setCompareIds(
-          result.comparison.sameOpponent
-            ? [result.comparison.sameOpponent.eventId]
-            : result.comparable.slice(0, 1).map((m) => m.productId)
-        );
+        // Standaard alleen deze wedstrijd; vergelijken kies je zelf.
+        setCompareIds([]);
       })
       .catch((caught) => !cancelled && setError(caught instanceof Error ? caught.message : String(caught)));
     return () => {

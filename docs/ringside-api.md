@@ -346,6 +346,14 @@ Gemeten op 2026-11-10 met de probe, op de eerste pagina van 5.000 rijen (scans u
 - **`last_touched_at` zegt niets over de vertraging van de stroom:** een scan uit 2019
   stond op oktober 2026, door een dataverversing.
 
+**De scans van het Philips Stadion staan er niet in** (hele stroom gelezen op 2026-11-10 met
+`/api/ringside/instroom/check`): 44.335 scans in totaal, van 2016 tot april 2022, over 76
+kleine evenementen (hooguit 1.458 scans per stuk), geen enkele met een poortje ingevuld en
+niets van 2023 of later. `sales.barcode_history` bevat per barcode alleen of hij actief is
+en wanneer hij is aangemaakt of geannuleerd, geen gebruik of scantijd. De instroom per stoel
+is met Ringside alleen dus niet te maken; daarvoor is een export uit het systeem van de
+toegangscontrole nodig.
+
 De instroom op Ticketing Stadion gebruikt deze tabel; zie
 [ticketing-stadion.md](ticketing-stadion.md).
 
