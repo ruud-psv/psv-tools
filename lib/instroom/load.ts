@@ -7,9 +7,9 @@
 import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
 import { todayInAmsterdam } from "../ringside/seat-state";
 import { readEventSeats, readSeatIndex } from "../ringside/seat-store";
-import { readEventSales } from "../ringside/store";
+import { readKnownProducts } from "../ringside/store";
 import { isStadiumStand } from "../ticketing-stadion/summary";
-import { describeTarget, findInstroomMatch } from "./match";
+import { describeTarget, findInstroomMatch, nearbyMatches } from "./match";
 import { layoutFromSeatState } from "./layout";
 import { buildReplay, EMPTY_LAYOUT, eventDateToMs, type Replay, type StadiumLayout } from "./replay";
 import { isInstroomLocked, readInstroomData, readInstroomState } from "./store";
@@ -37,6 +37,9 @@ export interface InstroomStatus {
   match: { productId: string; name: string; eventDate: string | null } | null;
   /** Omschrijving van de wedstrijd die we zoeken, voor als hij niet gevonden is. */
   wanted: string;
+  /** Als de wedstrijd niet gevonden is: hoeveel producten er bekend zijn, en de thuiswedstrijden rond die dag. */
+  known: number;
+  nearby: string[];
   started: boolean;
   running: boolean;
   complete: boolean;
@@ -54,17 +57,26 @@ export interface InstroomStatus {
 export async function loadInstroomStatus(): Promise<InstroomStatus> {
   const state = await readInstroomState();
 
+  let known = 0;
+  let nearby: string[] = [];
   let match = state.productId
     ? { productId: state.productId, name: state.name ?? "Onbekende wedstrijd", eventDate: state.eventDate }
     : null;
   if (!match) {
-    const found = findInstroomMatch(await readEventSales());
+    const products = await readKnownProducts();
+    const found = findInstroomMatch(products);
     if (found) match = { productId: found.productId, name: found.name, eventDate: found.eventDate };
+    else {
+      known = products.length;
+      nearby = nearbyMatches(products);
+    }
   }
 
   return {
     match,
     wanted: describeTarget(),
+    known,
+    nearby,
     started: Boolean(state.productId),
     running: isInstroomLocked(state),
     complete: state.salesComplete && state.attendanceComplete,

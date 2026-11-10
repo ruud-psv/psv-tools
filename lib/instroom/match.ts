@@ -7,7 +7,6 @@
  */
 
 import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
-import type { EventSales } from "../ringside/store";
 import { opponentOf } from "../ticketing-stadion/summary";
 
 export interface InstroomTarget {
@@ -30,21 +29,49 @@ export function describeTarget(target: InstroomTarget = INSTROOM_MATCH): string 
   return `PSV - ${target.opponent} op ${date}`;
 }
 
+/** Wat er van een product nodig is om de wedstrijd te herkennen. */
+export interface KnownProduct {
+  productId: string;
+  name: string;
+  eventDate: string;
+  total?: number;
+}
+
+function sameOpponent(a: string, b: string): boolean {
+  return Boolean(a && b) && (a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `));
+}
+
 /**
- * Het product van de wedstrijd. Staan er meer producten op die dag tegen die
- * tegenstander, dan het product met de meeste verkoop: dat is de wedstrijd zelf.
+ * Het product van de wedstrijd: een thuiswedstrijd van PSV 1 op die dag tegen
+ * die tegenstander. De naam mag iets achter de tegenstander hebben staan
+ * (`PSV - Willem II 26/27`). Staan er meer producten, dan dat met de meeste
+ * verkoop: dat is de wedstrijd zelf.
  */
-export function findInstroomMatch(
-  sales: Record<string, EventSales>,
+export function findInstroomMatch<T extends KnownProduct>(
+  products: Iterable<T>,
   target: InstroomTarget = INSTROOM_MATCH
-): EventSales | null {
+): T | null {
   const opponent = opponentOf(`PSV - ${target.opponent}`);
   return (
-    Object.values(sales)
+    [...products]
       .filter(
         (event) =>
-          isPsvHomeMatch(event.name) && event.eventDate.slice(0, 10) === target.date && opponentOf(event.name) === opponent
+          isPsvHomeMatch(event.name) &&
+          event.eventDate.slice(0, 10) === target.date &&
+          sameOpponent(opponentOf(event.name), opponent)
       )
-      .sort((a, b) => b.total - a.total)[0] ?? null
+      .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))[0] ?? null
   );
+}
+
+/** Thuiswedstrijden van PSV 1 binnen een week van de gezochte dag, voor de melding als hij niet gevonden is. */
+export function nearbyMatches(products: Iterable<KnownProduct>, target: InstroomTarget = INSTROOM_MATCH): string[] {
+  const day = Date.parse(`${target.date}T00:00:00Z`);
+  return [...products]
+    .filter((event) => {
+      const other = Date.parse(`${event.eventDate.slice(0, 10)}T00:00:00Z`);
+      return isPsvHomeMatch(event.name) && Math.abs(other - day) <= 7 * 86_400_000;
+    })
+    .sort((a, b) => a.eventDate.localeCompare(b.eventDate))
+    .map((event) => `${event.name} (${event.eventDate.slice(0, 16)})`);
 }
