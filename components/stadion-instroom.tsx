@@ -90,6 +90,71 @@ function Progress({ status }: { status: InstroomStatus }) {
   );
 }
 
+/** De keuzelijst: een gespeelde thuiswedstrijd van dit seizoen, en de knop die het inlezen start. */
+function MatchPicker({
+  status,
+  disabled,
+  onStart,
+}: {
+  status: InstroomStatus;
+  disabled: boolean;
+  onStart: (productId: string) => void;
+}) {
+  const current = status.match?.productId ?? "";
+  const [chosen, setChosen] = useState(current || status.matches[0]?.productId || "");
+  const replaces = Boolean(current) && chosen !== current;
+
+  if (status.matches.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm">
+          {status.known === 0
+            ? "De lijst met wedstrijden uit Ringside is er nog niet: de verkoop per dag is nog met zijn eerste doorloop bezig. Probeer het daarna opnieuw."
+            : `Er staan geen gespeelde thuiswedstrijden van seizoen ${status.season} in Ringside.`}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-6">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="form-group min-w-[16rem] flex-1 sm:max-w-md">
+            <label htmlFor="instroom-wedstrijd" className="form-label">
+              Wedstrijd ({status.season})
+            </label>
+            <select
+              id="instroom-wedstrijd"
+              value={chosen}
+              onChange={(event) => setChosen(event.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {status.matches.map((match) => (
+                <option key={match.productId} value={match.productId}>
+                  {match.name} · {formatEventDate(match.eventDate)}
+                  {match.productId === current ? " (gekozen)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button onClick={() => onStart(chosen)} disabled={disabled || !chosen || chosen === current}>
+            {replaces ? "Vervang en lees in" : "Lees scans in"}
+          </Button>
+        </div>
+        <p className="max-w-3xl text-xs text-muted-foreground">
+          {replaces
+            ? `Er is plaats voor één wedstrijd tegelijk: dit vervangt ${status.match?.name}. `
+            : ""}
+          Ringside kan niet op wedstrijd filteren. De tool leest daarom één keer alle verkoop en alle scans door en
+          bewaart alleen wat bij de gekozen wedstrijd hoort. Dat duurt een paar uur.
+          {status.running ? " Er loopt nu een run; kiezen kan zodra die klaar is." : ""}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function StadionInstroom() {
   const [payload, setPayload] = useState<InstroomPayload | null>(null);
   const [demo, setDemo] = useState<Replay | null>(null);
@@ -137,11 +202,15 @@ export function StadionInstroom() {
     return () => clearInterval(timer);
   }, [fetchPayload, reading]);
 
-  async function startIngest() {
+  /** Start of hervat het inlezen. Met een `productId` wordt dat de wedstrijd. */
+  async function startIngest(productId?: string) {
     setBusy("start");
     try {
+      const query = productId ? `?productId=${encodeURIComponent(productId)}` : "";
       // Een run duurt minuten; we wachten alleen tot hij gestart is.
-      await fetch("/api/ringside/instroom", { cache: "no-store", signal: AbortSignal.timeout(4000) }).catch(() => null);
+      await fetch(`/api/ringside/instroom${query}`, { cache: "no-store", signal: AbortSignal.timeout(4000) }).catch(
+        () => null
+      );
       await load();
     } finally {
       setBusy(null);
@@ -184,8 +253,9 @@ export function StadionInstroom() {
           <span className="tag tag--outlined">Eerste versie</span>
         </div>
         <p className="max-w-3xl text-muted-foreground">
-          Hoe het Philips Stadion volloopt: elke stoel licht op het moment dat de kaart bij de ingang is gescand. Voor nu
-          van één wedstrijd{status?.match ? `: ${status.match.name}, ${formatEventDate(status.match.eventDate)}` : ""}.
+          Hoe het Philips Stadion volloopt: elke stoel licht op het moment dat de kaart bij de ingang is gescand. De scans
+          worden alleen op verzoek opgehaald: kies een gespeelde thuiswedstrijd en lees hem in.
+          {status?.match ? ` Nu: ${status.match.name}, ${formatEventDate(status.match.eventDate)}.` : ""}
         </p>
       </div>
 
@@ -218,43 +288,38 @@ export function StadionInstroom() {
         </>
       ) : (
         <>
-          {!hasScans && (status || error) && (
+          {status && (
+            <MatchPicker
+              key={status.match?.productId ?? "geen"}
+              status={status}
+              disabled={busy !== null || status.running}
+              onStart={(productId) => startIngest(productId)}
+            />
+          )}
+
+          {!hasScans && (status?.match || error || status) && (
             <Card>
               <CardContent className="space-y-4 p-6">
-                {status &&
-                  (!status.match ? (
-                    <div className="max-w-3xl space-y-2 text-sm">
-                      <p>
-                        {status.wanted} is niet gevonden in de productenlijst uit Ringside
-                        {status.known === 0
-                          ? ": die lijst is nog leeg. De verkoop per dag is waarschijnlijk nog met zijn eerste doorloop bezig; probeer het daarna opnieuw."
-                          : ` (${number.format(status.known)} producten).`}
-                      </p>
-                      {status.nearby.length > 0 && (
-                        <p>Thuiswedstrijden rond die dag: {status.nearby.join(" · ")}.</p>
-                      )}
-                    </div>
-                  ) : !status.started ? (
+                {status?.match &&
+                  (!status.complete ? (
                     <p className="max-w-3xl text-sm">
-                      De scans van {matchName} zijn nog niet ingelezen. Ringside kan niet op wedstrijd filteren: de tool
-                      leest daarom één keer alle verkoop en alle scans door en bewaart alleen wat bij deze wedstrijd
-                      hoort. Dat duurt een paar uur en gaat op de achtergrond door; je kunt deze pagina sluiten.
+                      Het inlezen van {matchName} {status.running ? "loopt" : "staat stil"}. Er zijn nog geen scans van
+                      deze wedstrijd gevonden; die kunnen overal in de stroom staan. Het gaat op de achtergrond door;
+                      je kunt deze pagina sluiten.
                     </p>
                   ) : (
                     <p className="max-w-3xl text-sm">
-                      {status.complete
-                        ? `Alles is ingelezen, maar er zijn geen scans van ${matchName} gevonden.`
-                        : `Het inlezen ${status.running ? "loopt" : "is gestart"}. Er zijn nog geen scans van ${matchName} gevonden; die kunnen overal in de stroom staan.`}
+                      Alles is ingelezen, maar er zijn geen scans van {matchName} gevonden.
                     </p>
                   ))}
 
                 {status?.started && <Progress status={status} />}
 
                 <div className="flex flex-wrap gap-3">
-                  {status?.match && !status.complete && (
-                    <Button onClick={startIngest} disabled={busy !== null || status.running}>
+                  {status?.match && !status.complete && !status.running && (
+                    <Button onClick={() => startIngest()} disabled={busy !== null}>
                       {busy === "start" && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {status.running ? "Inlezen loopt" : status.started ? "Ga verder met inlezen" : "Start inlezen"}
+                      Ga verder met inlezen
                     </Button>
                   )}
                   <Button variant="outline" onClick={showDemo} disabled={busy !== null}>
@@ -276,7 +341,7 @@ export function StadionInstroom() {
                   </p>
                   <Progress status={status} />
                   {!status.running && (
-                    <Button size="sm" onClick={startIngest} disabled={busy !== null}>
+                    <Button size="sm" onClick={() => startIngest()} disabled={busy !== null}>
                       {busy === "start" && <Loader2 className="h-4 w-4 animate-spin" />}
                       Ga verder met inlezen
                     </Button>
