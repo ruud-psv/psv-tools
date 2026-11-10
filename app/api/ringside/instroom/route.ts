@@ -8,13 +8,14 @@ import { EVENT_ID } from "@/lib/ticketing-stadion/load";
  * Leest de tickets en scans van één gespeelde wedstrijd in, voor de instroom
  * op Ticketing Stadion (zie `lib/instroom/ingest.ts`).
  *
- * Geen cron: het is eenmalig werk voor één wedstrijd. Iemand met een login
- * start het vanaf de pagina. Beide stromen moeten helemaal doorlopen worden, en
+ * Geen cron en geen vaste wedstrijd: dit gebeurt alleen op verzoek. Iemand met
+ * een login kiest op de pagina een gespeelde thuiswedstrijd en start het. Beide stromen moeten helemaal doorlopen worden, en
  * dat is meer dan één serverless run aankan; een run start daarom zelf de
  * volgende, tot alles binnen is.
  *
  * - `?restart=1` begint opnieuw.
- * - `?productId=<id>` leest een andere wedstrijd in dan de vaste.
+ * - `?productId=<id>` kiest de wedstrijd (verplicht bij de eerste keer). Een
+ *   andere dan er stond vervangt hem, en het inlezen begint opnieuw.
  * - `?chain=0` doet één run; `?force=1` negeert het slot.
  */
 

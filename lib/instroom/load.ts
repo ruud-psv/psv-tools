@@ -9,7 +9,7 @@ import { todayInAmsterdam } from "../ringside/seat-state";
 import { readEventSeats, readSeatIndex } from "../ringside/seat-store";
 import { readKnownProducts } from "../ringside/store";
 import { isStadiumStand } from "../ticketing-stadion/summary";
-import { describeTarget, findInstroomMatch, nearbyMatches } from "./match";
+import { INSTROOM_SEASON, playedHomeMatches } from "./match";
 import { layoutFromSeatState } from "./layout";
 import { buildReplay, EMPTY_LAYOUT, eventDateToMs, type Replay, type StadiumLayout } from "./replay";
 import { isInstroomLocked, readInstroomData, readInstroomState } from "./store";
@@ -32,14 +32,20 @@ async function loadStadiumLayout(): Promise<StadiumLayout> {
   return EMPTY_LAYOUT;
 }
 
+export interface InstroomMatchOption {
+  productId: string;
+  name: string;
+  eventDate: string;
+}
+
 export interface InstroomStatus {
-  /** De wedstrijd, zoals in de toestand of anders zoals hij opgezocht is. */
+  /** De wedstrijd die is of wordt ingelezen; `null` als er nog geen gekozen is. */
   match: { productId: string; name: string; eventDate: string | null } | null;
-  /** Omschrijving van de wedstrijd die we zoeken, voor als hij niet gevonden is. */
-  wanted: string;
-  /** Als de wedstrijd niet gevonden is: hoeveel producten er bekend zijn, en de thuiswedstrijden rond die dag. */
+  /** Waaruit je kunt kiezen: de gespeelde thuiswedstrijden van dit seizoen. */
+  matches: InstroomMatchOption[];
+  season: string;
+  /** Hoeveel producten er uit Ringside bekend zijn; 0 als die lijst er nog niet is. */
   known: number;
-  nearby: string[];
   started: boolean;
   running: boolean;
   complete: boolean;
@@ -53,30 +59,21 @@ export interface InstroomStatus {
   lastError: string | null;
 }
 
-/** Alleen hoe ver het inlezen is; opent de data van de wedstrijd niet. */
+/** Alleen hoe ver het inlezen is en waaruit je kunt kiezen; opent de data van de wedstrijd niet. */
 export async function loadInstroomStatus(): Promise<InstroomStatus> {
-  const state = await readInstroomState();
-
-  let known = 0;
-  let nearby: string[] = [];
-  let match = state.productId
-    ? { productId: state.productId, name: state.name ?? "Onbekende wedstrijd", eventDate: state.eventDate }
-    : null;
-  if (!match) {
-    const products = await readKnownProducts();
-    const found = findInstroomMatch(products);
-    if (found) match = { productId: found.productId, name: found.name, eventDate: found.eventDate };
-    else {
-      known = products.length;
-      nearby = nearbyMatches(products);
-    }
-  }
+  const [state, products] = await Promise.all([readInstroomState(), readKnownProducts()]);
 
   return {
-    match,
-    wanted: describeTarget(),
-    known,
-    nearby,
+    match: state.productId
+      ? { productId: state.productId, name: state.name ?? "Onbekende wedstrijd", eventDate: state.eventDate }
+      : null,
+    matches: playedHomeMatches(products, todayInAmsterdam()).map(({ productId, name, eventDate }) => ({
+      productId,
+      name,
+      eventDate,
+    })),
+    season: INSTROOM_SEASON,
+    known: products.length,
     started: Boolean(state.productId),
     running: isInstroomLocked(state),
     complete: state.salesComplete && state.attendanceComplete,

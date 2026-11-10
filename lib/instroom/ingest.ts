@@ -1,5 +1,6 @@
 /**
- * Leest de tickets en scans van één gespeelde wedstrijd in uit Ringside.
+ * Leest de tickets en scans van één gespeelde wedstrijd in uit Ringside, op
+ * verzoek: iemand kiest de wedstrijd op de instroompagina.
  *
  * Ringside kan niet op wedstrijd filteren, en de stoelstatus bewaart een
  * wedstrijd niet meer zodra hij gespeeld is. Wie achteraf wil weten welke stoel
@@ -15,7 +16,8 @@
 
 import { readFeed, type FeedResult } from "../ringside/feed";
 import { readKnownProducts } from "../ringside/store";
-import { describeTarget, findInstroomMatch } from "./match";
+import { todayInAmsterdam } from "../ringside/seat-state";
+import { playedHomeMatches } from "./match";
 import {
   applyInstroomSale,
   applyInstroomScan,
@@ -40,26 +42,26 @@ export interface InstroomRunResult {
 }
 
 /**
- * Zoekt de wedstrijd op en zet hem in de toestand. Met een `productId` wordt
- * dat de wedstrijd; is het een andere dan er stond, dan begint het inlezen
- * opnieuw.
+ * Zet de gekozen wedstrijd in de toestand. Zonder `productId` gaat het inlezen
+ * verder met de wedstrijd die er al stond; is het een andere, dan begint het
+ * opnieuw. Alleen een wedstrijd uit de keuzelijst van de pagina mag.
  */
 async function resolveTarget(state: InstroomState, productId: string | null): Promise<void> {
-  if (state.productId && (!productId || productId === state.productId)) return;
-
-  // De productenlijst, ook als de verkoop per dag nog met zijn eerste doorloop bezig is.
-  const products = await readKnownProducts();
-  const event = productId ? products.find((product) => product.productId === productId) : findInstroomMatch(products);
-  if (!event && !productId) {
-    throw new Error(
-      `${describeTarget()} staat niet in de productenlijst uit Ringside. Is de verkoop-ingest (/api/ringside/ingest) al klaar?`
-    );
+  if (!productId || productId === state.productId) {
+    if (state.productId) return;
+    throw new Error("Kies eerst een wedstrijd op de instroompagina.");
   }
 
+  // De productenlijst, ook als de verkoop per dag nog met zijn eerste doorloop bezig is.
+  const event = playedHomeMatches(await readKnownProducts(), todayInAmsterdam()).find(
+    (product) => product.productId === productId
+  );
+  if (!event) throw new Error("Deze wedstrijd staat niet in de lijst van gespeelde thuiswedstrijden.");
+
   Object.assign(state, EMPTY_INSTROOM_STATE, {
-    productId: event?.productId ?? productId,
-    name: event?.name ?? null,
-    eventDate: event?.eventDate ?? null,
+    productId: event.productId,
+    name: event.name,
+    eventDate: event.eventDate,
     runs: state.runs,
   });
 }

@@ -1,56 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { EventSales } from "../ringside/store";
-import { describeTarget, findInstroomMatch, nearbyMatches } from "./match";
+import { playedHomeMatches } from "./match";
 
-const event = (productId: string, name: string, eventDate: string, total = 100): EventSales => ({
-  productId,
-  name,
-  eventDate,
-  productType: "Event",
-  category: "Wedstrijden",
-  season: "26/27",
-  perOffset: {},
-  total,
-  series: { vrij: {}, resale: {}, seizoenkaart: {}, vrijkaart: {} },
-  otherTotal: 0,
+const products = [
+  { productId: "a", name: "PSV - Willem II", eventDate: "2026-10-31 20:00:00" },
+  { productId: "b", name: "PSV - Ajax", eventDate: "2026-09-20 14:30:00" },
+  { productId: "c", name: "PSV - AZ", eventDate: "2026-11-28 18:45:00" },
+  { productId: "d", name: "PSV - Feyenoord", eventDate: "2026-03-01 14:30:00" },
+  { productId: "e", name: "Jong PSV - Willem II", eventDate: "2026-10-30 20:00:00" },
+  { productId: "f", name: "Willem II - PSV", eventDate: "2026-08-15 20:00:00" },
+  { productId: "g", name: "PSV Vrouwen - Ajax Vrouwen", eventDate: "2026-10-01 20:00:00" },
+];
+
+test("de keuzelijst: gespeelde thuiswedstrijden van PSV 1 dit seizoen, de laatste bovenaan", () => {
+  assert.deepEqual(playedHomeMatches(products, "2026-11-10").map((match) => match.productId), ["a", "b"]);
 });
 
-const sales = Object.fromEntries(
-  [
-    event("a", "PSV - Willem II", "2026-10-31 20:00:00", 30000),
-    event("b", "PSV - Willem II | Parkeren", "2026-10-31 20:00:00", 400),
-    event("c", "PSV - Willem II", "2025-03-01 18:45:00"),
-    event("d", "Jong PSV - Willem II", "2026-10-31 20:00:00"),
-    event("e", "Willem II - PSV", "2026-10-31 20:00:00"),
-    event("f", "PSV - Ajax", "2026-10-31 20:00:00"),
-  ].map((entry) => [entry.productId, entry])
-);
-
-test("de wedstrijd wordt gevonden op tegenstander en datum", () => {
-  assert.equal(findInstroomMatch(Object.values(sales))?.productId, "a");
-  assert.equal(findInstroomMatch(Object.values(sales), { opponent: "willem ii", date: "2025-03-01" })?.productId, "c");
+test("een wedstrijd van vandaag staat erbij, een komende niet", () => {
+  assert.deepEqual(playedHomeMatches(products, "2026-11-28").map((match) => match.productId), ["c", "a", "b"]);
 });
 
-test("staat hij er niet in, dan komt er niets terug", () => {
-  assert.equal(findInstroomMatch(Object.values(sales), { opponent: "Willem II", date: "2026-11-01" }), null);
-  assert.equal(findInstroomMatch([]), null);
-});
-
-test("de omschrijving noemt tegenstander en datum", () => {
-  assert.equal(describeTarget(), "PSV - Willem II op 31 oktober 2026");
-});
-
-test("de naam mag iets achter de tegenstander hebben", () => {
-  const products = [{ productId: "x", name: "PSV - Willem II 26/27", eventDate: "2026-10-31 20:00:00" }];
-  assert.equal(findInstroomMatch(products)?.productId, "x");
-});
-
-test("niet gevonden: de thuiswedstrijden rond die dag", () => {
-  const products = [
-    { productId: "x", name: "PSV - Ajax", eventDate: "2026-11-01 14:30:00" },
-    { productId: "y", name: "PSV - AZ", eventDate: "2026-12-20 14:30:00" },
-    { productId: "z", name: "Jong PSV - Ajax", eventDate: "2026-11-01 14:30:00" },
-  ];
-  assert.deepEqual(nearbyMatches(products), ["PSV - Ajax (2026-11-01 14:30)"]);
+test("een ander seizoen geeft andere wedstrijden", () => {
+  assert.deepEqual(playedHomeMatches(products, "2026-11-10", "25/26").map((match) => match.productId), ["d"]);
+  assert.deepEqual(playedHomeMatches([], "2026-11-10"), []);
 });

@@ -143,9 +143,13 @@ op de deellink.
 
 Pagina: `/dashboard/ticketing-stadion/instroom`, via de knop boven het overzicht. Het
 Philips Stadion met elke stoel als punt, en een tijdlijn die de stoelen laat oplichten op
-het moment dat de kaart is gescand. Voor nu van één wedstrijd: PSV - Willem II op
-31 oktober 2026 (`INSTROOM_MATCH` in `lib/instroom/match.ts`; het product-id wordt
-opgezocht in de productenlijst).
+het moment dat de kaart is gescand.
+
+De scans worden alleen op verzoek opgehaald. Op de pagina kies je een gespeelde
+thuiswedstrijd van PSV 1 uit seizoen 26/27 (`playedHomeMatches()` en `INSTROOM_SEASON` in
+`lib/instroom/match.ts`, uit de productenlijst van de verkoop-ingest) en klik je op "Lees
+scans in". Er is plaats voor één wedstrijd tegelijk: een andere kiezen vervangt de vorige
+en begint het inlezen opnieuw.
 
 - **Scherm:** een canvas (`components/stadion-instroom-player.tsx`). Rood is gescand, wit
   net binnen, grijs een kaart die niet is gescand, donkergrijs geen kaart. Onderin de klok
@@ -180,11 +184,12 @@ opgezocht in de productenlijst).
 Ringside kan niet op wedstrijd filteren en de stoelstatus is na de wedstrijd weg. De route
 `/api/ringside/instroom` leest daarom `/v1/sales` en `/v1/attendance` één keer helemaal
 door en bewaart alleen de rijen van deze wedstrijd (`lib/instroom/ingest.ts`). Dat duurt
-een paar uur. Je start het met "Start inlezen" op de pagina; een run start zelf de
+een paar uur. Je start het met "Lees scans in" op de pagina; een run start zelf de
 volgende, tot alles binnen is. Er is geen cron: het is eenmalig werk. Tijdens het inlezen
 toont de pagina wat er al is.
 
-- `?restart=1` begint opnieuw, `?productId=<id>` leest een andere wedstrijd in, `?chain=0`
+- `?productId=<id>` kiest de wedstrijd (alleen een uit de keuzelijst), `?restart=1` begint
+  opnieuw, `?chain=0`
   doet één run en `?force=1` negeert het slot.
 - **Opslag:** `ringside/instroom/state.json` (cursors, voortgang, slot) en
   `ringside/instroom/<product-id>.json.gz` in Vercel Blob.
