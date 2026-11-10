@@ -367,7 +367,7 @@ export function TicketingStadion() {
           balk: rood verkocht, goud verkocht maar in de resale, grijs gereserveerd. Klik op een wedstrijd voor de details. Stoelstatus van{" "}
           {formatDateTime(seats.caughtUpAt)}
           {seats.running && " (er loopt nu een update)"}, verkoop per dag van {formatDateTime(sales.updatedAt)}. De
-          vergelijking gebruikt voor beide wedstrijden de verkoop per dag, zonder reserveringen en seizoenkaarten.
+          vergelijking gebruikt voor beide wedstrijden de verkoop per dag, zonder reserveringen, seizoenkaarten en vrijkaarten.
         </p>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

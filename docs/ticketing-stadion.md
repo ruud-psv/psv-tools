@@ -72,8 +72,8 @@ opengeklapte rij van het overzicht.
   daaronder per vak (de dertig vakken met het meeste aanbod; de rest staat in de tabel).
   Het is de stand van nu; het verloop over de tijd volgt uit de meting per uur (fase 2 in
   [ticketing-verloop.md](ticketing-verloop.md)).
-- **Verkoop per dag:** zonder seizoenkaarten (`readMatchSales()` in
-  `lib/ringside/store.ts`), dus alleen losse verkoop, resale en vrijkaarten. Dat geldt ook
+- **Verkoop per dag:** zonder seizoenkaarten en vrijkaarten (`readMatchSales()` in
+  `lib/ringside/store.ts`), dus alleen losse verkoop en resale. Dat geldt ook
   voor het tempo, de vergelijking met eerder, de lijst met gespeelde wedstrijden en de
   chat. De grafiek van de Ringside-pagina (`components/ticket-sales-chart.tsx`),
   afgezet tegen het aantal dagen tot de aftrap. Standaard staat dezelfde tegenstander de

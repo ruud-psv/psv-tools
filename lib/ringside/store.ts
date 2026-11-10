@@ -205,12 +205,12 @@ export async function readEventSales(exclude: readonly SalesCategory[] = []): Pr
 }
 
 /**
- * De verkoop per dag zonder seizoenkaarten: wat er voor deze wedstrijd zelf
- * verkocht is (losse verkoop, resale en vrijkaarten). Dit lezen de grafieken,
+ * De verkoop per dag zonder seizoenkaarten en vrijkaarten: wat er voor deze
+ * wedstrijd zelf gekocht is (losse verkoop en resale). Dit lezen de grafieken,
  * het tempo en de vergelijking van Ticketing Stadion.
  */
 export function readMatchSales(): Promise<Record<string, EventSales>> {
-  return readEventSales(["seizoenkaart"]);
+  return readEventSales(["seizoenkaart", "vrijkaart"]);
 }
 
 /**

@@ -42,9 +42,9 @@ Wat de meting liet zien:
 - **Niet in de API-spec, wel in de stroom:** `resale_status`, `transfer_status`,
   `manifest_id`, `previous_ticket_id`, `new_ticket_id`, `original_sales_item_id`.
 
-**Ticketing Stadion laat de seizoenkaarten weg** uit de grafieken, het tempo en de
-vergelijkingen (`readMatchSales()`): ze zijn geen verkoop voor de wedstrijd zelf en staan
-als één piek op de dag dat ze zijn aangemaakt. De reeks zelf blijft bewaard.
+**Ticketing Stadion laat de seizoenkaarten en vrijkaarten weg** uit de grafieken, het
+tempo en de vergelijkingen (`readMatchSales()`): ze zijn geen verkoop voor de wedstrijd
+zelf. Seizoenkaarten staan bovendien als één piek op de dag dat ze zijn aangemaakt. De reeks zelf blijft bewaard.
 `/api/ticket-history` (rapportages) telt ze wel mee, omdat het daar om de bezetting gaat.
 
 Parkeren en andere vakken die niet op de plattegrond staan, tellen apart (`otherTotal`)

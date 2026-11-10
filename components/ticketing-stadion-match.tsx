@@ -588,8 +588,8 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
             <h2 className="text-xl">Verkoop per dag</h2>
             <p className="text-sm text-muted-foreground max-w-3xl">
               Afgezet tegen het aantal dagen tot de aftrap, zodat wedstrijden uit verschillende seizoenen naast elkaar
-              passen. Zonder seizoenkaarten: alleen wat er voor deze wedstrijd zelf verkocht is (losse verkoop, resale en
-              vrijkaarten). Standaard staat dezelfde tegenstander de vorige keer ernaast.
+              passen. Zonder seizoenkaarten en vrijkaarten: alleen wat er voor deze wedstrijd zelf gekocht is (losse verkoop en
+              resale). Standaard staat dezelfde tegenstander de vorige keer ernaast.
               {!salesStatus.complete && " De verkoop per dag is nog niet helemaal ingelezen; de lijnen zijn ondergrenzen."}
             </p>
           </div>
@@ -599,7 +599,7 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
 
       <p className="text-xs text-muted-foreground">
         Stoelstatus van {formatDateTime(seats.caughtUpAt)}, verkoop per dag van {formatDateTime(salesStatus.updatedAt)}.
-        De verkoop per dag telt geen reserveringen en geen seizoenkaarten.
+        De verkoop per dag telt geen reserveringen, seizoenkaarten en vrijkaarten.
       </p>
     </div>
   );

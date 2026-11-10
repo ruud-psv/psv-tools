@@ -253,8 +253,9 @@ function sumCategories(bucket: CategoryDays): number {
 
 /**
  * `exclude` laat reeksen weg uit `perOffset` en `total`. De pagina's van
- * Ticketing Stadion laten zo de seizoenkaarten weg: die zijn geen verkoop voor
- * deze wedstrijd en staan als één grote piek op de dag dat ze zijn aangemaakt.
+ * Ticketing Stadion laten zo de seizoenkaarten en vrijkaarten weg: die zijn
+ * geen verkoop voor deze wedstrijd. Seizoenkaarten staan bovendien als één
+ * grote piek op de dag dat ze zijn aangemaakt.
  * `series` blijft compleet.
  */
 export function toEventSales(event: StoredEvent, exclude: readonly SalesCategory[] = []): EventSales {
