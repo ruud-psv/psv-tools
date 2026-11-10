@@ -317,6 +317,38 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
   vak. Net als `attendance` geen vervanging van wat er nu is, wel iets dat er
   nu helemaal niet is.
 
+#### Wat `attendance` liet zien
+
+Gemeten op 2026-11-10 met de probe, op de eerste pagina van 5.000 rijen (scans uit 2019):
+
+- **`scan_date` is op de seconde**, een `timestamp` zonder tijdzone (`2019-10-25T17:31:50`).
+  Volgens de documentatie is dat UTC.
+- **De stoel staat niet op de scan.** `area_name` was op 4.998 van de 5.000 rijen leeg, en
+  daarmee ook `row_name` en `seat`. `area_name` is het vak van het ticket, niet de ingang.
+  De stoel moet dus via `primary_ticket_id` uit `sales` komen.
+- **Geen poort.** `gate_id`, `turnstile_name` en `device_group_name` waren leeg. Wel
+  `scanner_name`: dertien waarden, zoals "Scanner 3" en "Joya 1.1". Of de vaste
+  toegangspoorten van het Philips Stadion hun scans ook aan Ringside doorgeven, is nog
+  niet bekend; dat vragen we aan Ticketing.
+- **`first_scan` volgt waarschijnlijk het gescande item, niet de wedstrijd.** De telling
+  past precies bij "een seizoenkaart is `False`, een los ticket is `True`": 2.542
+  seizoenkaarten en 2.451 losse tickets tegenover 2.438 geslaagde scans met `False` en
+  2.399 met `True`. De kruising `scanned_item+first_scan` bevestigt of weerlegt dat. Voor
+  "de eerste keer binnen" is de vlag in elk geval niet bruikbaar.
+- **`scanner_controlled_entrance_type`** was overal `OuterGate`; de documentatie noemt
+  `Primary`.
+- **Uitlopen wordt niet gescand:** één `Exit` op 5.000 rijen. Ruim 3% van de scans
+  mislukte (162).
+- **Meer kolommen dan de spec:** `device_group_id`, `device_group_name`, `reference_id` en
+  `supplier_org_unit` staan wel in de stroom en niet in de OpenAPI-beschrijving. Bij
+  `sales` geldt hetzelfde voor `manifest_id` en `resale_status`. De kolommen uit de probe
+  (`rows=0`) zijn dus leidend.
+- **`last_touched_at` zegt niets over de vertraging van de stroom:** een scan uit 2019
+  stond op oktober 2026, door een dataverversing.
+
+De instroom op Ticketing Stadion gebruikt deze tabel; zie
+[ticketing-stadion.md](ticketing-stadion.md).
+
 #### De ingest
 
 > **Vervangen (november 2026).** De ingest telt nu per kalenderdag en per soort ticket,

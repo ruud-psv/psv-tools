@@ -139,6 +139,68 @@ op de deellink.
 - **Sleutel:** `ANTHROPIC_API_KEY` in Vercel, dezelfde als de andere AI-functies.
 - Route: `POST /api/ticketing-stadion/vraag` (met login).
 
+## Instroom (eerste versie)
+
+Pagina: `/dashboard/ticketing-stadion/instroom`, via de knop boven het overzicht. Het
+Philips Stadion met elke stoel als punt, en een tijdlijn die de stoelen laat oplichten op
+het moment dat de kaart is gescand. Voor nu van één wedstrijd: PSV - Willem II op
+31 oktober 2026 (`INSTROOM_MATCH` in `lib/instroom/match.ts`; het product-id wordt
+opgezocht in de productenlijst).
+
+- **Scherm:** een canvas (`components/stadion-instroom-player.tsx`). Rood is gescand, wit
+  net binnen, grijs een kaart die niet is gescand, donkergrijs geen kaart. Onderin de klok
+  in Nederlandse tijd, de tijd tot de aftrap, het aantal binnen, de snelheid (30× tot
+  600×) en de tijdlijn met het aantal scans per stukje tijd. Volledig scherm, zoomen
+  (knoppen, of het muiswiel in volledig scherm of met Ctrl/Cmd), slepen, vaknamen, en
+  spatie voor afspelen en pauze.
+- **Tijdstip:** `scan_date` uit `/v1/attendance`, op de seconde, in UTC. Per plaats telt de
+  vroegste geslaagde scan naar binnen (`Entry` of `Re-Entry`). `first_scan` is daarvoor
+  niet bruikbaar, zie [ringside-api.md](ringside-api.md).
+- **Stoel:** staat niet op de scan zelf. Hij komt van het ticket in `/v1/sales`, via
+  `primary_ticket_id`. De code probeert ook `product_item_id`, `sales_item_id` en
+  `scanned_item_id`, en gebruikt de plek op de scan als die er wel staat. Welke koppeling
+  werkte, staat in `joins` in het antwoord van de API en als tekst onder het stadion.
+  **Dat is nog niet met echte data gecontroleerd:** kijk na de eerste keer inlezen of
+  bijna alle gescande tickets een plaats kregen.
+- **Plek op het scherm:** Ringside kent alleen vak, rij en stoelnummer. De vakken liggen
+  zoals op de plattegrond; binnen een vak staan rij en stoelnummer als raster in de vorm
+  van het vak (`lib/instroom/geometry.ts`): rij 1 aan het veld, het hoogste stoelnummer
+  links als je naar het veld kijkt, in de hoeken met de bocht mee. Een staanvak heeft
+  geen plaatsen; daar vult elke scan een willekeurige plek.
+- **Stoelenkaart:** de stoelstatus bewaart alleen komende wedstrijden. De stoelen komen
+  daarom uit de stoelenkaart van de eerstvolgende thuiswedstrijd, aangevuld met de
+  plaatsen waar voor deze wedstrijd een kaart was.
+- **Tijdlijn:** van de eerste tot de laatste scan, maar niet verder dan zes uur voor en
+  vier uur na de aftrap. Scans daarbuiten vallen op het begin of het eind.
+- **Ingang:** nog niet. Ringside geeft op de scan alleen de naam van de scanner; welke
+  scanner bij welke ingang hoort, moet van Ticketing komen.
+
+### Inlezen
+
+Ringside kan niet op wedstrijd filteren en de stoelstatus is na de wedstrijd weg. De route
+`/api/ringside/instroom` leest daarom `/v1/sales` en `/v1/attendance` één keer helemaal
+door en bewaart alleen de rijen van deze wedstrijd (`lib/instroom/ingest.ts`). Dat duurt
+een paar uur. Je start het met "Start inlezen" op de pagina; een run start zelf de
+volgende, tot alles binnen is. Er is geen cron: het is eenmalig werk. Tijdens het inlezen
+toont de pagina wat er al is.
+
+- `?restart=1` begint opnieuw, `?productId=<id>` leest een andere wedstrijd in, `?chain=0`
+  doet één run en `?force=1` negeert het slot.
+- **Opslag:** `ringside/instroom/state.json` (cursors, voortgang, slot) en
+  `ringside/instroom/<product-id>.json.gz` in Vercel Blob.
+- **Persoonsgegevens:** er worden geen namen, relatienummers of barcodes bewaard; ids van
+  tickets en scans alleen gehasht. Stoel plus scantijd is bij een seizoenkaarthouder wel
+  tot een persoon te herleiden. Er is daarom geen deellink, en er is nog geen
+  bewaartermijn afgesproken.
+
+"Bekijk een voorbeeld" toont hetzelfde scherm met nagebootste scans
+(`lib/instroom/demo.ts`): een raster van stoelen en verzonnen aankomsttijden, voor zolang
+de echte wedstrijd nog niet is ingelezen. Het scherm zet er "voorbeeld" bij.
+
+API: `GET /api/ticketing-stadion/instroom` (`?status=1` voor alleen de voortgang,
+`?demo=1` voor het voorbeeld). Code: `lib/instroom/` (getest) en
+`components/stadion-instroom*.tsx`.
+
 ## Later (fase 3)
 
 Seizoensoverzicht en seizoenkaart tegenover losse verkoop (eerst nagaan met
