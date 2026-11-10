@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { DoorOpen } from "lucide-react";
 import { TicketingStadion } from "@/components/ticketing-stadion";
 
 export const metadata = {
@@ -19,13 +17,6 @@ export default function TicketingStadionPage() {
           gaat en hoe dat zich verhoudt tot eerdere thuiswedstrijden. De tool is nog in de testfase: vergelijk de
           cijfers met de ticketshop voordat je ze gebruikt.
         </p>
-        <Link
-          href="/dashboard/ticketing-stadion/instroom"
-          className="btn btn--medium btn--outlined mt-4 inline-flex items-center justify-center gap-2 whitespace-nowrap"
-        >
-          <DoorOpen className="h-4 w-4" />
-          Instroom van een gespeelde wedstrijd
-        </Link>
       </div>
       <TicketingStadion />
     </div>
