@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorize } from "@/lib/auth";
-import { readEventSales, readState, type EventSales } from "@/lib/ringside/store";
+import { readMatchSales, readState, type EventSales } from "@/lib/ringside/store";
 
 /**
  * De wedstrijden waarvan verkoopdata is ingelezen.
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   if (authError) return NextResponse.json({ error: authError }, { status: 401 });
 
   try {
-    const [events, state] = await Promise.all([readEventSales(), readState()]);
+    const [events, state] = await Promise.all([readMatchSales(), readState()]);
     const { searchParams } = new URL(req.url);
 
     const status = {

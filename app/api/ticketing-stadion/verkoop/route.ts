@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { parseIds, pickSalesSeries } from "@/lib/ticketing-stadion/load";
-import { readEventSales } from "@/lib/ringside/store";
+import { readMatchSales } from "@/lib/ringside/store";
 
 /**
  * De verkoop per dag van een paar eerdere thuiswedstrijden, om in de grafiek
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if ("error" in session) return session.error;
 
   try {
-    const matches = pickSalesSeries(await readEventSales(), parseIds(req.nextUrl.searchParams.get("ids")));
+    const matches = pickSalesSeries(await readMatchSales(), parseIds(req.nextUrl.searchParams.get("ids")));
     return NextResponse.json({ matches }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

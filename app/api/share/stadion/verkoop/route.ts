@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readEventSales } from "@/lib/ringside/store";
+import { readMatchSales } from "@/lib/ringside/store";
 import { parseIds, pickSalesSeries } from "@/lib/ticketing-stadion/load";
 import { readShareToken } from "@/lib/ticketing-stadion/share";
 
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Deze link is ongeldig." }, { status: 404 });
   }
   try {
-    const matches = pickSalesSeries(await readEventSales(), parseIds(req.nextUrl.searchParams.get("ids")));
+    const matches = pickSalesSeries(await readMatchSales(), parseIds(req.nextUrl.searchParams.get("ids")));
     return NextResponse.json({ matches }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch {
     return NextResponse.json({ error: "De verkoop kon niet worden geladen." }, { status: 500 });

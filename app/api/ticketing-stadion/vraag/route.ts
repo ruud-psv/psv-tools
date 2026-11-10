@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireEmail } from "@/lib/api-session";
-import { readEventSales } from "@/lib/ringside/store";
+import { readMatchSales } from "@/lib/ringside/store";
 import { matchContext, overviewContext } from "@/lib/ticketing-stadion/context";
 import { EVENT_ID, loadStadionMatch, loadStadionOverview, pickSalesSeries } from "@/lib/ticketing-stadion/load";
 
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   let context: string;
   try {
     if (eventId) {
-      const [data, sales] = await Promise.all([loadStadionMatch(eventId), readEventSales()]);
+      const [data, sales] = await Promise.all([loadStadionMatch(eventId), readMatchSales()]);
       if (!data) return NextResponse.json({ error: "Voor deze wedstrijd is geen data gevonden." }, { status: 404 });
       context = matchContext(data, pickSalesSeries(sales, compareIds));
     } else {

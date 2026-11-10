@@ -141,6 +141,12 @@ test("voor de pagina's: reeksen tellen op tot het totaal, parkeren apart", () =>
   assert.deepEqual(sales.perOffset, { "7": 12, "0": 4, "116": 20000 });
   assert.equal(sales.total, 20016);
   assert.equal(sales.otherTotal, 7);
+
+  // Zonder seizoenkaarten: de reeks blijft, maar telt niet mee in het totaal.
+  const match = toEventSales(stored, ["seizoenkaart"]);
+  assert.deepEqual(match.perOffset, { "7": 12, "0": 4 });
+  assert.equal(match.total, 16);
+  assert.deepEqual(match.series.seizoenkaart, { "116": 20000 });
 });
 
 test("past geen enkel vak op de plattegrond, dan telt alles", () => {

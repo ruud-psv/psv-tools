@@ -236,10 +236,10 @@ export interface EventSales {
   productType: string;
   category: string;
   season: string;
-  /** Alle verkochte tickets in de tribunevakken, per dagen-tot-de-wedstrijd. */
+  /** Verkochte tickets in de tribunevakken, per dagen-tot-de-wedstrijd; zie `exclude` bij `toEventSales()`. */
   perOffset: OffsetCounts;
   total: number;
-  /** Dezelfde tickets, uitgesplitst. De vier reeksen tellen op tot `perOffset`. */
+  /** Alle tickets, uitgesplitst. Zonder `exclude` tellen de vier reeksen op tot `perOffset`. */
   series: Record<SalesCategory, OffsetCounts>;
   /** Parkeren en overige vakken; niet in `perOffset`. */
   otherTotal: number;
@@ -251,7 +251,13 @@ function sumCategories(bucket: CategoryDays): number {
   return total;
 }
 
-export function toEventSales(event: StoredEvent): EventSales {
+/**
+ * `exclude` laat reeksen weg uit `perOffset` en `total`. De pagina's van
+ * Ticketing Stadion laten zo de seizoenkaarten weg: die zijn geen verkoop voor
+ * deze wedstrijd en staan als één grote piek op de dag dat ze zijn aangemaakt.
+ * `series` blijft compleet.
+ */
+export function toEventSales(event: StoredEvent, exclude: readonly SalesCategory[] = []): EventSales {
   // Past geen enkel vak op de plattegrond (een wedstrijd elders), dan telt alles.
   const standTotal = sumCategories(event.stand);
   const bucket = standTotal > 0 ? event.stand : event.other;
@@ -260,6 +266,7 @@ export function toEventSales(event: StoredEvent): EventSales {
   const perOffset: OffsetCounts = {};
   for (const category of SALES_CATEGORIES) {
     series[category] = daysToOffsets(bucket[category], event.eventDate);
+    if (exclude.includes(category)) continue;
     for (const [offset, count] of Object.entries(series[category])) {
       perOffset[offset] = (perOffset[offset] ?? 0) + count;
     }

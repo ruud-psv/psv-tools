@@ -11,7 +11,7 @@ import { countFreeGroups } from "../aangrenzende-stoelen/neighbors";
 import { buildSeatMaps, type SeatMaps } from "../aangrenzende-stoelen/seat-map";
 import { todayInAmsterdam, toNeighborInput } from "../ringside/seat-state";
 import { isSeatIngestLocked, readEventSeats, readSeatIndex, readSeatState } from "../ringside/seat-store";
-import { readEventSales, readState as readSalesState, type EventSales } from "../ringside/store";
+import { readMatchSales, readState as readSalesState, type EventSales } from "../ringside/store";
 import { buildStadionSummaryFromIndex, readStadionSummary } from "./store";
 import {
   comparableMatches,
@@ -30,7 +30,7 @@ export async function loadStadionOverview() {
   const [seatState, salesState, sales, stored] = await Promise.all([
     readSeatState(),
     readSalesState(),
-    readEventSales(),
+    readMatchSales(),
     readStadionSummary(),
   ]);
   const summary = stored ?? (await buildStadionSummaryFromIndex(await readSeatIndex()));
@@ -82,7 +82,7 @@ export async function loadStadionMatch(eventId: string) {
     readEventSeats(eventId),
     readSeatState(),
     readSalesState(),
-    readEventSales(),
+    readMatchSales(),
   ]);
   if (!event) return null;
 

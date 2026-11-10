@@ -32,6 +32,7 @@ import {
   type OffsetCounts,
   type ResaleProbe,
   type ResaleProbeSummary,
+  type SalesCategory,
   type StoredEvent,
 } from "./sales-series";
 
@@ -193,14 +194,23 @@ export async function writeSalesData(kind: SalesDataKind, data: SalesData): Prom
 }
 
 /**
- * De verkoop per dag van alle wedstrijden, zoals de pagina's hem lezen. Leeg
+ * De verkoop per dag van alle wedstrijden, met alle soorten tickets. Leeg
  * zolang de eerste doorloop nog niet compleet is.
  */
-export async function readEventSales(): Promise<Record<string, EventSales>> {
+export async function readEventSales(exclude: readonly SalesCategory[] = []): Promise<Record<string, EventSales>> {
   const data = await readSalesData("live");
   const sales: Record<string, EventSales> = {};
-  if (data) for (const [id, event] of Object.entries(data.events)) sales[id] = toEventSales(event);
+  if (data) for (const [id, event] of Object.entries(data.events)) sales[id] = toEventSales(event, exclude);
   return sales;
+}
+
+/**
+ * De verkoop per dag zonder seizoenkaarten: wat er voor deze wedstrijd zelf
+ * verkocht is (losse verkoop, resale en vrijkaarten). Dit lezen de grafieken,
+ * het tempo en de vergelijking van Ticketing Stadion.
+ */
+export function readMatchSales(): Promise<Record<string, EventSales>> {
+  return readEventSales(["seizoenkaart"]);
 }
 
 /**
