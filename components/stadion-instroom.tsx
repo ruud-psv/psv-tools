@@ -223,10 +223,17 @@ export function StadionInstroom() {
               <CardContent className="space-y-4 p-6">
                 {status &&
                   (!status.match ? (
-                    <p className="text-sm">
-                      {status.wanted} staat niet in de productenlijst uit Ringside. Controleer of de verkoop per dag al
-                      is ingelezen.
-                    </p>
+                    <div className="max-w-3xl space-y-2 text-sm">
+                      <p>
+                        {status.wanted} is niet gevonden in de productenlijst uit Ringside
+                        {status.known === 0
+                          ? ": die lijst is nog leeg. De verkoop per dag is waarschijnlijk nog met zijn eerste doorloop bezig; probeer het daarna opnieuw."
+                          : ` (${number.format(status.known)} producten).`}
+                      </p>
+                      {status.nearby.length > 0 && (
+                        <p>Thuiswedstrijden rond die dag: {status.nearby.join(" · ")}.</p>
+                      )}
+                    </div>
                   ) : !status.started ? (
                     <p className="max-w-3xl text-sm">
                       De scans van {matchName} zijn nog niet ingelezen. Ringside kan niet op wedstrijd filteren: de tool

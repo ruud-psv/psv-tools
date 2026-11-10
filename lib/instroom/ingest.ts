@@ -14,7 +14,7 @@
  */
 
 import { readFeed, type FeedResult } from "../ringside/feed";
-import { readEventSales } from "../ringside/store";
+import { readKnownProducts } from "../ringside/store";
 import { describeTarget, findInstroomMatch } from "./match";
 import {
   applyInstroomSale,
@@ -47,8 +47,9 @@ export interface InstroomRunResult {
 async function resolveTarget(state: InstroomState, productId: string | null): Promise<void> {
   if (state.productId && (!productId || productId === state.productId)) return;
 
-  const sales = await readEventSales();
-  const event = productId ? sales[productId] : findInstroomMatch(sales);
+  // De productenlijst, ook als de verkoop per dag nog met zijn eerste doorloop bezig is.
+  const products = await readKnownProducts();
+  const event = productId ? products.find((product) => product.productId === productId) : findInstroomMatch(products);
   if (!event && !productId) {
     throw new Error(
       `${describeTarget()} staat niet in de productenlijst uit Ringside. Is de verkoop-ingest (/api/ringside/ingest) al klaar?`

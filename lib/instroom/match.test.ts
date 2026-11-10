@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { EventSales } from "../ringside/store";
-import { describeTarget, findInstroomMatch } from "./match";
+import { describeTarget, findInstroomMatch, nearbyMatches } from "./match";
 
 const event = (productId: string, name: string, eventDate: string, total = 100): EventSales => ({
   productId,
@@ -28,15 +28,29 @@ const sales = Object.fromEntries(
 );
 
 test("de wedstrijd wordt gevonden op tegenstander en datum", () => {
-  assert.equal(findInstroomMatch(sales)?.productId, "a");
-  assert.equal(findInstroomMatch(sales, { opponent: "willem ii", date: "2025-03-01" })?.productId, "c");
+  assert.equal(findInstroomMatch(Object.values(sales))?.productId, "a");
+  assert.equal(findInstroomMatch(Object.values(sales), { opponent: "willem ii", date: "2025-03-01" })?.productId, "c");
 });
 
 test("staat hij er niet in, dan komt er niets terug", () => {
-  assert.equal(findInstroomMatch(sales, { opponent: "Willem II", date: "2026-11-01" }), null);
-  assert.equal(findInstroomMatch({}), null);
+  assert.equal(findInstroomMatch(Object.values(sales), { opponent: "Willem II", date: "2026-11-01" }), null);
+  assert.equal(findInstroomMatch([]), null);
 });
 
 test("de omschrijving noemt tegenstander en datum", () => {
   assert.equal(describeTarget(), "PSV - Willem II op 31 oktober 2026");
+});
+
+test("de naam mag iets achter de tegenstander hebben", () => {
+  const products = [{ productId: "x", name: "PSV - Willem II 26/27", eventDate: "2026-10-31 20:00:00" }];
+  assert.equal(findInstroomMatch(products)?.productId, "x");
+});
+
+test("niet gevonden: de thuiswedstrijden rond die dag", () => {
+  const products = [
+    { productId: "x", name: "PSV - Ajax", eventDate: "2026-11-01 14:30:00" },
+    { productId: "y", name: "PSV - AZ", eventDate: "2026-12-20 14:30:00" },
+    { productId: "z", name: "Jong PSV - Ajax", eventDate: "2026-11-01 14:30:00" },
+  ];
+  assert.deepEqual(nearbyMatches(products), ["PSV - Ajax (2026-11-01 14:30)"]);
 });
