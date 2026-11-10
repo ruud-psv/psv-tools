@@ -102,7 +102,7 @@ async function fetchPage(path: string, cursor: string | null, deadline: number):
   }
 }
 
-interface FeedResult {
+export interface FeedResult {
   rows: number;
   /** Tot het eind van de stroom gekomen: de data is nu actueel. */
   reachedEnd: boolean;
@@ -117,7 +117,7 @@ interface FeedResult {
  * probeert er dan JSON uit te lezen. De cursor wordt na elke pagina doorgegeven
  * via `onCursor`, zodat een fout halverwege het al gelezen werk niet weggooit.
  */
-async function readFeed<T>(
+export async function readFeed<T>(
   path: string,
   cursor: string | null,
   deadline: number,
