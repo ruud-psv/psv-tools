@@ -319,6 +319,10 @@ doorverkoopt. Voor de stadioncapaciteit en de primaire verkoop hebben we
 
 #### De ingest
 
+> **Vervangen (november 2026).** De ingest telt nu per kalenderdag en per soort ticket,
+> volgt de productenlijst en vangt een ververste dataset (HTTP 205) af. Zie
+> [ticketing-verloop.md](ticketing-verloop.md). Hieronder de oorspronkelijke opzet.
+
 `/api/ringside/ingest` leest de verkoop in stappen in en draait als cron elk
 uur. Elke run werkt binnen een tijdsbudget, onthoudt met een cursor waar hij
 gebleven is, en telt de verkoop op bij wat er al lag.

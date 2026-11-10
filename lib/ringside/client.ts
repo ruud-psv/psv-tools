@@ -12,12 +12,13 @@ import { getRingsideToken, resetRingsideToken, RingsideConfigError } from "./aut
 const DEFAULT_BASE_URL = "https://ringside.seatgeek.com";
 
 export class RingsideRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly body: string
-  ) {
+  readonly status: number;
+  readonly body: string;
+
+  constructor(message: string, status: number, body: string) {
     super(message);
+    this.status = status;
+    this.body = body;
   }
 }
 

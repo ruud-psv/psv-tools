@@ -1,38 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
-import { RingsideAuthError, isRingsideConfigured } from "@/lib/ringside/auth";
-import { ringsidePages } from "@/lib/ringside/client";
-import { getProductDisplayName } from "@/lib/ringside/products";
-import { isSoldTicket } from "@/lib/ringside/sales";
-import { categorizeProduct } from "@/lib/ringside/ticket-events";
-import { seasonOf } from "@/lib/ringside/daily-sales";
-import {
-  mergeOffsets,
-  readEventSales,
-  isLocked,
-  readState,
-  totalOf,
-  writeEventSales,
-  writeState,
-  type EventSales,
-  type IngestState,
-} from "@/lib/ringside/store";
+import { isRingsideConfigured } from "@/lib/ringside/auth";
+import { runSalesIngest, type SalesIngestResult } from "@/lib/ringside/sales-ingest";
+import { summarizeResaleProbe } from "@/lib/ringside/sales-series";
+import { isLocked, readState, writeState } from "@/lib/ringside/store";
 
 /**
- * Leest de Ringside-verkoop in stappen in.
+ * Leest de verkoop per dag in uit Ringside (zie `lib/ringside/sales-ingest.ts`).
  *
- * De verkooptabel is niet op datum geordend maar op sleutel: in de eerste
- * 110.000 rijen zaten transacties van 2015 tot 2026 door elkaar. De rijen van
- * één wedstrijd liggen dus verspreid over de hele tabel, en compleet worden kan
- * alleen door hem één keer helemaal door te lopen. Met ruim 2.300 rijen per
- * seconde is dat werk van uren, niet van minuten — maar eenmalig, want daarna
- * blijft de cursor staan en volstaat bijhouden.
+ * Draait als cron elk uur, en is met een ingelogde sessie ook handmatig te
+ * starten. De eerste vulling is meer dan één serverless run aankan (maximaal
+ * 300 seconden); een run start daarom zelf de volgende, tot alles binnen is.
  *
- * Elke run werkt daarom binnen een tijdsbudget, bewaart waar hij gebleven is en
- * telt de verkoop op bij wat er al lag. Meerdere runs samen maken het af.
- *
- * Producten gaan eerst: zonder de wedstrijddatum is er geen "dagen tot de
- * wedstrijd" om verkoop op te boeken.
+ * - `?restart=1` begint een nieuwe doorloop. De pagina's houden de oude cijfers
+ *   tot de nieuwe compleet is.
+ * - `?chain=50` maakt de ketting langer, `?chain=0` zet hem uit.
+ * - `?force=1` negeert het slot van een run die vastligt.
  */
 
 export const dynamic = "force-dynamic";
@@ -58,175 +41,6 @@ function isAuthorized(req: NextRequest): boolean {
   }
   const cookie = req.cookies.get("psv_session")?.value;
   return Boolean(cookie && verifySessionToken(cookie));
-}
-
-interface ProductRow {
-  product_id?: unknown;
-  product_type?: unknown;
-  product_description?: unknown;
-  product_details?: unknown;
-  event_date?: unknown;
-}
-
-interface SalesRow {
-  product_id?: unknown;
-  product_item_id?: unknown;
-  transaction_date?: unknown;
-  item_type?: unknown;
-  sale_type?: unknown;
-  current_status?: unknown;
-  forward_item_id?: unknown;
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function text(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-/** `product_id` is uuid in `products` en tekst in `sales`; kleine letters maken ze gelijk. */
-function productKey(value: unknown): string | null {
-  const raw = text(value);
-  return raw ? raw.toLowerCase() : null;
-}
-
-function dayStart(value: string): number | null {
-  const key = value.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
-    const parsed = new Date(value);
-    if (isNaN(parsed.getTime())) return null;
-    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
-  }
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).getTime();
-}
-
-/** Verwerkt productpagina's tot lege eventrecords, klaar om verkoop op te boeken. */
-async function ingestProducts(
-  state: IngestState,
-  events: Record<string, EventSales>,
-  deadline: number
-): Promise<number> {
-  let read = 0;
-
-  for await (const page of ringsidePages<ProductRow>("/v1/products", {
-    cursor: state.productsCursor ?? undefined,
-    maxPages: 100_000,
-  })) {
-    read += page.data.length;
-
-    for (const row of page.data) {
-      const id = productKey(row.product_id);
-      const eventDate = text(row.event_date);
-      if (!id || !eventDate) continue;
-
-      const productType = text(row.product_type) ?? "";
-      const name = getProductDisplayName(row) ?? "Onbekend";
-      const existing = events[id];
-
-      events[id] = {
-        productId: id,
-        name,
-        eventDate,
-        productType,
-        category: categorizeProduct(productType || null, name),
-        season: seasonOf(eventDate),
-        // Al ingelezen verkoop behouden: een product kan opnieuw langskomen.
-        perOffset: existing?.perOffset ?? {},
-        total: existing?.total ?? 0,
-      };
-    }
-
-    state.productsCursor = page.cursor ?? state.productsCursor;
-    if (!page.has_more) {
-      state.productsComplete = true;
-      break;
-    }
-    if (Date.now() > deadline) break;
-  }
-
-  state.productsRead += read;
-  return read;
-}
-
-/** Boekt verkooppagina's op de eventrecords, per dagen-tot-de-wedstrijd. */
-async function ingestSales(
-  state: IngestState,
-  events: Record<string, EventSales>,
-  deadline: number
-): Promise<number> {
-  let read = 0;
-
-  for await (const page of ringsidePages<SalesRow>("/v1/sales", {
-    cursor: state.salesCursor ?? undefined,
-    maxPages: 100_000,
-  })) {
-    read += page.data.length;
-
-    // Per pagina eerst groeperen, dan één keer samenvoegen. Scheelt duizenden
-    // kopieën van dezelfde objecten.
-    const perProduct = new Map<string, Map<number, number>>();
-    const seen = new Map<string, Set<string>>();
-
-    for (const row of page.data) {
-      if (!isSoldTicket(row)) continue;
-      const id = productKey(row.product_id);
-      if (!id) continue;
-
-      const event = events[id];
-      if (!event) continue; // Geen product bekend: geen wedstrijddatum, geen offset.
-
-      const transaction = text(row.transaction_date);
-      if (transaction) {
-        const seen = state.salesDateSeen;
-        if (!seen.earliest || transaction < seen.earliest) seen.earliest = transaction;
-        if (!seen.latest || transaction > seen.latest) seen.latest = transaction;
-      }
-      const eventStart = dayStart(event.eventDate);
-      const transactionStart = transaction ? dayStart(transaction) : null;
-      if (eventStart === null || transactionStart === null) continue;
-
-      const offset = Math.round((eventStart - transactionStart) / DAY_MS);
-
-      // Binnen een pagina ontdubbelen op ticket. Over pagina's heen kan dat
-      // niet zonder alle ids te bewaren; de filters op sale_type,
-      // current_status en forward_item_id zouden dat overbodig moeten maken.
-      const itemId = text(row.product_item_id);
-      if (itemId) {
-        const key = `${id}|${offset}`;
-        let ids = seen.get(key);
-        if (!ids) {
-          ids = new Set();
-          seen.set(key, ids);
-        }
-        if (ids.has(itemId)) continue;
-        ids.add(itemId);
-      }
-
-      let offsets = perProduct.get(id);
-      if (!offsets) {
-        offsets = new Map();
-        perProduct.set(id, offsets);
-      }
-      offsets.set(offset, (offsets.get(offset) ?? 0) + 1);
-    }
-
-    for (const [id, offsets] of perProduct) {
-      const event = events[id];
-      event.perOffset = mergeOffsets(event.perOffset, offsets);
-      event.total = totalOf(event.perOffset);
-    }
-
-    state.salesCursor = page.cursor ?? state.salesCursor;
-    if (!page.has_more) {
-      state.salesComplete = true;
-      break;
-    }
-    if (Date.now() > deadline) break;
-  }
-
-  state.rowsRead += read;
-  return read;
 }
 
 /**
@@ -276,69 +90,50 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const budget = Math.min(
-    Math.max(Number(searchParams.get("seconds")) || DEFAULT_BUDGET_SECONDS, 10),
-    290
-  );
+  const budget = Math.min(Math.max(Number(searchParams.get("seconds")) || DEFAULT_BUDGET_SECONDS, 10), 280);
   const startedAt = Date.now();
   const deadline = startedAt + budget * 1000;
+  const noStore = { "Cache-Control": "no-store, max-age=0" };
 
-  const state = searchParams.get("restart") === "1" ? { ...(await readState()), salesCursor: null, productsCursor: null, salesComplete: false, productsComplete: false, rowsRead: 0, productsRead: 0 } : await readState();
-  const events = searchParams.get("restart") === "1" ? {} : await readEventSales();
-
+  const state = await readState();
   if (isLocked(state) && searchParams.get("force") !== "1") {
     return NextResponse.json(
       {
         skipped: true,
         reason: "Er loopt al een run.",
         runningUntil: state.runningUntil,
-        note: "Twee runs tegelijk zouden dezelfde rijen lezen en dubbel optellen. Gebruik ?force=1 als je zeker weet dat de vorige run vastligt.",
+        note: "Twee runs tegelijk zouden dezelfde regels lezen en dubbel optellen. Gebruik ?force=1 als je zeker weet dat de vorige run vastligt.",
       },
-      { status: 409, headers: { "Cache-Control": "no-store, max-age=0" } }
+      { status: 409, headers: noStore }
     );
   }
 
   // Slot meteen zetten, vóór het eerste leeswerk: anders glipt een gelijktijdige
-  // run er alsnog tussendoor. Iets ruimer dan het budget, zodat het opslaan aan
-  // het eind er nog binnen valt.
-  state.runningUntil = new Date(deadline + 30_000).toISOString();
+  // run er alsnog tussendoor. Ruimer dan het budget, zodat het opslaan aan het
+  // eind er nog binnen valt.
+  state.runningUntil = new Date(deadline + 60_000).toISOString();
   await writeState(state);
 
-  let productsRead = 0;
-  let salesRead = 0;
-
+  let result: SalesIngestResult | null = null;
   try {
-    // Producten eerst: zonder wedstrijddatum is er geen as om verkoop op te
-    // boeken, en verkoop van een onbekend product zou stilletjes wegvallen.
-    if (!state.productsComplete) {
-      productsRead = await ingestProducts(state, events, deadline);
-    }
-    if (state.productsComplete && Date.now() < deadline) {
-      salesRead = await ingestSales(state, events, deadline);
-    }
-    state.lastError = null;
+    result = await runSalesIngest(state, deadline, { restart: searchParams.get("restart") === "1" });
+    state.lastError = result.error;
   } catch (error) {
+    // De opslag was niet te lezen of te schrijven. Er is niets veranderd.
     state.lastError = error instanceof Error ? error.message : String(error);
-    if (error instanceof RingsideAuthError) console.error("[ringside/ingest]", state.lastError);
   }
+  if (state.lastError) console.error("[ringside/ingest]", state.lastError);
 
   state.runs += 1;
-  // Slot vrijgeven: de volgende run mag meteen door.
   state.runningUntil = null;
-
-  // Ook na een fout opslaan: de voortgang tot dat punt is bruikbaar en scheelt
-  // een volgende run het werk opnieuw te doen.
-  await writeEventSales(events);
   await writeState(state);
 
-  const done = state.productsComplete && state.salesComplete;
-
+  const done = Boolean(result?.caughtUp);
   // Alleen doorpakken zolang er vooruitgang is: een run die niets las en geen
   // fout gaf, zou de ketting anders laten doorlopen zonder iets te bereiken.
-  const progressed = productsRead > 0 || salesRead > 0;
-  // Standaard doorpakken: één aanroep hoort het karwei af te maken. `chain=0`
-  // zet dat uit — niet op falsy testen, anders valt juist die stand terug op de
-  // standaard.
+  const progressed = Boolean(result && (result.productsRead > 0 || result.salesRead > 0 || result.reset));
+  // `chain=0` zet de ketting uit; niet op falsy testen, anders valt juist die
+  // stand terug op de standaard.
   const rawChain = searchParams.get("chain");
   const requestedChain = rawChain === null ? DEFAULT_CHAIN : Number(rawChain);
   const chainRemaining = Number.isFinite(requestedChain)
@@ -350,29 +145,42 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     {
       done,
+      mode: state.mode,
+      // Of de pagina's cijfers hebben: een complete doorloop staat klaar.
+      live: state.salesComplete,
+      published: Boolean(result?.published),
+      reset: Boolean(result?.reset),
       chained,
       chainRemaining: chained ? chainRemaining - 1 : 0,
-      phase: state.productsComplete ? "sales" : "products",
       thisRun: {
         seconds: Math.round(((Date.now() - startedAt) / 1000) * 10) / 10,
-        productsRead,
-        salesRead,
+        productsRead: result?.productsRead ?? 0,
+        salesRead: result?.salesRead ?? 0,
       },
       totals: {
         productsRead: state.productsRead,
         salesRowsRead: state.rowsRead,
-        events: Object.keys(events).length,
-        eventsWithSales: Object.values(events).filter((event) => event.total > 0).length,
         runs: state.runs,
+        resets: state.resets,
+        lastResetAt: state.lastResetAt,
+        caughtUpAt: state.caughtUpAt,
       },
       salesDateSeen: state.salesDateSeen,
+      // Controles op de aannames achter het optellen; zie `docs/ticketing-verloop.md`.
+      check: {
+        outOfOrder: state.check.outOfOrder,
+        unknownProduct: state.check.unknownProduct,
+        resale: state.mode === "live" && state.resaleSummary ? state.resaleSummary : summarizeResaleProbe(state.resaleProbe),
+      },
       lastError: state.lastError,
-      note: done
-        ? "Alles ingelezen. Vanaf nu houdt de cron alleen nieuwe mutaties bij."
-        : chained
-          ? `Nog niet klaar, maar de volgende run is gestart. Nog ${chainRemaining - 1} in de ketting.`
-          : "Nog niet klaar — roep deze route opnieuw aan, of geef ?chain=50 mee om hem zichzelf te laten doorzetten.",
+      note: result?.reset
+        ? "SeatGeek heeft de dataset ververst. De doorloop begint opnieuw; de pagina's houden de oude cijfers tot hij klaar is."
+        : done
+          ? "Alles ingelezen. De cron houdt het bij."
+          : chained
+            ? `Nog niet klaar, maar de volgende run is gestart. Nog ${chainRemaining - 1} in de ketting.`
+            : "Nog niet klaar. Roep deze route opnieuw aan, of geef ?chain=50 mee om hem zichzelf te laten doorzetten.",
     },
-    { headers: { "Cache-Control": "no-store, max-age=0" } }
+    { headers: noStore }
   );
 }

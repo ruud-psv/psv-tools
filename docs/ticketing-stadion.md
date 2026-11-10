@@ -35,7 +35,7 @@ crons al klaarzetten:
 | Bron | Cron | Levert |
 |---|---|---|
 | Stoelstatus (`lib/ringside/seat-*.ts`) | `/api/ringside/stoelen`, elk kwartier | bezetting per vak |
-| Verkoop per dag (`lib/ringside/store.ts`) | `/api/ringside/ingest`, elk uur | tempo en vergelijking, ook van gespeelde wedstrijden |
+| Verkoop per dag (`lib/ringside/store.ts`) | `/api/ringside/ingest`, elk uur | tempo en vergelijking, ook van gespeelde wedstrijden; zie [ticketing-verloop.md](ticketing-verloop.md) |
 
 De cron van de stoelstatus heeft alle komende wedstrijden al in het geheugen. Na elke run
 schrijft hij daarom een kleine samenvatting weg: `ticketing-stadion/summary.json` in Vercel
