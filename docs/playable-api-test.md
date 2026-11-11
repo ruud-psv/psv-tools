@@ -19,9 +19,10 @@ dat een collega die blijft kopiëren en plakken.
 3. Vraagt een token aan met **alleen lees-rechten** (`.list` en `.view`) en
    zonder rechten op registraties of andere persoonsgegevens.
 4. Haalt met dat token alle GET-endpoints van de campagne op die in de
-   beschrijving staan, plus de onderdelen van lijsten zoals
-   `/campaign/{id}/sections/{section}`. Endpoints met mogelijk
-   persoonsgegevens slaat hij over.
+   beschrijving staan, plus de losse onderdelen van lijsten: elke sectie uit
+   `/campaign/{id}/sections` via `/campaign/{id}/section/{section}` (tot 25).
+   Endpoints met mogelijk persoonsgegevens slaat hij over, net als prijzen en
+   formuliervelden, die voor deze vraag niet nodig zijn.
 5. Zoekt in de antwoorden naar velden die op pagina-code lijken: klassen van de
    PSV Campaign Kit (`psvk-`), HTML-tags, CSS-regels, JavaScript, of velden die
    `html`, `css` of `js` heten.
@@ -39,7 +40,9 @@ token gebruikt hij nergens voor. Tokens en sleutels komen niet in het rapport.
 - **Opgehaald voor deze campagne:** per endpoint de status, de gevonden
   codevelden en het volledige antwoord.
 - **API-beschrijving:** alle endpoints, en welke bij `campaigns.modify` en
-  `campaigns.copy` horen.
+  `campaigns.copy` horen. Klap een endpoint open voor zijn stuk uit de
+  beschrijving, met de schema's: daar staat welke velden je mag meesturen en
+  wat er terugkomt.
 
 Met **Kopieer rapport** zet je het hele resultaat als JSON op het klembord,
 bijvoorbeeld om het in een gesprek met Claude te plakken.

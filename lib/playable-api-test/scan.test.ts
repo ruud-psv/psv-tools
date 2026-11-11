@@ -7,6 +7,7 @@ import {
   idsFromList,
   isReadScope,
   isWriteScope,
+  listPathCandidates,
   normalizeUrl,
   parseCampaignInput,
   planReads,
@@ -20,13 +21,31 @@ test("planReads: alleen GET op een campagne, zonder persoonsgegevens", () => {
     plan.single.map((o) => o.path),
     ["/v1/campaign/{campaign}", "/v1/campaign/{campaign}/sections"]
   );
+  // De lijst staat in het meervoud, de losse sectie in het enkelvoud.
   assert.deepEqual(
     plan.nested.map((n) => [n.operation.path, n.listPath]),
-    [["/v1/campaign/{campaign}/sections/{section}", "/v1/campaign/{campaign}/sections"]]
+    [["/v1/campaign/{campaign}/section/{section}", "/v1/campaign/{campaign}/sections"]]
   );
-  assert.deepEqual(plan.skipped, [
-    { method: "get", path: "/v1/campaign/{campaign}/registrations", reason: "Mogelijk persoonsgegevens" },
+  assert.deepEqual(
+    plan.skipped.map((s) => `${s.path} · ${s.reason}`),
+    [
+      "/v1/campaign/{campaign}/section/{section}/form-fields · Niet nodig voor deze vraag",
+      "/v1/campaign/{campaign}/prizes · Niet nodig voor deze vraag",
+      "/v1/campaign/{campaign}/prize/{prize} · Niet nodig voor deze vraag",
+      "/v1/campaign/{campaign}/registrations · Mogelijk persoonsgegevens",
+    ]
+  );
+});
+
+test("listPathCandidates: enkelvoud en meervoud", () => {
+  assert.deepEqual(listPathCandidates("/v1/campaign/{c}/section/{s}"), [
+    "/v1/campaign/{c}/section",
+    "/v1/campaign/{c}/sections",
+    "/v1/campaign/{c}/sectiones",
   ]);
+  assert.ok(listPathCandidates("/v1/campaign/{c}/sections/{s}").includes("/v1/campaign/{c}/sections"));
+  assert.ok(listPathCandidates("/v1/campaign/{c}/categories/{s}").includes("/v1/campaign/{c}/category"));
+  assert.deepEqual(listPathCandidates("/v1/campaign/{c}"), []);
 });
 
 test("planReads: genest endpoint zonder lijst wordt overgeslagen", () => {
@@ -48,6 +67,7 @@ test("planReads: persoonsgegevens ook herkend aan het recht", () => {
 test("fillPath en idsFromList", () => {
   assert.equal(fillPath("/v1/campaign/{c}/sections/{s}", [123, "a b"]), "/v1/campaign/123/sections/a%20b");
   assert.deepEqual(idsFromList({ data: [{ id: 5 }, { id: "x" }, { naam: "geen id" }] }), [5, "x"]);
+  assert.deepEqual(idsFromList({ data: [{ uuid: "a-b" }] }), ["a-b"]);
   assert.deepEqual(idsFromList([{ id: 1 }, { id: 2 }], 1), [1]);
   assert.deepEqual(idsFromList({ data: { id: 1 } }), []);
   assert.deepEqual(idsFromList(undefined), []);

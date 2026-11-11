@@ -44,8 +44,9 @@ export interface ReadPlan {
   /** GET met één parameter: het campagne-ID. */
   single: SpecOperation[];
   /**
-   * GET met twee parameters, zoals `/campaign/{id}/sections/{section}`. Het
-   * tweede ID halen we uit het lijst-endpoint ervoor (`/campaign/{id}/sections`).
+   * GET met twee parameters, zoals `/campaign/{id}/section/{section}`. Het
+   * tweede ID halen we uit de lijst ervoor, ook als die in het meervoud staat
+   * (`/campaign/{id}/sections`).
    */
   nested: { operation: SpecOperation; listPath: string }[];
   /** Overgeslagen, met de reden. */
@@ -65,7 +66,25 @@ export const FALLBACK_OPERATIONS: SpecOperation[] = [
 
 export const MAX_SINGLE = 15;
 export const MAX_NESTED = 6;
-export const MAX_NESTED_IDS = 5;
+/** Een campagne heeft al snel tien of meer secties; de pagina-code kan in elk daarvan zitten. */
+export const MAX_NESTED_IDS = 25;
+
+/**
+ * Endpoints die voor de vraag "waar staat de pagina-code" niet nodig zijn:
+ * prijzen (en bulkprijzen, die codes kunnen bevatten) en formuliervelden.
+ */
+const NOT_NEEDED = /prize|form-field/i;
+
+/**
+ * De lijst waar het tweede ID van een genest endpoint uit komt:
+ * `/campaign/{c}/section/{s}` → `/campaign/{c}/section` of `/campaign/{c}/sections`.
+ */
+export function listPathCandidates(path: string): string[] {
+  const second = [...path.matchAll(/\{[^}]+\}/g)][1];
+  if (!second || second.index === undefined) return [];
+  const base = path.slice(0, second.index).replace(/\/+$/, "");
+  return [...new Set([base, `${base}s`, `${base}es`, base.replace(/ies$/, "y"), base.replace(/e?s$/, "")])];
+}
 
 export function planReads(operations: SpecOperation[]): ReadPlan {
   const plan: ReadPlan = { single: [], nested: [], skipped: [] };
@@ -80,12 +99,15 @@ export function planReads(operations: SpecOperation[]): ReadPlan {
       plan.skipped.push({ method: op.method, path: op.path, reason: "Mogelijk persoonsgegevens" });
       continue;
     }
+    if (NOT_NEEDED.test(op.path)) {
+      plan.skipped.push({ method: op.method, path: op.path, reason: "Niet nodig voor deze vraag" });
+      continue;
+    }
 
     if (params.length === 1) {
       plan.single.push(op);
     } else if (params.length === 2) {
-      const last = op.path.lastIndexOf("/{");
-      plan.nested.push({ operation: op, listPath: op.path.slice(0, last) });
+      plan.nested.push({ operation: op, listPath: "" });
     } else {
       plan.skipped.push({ method: op.method, path: op.path, reason: "Meer dan twee parameters" });
     }
@@ -94,7 +116,11 @@ export function planReads(operations: SpecOperation[]): ReadPlan {
   // Alleen een genest endpoint waarvan we de lijst ook ophalen, anders is er geen tweede ID.
   const singlePaths = new Set(plan.single.map((op) => op.path));
   plan.nested = plan.nested.filter((n) => {
-    if (singlePaths.has(n.listPath)) return true;
+    const listPath = listPathCandidates(n.operation.path).find((p) => singlePaths.has(p));
+    if (listPath) {
+      n.listPath = listPath;
+      return true;
+    }
     plan.skipped.push({ method: n.operation.method, path: n.operation.path, reason: "Geen lijst om een ID uit te halen" });
     return false;
   });
@@ -116,7 +142,7 @@ export function fillPath(path: string, values: (string | number)[]): string {
   return path.replace(/\{[^}]+\}/g, () => encodeURIComponent(String(values[i++] ?? "")));
 }
 
-/** De ID's uit een lijstantwoord: `[{id}]` of `{data: [{id}]}`. */
+/** De ID's uit een lijstantwoord: `[{id}]` of `{data: [{id}]}`, met `uuid` als er geen `id` is. */
 export function idsFromList(json: unknown, max = MAX_NESTED_IDS): (string | number)[] {
   const items = Array.isArray(json)
     ? json
@@ -125,7 +151,8 @@ export function idsFromList(json: unknown, max = MAX_NESTED_IDS): (string | numb
       : [];
   const ids: (string | number)[] = [];
   for (const item of items) {
-    const id = item && typeof item === "object" ? (item as { id?: unknown }).id : undefined;
+    const record = item && typeof item === "object" ? (item as { id?: unknown; uuid?: unknown }) : undefined;
+    const id = record?.id ?? record?.uuid;
     if (typeof id === "number" || (typeof id === "string" && id !== "")) ids.push(id);
     if (ids.length >= max) break;
   }

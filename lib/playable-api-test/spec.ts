@@ -27,6 +27,12 @@ export interface SpecOperation {
   summary: string;
   /** De rechten die bij dit endpoint horen, voor zover de beschrijving ze noemt. */
   scopes: string[];
+  /**
+   * Het stuk van de beschrijving over dit endpoint, met de schema's waar het
+   * naar verwijst (`$ref`). Daar staat welke velden je mag meesturen en wat
+   * er terugkomt.
+   */
+  source?: string;
 }
 
 export interface ParsedSpec {
@@ -120,9 +126,70 @@ function parseScopesYaml(lines: string[]): SpecScope[] {
   return scopes.filter((s) => (seen.has(s.name) ? false : (seen.add(s.name), true)));
 }
 
+/* ---------- De bron van een endpoint, met zijn schema's ---------- */
+
+const MAX_SOURCE_CHARS = 12_000;
+const MAX_REF_DEPTH = 3;
+
+/** Haalt de gemeenschappelijke inspringing weg. */
+function dedent(block: string[]): string {
+  const indents = block.filter(isContent).map(indentOf);
+  const min = indents.length > 0 ? Math.min(...indents) : 0;
+  return block.map((l) => l.slice(Math.min(min, indentOf(l)))).join("\n").trimEnd();
+}
+
+/** Alle onderdelen onder `components`, op hun `$ref`-adres: `#/components/schemas/Campaign` → tekst. */
+function componentBlocks(lines: string[]): Map<string, string> {
+  const blocks = new Map<string, string>();
+  const start = lines.findIndex((l) => indentOf(l) === 0 && keyValue(l)?.[0] === "components");
+  if (start < 0) return blocks;
+  const comp = blockAfter(lines, start);
+  const kindLevel = childIndent(lines, comp.from, comp.to);
+  for (let i = comp.from; i < comp.to; i++) {
+    if (!isContent(lines[i]) || indentOf(lines[i]) !== kindLevel) continue;
+    const kind = keyValue(lines[i])?.[0];
+    if (!kind) continue;
+    const kindBlock = blockAfter(lines, i);
+    const nameLevel = childIndent(lines, kindBlock.from, kindBlock.to);
+    for (let j = kindBlock.from; j < kindBlock.to; j++) {
+      if (!isContent(lines[j]) || indentOf(lines[j]) !== nameLevel) continue;
+      const name = keyValue(lines[j])?.[0];
+      if (!name) continue;
+      const own = blockAfter(lines, j);
+      blocks.set(`#/components/${kind}/${name}`, dedent(lines.slice(j, own.to)));
+    }
+  }
+  return blocks;
+}
+
+/** De tekst van een endpoint plus de onderdelen waar hij (ook indirect) naar verwijst. */
+function withRefs(text: string, components: Map<string, string>): string {
+  const parts = [text];
+  const seen = new Set<string>();
+  let frontier = [text];
+  for (let depth = 0; depth < MAX_REF_DEPTH && frontier.length > 0; depth++) {
+    const next: string[] = [];
+    for (const chunk of frontier) {
+      for (const m of chunk.matchAll(/\$ref:\s*['"]?(#\/components\/[^'"\s]+)/g)) {
+        const ref = m[1];
+        if (seen.has(ref)) continue;
+        seen.add(ref);
+        const block = components.get(ref);
+        if (!block) continue;
+        parts.push(`# ${ref}\n${block}`);
+        next.push(block);
+      }
+    }
+    frontier = next;
+  }
+  const source = parts.join("\n\n");
+  return source.length > MAX_SOURCE_CHARS ? `${source.slice(0, MAX_SOURCE_CHARS)}\n# … ingekort` : source;
+}
+
 function parseOperationsYaml(lines: string[], knownScopes: string[]): SpecOperation[] {
   const pathsLine = lines.findIndex((l) => indentOf(l) === 0 && keyValue(l)?.[0] === "paths");
   if (pathsLine < 0) return [];
+  const components = componentBlocks(lines);
 
   const operations: SpecOperation[] = [];
   const { from, to } = blockAfter(lines, pathsLine);
@@ -159,6 +226,7 @@ function parseOperationsYaml(lines: string[], knownScopes: string[]): SpecOperat
         path: pathKey[0],
         summary,
         scopes: scopesInText(body.join("\n"), knownScopes),
+        source: withRefs(dedent(lines.slice(j, opBlock.to)), components),
       });
     }
   }
@@ -168,7 +236,8 @@ function parseOperationsYaml(lines: string[], knownScopes: string[]): SpecOperat
 /** Rechten die in een stuk tekst genoemd worden: bekende namen, plus losse `- naam.recht`-regels. */
 function scopesInText(text: string, knownScopes: string[]): string[] {
   const found = knownScopes.filter((s) =>
-    new RegExp(`(^|[^a-z0-9_.-])${s.replace(/\./g, "\\.")}($|[^a-z0-9_.-])`, "i").test(text)
+    // Na de naam mag een punt staan als die een zin afsluit: "… of campaigns.copy."
+    new RegExp(`(^|[^a-z0-9_.-])${s.replace(/\./g, "\\.")}($|[^a-z0-9_.-]|\\.(?![a-z0-9_-]))`, "i").test(text)
   );
   for (const m of text.matchAll(/^\s*-\s*['"]?([a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)+)['"]?\s*$/gim)) {
     found.push(m[1]);
@@ -221,6 +290,7 @@ function parseJson(doc: Record<string, unknown>): ParsedSpec {
         path,
         summary: String(op.summary ?? op.operationId ?? ""),
         scopes: scopesInText(JSON.stringify(op.security ?? op), known),
+        source: JSON.stringify(op, null, 2).slice(0, MAX_SOURCE_CHARS),
       });
     }
   }

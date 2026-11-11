@@ -419,9 +419,18 @@ export async function runPlayableApiTest(input: string): Promise<PlayableTestRep
     ...(await getEndpoint(base, fillPath(op.path, [campaign.id]), token)),
   }));
 
+  const skipped = [...plan.skipped];
   const nestedJobs = plan.nested.flatMap(({ operation, listPath }) => {
     const list = singleReads.find((r) => r.specPath === listPath);
-    return idsFromList(list?.json).map((childId) => ({ operation, childId }));
+    const ids = idsFromList(list?.json);
+    if (ids.length === 0) {
+      skipped.push({
+        method: operation.method,
+        path: operation.path,
+        reason: list?.ok ? `Geen ID's gevonden in ${listPath}` : `${listPath} gaf geen lijst terug`,
+      });
+    }
+    return ids.map((childId) => ({ operation, childId }));
   });
   const nestedReads = await mapLimit(nestedJobs, CONCURRENCY, async ({ operation, childId }) => ({
     specPath: operation.path,
@@ -459,15 +468,17 @@ export async function runPlayableApiTest(input: string): Promise<PlayableTestRep
     scopes,
     readScopes,
     reads,
-    skipped: plan.skipped,
+    skipped,
     conclusion: {
       codeFound: codeFields.length > 0,
       psvkFound: codeFields.some(({ field }) => field.signals.includes("psvk")),
       codeLocations: codeFields.slice(0, 10).map(({ read, field }) => `GET ${read.path} → ${field.path}`),
       modify: scopeGranted("campaigns.modify"),
       copy: scopeGranted("campaigns.copy"),
-      writeOperations: operations.filter((op) =>
-        op.scopes.some((s) => s === "campaigns.modify" || s === "campaigns.copy")
+      writeOperations: operations.filter(
+        (op) =>
+          !op.path.startsWith("/oauth") &&
+          op.scopes.some((s) => s === "campaigns.modify" || s === "campaigns.copy")
       ),
     },
   };

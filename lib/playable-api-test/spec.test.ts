@@ -15,24 +15,45 @@ test("YAML: rechten met omschrijving", () => {
       "campaigns.copy",
       "campaigns.sections.list",
       "campaigns.sections.view",
+      "campaigns.sections.form-fields.list",
+      "campaigns.prizes.list",
+      "campaigns.prizes.view",
       "campaigns.registrations.list",
     ]
   );
-  assert.equal(spec.scopes[6].description, "Grant right to list registrations");
+  assert.equal(spec.scopes[9].description, "Grant right to list registrations");
 });
 
 test("YAML: endpoints met methode, omschrijving en rechten", () => {
   const spec = parseOpenApi(SAMPLE_SPEC_YAML);
   const ops = spec.operations.map((o) => `${o.method} ${o.path} [${o.scopes.join(",")}] ${o.summary}`);
   assert.deepEqual(ops, [
+    "post /oauth/token [campaigns.list,campaigns.modify,campaigns.copy] Authentication",
     "get /v1/campaigns [campaigns.list] List campaigns",
     "get /v1/campaign/{campaign} [campaigns.view] View a campaign",
-    "put /v1/campaign/{campaign} [campaigns.modify] Modify a campaign",
-    "post /v1/campaign/{campaign}/copy [campaigns.copy] copyCampaign",
+    "post /v1/campaign/{campaign} [campaigns.modify] Update Campaign",
+    "post /v1/campaign/copy/{campaign} [campaigns.copy] copyCampaign",
     "get /v1/campaign/{campaign}/sections [campaigns.sections.list] List sections",
-    "get /v1/campaign/{campaign}/sections/{section} [campaigns.sections.view] View a section",
+    "get /v1/campaign/{campaign}/section/{section} [campaigns.sections.view] View a section",
+    "get /v1/campaign/{campaign}/section/{section}/form-fields [campaigns.sections.form-fields.list] List form fields",
+    "get /v1/campaign/{campaign}/prizes [campaigns.prizes.list] List prizes",
+    "get /v1/campaign/{campaign}/prize/{prize} [campaigns.prizes.view] View a prize",
     "get /v1/campaign/{campaign}/registrations [campaigns.registrations.list] List registrations",
   ]);
+});
+
+test("YAML: de bron van een endpoint, met de schema's waar hij naar verwijst", () => {
+  const spec = parseOpenApi(SAMPLE_SPEC_YAML);
+  const update = spec.operations.find((o) => o.summary === "Update Campaign")!;
+  assert.ok(update.source?.startsWith("post:\n  summary: Update Campaign"));
+  assert.ok(update.source?.includes("# #/components/schemas/CampaignUpdate\nCampaignUpdate:"));
+  assert.ok(update.source?.includes("active_from:"));
+
+  // Ook een verwijzing binnen een verwijzing.
+  const section = spec.operations.find((o) => o.summary === "View a section")!;
+  assert.ok(section.source?.includes("# #/components/schemas/Section\n"));
+  assert.ok(section.source?.includes("# #/components/schemas/SectionContent\n"));
+  assert.ok(!section.source?.includes("CampaignUpdate"));
 });
 
 test("YAML: tekst in een omschrijving telt niet als endpoint", () => {
@@ -43,8 +64,9 @@ test("YAML: tekst in een omschrijving telt niet als endpoint", () => {
 test("YAML met vier spaties inspringing", () => {
   const wide = SAMPLE_SPEC_YAML.replace(/^( +)/gm, (spaces) => spaces + spaces);
   const spec = parseOpenApi(wide);
-  assert.equal(spec.scopes.length, 7);
-  assert.equal(spec.operations.length, 7);
+  assert.equal(spec.scopes.length, 10);
+  assert.equal(spec.operations.length, 11);
+  assert.ok(spec.operations[3].source?.includes("CampaignUpdate:"));
 });
 
 test("alleen het servers-blok telt als server", () => {

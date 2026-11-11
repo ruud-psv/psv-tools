@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { PlayableTestReport, ReadResult, ScopeResult } from "@/lib/playable-api-test/run";
+import type { SpecOperation } from "@/lib/playable-api-test/spec";
 
 /**
  * Tijdelijke testpagina (beta tool): wat kan PSV Tools met de API van
@@ -197,6 +198,34 @@ function ReadDetails({ read }: { read: ReadResult }) {
   );
 }
 
+/** Eén endpoint uit de API-beschrijving, met de bron uitklapbaar. */
+function OperationDetails({ op }: { op: SpecOperation }) {
+  return (
+    <details className="border-b border-border py-2 text-sm">
+      <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className={cn(
+            "w-14 shrink-0 font-mono uppercase",
+            op.method === "get" ? "text-muted-foreground" : "text-primary"
+          )}
+        >
+          {op.method}
+        </span>
+        <span className="min-w-0 flex-1 font-mono break-all">{op.path}</span>
+        {op.summary && <span className="text-muted-foreground">{op.summary}</span>}
+      </summary>
+      <div className="mt-2 space-y-2">
+        {op.scopes.length > 0 && (
+          <p className="font-mono text-xs text-muted-foreground">Rechten: {op.scopes.join(", ")}</p>
+        )}
+        <pre className="max-h-96 overflow-auto bg-muted p-3 text-xs">
+          {op.source ?? "Geen bron in de API-beschrijving."}
+        </pre>
+      </div>
+    </details>
+  );
+}
+
 export function PlayableApiTest() {
   const [campaign, setCampaign] = useState("");
   const [running, setRunning] = useState(false);
@@ -331,41 +360,23 @@ export function PlayableApiTest() {
             {report.conclusion.writeOperations.length > 0 && (
               <div className="mb-4">
                 <p className="form-label">Bij campaigns.modify en campaigns.copy</p>
-                <ul className="space-y-1 text-sm">
+                <p className="form-hint !mt-0 mb-2">
+                  Klap open om te zien welke velden je mag meesturen.
+                </p>
+                <div className="border-t border-border">
                   {report.conclusion.writeOperations.map((op) => (
-                    <li key={`${op.method} ${op.path}`}>
-                      <span className="font-mono">
-                        {op.method.toUpperCase()} {op.path}
-                      </span>
-                      {op.summary && <span className="text-muted-foreground"> · {op.summary}</span>}
-                    </li>
+                    <OperationDetails key={`${op.method} ${op.path}`} op={op} />
                   ))}
-                </ul>
+                </div>
               </div>
             )}
 
             <details className="accordion">
               <summary className="!text-base">Alle endpoints ({report.spec.operations.length})</summary>
-              <div className="accordion__content overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
-                  <tbody>
-                    {report.spec.operations.map((op) => (
-                      <tr key={`${op.method} ${op.path}`} className="border-b border-border align-top">
-                        <td
-                          className={cn(
-                            "py-1 pr-3 font-mono uppercase",
-                            op.method === "get" ? "text-muted-foreground" : "text-primary"
-                          )}
-                        >
-                          {op.method}
-                        </td>
-                        <td className="py-1 pr-3 font-mono break-all">{op.path}</td>
-                        <td className="py-1 pr-3 text-muted-foreground">{op.summary}</td>
-                        <td className="py-1 font-mono text-xs text-muted-foreground">{op.scopes.join(", ")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="accordion__content">
+                {report.spec.operations.map((op) => (
+                  <OperationDetails key={`${op.method} ${op.path}`} op={op} />
+                ))}
               </div>
             </details>
           </Card>

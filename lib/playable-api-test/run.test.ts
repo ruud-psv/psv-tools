@@ -56,7 +56,7 @@ function fakePlayable(allowed: string[], opts: { ignoreScopes?: boolean } = {}) 
         });
       case "/v1/campaign/123/sections":
         return Response.json({ data: [{ id: 5 }, { id: 6 }] });
-      case "/v1/campaign/123/sections/5":
+      case "/v1/campaign/123/section/5":
         return Response.json({
           data: {
             id: 5,
@@ -66,7 +66,7 @@ function fakePlayable(allowed: string[], opts: { ignoreScopes?: boolean } = {}) 
             },
           },
         });
-      case "/v1/campaign/123/sections/6":
+      case "/v1/campaign/123/section/6":
         return Response.json({ data: { id: 6, type: "form" } });
       case "/v1/campaigns?per_page=100&page=1":
         return Response.json({
@@ -112,12 +112,13 @@ test("per recht: lees-rechten wel, modify en copy niet, code gevonden", async ()
   assert.ok(report.conclusion.codeFound);
   assert.ok(report.conclusion.psvkFound);
   assert.deepEqual([...report.conclusion.codeLocations].sort(), [
-    "GET /v1/campaign/123/sections/5 → data.settings.css",
-    "GET /v1/campaign/123/sections/5 → data.settings.html",
+    "GET /v1/campaign/123/section/5 → data.settings.css",
+    "GET /v1/campaign/123/section/5 → data.settings.html",
   ]);
   assert.deepEqual(
     report.conclusion.writeOperations.map((o) => `${o.method} ${o.path}`),
-    ["put /v1/campaign/{campaign}", "post /v1/campaign/{campaign}/copy"]
+    // /oauth/token noemt ook campaigns.modify, maar hoort hier niet bij.
+    ["post /v1/campaign/{campaign}", "post /v1/campaign/copy/{campaign}"]
   );
 
   // Alleen GET naar de API, nooit naar registraties.
@@ -127,7 +128,7 @@ test("per recht: lees-rechten wel, modify en copy niet, code gevonden", async ()
   assert.ok(!apiCalls.some((c) => c.url.includes("registrations")));
   assert.deepEqual(
     apiCalls.map((c) => new URL(c.url).pathname),
-    ["/v1/campaign/123", "/v1/campaign/123/sections", "/v1/campaign/123/sections/5", "/v1/campaign/123/sections/6"]
+    ["/v1/campaign/123", "/v1/campaign/123/sections", "/v1/campaign/123/section/5", "/v1/campaign/123/section/6"]
   );
 
   // Het token voor het lezen bevat geen schrijf- of registratierechten.
@@ -146,6 +147,9 @@ test("alles in één keer toegekend: één tokenverzoek plus de controle", async
     "campaigns.modify",
     "campaigns.copy",
     "campaigns.registrations.list",
+    "campaigns.sections.form-fields.list",
+    "campaigns.prizes.list",
+    "campaigns.prizes.view",
     "campaigns.pause",
     "campaigns.resume",
   ]);
