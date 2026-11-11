@@ -54,16 +54,16 @@ test("admin en ADMIN_EMAILS mogen het beheer in", () => {
   assert.ok(canAccessApi(viaEnv, "/api/users"));
 });
 
-test("Playable API-test is een beta tool, los van Landingspagina's", () => {
+test("Playable loader is een beta tool, los van Landingspagina's", () => {
   const beta = resolveAccess("Nieuw@PSV.nl", users, []);
-  assert.ok(canAccessPath(beta, "/dashboard/playable-api-test"));
-  assert.ok(canAccessApi(beta, "/api/playable-api-test"));
+  assert.ok(canAccessPath(beta, "/dashboard/playable-loader"));
+  assert.ok(canAccessApi(beta, "/api/playable-loader"));
 
   const zonderBeta = resolveAccess("alles@psv.nl", users, []);
   assert.ok(canAccessPath(zonderBeta, "/dashboard/landingspaginas"));
   assert.ok(canAccessApi(zonderBeta, "/api/playable"));
-  assert.ok(!canAccessPath(zonderBeta, "/dashboard/playable-api-test"));
-  assert.ok(!canAccessApi(zonderBeta, "/api/playable-api-test"));
+  assert.ok(!canAccessPath(zonderBeta, "/dashboard/playable-loader"));
+  assert.ok(!canAccessApi(zonderBeta, "/api/playable-loader"));
 });
 
 test("paden matchen op segmentgrens en langste pagina wint", () => {

@@ -190,5 +190,5 @@ export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
   { name: "Contact Filter Import", href: "/dashboard/contact-filter-import", icon: ListFilter },
-  { name: "Playable API-test", href: "/dashboard/playable-api-test", icon: Plug },
+  { name: "Playable loader (test)", href: "/dashboard/playable-loader", icon: Plug },
 ];

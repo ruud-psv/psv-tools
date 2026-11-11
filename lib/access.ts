@@ -73,7 +73,7 @@ const API_PAGES: Record<string, string[]> = {
   "/api/maileon-upload": ["/dashboard/mail-builder"],
   "/api/paid-ads": ["/dashboard/paid-ads"],
   "/api/playable": ["/dashboard/landingspaginas"],
-  "/api/playable-api-test": ["/dashboard/playable-api-test"],
+  "/api/playable-loader": ["/dashboard/playable-loader"],
   "/api/playable-insights": ["/dashboard/landingspaginas"],
   "/api/ringside": ["/dashboard/aangrenzende-stoelen", "/dashboard/ticketing-stadion"],
   "/api/submit": ["/dashboard/copy-generator", "/dashboard/huisstijl-checker"],
