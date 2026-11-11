@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { FlaskConical, LogOut, PanelLeftClose, PanelLeftOpen, Plug, UserCog } from "lucide-react";
+import { FlaskConical, LogOut, PanelLeftClose, PanelLeftOpen, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -15,13 +15,7 @@ import {
   betaTools as allBetaTools,
   navItems,
 } from "@/lib/tools";
-import { PLAYABLE_API_TEST_HREF, USER_ADMIN_HREF } from "@/lib/access";
-
-/** Alleen zichtbaar voor admins, onderaan de sidebar. */
-const ADMIN_LINKS = [
-  { name: "Gebruikersbeheer", href: USER_ADMIN_HREF, icon: UserCog },
-  { name: "Playable API-test", href: PLAYABLE_API_TEST_HREF, icon: Plug },
-];
+import { USER_ADMIN_HREF } from "@/lib/access";
 
 export function AppSidebar({
   allowedPages,
@@ -292,23 +286,21 @@ export function AppSidebar({
       {/* Footer */}
       {!collapsed && (
         <div className="px-2 py-4 border-t border-sidebar-border space-y-0.5">
-          {isAdmin &&
-            ADMIN_LINKS.map(({ name, href, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={onMobileClose}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                  pathname.startsWith(href)
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                <span>{name}</span>
-              </Link>
-            ))}
+          {isAdmin && (
+            <Link
+              href={USER_ADMIN_HREF}
+              onClick={onMobileClose}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
+                pathname.startsWith(USER_ADMIN_HREF)
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <UserCog className="h-4 w-4 flex-shrink-0" />
+              <span>Gebruikersbeheer</span>
+            </Link>
+          )}
           {betaTools.length > 0 && (
             <div className="group relative">
               <button

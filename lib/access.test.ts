@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  PLAYABLE_API_TEST_HREF,
   USER_ADMIN_HREF,
   canAccessApi,
   canAccessPath,
@@ -55,19 +54,16 @@ test("admin en ADMIN_EMAILS mogen het beheer in", () => {
   assert.ok(canAccessApi(viaEnv, "/api/users"));
 });
 
-test("Playable API-test: alleen admins, ook niet via Landingspagina's", () => {
-  const admin = resolveAccess("baas@psv.nl", users, []);
-  assert.ok(canAccessPath(admin, PLAYABLE_API_TEST_HREF));
-  assert.ok(canAccessApi(admin, "/api/playable-api-test"));
+test("Playable API-test is een beta tool, los van Landingspagina's", () => {
+  const beta = resolveAccess("Nieuw@PSV.nl", users, []);
+  assert.ok(canAccessPath(beta, "/dashboard/playable-api-test"));
+  assert.ok(canAccessApi(beta, "/api/playable-api-test"));
 
-  for (const email of ["Nieuw@PSV.nl", "alles@psv.nl"]) {
-    const access = resolveAccess(email, users, []);
-    assert.ok(canAccessPath(access, "/dashboard/landingspaginas"));
-    assert.ok(!canAccessPath(access, PLAYABLE_API_TEST_HREF));
-    assert.ok(!canAccessApi(access, "/api/playable-api-test"));
-    // De gewone Playable-route blijft gewoon bij Landingspagina's horen.
-    assert.ok(canAccessApi(access, "/api/playable"));
-  }
+  const zonderBeta = resolveAccess("alles@psv.nl", users, []);
+  assert.ok(canAccessPath(zonderBeta, "/dashboard/landingspaginas"));
+  assert.ok(canAccessApi(zonderBeta, "/api/playable"));
+  assert.ok(!canAccessPath(zonderBeta, "/dashboard/playable-api-test"));
+  assert.ok(!canAccessApi(zonderBeta, "/api/playable-api-test"));
 });
 
 test("paden matchen op segmentgrens en langste pagina wint", () => {

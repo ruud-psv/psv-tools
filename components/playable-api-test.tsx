@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { PlayableTestReport, ReadResult, ScopeResult } from "@/lib/playable-api-test/run";
 
 /**
- * Tijdelijke testpagina voor admins: wat kan PSV Tools met de API van
+ * Tijdelijke testpagina (beta tool): wat kan PSV Tools met de API van
  * Playable? De vraag erachter: kan een tool de HTML, CSS en JS van een
  * campagnepagina zelf ophalen (en later terugzetten), of moet een collega die
  * blijven kopiëren en plakken?

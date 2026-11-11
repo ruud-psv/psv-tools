@@ -4,7 +4,7 @@ export const metadata = {
   title: "Playable API-test | PSV Tools",
 };
 
-// Alleen admins komen hier: de middleware stuurt de rest terug naar het dashboard.
+// Beta tool: wie geen beta tools mag zien, stuurt de middleware terug naar het dashboard.
 export default function PlayableApiTestPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">

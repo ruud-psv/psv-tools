@@ -24,12 +24,6 @@ export const DEFAULT_LEVEL: AccessLevel = "all-beta";
 
 export const USER_ADMIN_HREF = "/dashboard/gebruikersbeheer";
 
-/** Tijdelijke testpagina: wat kan PSV Tools met de API van Playable? */
-export const PLAYABLE_API_TEST_HREF = "/dashboard/playable-api-test";
-
-/** Pagina's die alleen admins zien, los van welk niveau iemand heeft. */
-export const ADMIN_PAGES = [USER_ADMIN_HREF, PLAYABLE_API_TEST_HREF];
-
 export interface UserAccess {
   email: string;
   level: AccessLevel;
@@ -79,6 +73,7 @@ const API_PAGES: Record<string, string[]> = {
   "/api/maileon-upload": ["/dashboard/mail-builder"],
   "/api/paid-ads": ["/dashboard/paid-ads"],
   "/api/playable": ["/dashboard/landingspaginas"],
+  "/api/playable-api-test": ["/dashboard/playable-api-test"],
   "/api/playable-insights": ["/dashboard/landingspaginas"],
   "/api/ringside": ["/dashboard/aangrenzende-stoelen", "/dashboard/ticketing-stadion"],
   "/api/submit": ["/dashboard/copy-generator", "/dashboard/huisstijl-checker"],
@@ -89,10 +84,6 @@ const API_PAGES: Record<string, string[]> = {
 };
 
 export const USERS_API = "/api/users";
-export const PLAYABLE_API_TEST_API = "/api/playable-api-test";
-
-/** API-routes die alleen admins mogen aanroepen. */
-const ADMIN_APIS = [USERS_API, PLAYABLE_API_TEST_API];
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -153,8 +144,7 @@ function under(pathname: string, prefix: string): boolean {
 
 /** De pagina waar een dashboard-pad bij hoort; `null` voor paden zonder eigen recht (zoals het overzicht). */
 export function pageForPath(pathname: string): string | null {
-  const adminPage = ADMIN_PAGES.find((href) => under(pathname, href));
-  if (adminPage) return adminPage;
+  if (under(pathname, USER_ADMIN_HREF)) return USER_ADMIN_HREF;
   // Langste match eerst: `/dashboard/ticket-inzichten-new` mag niet als `/dashboard/ticket-inzichten` tellen.
   const match = ALL_PAGES.filter((href) => under(pathname, href)).sort((a, b) => b.length - a.length)[0];
   return match ?? null;
@@ -163,12 +153,12 @@ export function pageForPath(pathname: string): string | null {
 export function canAccessPath(access: EffectiveAccess, pathname: string): boolean {
   const page = pageForPath(pathname);
   if (page === null) return true;
-  if (ADMIN_PAGES.includes(page)) return access.isAdmin;
+  if (page === USER_ADMIN_HREF) return access.isAdmin;
   return access.pages.includes(page);
 }
 
 export function canAccessApi(access: EffectiveAccess, pathname: string): boolean {
-  if (ADMIN_APIS.some((prefix) => under(pathname, prefix))) return access.isAdmin;
+  if (under(pathname, USERS_API)) return access.isAdmin;
   const prefix = Object.keys(API_PAGES).find((p) => under(pathname, p));
   if (!prefix) return true;
   return API_PAGES[prefix].some((href) => access.pages.includes(href));

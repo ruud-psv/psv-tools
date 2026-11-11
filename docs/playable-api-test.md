@@ -1,10 +1,12 @@
 # Playable API-test
 
-Op `/dashboard/playable-api-test` test een admin wat PSV Tools met de API van
-Playable kan. Alleen admins zien de pagina (onderaan de sidebar, onder
-Gebruikersbeheer). Het is een tijdelijke pagina: hij beantwoordt de vraag of een
-tool in PSV Tools de HTML, CSS en JS van een campagnepagina zelf kan ophalen en
-terugzetten, of dat een collega die blijft kopiëren en plakken.
+Op `/dashboard/playable-api-test` test je wat PSV Tools met de API van
+Playable kan. De pagina staat bij de **Beta tools** in de sidebar; wie hem ziet
+regel je in Gebruikersbeheer, net als bij de andere beta tools.
+
+Het is een tijdelijke pagina: hij beantwoordt de vraag of een tool in PSV Tools
+de HTML, CSS en JS van een campagnepagina zelf kan ophalen en terugzetten, of
+dat een collega die blijft kopiëren en plakken.
 
 ## Wat de test doet
 
@@ -60,9 +62,8 @@ vindt hij geen `psvk-`-klassen.
 - `lib/playable-api-test/spec.ts`: de API-beschrijving inlezen
 - `lib/playable-api-test/scan.ts`: welke endpoints, pagina-code herkennen
 - `lib/playable-api-test/run.ts`: de test zelf
-- `app/api/playable-api-test/route.ts`: de API-route, alleen voor admins
+- `app/api/playable-api-test/route.ts`: de API-route
 - `components/playable-api-test.tsx`: de pagina
 
-Is de vraag beantwoord, dan kunnen deze bestanden weg, samen met
-`PLAYABLE_API_TEST_HREF` en `PLAYABLE_API_TEST_API` in `lib/access.ts` en de
-link in `components/app-sidebar.tsx`.
+Is de vraag beantwoord, dan kunnen deze bestanden weg, samen met de regel in
+`betaTools` (`lib/tools.ts`) en die in `API_PAGES` (`lib/access.ts`).
