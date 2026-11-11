@@ -194,8 +194,9 @@ ${page.kitJs}
 
 /**
  * Wat een collega één keer in de drie velden van het `html-element` in Playable
- * zet. De `?v=` verandert elke minuut, zodat een nieuwe publicatie binnen een
- * minuut of twee zichtbaar is, ook als Bunny of de browser het bestand bewaart.
+ * zet. De `?v=` verandert elke minuut, zodat de browser hooguit een minuut een
+ * oude versie bewaart. Bunny negeert de `?v=`; daar leegt PSV Tools de cache na
+ * elke publicatie (`purgeBundle`).
  */
 export function loaderFields(campaignId: number, bundleUrl: string): PageSource {
   return {

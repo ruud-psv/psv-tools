@@ -190,7 +190,7 @@ export function PlayableLoader() {
                 {publishing ? "Bezig…" : "Publiceren"}
               </Button>
               <p className="text-sm text-muted-foreground">
-                Staat de loader al in Playable, dan is dit binnen een minuut of twee live op de pagina.
+                Staat de loader al in Playable, dan is dit binnen een minuut live op de pagina.
               </p>
             </div>
 

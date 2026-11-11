@@ -43,7 +43,8 @@ leeg hem dan in Bunny bij de pull zone onder Purge, met het adres van
    - werken de knoppen, uitklappers en de plakkende kop, ook op mobiel;
    - geeft de browserconsole geen fout met `[psvk]`.
 5. Pas in PSV Tools een tekst aan, publiceer opnieuw en ververs de demo na een
-   minuut of twee. Komt de nieuwe tekst door?
+   halve minuut. Komt de nieuwe tekst door? Geeft PSV Tools een gele melding
+   over de cache, dan staat `BUNNY_API_KEY` niet (goed) in Vercel.
 
 Lukt stap 4 niet, kijk dan in de console of Playable het script van
 `psveindhoven.b-cdn.net` blokkeert. Terug naar de oude situatie: plak de
