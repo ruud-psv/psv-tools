@@ -30,6 +30,33 @@ die, dan publiceert PSV Tools wel maar meldt het dat de cache niet is geleegd;
 leeg hem dan in Bunny bij de pull zone onder Purge, met het adres van
 `page.js`.
 
+## Aanpassen met Claude
+
+Bovenaan de pagina zegt een collega in gewone taal wat er anders moet. Claude
+(`claude-opus-5-5`, zie `lib/playable-loader/assistent.ts`) krijgt de regels
+en de naslag van de Kit (uit de skill playable-page-builder, via
+`scripts/kit-bijwerken.mjs` in `lib/playable-loader/skill.ts`) en de huidige
+code zonder de Kit, en geeft gerichte wijzigingen terug: per veld een stuk
+code dat er precies één keer in staat, en wat ervoor in de plaats komt.
+
+- PSV Tools voert de wijzigingen uit op het **concept**, niet op wat live
+  staat. Alles of niets: past één wijziging niet, of klopt de JavaScript daarna
+  niet, dan krijgt Claude de fout terug en probeert het opnieuw (maximaal drie
+  keer).
+- Naast de chat staat een **voorbeeld** van het concept, op desktop- en
+  mobielbreedte, met dezelfde bundel die op Bunny komt. Zonder de opmaak van
+  Playable zelf, dus kijk na het publiceren op de demo.
+- **Ongedaan maken** zet het concept terug naar voor de laatste wijziging.
+- Pas **Publiceren** zet het live.
+- Vraagt de collega iets wat niet kan of onduidelijk is, dan vraagt Claude door
+  en verandert er niets.
+
+Het gesprek staat alleen in de browser; na verversen begint het opnieuw. Per
+vraag logt de route het aantal tokens, om de kosten te volgen. Met Opus 5.5
+($4 in, $20 uit per miljoen tokens) is dat bij een pagina als 244347 een paar
+dubbeltjes per wijziging (een schatting, nog niet gemeten). Sonnet 5.5 kost de
+helft; dat is de constante `MODEL`.
+
 ## Testen met campagne 244347
 
 1. Open **Beta tools → Playable loader** en open campagne 244347.

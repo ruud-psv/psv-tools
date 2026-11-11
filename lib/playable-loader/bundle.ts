@@ -39,6 +39,19 @@ export function splitKit(code: string, framework: string): { rest: string; kit: 
   return { rest: code.trim(), kit: "geen" };
 }
 
+/**
+ * De code zonder de Kit, zoals de collega en de assistent hem zien. Een
+ * andere versie van de Kit blijft staan; PSV Tools zet de eigen Kit er bij
+ * het publiceren bij.
+ */
+export function zonderKit(bron: PageSource): PageSource {
+  return {
+    html: bron.html.trim(),
+    css: splitKit(bron.css, FRAMEWORK_CSS).rest,
+    js: splitKit(bron.js, FRAMEWORK_JS).rest,
+  };
+}
+
 export interface PreparedPage {
   html: string;
   /** Alle CSS: de kit plus de pagina-eigen CSS. */
