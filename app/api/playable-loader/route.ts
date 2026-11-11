@@ -15,6 +15,7 @@ import {
   bundleUrl,
   purgeBundle,
   readPublished,
+  rememberPublished,
   savePublished,
   uploadBundle,
   type PublishedPage,
@@ -131,6 +132,12 @@ export async function POST(req: NextRequest) {
       warnings,
     };
     await savePublished(record);
+    // Het eigen lijstje van recente campagnes; mislukt dat, dan is de publicatie er toch.
+    try {
+      await rememberPublished(session.email, { campaignId, campaignName, publishedAt });
+    } catch (err) {
+      console.error("[playable-loader] Recente campagnes bijwerken mislukt:", err);
+    }
     console.info(`[playable-loader] ${session.email} publiceerde campagne ${campaignId} (${bundle.length} tekens).`);
 
     // Meteen nakijken wat Bunny nu teruggeeft, zodat de collega ziet of het live staat.

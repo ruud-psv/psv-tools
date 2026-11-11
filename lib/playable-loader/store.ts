@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { get, list, put } from "@vercel/blob";
 import { bundlePath, type PageSource } from "./bundle";
 
@@ -106,36 +107,91 @@ export async function savePublished(record: PublishedPage): Promise<void> {
   await put(currentPath(record.campaignId), body, options);
 }
 
+/**
+ * Jouw recente campagnes: die waar jij zelf op hebt gepubliceerd, laatst
+ * eerst. Per collega een eigen lijstje in Blob, onder een hash van het
+ * e-mailadres. Bestaat dat lijstje nog niet, dan wordt het één keer gevuld met
+ * de campagnes waarvan jij de laatste publicatie deed.
+ */
 export interface RecentCampaign {
   campaignId: number;
   campaignName?: string;
+  /** Jouw laatste publicatie van deze campagne. */
   publishedAt: string;
-  publishedBy: string;
-  publishedByName?: string;
 }
 
-/** De campagnes met een pagina in PSV Tools, laatst gepubliceerd eerst. */
-export async function listRecent(limit = 10): Promise<RecentCampaign[]> {
-  const huidige: { campaignId: number; uploadedAt: number }[] = [];
+const MAX_RECENT = 20;
+
+function userPath(email: string): string {
+  const hash = createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 32);
+  return `${PREFIX}gebruikers/${hash}.json`;
+}
+
+/** Zet een campagne bovenaan, zonder dubbele, en houdt er hooguit `max`. */
+export function upsertRecent(items: RecentCampaign[], item: RecentCampaign, max = MAX_RECENT): RecentCampaign[] {
+  const vorige = items.find((i) => i.campaignId === item.campaignId);
+  const nieuw: RecentCampaign = { ...item, campaignName: item.campaignName ?? vorige?.campaignName };
+  if (!nieuw.campaignName) delete nieuw.campaignName;
+  return [nieuw, ...items.filter((i) => i.campaignId !== item.campaignId)]
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    .slice(0, max);
+}
+
+async function readUserRecent(email: string): Promise<RecentCampaign[] | null> {
+  try {
+    const result = await get(userPath(email), { access: "private", useCache: false });
+    if (!result?.stream) return null;
+    const data = JSON.parse(await new Response(result.stream).text()) as { items?: RecentCampaign[] };
+    return Array.isArray(data.items) ? data.items : [];
+  } catch {
+    return null;
+  }
+}
+
+async function writeUserRecent(email: string, items: RecentCampaign[]): Promise<void> {
+  await put(userPath(email), JSON.stringify({ items }), {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+  });
+}
+
+/** Eenmalig: de campagnes waarvan deze collega de laatste publicatie deed. */
+async function vulUitPublicaties(email: string): Promise<RecentCampaign[]> {
+  const ids: number[] = [];
   let cursor: string | undefined;
   do {
     const page = await list({ prefix: PREFIX, cursor, limit: 1000 });
     for (const blob of page.blobs) {
       const m = /^playable-loader\/(\d+)\/huidig\.json$/.exec(blob.pathname);
-      if (m) huidige.push({ campaignId: Number(m[1]), uploadedAt: new Date(blob.uploadedAt).getTime() });
+      if (m) ids.push(Number(m[1]));
     }
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
 
-  const nieuwste = huidige.sort((a, b) => b.uploadedAt - a.uploadedAt).slice(0, limit);
-  const records = await Promise.all(nieuwste.map((h) => readPublished(h.campaignId)));
+  const records = await Promise.all(ids.map((id) => readPublished(id)));
+  const eigen = email.trim().toLowerCase();
   return records
-    .filter((r): r is PublishedPage => r !== null)
-    .map(({ campaignId, campaignName, publishedAt, publishedBy, publishedByName }) => ({
-      campaignId,
-      ...(campaignName && { campaignName }),
-      publishedAt,
-      publishedBy,
-      ...(publishedByName && { publishedByName }),
-    }));
+    .filter((r): r is PublishedPage => r !== null && r.publishedBy.trim().toLowerCase() === eigen)
+    .reduce<RecentCampaign[]>(
+      (lijst, r) =>
+        upsertRecent(lijst, { campaignId: r.campaignId, campaignName: r.campaignName, publishedAt: r.publishedAt }),
+      []
+    );
+}
+
+export async function listRecent(email: string, limit = 10): Promise<RecentCampaign[]> {
+  let items = await readUserRecent(email);
+  if (items === null) {
+    items = await vulUitPublicaties(email);
+    await writeUserRecent(email, items);
+  }
+  return items.slice(0, limit);
+}
+
+/** Na een publicatie: de campagne bovenaan het lijstje van deze collega. */
+export async function rememberPublished(email: string, item: RecentCampaign): Promise<void> {
+  const items = (await readUserRecent(email)) ?? (await vulUitPublicaties(email));
+  await writeUserRecent(email, upsertRecent(items, item));
 }

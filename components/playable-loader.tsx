@@ -477,13 +477,15 @@ export function PlayableLoader() {
           </form>
 
           <div>
-            <p className="form-label">Recent gepubliceerd</p>
+            <p className="form-label">Jouw recente campagnes</p>
             {recent === null ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Laden…
               </p>
             ) : recent.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nog geen campagnes gepubliceerd via PSV Tools.</p>
+              <p className="text-sm text-muted-foreground">
+                Hier komen de campagnes waar jij op publiceert. Je hebt er nog geen.
+              </p>
             ) : (
               <ul className="divide-y divide-border border-y border-border">
                 {recent.map((r) => (
@@ -499,7 +501,7 @@ export function PlayableLoader() {
                         <span className="ml-3 font-semibold">{r.campaignName ?? "Naam onbekend"}</span>
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {formatDate(r.publishedAt)} door {r.publishedByName ?? r.publishedBy}
+                        Door jou gepubliceerd {formatDate(r.publishedAt)}
                       </span>
                     </button>
                   </li>

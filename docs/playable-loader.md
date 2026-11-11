@@ -37,8 +37,11 @@ In de stappenbalk is rood de stap waar je bent, groen klaar, oranje vraagt
 aandacht (het concept wijkt af van live, of Bunny geeft niet de laatste
 versie) en grijs komt nog.
 
-1. **Campagne**: ID invullen of een campagne kiezen uit de lijst met recent
-   gepubliceerde. Bij het openen controleert PSV Tools:
+1. **Campagne**: ID invullen of een campagne kiezen uit je eigen recente
+   campagnes: die waar jij op hebt gepubliceerd (per collega in Blob onder
+   `playable-loader/gebruikers/`, met een hash van het e-mailadres). Wat je
+   alleen in de chat aanpast wordt niet bewaard, dus dat staat er niet in. Bij
+   het openen controleert PSV Tools:
    - of Playable de campagne kent (naam, actief of niet, links naar demo en
      live; recht `campaigns.view`). Een onbekend ID zonder pagina in PSV Tools
      opent niet;

@@ -1,7 +1,7 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { purgeBundle } from "./store";
+import { purgeBundle, upsertRecent } from "./store";
 
 const realFetch = globalThis.fetch;
 const URL_BUNDEL = "https://psveindhoven.b-cdn.net/playable/pages/244347/page.js";
@@ -40,4 +40,18 @@ test("purgeBundle: een fout van Bunny komt als melding terug", async () => {
   process.env.BUNNY_API_KEY = "fout";
   globalThis.fetch = async () => new Response("Unauthorized", { status: 401 });
   await assert.rejects(purgeBundle(URL_BUNDEL), /Cache van Bunny legen mislukt \(401\): Unauthorized/);
+});
+
+test("upsertRecent: nieuwste bovenaan, geen dubbele, naam blijft bewaard", () => {
+  let lijst = upsertRecent([], { campaignId: 1, campaignName: "Een", publishedAt: "2026-11-10T09:00:00.000Z" });
+  lijst = upsertRecent(lijst, { campaignId: 2, publishedAt: "2026-11-11T09:00:00.000Z" });
+  lijst = upsertRecent(lijst, { campaignId: 1, publishedAt: "2026-11-11T10:00:00.000Z" });
+  assert.deepEqual(lijst, [
+    { campaignId: 1, campaignName: "Een", publishedAt: "2026-11-11T10:00:00.000Z" },
+    { campaignId: 2, publishedAt: "2026-11-11T09:00:00.000Z" },
+  ]);
+  const vol = Array.from({ length: 25 }, (_, i) => ({ campaignId: i, publishedAt: `2026-11-${String(i + 1).padStart(2, "0")}T00:00:00.000Z` }));
+  const kort = vol.reduce((l, item) => upsertRecent(l, item, 20), [] as ReturnType<typeof upsertRecent>);
+  assert.equal(kort.length, 20);
+  assert.equal(kort[0].campaignId, 24);
 });
