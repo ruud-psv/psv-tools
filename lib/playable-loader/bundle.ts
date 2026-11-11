@@ -117,6 +117,21 @@ export interface BundleMeta {
  * JS-veld van Playable en hoeft daar niet aan te voldoen.
  */
 export function buildBundle(page: PreparedPage, meta: BundleMeta): string {
+  return asciiOnly(rawBundle(page, meta));
+}
+
+/**
+ * Vervangt elk teken buiten ASCII door een `\uXXXX`-escape. Bunny geeft het
+ * bestand geen tekenset mee; een browser die het als Western leest, maakt van
+ * "één" dan "Ã©Ã©n". In JavaScript betekent de escape in strings, regexen en
+ * namen hetzelfde als het teken zelf, dus de pagina verandert niet; alleen
+ * in commentaar staat de escape letterlijk.
+ */
+export function asciiOnly(js: string): string {
+  return js.replace(/[^\x00-\x7f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+function rawBundle(page: PreparedPage, meta: BundleMeta): string {
   return `/* PSV Campaign Kit ${KIT_VERSIE} via de Playable loader, campagne ${meta.campaignId}.
    Gepubliceerd ${meta.publishedAt} vanuit PSV Tools. Niet met de hand aanpassen:
    de inhoud beheer je in PSV Tools, Beta tools, Playable loader. */

@@ -197,7 +197,13 @@ export function PlayableLoader() {
             {justPublished && (
               <div className="alert alert--success !mb-0">
                 Gepubliceerd om {formatDate(justPublished.publishedAt)}.{" "}
-                <a className="underline" href={justPublished.bundleUrl} target="_blank" rel="noopener noreferrer">
+                {/* Met ?v= het net gepubliceerde bestand, niet een bewaarde versie. */}
+                <a
+                  className="underline"
+                  href={`${justPublished.bundleUrl}?v=${Date.parse(justPublished.publishedAt)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   Bekijk de bundel
                 </a>
               </div>

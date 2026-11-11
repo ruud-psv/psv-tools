@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   MAX_FIELD_CHARS,
+  asciiOnly,
   PageSourceError,
   buildBundle,
   bundlePath,
@@ -101,4 +102,15 @@ test("bundlePath en parseCampaignId", () => {
   assert.equal(parseCampaignId("../244347"), null);
   assert.equal(parseCampaignId("abc"), null);
   assert.equal(parseCampaignId(undefined), null);
+});
+
+test("buildBundle: alleen ASCII, en speciale tekens komen er hetzelfde uit", () => {
+  const html = '<div id="psvk-app"><p>Één — Kovář 😀</p></div>';
+  const page = preparePage({ html, css: "#psvk-app::after { content: '—'; }", js: "var naam = 'Kovář'; var r = /[é]/;" });
+  const bundle = buildBundle(page, { campaignId: 1, publishedAt: "2026-11-11T13:00:00.000Z" });
+  assert.ok(/^[\x00-\x7f]*$/.test(bundle));
+  assert.doesNotThrow(() => new Function(bundle));
+  // De escape betekent in JavaScript hetzelfde als het teken.
+  assert.equal(new Function(`return ${asciiOnly(JSON.stringify(html))};`)(), html);
+  assert.equal(new Function(asciiOnly("var s = 'Kovář 😀'; return s + /[é]/.test('é');"))(), "Kovář 😀true");
 });
