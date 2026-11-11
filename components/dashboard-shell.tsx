@@ -42,9 +42,13 @@ export function DashboardShell({
         />
       )}
 
-      {/* Sidebar — fixed overlay on mobile, static on desktop */}
+      {/* Sidebar — fixed overlay on mobile, in de flex-rij op desktop.
+          `lg:relative lg:z-40`: het Beta tools-menu steekt over de inhoud
+          heen, en `<main>` is `relative`. Zonder eigen laag tekent de inhoud
+          over de zijbalk en ligt het menu eronder. Onder z-50 blijven
+          pop-ups en dialogen in de inhoud er wel boven. */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 lg:static lg:translate-x-0 lg:z-auto transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-50 lg:relative lg:translate-x-0 lg:z-40 transition-transform duration-300 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
