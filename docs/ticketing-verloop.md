@@ -9,9 +9,9 @@ soort ticket, voor [Ticketing Stadion](ticketing-stadion.md) en
 | Fase | Wat | Stand |
 |---|---|---|
 | 0 | Meten in Ringside hoe resale en seizoenkaart te herkennen zijn | klaar (10 november 2026) |
-| 1 | Nieuwe ingest: verkoop per dag en per reeks, met terugwerkende kracht | gebouwd |
-| 2 | Lopende wedstrijden uit de stoelstatus, meting per uur, eindstand bevriezen | nog niet |
-| 3 | Grafiek in Ticketing Stadion: vrije verkoop / resale, spreiding van eerdere wedstrijden, piekdagen | nog niet |
+| 1 | Nieuwe ingest: verkoop per dag en per reeks, met terugwerkende kracht | klaar, eerste vulling gedaan op 10 november 2026 |
+| 2 | Lopende wedstrijden uit de stoelstatus, meting per uur, eindstand bevriezen | gebouwd |
+| 3 | Grafiek in Ticketing Stadion: vrije verkoop / resale, spreiding van eerdere wedstrijden, piekdagen, aanbod over de tijd | deels: seizoenkaarten en vrijkaarten eruit, blok Aanbod |
 | 4 | Dezelfde grafiek in Ticketing Herdgang | nog niet |
 | 5 | Opruimen: `.github/workflows/ticket-snapshot.yml` roept een route aan die niet meer bestaat | nog niet |
 
@@ -36,8 +36,11 @@ Wat de meting liet zien:
   vrijkaarten hebben het.
 - **Resale.** `is_venue_resale` is bij tickets altijd `true` of `false`. De regel van de
   koper heeft de datum van de aankoop en in `previous_ticket_id` het ticket van de
-  verkoper. De kaart van de verkoper is dan vervallen (`Resold - Refunded`) en telt niet
-  meer mee; een doorverkocht ticket staat dus alleen bij `resale`.
+  verkoper (diens `product_item_id`). De kaart van de verkoper is dan vervallen
+  (`Sale` met `Resold - Refunded`) maar houdt zijn oorspronkelijke verkoopdatum: in de
+  eerste vulling lag bij alle 101 gekoppelde paren de datum van de verkoper voor die van
+  de koper. Een doorverkocht ticket telt daarom twee keer: de kaart van de verkoper op de
+  oorspronkelijke dag in zijn eigen reeks, de aankoop op de resaledag bij `resale`.
 - **Datum.** `transaction_date` is UTC met tijd. We tellen per Nederlandse kalenderdag.
 - **Niet in de API-spec, wel in de stroom:** `resale_status`, `transfer_status`,
   `manifest_id`, `previous_ticket_id`, `new_ticket_id`, `original_sales_item_id`.
@@ -104,10 +107,49 @@ Het antwoord van `/api/ringside/ingest` heeft een blok `check`:
   verkoopdatum houdt. Dan kan een doorverkocht ticket ook bij de vrije verkoop meetellen
   op de dag dat het voor het eerst verkocht werd.
 
-## Bekende beperking
+## Lopende wedstrijden uit de stoelstatus (fase 2)
 
-Bij het bijhouden levert Ringside een gewijzigde regel opnieuw aan, en optellen kan een
-eerdere versie niet terugdraaien. Een ticket dat na verkoop wijzigt, kan dus dubbel
-tellen, en een retour gaat er niet af. Voor gespeelde wedstrijden speelt dit niet. Voor
-lopende wedstrijden lost fase 2 het op door de reeksen uit de stoelstatus te rekenen,
-waar de laatste versie van een regel wint.
+De verkoop-ingest telt regels op. Bij het bijhouden levert Ringside een gewijzigde regel
+opnieuw aan, en optellen kan een eerdere versie niet terugdraaien: een ticket dat na
+verkoop wijzigt telt dubbel, een retour gaat er niet af. In de eerste vulling waren dat
+de wijzigingen sinds de verversing van 20 oktober (`outOfOrder: 21280`).
+
+De stoelstatus (`/api/ringside/stoelen`, elk kwartier) heeft dat probleem niet: daar wint
+de laatste versie van een regel. Hij bewaart per ticket nu ook de Nederlandse dag van de
+transactie en de reeks, en apart de doorverkochte kaarten van verkopers (`resold`). Na
+elke run (`lib/ringside/verloop-refresh.ts`), alleen voor PSV 1 thuis, Jong PSV en PSV
+Vrouwen:
+
+- **Komende wedstrijden:** de reeksen opnieuw gerekend uit de tickets
+  (`seriesFromSeatState()`).
+- **Gespeelde wedstrijden:** op het moment dat de stoelstatus een wedstrijd opruimt, wordt
+  zijn laatste reeks de eindstand (`frozen`).
+- **Meting per uur:** capaciteit, verkocht, gereserveerd, vrij en aangeboden in de resale,
+  alleen de tribunevakken. Niet met terugwerkende kracht.
+
+`readEventSales()` legt de reeksen uit de stoelstatus over de opgetelde heen: eerst
+komend, dan bevroren, anders de telling van de verkoop-ingest.
+
+| Bestand onder `ringside/verloop/` | Inhoud |
+|---|---|
+| `stoelstatus.json.gz` | `upcoming` en `frozen`: per wedstrijd de reeksen per kalenderdag |
+| `metingen/<eventId>.json.gz` | per wedstrijd `[uur (UTC), capaciteit, verkocht, gereserveerd, vrij, resale]`; blijft staan na de wedstrijd |
+
+Alles gebeurt alleen als de stoelstatus bij is en compleet (stoelen, tickets, capaciteit,
+reserveringen en dagen). Anders blijven de vorige reeksen staan en komt er geen meting.
+
+**Inhaalronde.** Tickets die al in de stoelstatus stonden, hebben nog geen dag. Een
+eenmalige vierde ronde door `/v1/sales` vult die aan (`applySalesDay()`, `dayComplete` in
+het antwoord van `/api/ringside/stoelen`). Dat duurt een paar uur; tot die tijd gebeurt
+er van het bovenstaande niets en lezen de pagina's de opgetelde reeksen.
+
+**Na de deploy één keer `/api/ringside/ingest?restart=1`**, zodat ook gespeelde
+wedstrijden de kaart van de verkoper meetellen. De pagina's houden de oude cijfers tot de
+nieuwe doorloop klaar is.
+
+## Wat blijft
+
+Wedstrijden die tussen 20 oktober en de start van fase 2 gespeeld zijn, houden de
+opgetelde reeks, met de dubbeltelling van wijzigingen in die weken. Na een nieuwe
+verversing van de dataset verdwijnt die vanzelf: dan begint de doorloop opnieuw met één
+versie per regel.

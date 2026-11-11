@@ -14,10 +14,10 @@
  * | `seizoenkaart` | `subscription_instance_id` gevuld: het ticket hoort bij een seizoenkaart of andere reeks |
  * | `vrij` | de rest: losse verkoop |
  *
- * De eerste regel die past, wint. Een doorverkocht ticket telt alleen bij
- * `resale`: de kaart van de verkoper is dan vervallen (`current_status = false`)
- * en valt dus af. Of die kaart zijn oorspronkelijke verkoopdatum houdt, meet de
- * ingest (`ResaleProbe`); tot dat duidelijk is tellen we hem niet apart mee.
+ * De eerste regel die past, wint. Een doorverkocht ticket telt twee keer: de
+ * vervallen kaart van de verkoper op de oorspronkelijke dag in zijn eigen reeks
+ * (`isResoldSeller()`), en de aankoop door de koper op de resaledag bij
+ * `resale`.
  *
  * We bewaren per **kalenderdag** (Nederlandse tijd) en niet per dag-tot-de-
  * wedstrijd: wordt een wedstrijd verplaatst, dan kloppen de tellingen nog en
@@ -91,6 +91,18 @@ export function categoryOf(row: SalesSeriesRow): SalesCategory {
   if (text(row.price_type).toLowerCase().startsWith("vrijkaart")) return "vrijkaart";
   if (text(row.subscription_instance_id)) return "seizoenkaart";
   return "vrij";
+}
+
+/**
+ * De vervallen kaart van iemand die via de resale verkocht heeft. Die kaart
+ * houdt zijn oorspronkelijke verkoopdatum (gemeten in de eerste vulling: bij
+ * alle 101 gekoppelde paren lag de datum van de verkoper voor die van de
+ * koper). Hij telt daarom mee als verkoop op die dag, in zijn eigen reeks; de
+ * aankoop door de koper telt op de resaledag bij `resale`. Een doorverkocht
+ * ticket staat zo op twee dagen, en dat is ook wat er gebeurd is.
+ */
+export function isResoldSeller(row: SalesSeriesRow): boolean {
+  return row.item_type === "Ticket" && row.sale_type === "Sale" && row.resale_status === "Resold - Refunded";
 }
 
 /* ---------- Tribune of niet ---------- */
@@ -194,7 +206,7 @@ export function applySalesPage(events: Record<string, StoredEvent>, rows: readon
   const seen = new Set<string>();
 
   for (const row of rows) {
-    if (!isSoldTicket(row)) continue;
+    if (!isSoldTicket(row) && !isResoldSeller(row)) continue;
     const productId = id(row.product_id);
     if (!productId) continue;
     const event = events[productId];

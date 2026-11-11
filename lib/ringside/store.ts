@@ -25,6 +25,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import { put } from "@vercel/blob";
 import { readPrivateBlob } from "../blob/read";
+import { readSeatSeries } from "./verloop-store";
 import {
   EMPTY_RESALE_PROBE,
   toEventSales,
@@ -198,10 +199,26 @@ export async function writeSalesData(kind: SalesDataKind, data: SalesData): Prom
  * zolang de eerste doorloop nog niet compleet is.
  */
 export async function readEventSales(exclude: readonly SalesCategory[] = []): Promise<Record<string, EventSales>> {
-  const data = await readSalesData("live");
+  const [data, seats] = await Promise.all([readSalesData("live"), readSeatSeriesOrNull()]);
   const sales: Record<string, EventSales> = {};
-  if (data) for (const [id, event] of Object.entries(data.events)) sales[id] = toEventSales(event, exclude);
+  if (!data) return sales;
+  for (const [id, event] of Object.entries(data.events)) {
+    // De stoelstatus weet het beter: voor komende wedstrijden de laatste stand
+    // per ticket, voor pas gespeelde de eindstand daarvan.
+    const fromSeats = seats?.upcoming[id] ?? seats?.frozen[id];
+    sales[id] = toEventSales(fromSeats ? { ...event, stand: fromSeats.stand, other: fromSeats.other } : event, exclude);
+  }
   return sales;
+}
+
+/** Zonder dit bestand werken de pagina's ook, met de tellingen van de verkoop-ingest. */
+async function readSeatSeriesOrNull() {
+  try {
+    return await readSeatSeries();
+  } catch (error) {
+    console.error("[ringside] reeksen uit de stoelstatus niet te lezen:", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 /**

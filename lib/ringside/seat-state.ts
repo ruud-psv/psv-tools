@@ -21,6 +21,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { SALES_CATEGORIES, amsterdamDay, categoryOf, isResoldSeller, type SalesCategory } from "./sales-series";
 import { seatKey, toSeatNumber, type SeatInfo, type TicketInfo } from "../aangrenzende-stoelen/neighbors";
 
 /**
@@ -37,8 +38,12 @@ export type SeatTuple = [area: string, row: string, seat: string, flags: number,
  * resale, `RESALE_BOUGHT` (2) is via de resale gekocht. Eerder was het alleen
  * 0 of 1; die waarden betekenen nog steeds hetzelfde.
  *
- * De laatste staat er alleen bij een openstaande reservering (1): de plaats is
- * bezet, maar nog niet afgenomen.
+ * `reservering` is 1 bij een openstaande reservering: de plaats is bezet, maar
+ * nog niet afgenomen. Hij ontbreekt of is 0 bij een gewoon ticket.
+ *
+ * `dag` en `soort` zijn voor het verkoopverloop: de Nederlandse dag van de
+ * transactie en de reeks (index in `SALES_CATEGORIES`). Ze ontbreken bij
+ * tickets van voor november 2026 tot de inhaalronde ze heeft aangevuld.
  */
 export type TicketTuple = [
   manifestId: string,
@@ -48,7 +53,16 @@ export type TicketTuple = [
   resale: number,
   owner: string,
   reservation?: number,
+  day?: string,
+  category?: number,
 ];
+
+/**
+ * De vervallen kaart van iemand die via de resale verkocht heeft:
+ * `[dag, soort, vak]`. Houdt geen stoel bezet, maar was wel een verkoop op de
+ * oorspronkelijke dag; zonder deze regel verdwijnt die uit het verloop.
+ */
+export type ResoldTuple = [day: string, category: number, area: string];
 
 /** In de resale aangeboden: `resale_status = 'Posted'`. */
 export const RESALE_POSTED = 1;
@@ -84,6 +98,8 @@ export interface EventSeatState {
   eventDate: string | null;
   seats: Record<string, SeatTuple>;
   tickets: Record<string, TicketTuple>;
+  /** Doorverkochte kaarten van verkopers, op `sales_item_id`. */
+  resold?: Record<string, ResoldTuple>;
 }
 
 export type EventStates = Map<string, EventSeatState>;
@@ -121,6 +137,25 @@ export interface SalesFeedRow {
   resale_status?: unknown;
   is_venue_resale?: unknown;
   own_client_guid?: unknown;
+  transaction_date?: unknown;
+  subscription_instance_id?: unknown;
+  price_type?: unknown;
+  price_type_group?: unknown;
+}
+
+/** De reeks van een regel als getal, om in de tuple te bewaren. */
+function categoryCode(row: SalesFeedRow): number {
+  return SALES_CATEGORIES.indexOf(categoryOf(row));
+}
+
+export function categoryFromCode(code: number | undefined): SalesCategory {
+  return SALES_CATEGORIES[code ?? 0] ?? "vrij";
+}
+
+/** `[dag, soort, vak]` van een doorverkochte kaart, of `null` zonder datum. */
+function resoldTuple(row: SalesFeedRow): ResoldTuple | null {
+  const day = amsterdamDay(row.transaction_date);
+  return day ? [day, categoryCode(row), text(row.area)] : null;
 }
 
 /**
@@ -349,13 +384,36 @@ export function applySalesRow(
     // miljoenen oude regels langs die nergens in staan.
     const owner = productId ? events.get(productId) : undefined;
     const candidates = productId && !isDelete(row) ? (owner ? [owner] : []) : events.values();
+    let changedEvent: string | null = null;
     for (const event of candidates) {
       if (event.tickets[salesItemId]) {
         delete event.tickets[salesItemId];
-        return event.eventId;
+        changedEvent = event.eventId;
+        break;
       }
     }
-    return null;
+
+    // De kaart van een resale-verkoper: geen stoel meer, wel een verkoop.
+    if (isDelete(row)) {
+      for (const event of events.values()) {
+        if (event.resold?.[salesItemId]) {
+          delete event.resold[salesItemId];
+          return event.eventId;
+        }
+      }
+    } else if (isResoldSeller(row) && productId && !isPast(productId)) {
+      const tuple = resoldTuple(row);
+      if (tuple) {
+        let event = events.get(productId);
+        if (!event) {
+          event = emptyEvent(productId);
+          events.set(productId, event);
+        }
+        (event.resold ??= {})[salesItemId] = tuple;
+        return productId;
+      }
+    }
+    return changedEvent;
   }
 
   if (!productId || isPast(productId)) return null;
@@ -365,6 +423,8 @@ export function applySalesRow(
     event = emptyEvent(productId);
     events.set(productId, event);
   }
+  // Een kaart die opnieuw geldig wordt, is geen doorverkochte kaart meer.
+  if (event.resold?.[salesItemId]) delete event.resold[salesItemId];
   const tuple: TicketTuple = [
     id(row.manifest_id) ?? "",
     text(row.area),
@@ -373,7 +433,9 @@ export function applySalesRow(
     resaleFlags(row),
     ownerFingerprint(row.own_client_guid),
   ];
-  if (isReservation(row)) tuple.push(1);
+  const day = amsterdamDay(row.transaction_date);
+  if (day) tuple.push(isReservation(row) ? 1 : 0, day, categoryCode(row));
+  else if (isReservation(row)) tuple.push(1);
   event.tickets[salesItemId] = tuple;
   return productId;
 }
@@ -397,7 +459,8 @@ export function applySalesReservation(events: EventStates, row: SalesFeedRow): s
   const reservation = isReservation(row);
   if (reservation === (ticket[6] === 1)) return null;
   const updated: TicketTuple = [ticket[0], ticket[1], ticket[2], ticket[3], ticket[4], ticket[5]];
-  if (reservation) updated.push(1);
+  if (ticket[7]) updated.push(reservation ? 1 : 0, ticket[7], ticket[8] ?? 0);
+  else if (reservation) updated.push(1);
   event.tickets[salesItemId] = updated;
   return event.eventId;
 }
@@ -424,6 +487,39 @@ export function applySalesVenueResale(events: EventStates, row: SalesFeedRow): s
   const updated: TicketTuple = [...ticket];
   updated[4] = flags;
   event.tickets[salesItemId] = updated;
+  return event.eventId;
+}
+
+/**
+ * Vult bij een ticket dat al bekend is de dag en de reeks aan, en legt de
+ * doorverkochte kaarten van verkopers vast.
+ *
+ * Voor de eenmalige vierde ronde door `/v1/sales`: beide werden eerst niet
+ * bewaard. Raakt verder niets; of een ticket bestaat, bepaalt de gewone
+ * stroom. Geeft het event-id terug als er iets veranderde.
+ */
+export function applySalesDay(events: EventStates, row: SalesFeedRow): string | null {
+  const salesItemId = id(row.sales_item_id);
+  const productId = id(row.product_id);
+  if (!salesItemId || !productId || isDelete(row)) return null;
+  const event = events.get(productId);
+  if (!event) return null;
+
+  if (isResoldSeller(row)) {
+    const tuple = resoldTuple(row);
+    const known = event.resold?.[salesItemId];
+    if (!tuple || event.tickets[salesItemId]) return null;
+    if (known && known[0] === tuple[0] && known[1] === tuple[1] && known[2] === tuple[2]) return null;
+    (event.resold ??= {})[salesItemId] = tuple;
+    return event.eventId;
+  }
+
+  const ticket = event.tickets[salesItemId];
+  if (!ticket || !isOccupyingTicket(row)) return null;
+  const day = amsterdamDay(row.transaction_date);
+  const category = categoryCode(row);
+  if (!day || (ticket[7] === day && ticket[8] === category)) return null;
+  event.tickets[salesItemId] = [ticket[0], ticket[1], ticket[2], ticket[3], ticket[4], ticket[5], ticket[6] === 1 ? 1 : 0, day, category];
   return event.eventId;
 }
 

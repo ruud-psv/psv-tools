@@ -63,6 +63,13 @@ export interface SeatIngestState {
   venueResaleComplete: boolean;
   venueResaleRead: number;
   /**
+   * En een vierde, om bij elk ticket de dag van de transactie en de reeks aan
+   * te vullen, en de doorverkochte kaarten van verkopers. Zie `applySalesDay()`.
+   */
+  dayCursor: string | null;
+  dayComplete: boolean;
+  dayRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -90,6 +97,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   venueResaleCursor: null,
   venueResaleComplete: false,
   venueResaleRead: 0,
+  dayCursor: null,
+  dayComplete: false,
+  dayRead: 0,
 };
 
 export interface SeatIndexEntry {
