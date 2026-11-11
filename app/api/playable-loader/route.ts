@@ -8,6 +8,8 @@ import {
   preparePage,
 } from "@/lib/playable-loader/bundle";
 import { KIT_VERSIE, STARTER_HTML } from "@/lib/playable-loader/kit";
+import { lookupCampaign } from "@/lib/playable-loader/playable";
+import { checkBundle } from "@/lib/playable-loader/status";
 import {
   BunnyConfigError,
   bundleUrl,
@@ -35,7 +37,11 @@ function configError(err: unknown) {
   return null;
 }
 
-/** De huidige bron van een campagne (of de startpagina van de kit) en het stukje code voor Playable. */
+/**
+ * Een campagne openen: de huidige bron (of de startpagina van de kit), het
+ * stukje code voor Playable, en de controle: bestaat de campagne in Playable,
+ * en geeft Bunny dezelfde versie als PSV Tools.
+ */
 export async function GET(req: NextRequest) {
   const session = requireEmail(req);
   if ("error" in session) return session.error;
@@ -45,12 +51,26 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = bundleUrl(campaignId);
-    const published = await readPublished(campaignId);
+    const [published, lookup] = await Promise.all([readPublished(campaignId), lookupCampaign(campaignId)]);
+    // Een tikfout in het ID wil je meteen zien; staat er al een pagina in PSV
+    // Tools, dan mag hij open, ook als Playable hem niet (meer) kent.
+    if (lookup.status === "niet-gevonden" && !published) {
+      return NextResponse.json({ error: `Playable kent geen campagne met ID ${campaignId}.` }, { status: 404 });
+    }
+    const bundle = await checkBundle(url, published?.publishedAt ?? null);
     return NextResponse.json({
       campaignId,
       kitVersie: KIT_VERSIE,
       bundleUrl: url,
       published,
+      campaign: lookup.status === "gevonden" ? lookup.campaign : null,
+      playableFout:
+        lookup.status === "fout"
+          ? `Playable gaf geen antwoord (${lookup.message}).`
+          : lookup.status === "niet-gevonden"
+            ? "Playable kent deze campagne niet meer."
+            : null,
+      bundleStatus: bundle,
       starter: { html: STARTER_HTML, css: "", js: "" },
       loader: loaderFields(campaignId, url),
     });
@@ -68,6 +88,8 @@ export async function POST(req: NextRequest) {
   const campaignId = parseCampaignId(body?.campaignId);
   if (!campaignId) return NextResponse.json({ error: "Vul een campagne-ID in, bijvoorbeeld 244347." }, { status: 400 });
 
+  const campaignName =
+    typeof body?.campaignName === "string" && body.campaignName.trim() ? body.campaignName.trim().slice(0, 200) : undefined;
   const source = {
     html: typeof body?.html === "string" ? body.html : "",
     css: typeof body?.css === "string" ? body.css : "",
@@ -99,6 +121,7 @@ export async function POST(req: NextRequest) {
 
     const record: PublishedPage = {
       campaignId,
+      ...(campaignName && { campaignName }),
       source,
       bundleUrl: url,
       kitVersie: KIT_VERSIE,
@@ -110,7 +133,9 @@ export async function POST(req: NextRequest) {
     await savePublished(record);
     console.info(`[playable-loader] ${session.email} publiceerde campagne ${campaignId} (${bundle.length} tekens).`);
 
-    return NextResponse.json({ published: record, loader: loaderFields(campaignId, url) });
+    // Meteen nakijken wat Bunny nu teruggeeft, zodat de collega ziet of het live staat.
+    const bundleStatus = await checkBundle(url, publishedAt);
+    return NextResponse.json({ published: record, loader: loaderFields(campaignId, url), bundleStatus });
   } catch (err) {
     if (err instanceof PageSourceError) return NextResponse.json({ error: err.message }, { status: 400 });
     const config = configError(err);

@@ -30,6 +30,34 @@ die, dan publiceert PSV Tools wel maar meldt het dat de cache niet is geleegd;
 leeg hem dan in Bunny bij de pull zone onder Purge, met het adres van
 `page.js`.
 
+## Stappen
+
+De pagina werkt in vier stappen, naar het voorbeeld van een flow in Maileon.
+In de stappenbalk is rood de stap waar je bent, groen klaar, oranje vraagt
+aandacht (het concept wijkt af van live, of Bunny geeft niet de laatste
+versie) en grijs komt nog.
+
+1. **Campagne**: ID invullen of een campagne kiezen uit de lijst met recent
+   gepubliceerde. Bij het openen controleert PSV Tools:
+   - of Playable de campagne kent (naam, actief of niet, links naar demo en
+     live; recht `campaigns.view`). Een onbekend ID zonder pagina in PSV Tools
+     opent niet;
+   - welke versie Bunny geeft, dus wat de demo en de livepagina laden,
+     vergeleken met de laatste publicatie in PSV Tools. Is die ouder, dan
+     staat er een knop om de cache te legen.
+   Of het vaste stukje code in Playable staat, kan PSV Tools niet zien: de API
+   van Playable kijkt niet in het `html-element`.
+2. **Aanpassen**: de chat met Claude en het voorbeeld van het concept, op
+   Desktop (1920, 1440, 1280 px), Tablet (1024, 768) of Mobiel (430, 390,
+   360). Die breedtes vallen in de verschillende breekpunten van de Kit; een
+   breed scherm wordt verkleind getoond.
+3. **Publiceren**: het concept live zetten, met daarna meteen opnieuw de
+   controle van Bunny.
+4. **Code**: de HTML, CSS en JS zelf, en het vaste stukje voor Playable.
+
+Het campagne-ID staat in de adresbalk (`?campagne=244347`), zodat de campagne
+open blijft na verversen.
+
 ## Aanpassen met Claude
 
 Bovenaan de pagina zegt een collega in gewone taal wat er anders moet. Claude

@@ -1,4 +1,4 @@
-import { get, put } from "@vercel/blob";
+import { get, list, put } from "@vercel/blob";
 import { bundlePath, type PageSource } from "./bundle";
 
 /**
@@ -11,6 +11,8 @@ import { bundlePath, type PageSource } from "./bundle";
 
 export interface PublishedPage {
   campaignId: number;
+  /** De naam in Playable op het moment van publiceren. */
+  campaignName?: string;
   source: PageSource;
   bundleUrl: string;
   kitVersie: string;
@@ -102,4 +104,38 @@ export async function savePublished(record: PublishedPage): Promise<void> {
   };
   await put(versionPath(record.campaignId, record.publishedAt), body, options);
   await put(currentPath(record.campaignId), body, options);
+}
+
+export interface RecentCampaign {
+  campaignId: number;
+  campaignName?: string;
+  publishedAt: string;
+  publishedBy: string;
+  publishedByName?: string;
+}
+
+/** De campagnes met een pagina in PSV Tools, laatst gepubliceerd eerst. */
+export async function listRecent(limit = 10): Promise<RecentCampaign[]> {
+  const huidige: { campaignId: number; uploadedAt: number }[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix: PREFIX, cursor, limit: 1000 });
+    for (const blob of page.blobs) {
+      const m = /^playable-loader\/(\d+)\/huidig\.json$/.exec(blob.pathname);
+      if (m) huidige.push({ campaignId: Number(m[1]), uploadedAt: new Date(blob.uploadedAt).getTime() });
+    }
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+
+  const nieuwste = huidige.sort((a, b) => b.uploadedAt - a.uploadedAt).slice(0, limit);
+  const records = await Promise.all(nieuwste.map((h) => readPublished(h.campaignId)));
+  return records
+    .filter((r): r is PublishedPage => r !== null)
+    .map(({ campaignId, campaignName, publishedAt, publishedBy, publishedByName }) => ({
+      campaignId,
+      ...(campaignName && { campaignName }),
+      publishedAt,
+      publishedBy,
+      ...(publishedByName && { publishedByName }),
+    }));
 }

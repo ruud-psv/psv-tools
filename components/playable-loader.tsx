@@ -1,21 +1,40 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, FolderOpen, Loader2, Send, Undo2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Copy,
+  ExternalLink,
+  FolderOpen,
+  Loader2,
+  RefreshCw,
+  Send,
+  Undo2,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlayableLoaderPreview } from "@/components/playable-loader-preview";
+import { StappenBalk, type Stap, type StapId } from "@/components/playable-loader-steps";
 import { zonderKit, type PageSource } from "@/lib/playable-loader/bundle";
-import type { PublishedPage } from "@/lib/playable-loader/store";
+import type { PlayableCampaign } from "@/lib/playable-loader/playable";
+import type { BundleStatus } from "@/lib/playable-loader/status";
+import type { PublishedPage, RecentCampaign } from "@/lib/playable-loader/store";
 import { cn } from "@/lib/utils";
 
 /**
- * Playable loader (beta): de pagina van een campagne aanpassen met Claude,
- * het concept bekijken en publiceren naar Bunny. In Playable staat één keer
- * een vast stukje code dat de pagina daar vandaan laadt.
+ * Playable loader (beta), in stappen zoals een flow in Maileon:
+ * 1. Campagne: ID invullen of een recente kiezen; PSV Tools controleert of
+ *    Playable de campagne kent en of Bunny de laatste versie geeft.
+ * 2. Aanpassen: met Claude, naast een voorbeeld van het concept.
+ * 3. Publiceren: het concept live zetten.
+ * 4. Code: de HTML, CSS en JS zelf, en het vaste stukje voor Playable.
  */
 
 interface LoadResponse {
@@ -23,6 +42,9 @@ interface LoadResponse {
   kitVersie: string;
   bundleUrl: string;
   published: PublishedPage | null;
+  campaign: PlayableCampaign | null;
+  playableFout: string | null;
+  bundleStatus: BundleStatus;
   starter: PageSource;
   loader: PageSource;
 }
@@ -41,9 +63,9 @@ interface ChatBericht {
 }
 
 const FIELDS: { key: keyof PageSource; label: string; rows: number }[] = [
-  { key: "html", label: "HTML", rows: 14 },
-  { key: "css", label: "CSS", rows: 8 },
-  { key: "js", label: "JavaScript", rows: 8 },
+  { key: "html", label: "HTML", rows: 16 },
+  { key: "css", label: "CSS", rows: 10 },
+  { key: "js", label: "JavaScript", rows: 10 },
 ];
 
 const VOORBEELDEN = [
@@ -61,6 +83,14 @@ function zelfde(a: PageSource, b: PageSource): boolean {
   const y = zonderKit(b);
   return x.html === y.html && x.css.trim() === y.css.trim() && x.js.trim() === y.js.trim();
 }
+
+async function json<T>(res: Response): Promise<T> {
+  const data = await res.json().catch(() => ({ error: `Onverwacht antwoord (${res.status}).` }));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Er ging iets mis (${res.status}).`);
+  return data as T;
+}
+
+/* ---------- Kleine onderdelen ---------- */
 
 function CodeBlock({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -110,14 +140,97 @@ function WijzigingenLijst({ wijzigingen }: { wijzigingen: Wijziging[] }) {
   );
 }
 
+function Link({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+    >
+      {children}
+      <ExternalLink className="h-3.5 w-3.5" />
+    </a>
+  );
+}
+
+/** Wat de demo nu van Bunny krijgt, vergeleken met de laatste publicatie in PSV Tools. */
+function BundelStatus({
+  status,
+  published,
+  onCache,
+  cacheBezig,
+}: {
+  status: BundleStatus;
+  published: PublishedPage | null;
+  onCache: () => void;
+  cacheBezig: boolean;
+}) {
+  const bunny = status.bunnyPublishedAt ? formatDate(status.bunnyPublishedAt) : null;
+  const cacheKnop = (
+    <Button type="button" size="sm" variant="outline" onClick={onCache} disabled={cacheBezig}>
+      {cacheBezig ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+      Cache legen
+    </Button>
+  );
+  switch (status.status) {
+    case "gelijk":
+      return (
+        <p className="flex items-center gap-2">
+          <Badge variant="success">Live gelijk</Badge>
+          Demo en livepagina krijgen de laatste publicatie ({bunny}).
+        </p>
+      );
+    case "ouder":
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="warning">Oude versie</Badge>
+          <span>
+            Bunny geeft nog de versie van {bunny}, de laatste publicatie is van{" "}
+            {published ? formatDate(published.publishedAt) : "later"}.
+          </span>
+          {cacheKnop}
+        </div>
+      );
+    case "anders":
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="warning">Andere versie</Badge>
+          <span>Bunny geeft een versie ({bunny}) die PSV Tools niet als laatste kent. Publiceer opnieuw.</span>
+          {cacheKnop}
+        </div>
+      );
+    case "leeg":
+      return (
+        <p className="flex items-center gap-2">
+          <Badge variant="outline">Niet gepubliceerd</Badge>
+          Er staat nog geen pagina op Bunny voor deze campagne.
+        </p>
+      );
+    default:
+      return (
+        <p className="flex items-center gap-2">
+          <Badge variant="warning">Onbekend</Badge>
+          Bunny kon niet worden gecontroleerd{status.detail ? `: ${status.detail}` : "."}
+        </p>
+      );
+  }
+}
+
+/* ---------- De loader ---------- */
+
 export function PlayableLoader() {
+  const [stap, setStap] = useState<StapId>("campagne");
   const [campaign, setCampaign] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<LoadResponse | null>(null);
   const [source, setSource] = useState<PageSource>({ html: "", css: "", js: "" });
-  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<RecentCampaign[] | null>(null);
+
+  const [publishing, setPublishing] = useState(false);
   const [justPublished, setJustPublished] = useState<PublishedPage | null>(null);
+  const [cacheBezig, setCacheBezig] = useState(false);
 
   const [chat, setChat] = useState<ChatBericht[]>([]);
   const [vraag, setVraag] = useState("");
@@ -129,22 +242,44 @@ export function PlayableLoader() {
     chatEinde.current?.scrollIntoView({ block: "nearest" });
   }, [chat, bezig]);
 
-  async function open(e: React.FormEvent) {
-    e.preventDefault();
+  async function laadRecent() {
+    try {
+      const res = await json<{ recent: RecentCampaign[] }>(await fetch("/api/playable-loader/recent"));
+      setRecent(res.recent);
+    } catch {
+      setRecent([]);
+    }
+  }
+
+  // Bij openen: de recente campagnes, en een campagne uit de adresbalk
+  // (zo blijft hij open na verversen).
+  useEffect(() => {
+    laadRecent();
+    const uitAdres = new URLSearchParams(window.location.search).get("campagne");
+    if (uitAdres) openCampagne(uitAdres);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function openCampagne(id: string) {
+    const schoon = id.trim();
+    if (!schoon) return;
+    setCampaign(schoon);
     setLoading(true);
     setError(null);
     setJustPublished(null);
     try {
-      const res = await fetch(`/api/playable-loader?campagne=${encodeURIComponent(campaign.trim())}`);
-      const json = await res.json().catch(() => ({ error: `Onverwacht antwoord (${res.status}).` }));
-      if (!res.ok) throw new Error(json.error ?? `Openen mislukt (${res.status}).`);
-      const loaded = json as LoadResponse;
+      const loaded = await json<LoadResponse>(
+        await fetch(`/api/playable-loader?campagne=${encodeURIComponent(schoon)}`)
+      );
       setData(loaded);
       setSource(loaded.published?.source ?? loaded.starter);
       setChat([]);
       setGeschiedenis([]);
+      setStap("aanpassen");
+      window.history.replaceState(null, "", `?campagne=${loaded.campaignId}`);
     } catch (err) {
       setData(null);
+      setStap("campagne");
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -158,23 +293,23 @@ export function PlayableLoader() {
     setVraag("");
     setBezig(true);
     try {
-      const res = await fetch("/api/playable-loader/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          campaignId: data.campaignId,
-          // Foutmeldingen horen niet bij het gesprek met Claude.
-          berichten: nieuw.filter((b) => !b.fout).map(({ rol, tekst }) => ({ rol, tekst })),
-          bron: source,
-        }),
-      });
-      const json = await res.json().catch(() => ({ error: `Onverwacht antwoord (${res.status}).` }));
-      if (!res.ok) throw new Error(json.error ?? `Er ging iets mis (${res.status}).`);
-      if (json.bron) {
+      const res = await json<{ antwoord: string; bron: PageSource | null; wijzigingen: Wijziging[] }>(
+        await fetch("/api/playable-loader/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            campaignId: data.campaignId,
+            // Foutmeldingen horen niet bij het gesprek met Claude.
+            berichten: nieuw.filter((b) => !b.fout).map(({ rol, tekst }) => ({ rol, tekst })),
+            bron: source,
+          }),
+        })
+      );
+      if (res.bron) {
         setGeschiedenis((g) => [...g, source]);
-        setSource(json.bron as PageSource);
+        setSource(res.bron);
       }
-      setChat([...nieuw, { rol: "assistent", tekst: json.antwoord, wijzigingen: json.bron ? json.wijzigingen : undefined }]);
+      setChat([...nieuw, { rol: "assistent", tekst: res.antwoord, wijzigingen: res.bron ? res.wijzigingen : undefined }]);
     } catch (err) {
       setChat([...nieuw, { rol: "assistent", tekst: err instanceof Error ? err.message : String(err), fout: true }]);
     } finally {
@@ -196,15 +331,16 @@ export function PlayableLoader() {
     setError(null);
     setJustPublished(null);
     try {
-      const res = await fetch("/api/playable-loader", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId: data.campaignId, ...source }),
-      });
-      const json = await res.json().catch(() => ({ error: `Onverwacht antwoord (${res.status}).` }));
-      if (!res.ok) throw new Error(json.error ?? `Publiceren mislukt (${res.status}).`);
-      setJustPublished(json.published as PublishedPage);
-      setData({ ...data, published: json.published, loader: json.loader });
+      const res = await json<{ published: PublishedPage; loader: PageSource; bundleStatus: BundleStatus }>(
+        await fetch("/api/playable-loader", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ campaignId: data.campaignId, campaignName: data.campaign?.name, ...source }),
+        })
+      );
+      setJustPublished(res.published);
+      setData({ ...data, published: res.published, loader: res.loader, bundleStatus: res.bundleStatus });
+      laadRecent();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -212,232 +348,389 @@ export function PlayableLoader() {
     }
   }
 
+  async function legeCache() {
+    if (!data) return;
+    setCacheBezig(true);
+    setError(null);
+    try {
+      const res = await json<{ bundleStatus: BundleStatus }>(
+        await fetch("/api/playable-loader/cache", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ campaignId: data.campaignId }),
+        })
+      );
+      setData({ ...data, bundleStatus: res.bundleStatus });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCacheBezig(false);
+    }
+  }
+
   const published = data?.published ?? null;
-  const conceptAfwijkend = !published || !zelfde(source, published.source);
+  const conceptAfwijkend = !!data && (!published || !zelfde(source, published.source));
+  const bunnyAandacht = !!data && ["ouder", "anders", "fout"].includes(data.bundleStatus.status);
+
+  const stappen: Stap[] = [
+    { id: "campagne", label: "Campagne", staat: stap === "campagne" ? "huidig" : data ? "klaar" : "open" },
+    {
+      id: "aanpassen",
+      label: "Aanpassen",
+      disabled: !data,
+      staat: stap === "aanpassen" ? "huidig" : geschiedenis.length > 0 ? "klaar" : "open",
+    },
+    {
+      id: "publiceren",
+      label: "Publiceren",
+      disabled: !data,
+      staat:
+        stap === "publiceren"
+          ? "huidig"
+          : conceptAfwijkend || bunnyAandacht
+            ? "aandacht"
+            : published
+              ? "klaar"
+              : "open",
+      hint: conceptAfwijkend
+        ? "Het concept wijkt af van wat live staat"
+        : bunnyAandacht
+          ? "Bunny geeft niet de laatste versie"
+          : undefined,
+    },
+    {
+      id: "code",
+      label: "Code",
+      disabled: !data,
+      staat: stap === "code" ? "huidig" : data && !published ? "aandacht" : "open",
+      hint: data && !published ? "Nog niet gepubliceerd: zet het vaste stukje in Playable" : undefined,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <form onSubmit={open}>
-          <label htmlFor="loader-campaign" className="form-label">
-            Campagne-ID
-          </label>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Input
-              id="loader-campaign"
-              value={campaign}
-              onChange={(e) => setCampaign(e.target.value)}
-              placeholder="244347"
-              inputMode="numeric"
-              autoComplete="off"
-              disabled={loading}
-            />
-            <Button type="submit" disabled={loading || campaign.trim() === ""} className="shrink-0">
-              {loading ? <Loader2 className="animate-spin" /> : <FolderOpen />}
-              Openen
-            </Button>
-          </div>
-          <p className="form-hint">Het ID staat in Playable in de adresbalk en in Landingspagina&apos;s.</p>
-        </form>
-      </Card>
-
-      {error && <div className="alert alert--error">{error}</div>}
-
+    <div className="space-y-5">
       {data && (
-        <>
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-            {/* ---------- Chat ---------- */}
-            <Card className="flex flex-col p-6">
-              <h2 className="text-xl mb-1">Wat moet er anders?</h2>
-              <p className="text-sm text-muted-foreground mb-4">
-                Zeg in gewone taal wat er op de pagina van campagne {data.campaignId} moet veranderen. Claude past
-                het concept aan; er gaat pas iets live als je publiceert.
-              </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span className="font-heading uppercase tracking-wide text-muted-foreground">
+            Campagne {data.campaignId}
+          </span>
+          {data.campaign && <span className="font-semibold">{data.campaign.name}</span>}
+          {data.campaign && (
+            <Badge variant={data.campaign.active ? "success" : "outline"}>
+              {data.campaign.active ? "Actief" : "Niet actief"}
+            </Badge>
+          )}
+          {data.campaign?.demoUrl && <Link href={data.campaign.demoUrl}>Demo</Link>}
+          {data.campaign?.liveUrl && <Link href={data.campaign.liveUrl}>Live</Link>}
+          <button
+            type="button"
+            onClick={() => setStap("campagne")}
+            className="text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+          >
+            Andere campagne
+          </button>
+        </div>
+      )}
 
-              <div className="flex-1 space-y-3 overflow-y-auto pr-1 xl:max-h-[560px]" aria-live="polite">
-                {chat.length === 0 && (
-                  <div className="space-y-2">
-                    <p className="form-label">Bijvoorbeeld</p>
-                    {VOORBEELDEN.map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setVraag(v)}
-                        className="block w-full border border-border px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:text-primary"
-                      >
-                        {v}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {chat.map((b, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "max-w-[90%] px-3 py-2 text-sm whitespace-pre-wrap",
-                      b.rol === "gebruiker"
-                        ? "ml-auto bg-primary text-primary-foreground"
-                        : b.fout
-                          ? "alert alert--error !mb-0"
-                          : "border border-border bg-muted"
-                    )}
-                  >
-                    {b.tekst}
-                    {b.wijzigingen && b.wijzigingen.length > 0 && <WijzigingenLijst wijzigingen={b.wijzigingen} />}
-                  </div>
-                ))}
-                {bezig && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Claude past de pagina aan. Dat kan een minuut duren.
-                  </div>
-                )}
-                <div ref={chatEinde} />
-              </div>
+      <StappenBalk stappen={stappen} onKies={setStap} />
 
-              <form
-                className="mt-4 space-y-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  stuur(vraag);
-                }}
-              >
-                <Textarea
-                  value={vraag}
-                  onChange={(e) => setVraag(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      stuur(vraag);
-                    }
-                  }}
-                  rows={3}
-                  placeholder="Bijvoorbeeld: zet de datum op zondag 15 november, 14.30 uur"
-                  disabled={bezig}
-                  aria-label="Wat moet er anders?"
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Button type="button" variant="ghost" size="sm" onClick={ongedaan} disabled={bezig || geschiedenis.length === 0}>
-                    <Undo2 />
-                    Ongedaan maken
-                  </Button>
-                  <Button type="submit" disabled={bezig || !vraag.trim()}>
-                    {bezig ? <Loader2 className="animate-spin" /> : <Send />}
-                    Versturen
-                  </Button>
-                </div>
-              </form>
-            </Card>
+      {data && stap !== "campagne" && (
+        <div className="space-y-1 border-l-4 border-border bg-muted/50 px-4 py-3 text-sm">
+          {data.playableFout && <p className="text-warning">{data.playableFout}</p>}
+          <BundelStatus status={data.bundleStatus} published={published} onCache={legeCache} cacheBezig={cacheBezig} />
+        </div>
+      )}
 
-            {/* ---------- Voorbeeld ---------- */}
-            <Card className="p-6">
-              <PlayableLoaderPreview bron={source} />
-            </Card>
-          </div>
+      {error && <div className="alert alert--error !mb-0">{error}</div>}
 
-          {/* ---------- Publiceren ---------- */}
-          <Card className="p-6 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl">Publiceren</h2>
-                  {conceptAfwijkend ? (
-                    <Badge variant="warning">Concept wijkt af van live</Badge>
-                  ) : (
-                    <Badge variant="success">Gelijk aan live</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {published
-                    ? `Laatst gepubliceerd ${formatDate(published.publishedAt)} door ${published.publishedByName ?? published.publishedBy}.`
-                    : "Nog niet gepubliceerd."}{" "}
-                  Staat de loader in Playable, dan is een publicatie binnen een minuut live.
-                </p>
-              </div>
-              <Button type="button" onClick={publish} disabled={publishing || source.html.trim() === ""}>
-                {publishing ? <Loader2 className="animate-spin" /> : <Upload />}
-                {publishing ? "Bezig…" : "Publiceren"}
+      {/* ---------- 1. Campagne ---------- */}
+      {stap === "campagne" && (
+        <Card className="p-6 space-y-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              openCampagne(campaign);
+            }}
+          >
+            <label htmlFor="loader-campaign" className="form-label">
+              Campagne-ID
+            </label>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Input
+                id="loader-campaign"
+                value={campaign}
+                onChange={(e) => setCampaign(e.target.value)}
+                placeholder="244347"
+                inputMode="numeric"
+                autoComplete="off"
+                disabled={loading}
+              />
+              <Button type="submit" disabled={loading || campaign.trim() === ""} className="shrink-0">
+                {loading ? <Loader2 className="animate-spin" /> : <FolderOpen />}
+                Openen
               </Button>
             </div>
+            <p className="form-hint">
+              Het ID staat in Playable in de adresbalk en in Landingspagina&apos;s. PSV Tools controleert of
+              Playable de campagne kent en welke versie de demo krijgt.
+            </p>
+          </form>
 
-            {justPublished && (
-              <div className="alert alert--success !mb-0">
-                Gepubliceerd om {formatDate(justPublished.publishedAt)}.{" "}
-                {/* Met ?v= het net gepubliceerde bestand, niet een bewaarde versie. */}
-                <a
-                  className="underline"
-                  href={`${justPublished.bundleUrl}?v=${Date.parse(justPublished.publishedAt)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Bekijk de bundel
-                </a>
-              </div>
-            )}
-            {justPublished?.warnings.map((w) => (
-              <div key={w} className="alert alert--warning !mb-0">
-                {w}
-              </div>
-            ))}
-          </Card>
-
-          {/* ---------- Code ---------- */}
-          <Card className="p-6">
-            <details>
-              <summary className="cursor-pointer">
-                <span className="font-heading uppercase text-xl">Code</span>
-                <span className="ml-2 text-sm text-muted-foreground">
-                  Zelf bekijken of aanpassen, of de code uit Playable plakken
-                </span>
-              </summary>
-              <div className="mt-4 space-y-4">
-                <p className="form-hint !mt-0">
-                  De Kit ({data.kitVersie}) zet PSV Tools er zelf bij; staat hij er al in, dan haalt PSV Tools hem
-                  eruit.
-                  {!published && " Nog niet gepubliceerd: hieronder staat de startpagina van de Kit."}
-                </p>
-                {FIELDS.map(({ key, label, rows }) => (
-                  <div key={key}>
-                    <label htmlFor={`loader-${key}`} className="form-label">
-                      {label}
-                    </label>
-                    <Textarea
-                      id={`loader-${key}`}
-                      value={source[key]}
-                      onChange={(e) => setSource({ ...source, [key]: e.target.value })}
-                      rows={rows}
-                      spellCheck={false}
-                      className="font-mono text-xs"
-                    />
-                  </div>
-                ))}
-              </div>
-            </details>
-          </Card>
-
-          {/* ---------- Eenmalig in Playable ---------- */}
-          <Card className="p-6">
-            <details open={!published}>
-              <summary className="cursor-pointer">
-                <span className="font-heading uppercase text-xl">Eenmalig in Playable</span>
-                <span className="ml-2 text-sm text-muted-foreground">Het vaste stukje code voor het html-element</span>
-              </summary>
-              <div className="mt-4 space-y-4">
-                <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-                  <li>Plak eerst de huidige code uit Playable onder Code en publiceer, zodat hij bewaard is.</li>
-                  <li>
-                    Vervang in Playable de inhoud van de drie velden van het html-element door de drie blokken
-                    hieronder, en sla op.
+          <div>
+            <p className="form-label">Recent gepubliceerd</p>
+            {recent === null ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Laden…
+              </p>
+            ) : recent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nog geen campagnes gepubliceerd via PSV Tools.</p>
+            ) : (
+              <ul className="divide-y divide-border border-y border-border">
+                {recent.map((r) => (
+                  <li key={r.campaignId}>
+                    <button
+                      type="button"
+                      onClick={() => openCampagne(String(r.campaignId))}
+                      disabled={loading}
+                      className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 py-3 text-left text-sm transition-colors hover:bg-muted"
+                    >
+                      <span>
+                        <span className="font-mono text-muted-foreground">{r.campaignId}</span>
+                        <span className="ml-3 font-semibold">{r.campaignName ?? "Naam onbekend"}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(r.publishedAt)} door {r.publishedByName ?? r.publishedBy}
+                      </span>
+                    </button>
                   </li>
-                  <li>Open de demo. De pagina komt nu uit PSV Tools.</li>
-                </ol>
-                <CodeBlock label="HTML" value={data.loader.html} />
-                <CodeBlock label="CSS" value={data.loader.css} />
-                <CodeBlock label="JavaScript" value={data.loader.js} />
+                ))}
+              </ul>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* ---------- 2. Aanpassen ---------- */}
+      {stap === "aanpassen" && data && (
+        <div className="grid gap-6 xl:grid-cols-[minmax(320px,2fr)_minmax(0,3fr)]">
+          <Card className="flex flex-col p-6">
+            <h2 className="text-xl mb-1">Wat moet er anders?</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Zeg in gewone taal wat er op de pagina moet veranderen. Claude past het concept aan; er gaat pas iets
+              live als je publiceert.
+            </p>
+
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1 xl:max-h-[560px]" aria-live="polite">
+              {chat.length === 0 && (
+                <div className="space-y-2">
+                  <p className="form-label">Bijvoorbeeld</p>
+                  {VOORBEELDEN.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setVraag(v)}
+                      className="block w-full border border-border px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:text-primary"
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {chat.map((b, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "max-w-[90%] px-3 py-2 text-sm whitespace-pre-wrap",
+                    b.rol === "gebruiker"
+                      ? "ml-auto bg-primary text-primary-foreground"
+                      : b.fout
+                        ? "alert alert--error !mb-0"
+                        : "border border-border bg-muted"
+                  )}
+                >
+                  {b.tekst}
+                  {b.wijzigingen && b.wijzigingen.length > 0 && <WijzigingenLijst wijzigingen={b.wijzigingen} />}
+                </div>
+              ))}
+              {bezig && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Claude past de pagina aan. Dat kan een minuut duren.
+                </div>
+              )}
+              <div ref={chatEinde} />
+            </div>
+
+            <form
+              className="mt-4 space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                stuur(vraag);
+              }}
+            >
+              <Textarea
+                value={vraag}
+                onChange={(e) => setVraag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    stuur(vraag);
+                  }
+                }}
+                rows={3}
+                placeholder="Bijvoorbeeld: zet de datum op zondag 15 november, 14.30 uur"
+                disabled={bezig}
+                aria-label="Wat moet er anders?"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={ongedaan}
+                  disabled={bezig || geschiedenis.length === 0}
+                >
+                  <Undo2 />
+                  Ongedaan maken
+                </Button>
+                <Button type="submit" disabled={bezig || !vraag.trim()}>
+                  {bezig ? <Loader2 className="animate-spin" /> : <Send />}
+                  Versturen
+                </Button>
               </div>
-            </details>
+            </form>
+
+            <div className="mt-4 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant={conceptAfwijkend ? "default" : "outline"}
+                className="w-full"
+                onClick={() => setStap("publiceren")}
+              >
+                Verder naar publiceren
+                <ArrowRight />
+              </Button>
+            </div>
           </Card>
-        </>
+
+          <Card className="p-6">
+            <PlayableLoaderPreview bron={source} />
+          </Card>
+        </div>
+      )}
+
+      {/* ---------- 3. Publiceren ---------- */}
+      {stap === "publiceren" && data && (
+        <Card className="p-6 space-y-5">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl">Publiceren</h2>
+              {conceptAfwijkend ? (
+                <Badge variant="warning">Concept wijkt af van live</Badge>
+              ) : (
+                <Badge variant="success">Concept gelijk aan live</Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {published
+                ? `Laatst gepubliceerd ${formatDate(published.publishedAt)} door ${published.publishedByName ?? published.publishedBy}.`
+                : "Deze campagne is nog niet gepubliceerd vanuit PSV Tools."}{" "}
+              Staat het vaste stukje code in Playable, dan is een publicatie binnen een minuut te zien op de demo en
+              de livepagina.
+            </p>
+            {geschiedenis.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                In dit concept: {geschiedenis.length === 1 ? "1 wijziging" : `${geschiedenis.length} wijzigingen`} via
+                de chat.
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" onClick={() => setStap("aanpassen")}>
+              <ArrowLeft />
+              Terug naar aanpassen
+            </Button>
+            <Button type="button" onClick={publish} disabled={publishing || source.html.trim() === ""}>
+              {publishing ? <Loader2 className="animate-spin" /> : <Upload />}
+              {publishing ? "Bezig…" : "Publiceren"}
+            </Button>
+            {data.campaign?.demoUrl && <Link href={data.campaign.demoUrl}>Demo bekijken</Link>}
+          </div>
+
+          {justPublished && (
+            <div className="alert alert--success !mb-0">
+              Gepubliceerd om {formatDate(justPublished.publishedAt)}.{" "}
+              {/* Met ?v= het net gepubliceerde bestand, niet een bewaarde versie. */}
+              <a
+                className="underline"
+                href={`${justPublished.bundleUrl}?v=${Date.parse(justPublished.publishedAt)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Bekijk de bundel
+              </a>
+            </div>
+          )}
+          {justPublished?.warnings.map((w) => (
+            <div key={w} className="alert alert--warning !mb-0">
+              {w}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* ---------- 4. Code ---------- */}
+      {stap === "code" && data && (
+        <Card className="p-6">
+          <Tabs defaultValue={published ? "code" : "playable"}>
+            <TabsList>
+              <TabsTrigger value="code">HTML, CSS en JS</TabsTrigger>
+              <TabsTrigger value="playable">Eenmalig in Playable</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="code" className="space-y-4 pt-4">
+              <p className="form-hint !mt-0">
+                Het concept zelf bekijken of aanpassen, of de code uit Playable plakken. De Kit ({data.kitVersie})
+                zet PSV Tools er zelf bij; staat hij er al in, dan haalt PSV Tools hem eruit.
+                {!published && " Nog niet gepubliceerd: hieronder staat de startpagina van de Kit."}
+              </p>
+              {FIELDS.map(({ key, label, rows }) => (
+                <div key={key}>
+                  <label htmlFor={`loader-${key}`} className="form-label">
+                    {label}
+                  </label>
+                  <Textarea
+                    id={`loader-${key}`}
+                    value={source[key]}
+                    onChange={(e) => setSource({ ...source, [key]: e.target.value })}
+                    rows={rows}
+                    spellCheck={false}
+                    className="font-mono text-xs"
+                  />
+                </div>
+              ))}
+            </TabsContent>
+
+            <TabsContent value="playable" className="space-y-4 pt-4">
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>Plak eerst de huidige code uit Playable onder HTML, CSS en JS en publiceer, zodat hij bewaard is.</li>
+                <li>
+                  Vervang in Playable de inhoud van de drie velden van het html-element door de drie blokken
+                  hieronder, en sla op.
+                </li>
+                <li>Open de demo. De pagina komt nu uit PSV Tools.</li>
+              </ol>
+              <p className="form-hint !mt-0">
+                Of het vaste stukje in Playable staat, kan PSV Tools niet zien: de API van Playable kijkt niet in
+                het html-element. Controleer het op de demo.
+              </p>
+              <CodeBlock label="HTML" value={data.loader.html} />
+              <CodeBlock label="CSS" value={data.loader.css} />
+              <CodeBlock label="JavaScript" value={data.loader.js} />
+            </TabsContent>
+          </Tabs>
+        </Card>
       )}
     </div>
   );
