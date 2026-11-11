@@ -21,10 +21,14 @@ De bron (wat de collega invulde) staat in Vercel Blob onder
 `playable-loader/<campagne-ID>/huidig.json`, en elke publicatie los onder
 `versies/`, zodat we later kunnen terugdraaien.
 
-Het script vraagt het bestand op met `?v=` plus de huidige minuut. Een nieuwe
-publicatie is daardoor binnen een minuut of twee zichtbaar, als Bunny de
-query in de cache meeneemt. Dat is een van de dingen die de test moet laten
-zien.
+Bunny bewaart `page.js` in zijn cache en negeert de `?v=` die het script
+meestuurt; dat bleek bij de eerste test (de demo toonde een oudere versie).
+Daarom leegt PSV Tools na elke publicatie de cache van Bunny voor dat ene
+bestand. Daarvoor staat in Vercel `BUNNY_API_KEY`: de API-sleutel van het
+Bunny-account (Account settings, API), niet de sleutel van de opslag. Ontbreekt
+die, dan publiceert PSV Tools wel maar meldt het dat de cache niet is geleegd;
+leeg hem dan in Bunny bij de pull zone onder Purge, met het adres van
+`page.js`.
 
 ## Testen met campagne 244347
 

@@ -11,6 +11,7 @@ import { KIT_VERSIE, STARTER_HTML } from "@/lib/playable-loader/kit";
 import {
   BunnyConfigError,
   bundleUrl,
+  purgeBundle,
   readPublished,
   savePublished,
   uploadBundle,
@@ -81,6 +82,21 @@ export async function POST(req: NextRequest) {
     new Function(bundle);
 
     const url = await uploadBundle(campaignId, bundle);
+
+    // De bundel staat erop; een mislukte purge maakt de publicatie niet ongedaan.
+    const warnings = [...page.warnings];
+    try {
+      if (!(await purgeBundle(url))) {
+        warnings.push(
+          "De cache van Bunny is niet geleegd, want BUNNY_API_KEY ontbreekt in Vercel. De nieuwe versie is pas " +
+            "zichtbaar als je de cache in Bunny leegt of als hij verloopt."
+        );
+      }
+    } catch (err) {
+      console.error("[playable-loader] Purge mislukt:", err);
+      warnings.push(`${err instanceof Error ? err.message : String(err)}. Leeg de cache in Bunny met de hand.`);
+    }
+
     const record: PublishedPage = {
       campaignId,
       source,
@@ -89,7 +105,7 @@ export async function POST(req: NextRequest) {
       publishedAt,
       publishedBy: session.email,
       ...(session.name && { publishedByName: session.name }),
-      warnings: page.warnings,
+      warnings,
     };
     await savePublished(record);
     console.info(`[playable-loader] ${session.email} publiceerde campagne ${campaignId} (${bundle.length} tekens).`);

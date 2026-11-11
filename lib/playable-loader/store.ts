@@ -60,6 +60,27 @@ export async function uploadBundle(campaignId: number, bundle: string): Promise<
   return `${cdn}/${path}`;
 }
 
+/**
+ * Leegt de cache van Bunny voor de bundel van deze campagne. Bunny negeert de
+ * `?v=` van de loader en gaf na een nieuwe publicatie de oude versie. Hiervoor
+ * is de API-sleutel van het Bunny-account nodig (`BUNNY_API_KEY`), niet de
+ * sleutel van de opslag. Zonder die sleutel geeft dit `false` terug: de bundel
+ * staat dan wel op Bunny, maar wordt pas zichtbaar als de cache verloopt.
+ */
+export async function purgeBundle(url: string): Promise<boolean> {
+  const key = process.env.BUNNY_API_KEY;
+  if (!key) return false;
+  const res = await fetch(`https://api.bunny.net/purge?url=${encodeURIComponent(url)}&async=false`, {
+    method: "POST",
+    headers: { AccessKey: key },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Cache van Bunny legen mislukt (${res.status}): ${text.slice(0, 200)}`);
+  }
+  return true;
+}
+
 export async function readPublished(campaignId: number): Promise<PublishedPage | null> {
   try {
     const result = await get(currentPath(campaignId), { access: "private", useCache: false });
