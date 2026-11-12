@@ -86,6 +86,26 @@ API: `GET /api/ticketing-stadion/<eventId>` leest één stoelenkaart en de verko
 `GET /api/ticketing-stadion/verkoop?ids=…` geeft de verkoop per dag van de gekozen
 eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
 
+## Export per wedstrijd
+
+"Export" naast "Meer info" in de opengeklapte rij van het overzicht downloadt een CSV
+(`;`-gescheiden, UTF-8, opent direct in Excel) met per ticket: wedstrijd, datum, vak, rij,
+stoel, sales type, een anonieme eigenaar en het ticket-id (`sales_item_id`).
+
+- **Bron:** dezelfde stoelstatus als de wedstrijdpagina (`readEventSeats()`). Er gaat geen
+  verzoek naar Ringside: die kan niet per wedstrijd filteren (de OpenAPI-spec kent bij elk
+  endpoint alleen `cursor` en `limit`), dus de cron houdt de tickets per wedstrijd al bij.
+- **Sales type:** `Sale`, `Reservation` (openstaand), `Resale - Posted` (staat in de
+  resale) of `Resale - Bought` (gekocht via de resale).
+- **Niet in de export:** teruggegeven, geannuleerde en refunded tickets (die vallen bij
+  het inlezen af) en de CRM ID. Die staat niet in `/v1/sales`, alleen via
+  `own_client_guid` in `/v1/clients`, en de tool bewaart geen persoonsgegevens. De kolom
+  "Eigenaar (anoniem)" is een hash: gelijke waarde is dezelfde eigenaar.
+- **Alleen komende wedstrijden;** een gespeelde wedstrijd staat niet meer in de stoelstatus.
+
+Code: `lib/ticketing-stadion/export.ts` (getest) en
+`app/api/ticketing-stadion/[eventId]/export/route.ts` (met login).
+
 ## Fase 4: Ticket Inzichten vervangen
 
 - **Menu:** Ticket Inzichten en de beta-pagina Ringside zijn weg; Ticketing Stadion staat

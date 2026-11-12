@@ -7,6 +7,7 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronUp,
+  Download,
   Loader2,
   RefreshCw,
   TrendingDown,
@@ -130,10 +131,21 @@ function MatchDetail({ match }: { match: MatchRow }) {
             "Geen vrije plaatsen meer."
           )}
         </p>
-        <Link href={`/dashboard/ticketing-stadion/${match.eventId}`} className="btn btn--medium inline-flex items-center justify-center gap-2 whitespace-nowrap">
-          Meer info
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/api/ticketing-stadion/${match.eventId}/export`}
+            download
+            title="Alle tickets van deze wedstrijd als CSV: vak, rij, stoel en sales type"
+            className="btn btn--medium btn--outlined inline-flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </a>
+          <Link href={`/dashboard/ticketing-stadion/${match.eventId}`} className="btn btn--medium inline-flex items-center justify-center gap-2 whitespace-nowrap">
+            Meer info
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
     </div>
   );
