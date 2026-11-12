@@ -2,13 +2,13 @@
  * De export van één wedstrijd: per ticket een regel, als CSV.
  *
  * Gebruikt dezelfde stoelstatus als de wedstrijdpagina (`readEventSeats()`); er
- * gaat geen verzoek naar Ringside. Daardoor staan er alleen tickets in die de
- * stoel nu bezet houden. Teruggegeven en geannuleerde tickets vallen bij het
- * inlezen al af, en een CRM ID wordt niet bewaard (alleen een hash van de
- * eigenaar, zie `ownerFingerprint()`).
+ * gaat geen verzoek naar Ringside. Er staan in: de tickets die de stoel nu bezet
+ * houden, en de kaarten die in de resale zijn doorverkocht (`Resold - Refunded`).
+ * Teruggegeven en geannuleerde tickets vallen bij het inlezen af, en een CRM ID
+ * wordt niet bewaard (alleen een hash van de eigenaar, zie `ownerFingerprint()`).
  */
 
-import { RESALE_BOUGHT, RESALE_POSTED, type EventSeatState } from "../ringside/seat-state";
+import { RESALE_BOUGHT, RESALE_POSTED, RESOLD_STATUS, type EventSeatState } from "../ringside/seat-state";
 
 export const EXPORT_COLUMNS = [
   "Wedstrijd",
@@ -58,6 +58,21 @@ export function buildSalesExport(event: EventSeatState): string {
       salesItemId,
     ];
   });
+
+  // De kaart van de verkoper; de koper staat hierboven met `Resale - Bought` op dezelfde stoel.
+  for (const [salesItemId, [manifestId, area, row, seat, owner]] of Object.entries(event.resold ?? {})) {
+    const fromManifest = manifestId ? event.seats[manifestId] : undefined;
+    rows.push([
+      name,
+      date,
+      fromManifest?.[0] ?? area,
+      fromManifest?.[1] ?? row,
+      fromManifest?.[2] ?? seat,
+      RESOLD_STATUS,
+      owner,
+      salesItemId,
+    ]);
+  }
 
   rows.sort((a, b) => compare(a[2], b[2]) || compare(a[3], b[3]) || compare(a[4], b[4]));
 

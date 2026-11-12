@@ -14,6 +14,7 @@ const event: EventSeatState = {
     s3: ["", "=GA", "", "", 2, "ghi"],
     s4: ["m9", "W", "1", "1", 0, "jkl", 1],
   },
+  resold: { s0: ["m1", "", "", "", "xyz"] },
 };
 
 test("sales type per ticket", () => {
@@ -29,7 +30,7 @@ test("CSV met kopregel, plek uit de stoelenkaart en gesorteerd op vak, rij en st
   assert.equal(lines[0], "Wedstrijd;Datum;Vak;Rij;Stoel;Sales type;Eigenaar (anoniem);Ticket ID");
   assert.deepEqual(
     lines.slice(1).map((line) => line.split(";").slice(2, 6).join(";")),
-    ["'=GA;;;Resale - Bought", "P;2;5;Resale - Posted", "P;10;2;Sale", "W;1;1;Reservation"]
+    ["'=GA;;;Resale - Bought", "P;2;5;Resale - Posted", "P;10;2;Sale", "P;10;2;Resold - Refunded", "W;1;1;Reservation"]
   );
   assert.ok(lines[1].startsWith("PSV - Go Ahead Eagles;2026-11-28T18:45:00+01:00;"));
 });

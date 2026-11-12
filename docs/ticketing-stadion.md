@@ -96,9 +96,16 @@ stoel, sales type, een anonieme eigenaar en het ticket-id (`sales_item_id`).
   verzoek naar Ringside: die kan niet per wedstrijd filteren (de OpenAPI-spec kent bij elk
   endpoint alleen `cursor` en `limit`), dus de cron houdt de tickets per wedstrijd al bij.
 - **Sales type:** `Sale`, `Reservation` (openstaand), `Resale - Posted` (staat in de
-  resale) of `Resale - Bought` (gekocht via de resale).
-- **Niet in de export:** teruggegeven, geannuleerde en refunded tickets (die vallen bij
-  het inlezen af) en de CRM ID. Die staat niet in `/v1/sales`, alleen via
+  resale), `Resale - Bought` (gekocht via de resale) of `Resold - Refunded` (de kaart van
+  de verkoper, na verkoop in de resale). Een doorverkochte stoel staat er dus twee keer
+  in: de verkoper met `Resold - Refunded` en de koper met `Resale - Bought`.
+- **Doorverkochte kaarten** houden geen stoel bezet en staan daarom apart in de
+  stoelstatus (`resold`, zie `applySalesRow()`), zodat de bezetting niet verandert. Voor
+  kaarten die al vóór deze wijziging waren doorverkocht, doet de cron eenmalig een
+  vierde ronde door `/v1/sales` (`applySalesResold()`, `resoldComplete` in de toestand).
+  Tot die klaar is, kunnen er oudere doorverkopen ontbreken.
+- **Niet in de export:** teruggegeven en geannuleerde tickets (`Return`,
+  `Reservation Cancellation`; die vallen bij het inlezen af) en de CRM ID. Die staat niet in `/v1/sales`, alleen via
   `own_client_guid` in `/v1/clients`, en de tool bewaart geen persoonsgegevens. De kolom
   "Eigenaar (anoniem)" is een hash: gelijke waarde is dezelfde eigenaar.
 - **Alleen komende wedstrijden;** een gespeelde wedstrijd staat niet meer in de stoelstatus.

@@ -4,6 +4,7 @@ import {
   applyManifestCapacity,
   applyManifestRow,
   applySalesReservation,
+  applySalesResold,
   applySalesRow,
   applySalesVenueResale,
   localizeStoredEventDates,
@@ -282,4 +283,33 @@ test("tijden van vóór de omzetting worden één keer omgezet", () => {
   assert.equal(events.get("c")!.eventDate, "2026-12-12 14:30:00");
   // Nog een keer: niets meer te doen.
   assert.deepEqual(localizeStoredEventDates(events), []);
+});
+
+test("doorverkochte kaart van de verkoper apart bewaard, zonder de stoel bezet te houden", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("s1"), neverPast);
+  const resold = sale("s1", { _ringside_operation: "U", current_status: false, resale_status: "Resold - Refunded" });
+  assert.equal(applySalesRow(events, resold, neverPast), EVENT);
+  const event = events.get(EVENT)!;
+  assert.deepEqual(event.tickets, {});
+  assert.deepEqual(event.resold, { s1: ["m1", "N", "15", "12", ownerFingerprint("0000508F-E239-E611-9417-005056844CAF")] });
+
+  // De bijbehorende Return telt niet; dezelfde versie nog eens verandert niets.
+  assert.equal(applySalesRow(events, sale("s2", { sale_type: "Return", current_status: false, resale_status: "Resold - Refunded" }), neverPast), null);
+  assert.equal(applySalesRow(events, resold, neverPast), null);
+  assert.deepEqual(Object.keys(event.resold!), ["s1"]);
+
+  // Verwijderd: weg uit de lijst.
+  assert.equal(applySalesRow(events, { _ringside_operation: "D", sales_item_id: "s1" }, neverPast), EVENT);
+  assert.deepEqual(event.resold, {});
+});
+
+test("tweede ronde vult doorverkochte kaarten aan, alleen voor bekende wedstrijden", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("s1"), neverPast);
+  const resold = { current_status: false, resale_status: "Resold - Refunded" };
+  assert.equal(applySalesResold(events, sale("s9", resold)), EVENT);
+  assert.equal(applySalesResold(events, sale("s8", { ...resold, product_id: PAST })), null);
+  assert.equal(applySalesResold(events, sale("s7")), null);
+  assert.deepEqual(Object.keys(events.get(EVENT)!.resold!), ["s9"]);
 });

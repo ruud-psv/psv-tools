@@ -114,7 +114,8 @@ export async function GET(req: NextRequest) {
     state.salesComplete &&
     state.capacityComplete &&
     state.reservationComplete &&
-    state.venueResaleComplete;
+    state.venueResaleComplete &&
+    state.resoldComplete;
 
   // `chain=0` zet de ketting uit; niet op falsy testen, anders valt juist die
   // stand terug op de standaard.
@@ -138,6 +139,7 @@ export async function GET(req: NextRequest) {
         capacityRead: result?.capacityRead ?? 0,
         reservationRead: result?.reservationRead ?? 0,
         venueResaleRead: result?.venueResaleRead ?? 0,
+        resoldRead: result?.resoldRead ?? 0,
         eventsChanged: result?.eventsChanged ?? 0,
         resets: result?.resets ?? [],
       },
@@ -152,6 +154,8 @@ export async function GET(req: NextRequest) {
         reservationComplete: state.reservationComplete,
         venueResaleRead: state.venueResaleRead,
         venueResaleComplete: state.venueResaleComplete,
+        resoldRead: state.resoldRead,
+        resoldComplete: state.resoldComplete,
         events: result?.events ?? null,
         runs: state.runs,
       },

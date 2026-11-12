@@ -84,7 +84,19 @@ export interface EventSeatState {
   eventDate: string | null;
   seats: Record<string, SeatTuple>;
   tickets: Record<string, TicketTuple>;
+  /**
+   * Tickets die via de resale zijn doorverkocht (`Resold - Refunded`): de kaart
+   * van de verkoper. Houdt geen stoel bezet, dus apart van `tickets`; alleen
+   * voor de export. Ontbreekt in bestanden van vóór die export.
+   */
+  resold?: Record<string, ResoldTuple>;
 }
+
+/** `[manifest_id, vak, rij, stoel, gehashte eigenaar]` van een doorverkocht ticket. */
+export type ResoldTuple = [manifestId: string, area: string, row: string, seat: string, owner: string];
+
+/** `resale_status` van de kaart van de verkoper nadat hij in de resale verkocht is. */
+export const RESOLD_STATUS = "Resold - Refunded";
 
 export type EventStates = Map<string, EventSeatState>;
 
@@ -158,6 +170,20 @@ export function isOccupyingTicket(row: SalesFeedRow): boolean {
   if (!isTrue(row.current_status)) return false;
   return row.forward_item_id === null || row.forward_item_id === undefined;
 }
+
+/**
+ * Of dit de kaart van een verkoper is die in de resale verkocht is.
+ *
+ * Na de doorverkoop heeft de oorspronkelijke verkoopregel `Resold - Refunded`
+ * en `current_status = false`. Er komt ook een `Return` met dezelfde status
+ * bij; die telt niet, anders staat hetzelfde ticket er twee keer in.
+ */
+export function isResoldTicket(row: SalesFeedRow): boolean {
+  if (row.item_type !== "Ticket" || row.resale_status !== RESOLD_STATUS) return false;
+  return typeof row.sale_type === "string" && SOLD_FOR_RESALE.has(row.sale_type);
+}
+
+const SOLD_FOR_RESALE = new Set(["Sale", "Reservation Confirmation", "Update - New"]);
 
 /**
  * De resale-vlaggen van een verkoopregel.
@@ -343,6 +369,7 @@ export function applySalesRow(
   const productId = id(row.product_id);
 
   if (isDelete(row) || !isOccupyingTicket(row)) {
+    const resoldIn = applyResold(events, row, salesItemId, productId, isPast);
     // Vervallen of verwijderd: weg uit de wedstrijd waar hij in stond. Meestal
     // weten we die via het product; alleen een delete heeft soms niets dan de
     // sleutel. Dat onderscheid scheelt veel: bij de eerste vulling komen
@@ -355,7 +382,7 @@ export function applySalesRow(
         return event.eventId;
       }
     }
-    return null;
+    return resoldIn;
   }
 
   if (!productId || isPast(productId)) return null;
@@ -376,6 +403,63 @@ export function applySalesRow(
   if (isReservation(row)) tuple.push(1);
   event.tickets[salesItemId] = tuple;
   return productId;
+}
+
+/**
+ * Houdt de lijst met doorverkochte tickets bij: erbij als de regel er een is,
+ * eraf als hij verwijderd wordt of niet meer doorverkocht is. Geeft het
+ * event-id terug als er iets veranderde.
+ */
+function applyResold(
+  events: EventStates,
+  row: SalesFeedRow,
+  salesItemId: string,
+  productId: string | null,
+  isPast: (productId: string) => boolean
+): string | null {
+  if (!isDelete(row) && isResoldTicket(row)) {
+    if (!productId || isPast(productId)) return null;
+    let event = events.get(productId);
+    if (!event) {
+      event = emptyEvent(productId);
+      events.set(productId, event);
+    }
+    const tuple: ResoldTuple = [
+      id(row.manifest_id) ?? "",
+      text(row.area),
+      text(row.row),
+      text(row.seat),
+      ownerFingerprint(row.own_client_guid),
+    ];
+    const existing = event.resold?.[salesItemId];
+    if (existing && existing.every((value, i) => value === tuple[i])) return null;
+    (event.resold ??= {})[salesItemId] = tuple;
+    return event.eventId;
+  }
+
+  const owner = productId ? events.get(productId) : undefined;
+  const candidates = productId && !isDelete(row) ? (owner ? [owner] : []) : events.values();
+  for (const event of candidates) {
+    if (event.resold?.[salesItemId]) {
+      delete event.resold[salesItemId];
+      return event.eventId;
+    }
+  }
+  return null;
+}
+
+/**
+ * Vult de doorverkochte tickets aan voor wedstrijden die al bekend zijn.
+ *
+ * Voor de eenmalige vierde ronde door `/v1/sales`: die tickets werden eerst
+ * niet bewaard. Maakt geen nieuwe wedstrijden aan. Geeft het event-id terug
+ * als er iets veranderde.
+ */
+export function applySalesResold(events: EventStates, row: SalesFeedRow): string | null {
+  const salesItemId = id(row.sales_item_id);
+  const productId = id(row.product_id);
+  if (!salesItemId || !productId || isDelete(row) || !isResoldTicket(row) || !events.has(productId)) return null;
+  return applyResold(events, row, salesItemId, productId, () => false);
 }
 
 /**

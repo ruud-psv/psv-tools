@@ -63,6 +63,13 @@ export interface SeatIngestState {
   venueResaleComplete: boolean;
   venueResaleRead: number;
   /**
+   * En een vierde ronde door `/v1/sales`, voor de tickets die in de resale
+   * doorverkocht zijn (`Resold - Refunded`). Zie `applySalesResold()`.
+   */
+  resoldCursor: string | null;
+  resoldComplete: boolean;
+  resoldRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -90,6 +97,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   venueResaleCursor: null,
   venueResaleComplete: false,
   venueResaleRead: 0,
+  resoldCursor: null,
+  resoldComplete: false,
+  resoldRead: 0,
 };
 
 export interface SeatIndexEntry {
