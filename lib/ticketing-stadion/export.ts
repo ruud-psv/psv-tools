@@ -4,6 +4,8 @@
  * Gebruikt dezelfde stoelstatus als de wedstrijdpagina (`readEventSeats()`); er
  * gaat geen verzoek naar Ringside. Er staan in: de tickets die de stoel nu bezet
  * houden, en de kaarten die in de resale zijn doorverkocht (`Resold - Refunded`).
+ * "Sales type" en "Status" zijn `sale_type` en `resale_status` uit Ringside, dus
+ * ook waarden die we nog niet kennen komen er gewoon in.
  * Teruggegeven en geannuleerde tickets vallen bij het inlezen af, en een CRM ID
  * wordt niet bewaard (alleen een hash van de eigenaar, zie `ownerFingerprint()`).
  */
@@ -17,16 +19,25 @@ export const EXPORT_COLUMNS = [
   "Rij",
   "Stoel",
   "Sales type",
+  "Status",
+  "Via resale",
   "Eigenaar (anoniem)",
   "Ticket ID",
 ] as const;
 
-/** Wat er met het ticket aan de hand is, in de woorden van Ringside waar dat kan. */
-export function salesType(resale: number, reservation?: number): string {
-  if (reservation === 1) return "Reservation";
-  if (resale & RESALE_POSTED) return "Resale - Posted";
-  if (resale & RESALE_BOUGHT) return "Resale - Bought";
-  return "Sale";
+/**
+ * `sale_type` en `resale_status` zoals Ringside ze levert. Staan ze (nog) niet
+ * in de stoelstatus, dan volgen ze uit de vlaggen: een openstaande reservering
+ * is `Reservation`, de rest `Sale`, en aangeboden in de resale is `Posted`.
+ * Dat geldt voor tickets van vóór de eenmalige ronde van `applySalesDetails()`.
+ */
+export function ticketStatus(
+  resale: number,
+  reservation: number | undefined,
+  details: [string, string] | undefined
+): { saleType: string; status: string } {
+  if (details) return { saleType: details[0], status: details[1] };
+  return { saleType: reservation === 1 ? "Reservation" : "Sale", status: resale & RESALE_POSTED ? "Posted" : "" };
 }
 
 /** Een waarde voor CSV met `;` als scheidingsteken, zoals Excel in het Nederlands verwacht. */
@@ -44,34 +55,29 @@ export function buildSalesExport(event: EventSeatState): string {
   const name = event.name ?? "";
   const date = event.eventDate ?? "";
 
-  const rows = Object.entries(event.tickets).map(([salesItemId, [manifestId, area, row, seat, resale, owner, reservation]]) => {
+  const place = (manifestId: string, area: string, row: string, seat: string) => {
     // De plek van de stoelenkaart gaat voor, net als op de wedstrijdpagina (`toNeighborInput()`).
     const fromManifest = manifestId ? event.seats[manifestId] : undefined;
+    return [fromManifest?.[0] ?? area, fromManifest?.[1] ?? row, fromManifest?.[2] ?? seat];
+  };
+
+  const rows = Object.entries(event.tickets).map(([salesItemId, [manifestId, area, row, seat, resale, owner, reservation]]) => {
+    const { saleType, status } = ticketStatus(resale, reservation, event.details?.[salesItemId]);
     return [
       name,
       date,
-      fromManifest?.[0] ?? area,
-      fromManifest?.[1] ?? row,
-      fromManifest?.[2] ?? seat,
-      salesType(resale, reservation),
+      ...place(manifestId, area, row, seat),
+      saleType,
+      status,
+      resale & RESALE_BOUGHT ? "ja" : "nee",
       owner,
       salesItemId,
     ];
   });
 
-  // De kaart van de verkoper; de koper staat hierboven met `Resale - Bought` op dezelfde stoel.
-  for (const [salesItemId, [manifestId, area, row, seat, owner]] of Object.entries(event.resold ?? {})) {
-    const fromManifest = manifestId ? event.seats[manifestId] : undefined;
-    rows.push([
-      name,
-      date,
-      fromManifest?.[0] ?? area,
-      fromManifest?.[1] ?? row,
-      fromManifest?.[2] ?? seat,
-      RESOLD_STATUS,
-      owner,
-      salesItemId,
-    ]);
+  // De kaart van de verkoper; de koper staat erbij met "Via resale" ja op dezelfde stoel.
+  for (const [salesItemId, [manifestId, area, row, seat, owner, saleType]] of Object.entries(event.resold ?? {})) {
+    rows.push([name, date, ...place(manifestId, area, row, seat), saleType || "Sale", RESOLD_STATUS, "", owner, salesItemId]);
   }
 
   rows.sort((a, b) => compare(a[2], b[2]) || compare(a[3], b[3]) || compare(a[4], b[4]));

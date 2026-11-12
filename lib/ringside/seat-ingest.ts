@@ -19,6 +19,7 @@ import {
   applyManifestCapacity,
   applyManifestRow,
   applySalesReservation,
+  applySalesDetails,
   applySalesResold,
   applySalesVenueResale,
   applySalesRow,
@@ -47,6 +48,7 @@ export interface SeatIngestResult {
   reservationRead: number;
   venueResaleRead: number;
   resoldRead: number;
+  detailsRead: number;
   eventsChanged: number;
   events: number;
   resets: string[];
@@ -207,6 +209,20 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
     (row) => applySalesResold(events, row),
     changed
   );
+  const details = await backfill<SalesFeedRow>(
+    "/v1/sales",
+    state.detailsCursor,
+    caughtUp &&
+      !state.detailsComplete &&
+      !sales.reset &&
+      !capacity.failure &&
+      !reservation.failure &&
+      !venueResale.failure &&
+      !resold.failure,
+    deadline,
+    (row) => applySalesDetails(events, row),
+    changed
+  );
 
   if (manifests.reset) {
     resets.push("manifests");
@@ -222,6 +238,7 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
     for (const event of events.values()) {
       event.tickets = {};
       event.resold = {};
+      event.details = {};
       changed.add(event.eventId);
     }
   }
@@ -266,13 +283,16 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   state.resoldCursor = resold.cursor;
   state.resoldRead += resold.rows;
   if (resold.reachedEnd || sales.reset) state.resoldComplete = true;
+  state.detailsCursor = details.cursor;
+  state.detailsRead += details.rows;
+  if (details.reachedEnd || sales.reset) state.detailsComplete = true;
   if (manifests.reachedEnd && sales.reachedEnd) state.caughtUpAt = new Date().toISOString();
 
   // Een fout in één van de stromen pas melden nu het gelezen werk bewaard is.
   for (const result of [manifestsResult, salesResult]) {
     if (result.status === "rejected") throw result.reason;
   }
-  for (const pass of [capacity, reservation, venueResale, resold]) {
+  for (const pass of [capacity, reservation, venueResale, resold, details]) {
     if (pass.failure) throw pass.failure;
   }
 
@@ -283,6 +303,7 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
     reservationRead: reservation.rows,
     venueResaleRead: venueResale.rows,
     resoldRead: resold.rows,
+    detailsRead: details.rows,
     eventsChanged: changed.size,
     events: events.size,
     resets,
@@ -321,7 +342,7 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.runningUntil = new Date(deadline + 60_000).toISOString();
   await writeSeatState(state);
 
-  const readBefore = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead + state.venueResaleRead + state.resoldRead;
+  const readBefore = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead + state.venueResaleRead + state.resoldRead + state.detailsRead;
   let result: SeatIngestResult | null = null;
   let error: string | null = null;
   try {
@@ -335,7 +356,7 @@ export async function runLockedSeatIngest(budgetMs: number, force = false): Prom
   state.lastError = error;
   state.runningUntil = null;
   await writeSeatState(state);
-  const readAfter = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead + state.venueResaleRead + state.resoldRead;
+  const readAfter = state.manifestsRead + state.salesRead + state.capacityRead + state.reservationRead + state.venueResaleRead + state.resoldRead + state.detailsRead;
   return { ran: true, state, result, error, progressed: readAfter > readBefore };
 }
 

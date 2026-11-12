@@ -4,6 +4,7 @@ import {
   applyManifestCapacity,
   applyManifestRow,
   applySalesReservation,
+  applySalesDetails,
   applySalesResold,
   applySalesRow,
   applySalesVenueResale,
@@ -292,7 +293,7 @@ test("doorverkochte kaart van de verkoper apart bewaard, zonder de stoel bezet t
   assert.equal(applySalesRow(events, resold, neverPast), EVENT);
   const event = events.get(EVENT)!;
   assert.deepEqual(event.tickets, {});
-  assert.deepEqual(event.resold, { s1: ["m1", "N", "15", "12", ownerFingerprint("0000508F-E239-E611-9417-005056844CAF")] });
+  assert.deepEqual(event.resold, { s1: ["m1", "N", "15", "12", ownerFingerprint("0000508F-E239-E611-9417-005056844CAF"), "Sale"] });
 
   // De bijbehorende Return telt niet; dezelfde versie nog eens verandert niets.
   assert.equal(applySalesRow(events, sale("s2", { sale_type: "Return", current_status: false, resale_status: "Resold - Refunded" }), neverPast), null);
@@ -312,4 +313,28 @@ test("tweede ronde vult doorverkochte kaarten aan, alleen voor bekende wedstrijd
   assert.equal(applySalesResold(events, sale("s8", { ...resold, product_id: PAST })), null);
   assert.equal(applySalesResold(events, sale("s7")), null);
   assert.deepEqual(Object.keys(events.get(EVENT)!.resold!), ["s9"]);
+});
+
+test("ruwe sale_type en resale_status per ticket, alleen als het geen gewone Sale is", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("s1"), neverPast);
+  applySalesRow(events, sale("s2", { resale_status: "Requested" }), neverPast);
+  applySalesRow(events, sale("s3", { sale_type: "Reservation Confirmation" }), neverPast);
+  const event = events.get(EVENT)!;
+  assert.deepEqual(event.details, { s2: ["Sale", "Requested"], s3: ["Reservation Confirmation", ""] });
+
+  // Terug naar een gewone Sale, en vervallen: details weg.
+  applySalesRow(events, sale("s2", { _ringside_operation: "U" }), neverPast);
+  applySalesRow(events, sale("s3", { _ringside_operation: "U", current_status: false }), neverPast);
+  assert.deepEqual(event.details, {});
+});
+
+test("ronde voor de details vult alleen bekende tickets aan", () => {
+  const events: EventStates = new Map();
+  applySalesRow(events, sale("s1"), neverPast);
+  delete events.get(EVENT)!.details;
+  assert.equal(applySalesDetails(events, sale("s1", { resale_status: "Posted" })), EVENT);
+  assert.equal(applySalesDetails(events, sale("s1", { resale_status: "Posted" })), null);
+  assert.equal(applySalesDetails(events, sale("onbekend", { resale_status: "Posted" })), null);
+  assert.deepEqual(events.get(EVENT)!.details, { s1: ["Sale", "Posted"] });
 });

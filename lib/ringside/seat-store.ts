@@ -70,6 +70,13 @@ export interface SeatIngestState {
   resoldComplete: boolean;
   resoldRead: number;
   /**
+   * En een vijfde ronde, voor de ruwe `sale_type` en `resale_status` van elk
+   * ticket (de status in de export). Zie `applySalesDetails()`.
+   */
+  detailsCursor: string | null;
+  detailsComplete: boolean;
+  detailsRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -100,6 +107,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   resoldCursor: null,
   resoldComplete: false,
   resoldRead: 0,
+  detailsCursor: null,
+  detailsComplete: false,
+  detailsRead: 0,
 };
 
 export interface SeatIndexEntry {

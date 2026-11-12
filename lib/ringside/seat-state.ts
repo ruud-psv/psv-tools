@@ -90,10 +90,19 @@ export interface EventSeatState {
    * voor de export. Ontbreekt in bestanden van vóór die export.
    */
   resold?: Record<string, ResoldTuple>;
+  /**
+   * De ruwe `sale_type` en `resale_status` van een ticket in `tickets`, alleen
+   * voor de export. Staat er alleen als het iets anders is dan een gewone
+   * `Sale` zonder resale-status; zie `ticketDetails()`.
+   */
+  details?: Record<string, DetailTuple>;
 }
 
-/** `[manifest_id, vak, rij, stoel, gehashte eigenaar]` van een doorverkocht ticket. */
-export type ResoldTuple = [manifestId: string, area: string, row: string, seat: string, owner: string];
+/** `[sale_type, resale_status]` zoals Ringside ze levert. */
+export type DetailTuple = [saleType: string, resaleStatus: string];
+
+/** `[manifest_id, vak, rij, stoel, gehashte eigenaar, sale_type]` van een doorverkocht ticket. */
+export type ResoldTuple = [manifestId: string, area: string, row: string, seat: string, owner: string, saleType?: string];
 
 /** `resale_status` van de kaart van de verkoper nadat hij in de resale verkocht is. */
 export const RESOLD_STATUS = "Resold - Refunded";
@@ -379,6 +388,7 @@ export function applySalesRow(
     for (const event of candidates) {
       if (event.tickets[salesItemId]) {
         delete event.tickets[salesItemId];
+        if (event.details) delete event.details[salesItemId];
         return event.eventId;
       }
     }
@@ -402,6 +412,7 @@ export function applySalesRow(
   ];
   if (isReservation(row)) tuple.push(1);
   event.tickets[salesItemId] = tuple;
+  setDetails(event, salesItemId, row);
   return productId;
 }
 
@@ -430,9 +441,10 @@ function applyResold(
       text(row.row),
       text(row.seat),
       ownerFingerprint(row.own_client_guid),
+      text(row.sale_type),
     ];
     const existing = event.resold?.[salesItemId];
-    if (existing && existing.every((value, i) => value === tuple[i])) return null;
+    if (existing && existing.length === tuple.length && existing.every((value, i) => value === tuple[i])) return null;
     (event.resold ??= {})[salesItemId] = tuple;
     return event.eventId;
   }
@@ -446,6 +458,43 @@ function applyResold(
     }
   }
   return null;
+}
+
+/** `sale_type` en `resale_status` van een verkoopregel; `null` voor een gewone `Sale`. */
+export function ticketDetails(row: SalesFeedRow): DetailTuple | null {
+  const saleType = text(row.sale_type);
+  const resaleStatus = text(row.resale_status);
+  return saleType === "Sale" && !resaleStatus ? null : [saleType, resaleStatus];
+}
+
+/** Zet de details van een ticket; geeft `true` als er iets veranderde. */
+function setDetails(event: EventSeatState, salesItemId: string, row: SalesFeedRow): boolean {
+  const next = ticketDetails(row);
+  const current = event.details?.[salesItemId];
+  if (!next) {
+    if (!current) return false;
+    delete event.details![salesItemId];
+    return true;
+  }
+  if (current && current[0] === next[0] && current[1] === next[1]) return false;
+  (event.details ??= {})[salesItemId] = next;
+  return true;
+}
+
+/**
+ * Vult `sale_type` en `resale_status` aan bij een ticket dat al bekend is.
+ *
+ * Voor de eenmalige vijfde ronde door `/v1/sales`: die werden eerst niet
+ * bewaard. Of het ticket bestaat, bepaalt de gewone stroom. Geeft het event-id
+ * terug als er iets veranderde.
+ */
+export function applySalesDetails(events: EventStates, row: SalesFeedRow): string | null {
+  const salesItemId = id(row.sales_item_id);
+  const productId = id(row.product_id);
+  if (!salesItemId || !productId || isDelete(row) || !isOccupyingTicket(row)) return null;
+  const event = events.get(productId);
+  if (!event?.tickets[salesItemId]) return null;
+  return setDetails(event, salesItemId, row) ? event.eventId : null;
 }
 
 /**

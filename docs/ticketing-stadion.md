@@ -90,15 +90,23 @@ eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
 
 "Export" naast "Meer info" in de opengeklapte rij van het overzicht downloadt een CSV
 (`;`-gescheiden, UTF-8, opent direct in Excel) met per ticket: wedstrijd, datum, vak, rij,
-stoel, sales type, een anonieme eigenaar en het ticket-id (`sales_item_id`).
+stoel, sales type, status, via resale, een anonieme eigenaar en het ticket-id
+(`sales_item_id`).
 
 - **Bron:** dezelfde stoelstatus als de wedstrijdpagina (`readEventSeats()`). Er gaat geen
   verzoek naar Ringside: die kan niet per wedstrijd filteren (de OpenAPI-spec kent bij elk
   endpoint alleen `cursor` en `limit`), dus de cron houdt de tickets per wedstrijd al bij.
-- **Sales type:** `Sale`, `Reservation` (openstaand), `Resale - Posted` (staat in de
-  resale), `Resale - Bought` (gekocht via de resale) of `Resold - Refunded` (de kaart van
-  de verkoper, na verkoop in de resale). Een doorverkochte stoel staat er dus twee keer
-  in: de verkoper met `Resold - Refunded` en de koper met `Resale - Bought`.
+- **Sales type en Status** zijn `sale_type` en `resale_status` zoals Ringside ze levert,
+  dus ook waarden die we nog niet gezien hebben (zoals `Requested`) komen erin. Sales type
+  is `Sale`, `Reservation`, `Reservation Confirmation` of `Update - New`; Status is leeg,
+  `Posted` (aangeboden in de resale), `Resold - Refunded` (doorverkocht, de kaart van de
+  verkoper) of een andere waarde. De stoelstatus bewaart ze per ticket in `details`, alleen
+  als het geen gewone `Sale` zonder status is. Voor tickets van vóór die wijziging doet de
+  cron eenmalig een vijfde ronde door `/v1/sales` (`applySalesDetails()`,
+  `detailsComplete`); tot die klaar is, volgen ze uit de vlaggen (`Reservation`, `Posted`).
+- **Via resale:** `ja` als het ticket via de resale gekocht is (`is_venue_resale`).
+  Een doorverkochte stoel staat er dus twee keer in: de verkoper met status
+  `Resold - Refunded` en de koper met via resale `ja`.
 - **Doorverkochte kaarten** houden geen stoel bezet en staan daarom apart in de
   stoelstatus (`resold`, zie `applySalesRow()`), zodat de bezetting niet verandert. Voor
   kaarten die al vóór deze wijziging waren doorverkocht, doet de cron eenmalig een
