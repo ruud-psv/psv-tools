@@ -110,6 +110,8 @@ resale, een anonieme eigenaar en het ticket-id (`sales_item_id`).
   als het geen gewone `Sale` zonder status is. Voor tickets van vóór die wijziging doet de
   cron eenmalig een vijfde ronde door `/v1/sales` (`applySalesDetails()`,
   `detailsComplete`); tot die klaar is, volgen ze uit de vlaggen (`Reservation`, `Posted`).
+  De voortgang staat op `/api/ringside/stoelen?status=1` (met login; start geen run):
+  `busyWith` is de ronde waar de cron mee bezig is, `done: true` betekent alles binnen.
 - **Via resale:** `ja` als het ticket via de resale gekocht is (`is_venue_resale`).
   Een doorverkochte stoel heeft dus twee regels: de koper met via resale `ja` en daaronder
   de verkoper met status `Resold - Refunded`.

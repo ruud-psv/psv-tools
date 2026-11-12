@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
 import { isRingsideConfigured } from "@/lib/ringside/auth";
 import { runLockedSeatIngest } from "@/lib/ringside/seat-ingest";
+import { isSeatIngestLocked, readSeatState, type SeatIngestState } from "@/lib/ringside/seat-store";
 
 /**
  * Houdt de stoelstatus van komende wedstrijden bij (zie `lib/ringside/seat-ingest.ts`).
@@ -11,6 +12,8 @@ import { runLockedSeatIngest } from "@/lib/ringside/seat-ingest";
  * vulling leest de hele historie van stoelen en verkoop, en dat is meer dan één
  * serverless run aankan. Een run start daarom zelf de volgende, net als
  * `/api/ringside/ingest`, tot alles binnen is.
+ *
+ * `?status=1` start niets en toont alleen de voortgang, ook als er een run loopt.
  */
 
 export const dynamic = "force-dynamic";
@@ -84,9 +87,41 @@ async function startNextRun(req: NextRequest, remaining: number): Promise<boolea
   }
 }
 
+/** De voortgang per ronde, in de volgorde waarin de cron ze afwerkt. */
+function progress(state: SeatIngestState) {
+  const phase = (read: number, complete: boolean) => ({ read, complete });
+  const phases = {
+    stoelen: phase(state.manifestsRead, state.manifestsComplete),
+    verkoop: phase(state.salesRead, state.salesComplete),
+    capaciteit: phase(state.capacityRead, state.capacityComplete),
+    reserveringen: phase(state.reservationRead, state.reservationComplete),
+    resaleAankopen: phase(state.venueResaleRead, state.venueResaleComplete),
+    doorverkocht: phase(state.resoldRead, state.resoldComplete),
+    statusPerTicket: phase(state.detailsRead, state.detailsComplete),
+  };
+  const busyWith = Object.entries(phases).find(([, p]) => !p.complete)?.[0] ?? null;
+  return { done: busyWith === null, busyWith, phases };
+}
+
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (new URL(req.url).searchParams.get("status") === "1") {
+    const state = await readSeatState();
+    return NextResponse.json(
+      {
+        ...progress(state),
+        running: isSeatIngestLocked(state),
+        runningUntil: state.runningUntil,
+        caughtUpAt: state.caughtUpAt,
+        runs: state.runs,
+        updatedAt: state.updatedAt || null,
+        lastError: state.lastError,
+      },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   }
   if (!isRingsideConfigured()) {
     return NextResponse.json({ error: "Ringside is niet geconfigureerd." }, { status: 503 });
@@ -101,7 +136,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         skipped: true,
-        reason: "Er loopt al een run.",
+        reason: "Er loopt al een run. Bekijk de voortgang met ?status=1.",
         runningUntil: outcome.state.runningUntil,
       },
       { status: 409, headers: { "Cache-Control": "no-store, max-age=0" } }
