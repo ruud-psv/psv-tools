@@ -100,15 +100,6 @@ export const makeTools: ToolEntry[] = [
 
 export const knowledgeTools: ToolEntry[] = [
   {
-    name: "Assistent",
-    title: "Vraag stellen over de data",
-    description:
-      "Eén chat over ticketing, de FANdesk en de kennisbank heen, met een link naar de bron.",
-    href: "/dashboard/assistent",
-    icon: MessagesSquare,
-    badge: "Beta",
-  },
-  {
     name: "Kennisbank",
     title: "Kennisbank doorzoeken",
     description:
@@ -196,6 +187,7 @@ export const insightTools: ToolEntry[] = [
 
 /** Het BETA-blok in de footer van de sidebar: verschijnt bij hover op "Beta tools". */
 export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
+  { name: "Assistent", href: "/dashboard/assistent", icon: MessagesSquare },
   { name: "Kleurplaat Creator", href: "/dashboard/kleurplaat", icon: Palette },
   { name: "Aangrenzende stoelen", href: "/dashboard/aangrenzende-stoelen", icon: Armchair },
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },

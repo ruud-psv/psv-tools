@@ -29,8 +29,9 @@ haalt het model opnieuw op wat het nodig heeft.
 ## Rechten
 
 Elke tool hoort bij een pagina. Wie een pagina niet mag zien (Gebruikersbeheer), krijgt de tools
-van die pagina niet, ook niet als het model erom vraagt. De pagina Assistent zelf is een gewone
-pagina in de groep Kennisbank en is dus per gebruiker aan of uit te zetten.
+van die pagina niet, ook niet als het model erom vraagt. De pagina Assistent zelf staat bij de beta
+tools: wie het niveau "Alles" heeft ziet hem niet, en bij "Specifieke pagina's" is hij per
+gebruiker aan of uit te zetten.
 
 ## Tools
 
