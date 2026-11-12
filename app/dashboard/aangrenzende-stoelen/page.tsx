@@ -1,4 +1,5 @@
 import { AangrenzendeStoelen } from "@/components/aangrenzende-stoelen";
+import { AangrenzendeStoelenEffect } from "@/components/aangrenzende-stoelen-effect";
 
 export const metadata = {
   title: "Aangrenzende stoelen | PSV Tools",
@@ -20,7 +21,10 @@ export default function AangrenzendeStoelenPage() {
           in de testfase: controleer een lijst steekproefsgewijs voordat je hem gebruikt.
         </p>
       </div>
-      <AangrenzendeStoelen />
+      <div className="space-y-6">
+        <AangrenzendeStoelen />
+        <AangrenzendeStoelenEffect />
+      </div>
     </div>
   );
 }

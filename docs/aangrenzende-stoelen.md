@@ -238,6 +238,64 @@ doelgroep; deze bewust niet, vanwege de Ticketing-regel hieronder.
 - **Sleutel:** `MAILEON_API_KEY` in Vercel (de API-sleutel "PSV Tools II" in Maileon).
   Elke keer doorzetten maakt een nieuw filter; opruimen gaat in Maileon zelf.
 
+## Effect van een mail
+
+Onderaan de pagina: achteraf zien wat een mail over aangrenzende stoelen opleverde. Je
+vult het moment van de mail in (Nederlandse tijd), kiest de wedstrijd (standaard de
+eerste thuiswedstrijd na dat moment) en plakt de relatienummers die de mail kregen.
+Per relatienummer komt eruit welke buurstoelen bij de mail vrij waren, of die daarna
+verkocht zijn, en of de houder hem zelf kocht of iemand anders. Download als CSV, één
+regel per buurstoel.
+
+**Inlezen.** De stoelstatus is hier niet genoeg: die bewaart geen verkoopmoment en wist
+een wedstrijd zodra hij gespeeld is. Daarom leest "Lees verkoop in" de hele stroom
+`/v1/sales` één keer door en bewaart alle ticketregels van die wedstrijd, ook vervallen
+regels en retouren, met `transaction_date` en de gehashte eigenaar. Dat duurt een paar
+uur, in een ketting van runs, net als de instroom van Ticketing Stadion. Er wordt één
+wedstrijd tegelijk ingelezen; een wedstrijd die klaar is, blijft bruikbaar en is met
+"Bijwerken" vanaf zijn eigen cursor snel bij te lezen.
+
+- Code: `lib/aangrenzende-stoelen/effect-data.ts` (een regel verwerken),
+  `effect-ingest.ts` (de ketting), `effect-store.ts` (opslag) en
+  `app/api/aangrenzende-stoelen/effect/inlezen/route.ts` (`?productId=`, `?restart=1`,
+  `?chain=0`, `?force=1`, zoals de instroom).
+- Opslag: Vercel Blob onder `aangrenzende-stoelen/effect/`: `state.json` en per wedstrijd
+  `<product-id>.json.gz`. Geen relatienummers of namen; ids en eigenaren alleen gehasht.
+
+**Regels** (`lib/aangrenzende-stoelen/effect.ts`, getest in `effect.test.ts`):
+
+- **Buurstoel:** links, rechts, voor of achter, in hetzelfde vak, zoals bij de lijst.
+  Uitgesloten vakken doen niet mee. De eigen stoelen komen uit de lijst
+  seizoenkaarthouders die nu op de pagina staat.
+- **Bezet op een moment:** een ticket dat nu nog geldig is en vóór dat moment gekocht;
+  of een vervallen ticket van daarvoor zonder retour of annulering (`Return`,
+  `Reservation Cancellation`, `Confirmed Reservation Return`) op die stoel ertussen.
+- **Vrij bij de mail:** niet bezet en niet geblokkeerd. Of bezet door een kaart die
+  daarna via de resale is doorverkocht ("in de resale"); wanneer hij werd aangeboden,
+  staat niet in Ringside.
+- **Verkocht na de mail:** er staat nu een geldig ticket op dat op of na het moment van
+  de mail gekocht is, ook een openstaande reservering.
+- **Zelf of iemand anders:** "zelf" als de eigenaar van de koper (`own_client_guid`,
+  gehasht) dezelfde is als die van de seizoenkaart van de houder voor deze wedstrijd.
+  Een huisgenoot met een eigen account telt dus als iemand anders.
+- **Extra kaarten zelf:** alle kaarten voor deze wedstrijd die de houder na de mail zelf
+  kocht, in een tribunevak buiten zijn eigen stoelen. Parkeren telt niet.
+- **Uitkomst per relatienummer**, de eerste die past: zelf gekocht (de buurstoel), zelf
+  gekocht andere stoel, door ander gekocht, verkocht koper onbekend, niet verkocht, geen
+  vrije buurstoel, niet in de lijst. Bij "geen vrije buurstoel" toont de tool buurstoelen
+  die in de 24 uur vóór de mail verkocht zijn: dan stond iemand terecht op de lijst, maar
+  was de stoel bij het versturen al weg.
+- **Ter vergelijking:** welk deel van alle andere vrije stoelen in het stadion na de mail
+  verkocht is.
+- **Stoelenkaart:** van een gespeelde wedstrijd is die er niet meer. Dan komt hij van de
+  eerstvolgende thuiswedstrijd, zoals bij de instroom; welke stoelen geblokkeerd zijn kan
+  per wedstrijd iets verschillen. De pagina zegt welke gebruikt is.
+
+**Nog te controleren met echte data:** of `transaction_date` van de kaart van een
+verkoper na een doorverkoop de oorspronkelijke datum houdt, en of retouren een stoel
+hebben. De pagina telt retouren zonder stoel ("diagnostics"); zijn dat er veel, dan
+kunnen teruggegeven stoelen ten onrechte als bezet tellen.
+
 ## Instellingen
 
 - `INCLUDE_SEAT_COLUMNS` in `lib/aangrenzende-stoelen/settings.ts`: vak, rij en stoel
