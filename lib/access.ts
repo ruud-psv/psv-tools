@@ -61,6 +61,7 @@ const ALL_PAGES = [...REGULAR_PAGES, ...BETA_PAGES];
 const API_PAGES: Record<string, string[]> = {
   "/api/aangrenzende-stoelen": ["/dashboard/aangrenzende-stoelen"],
   "/api/analytics-insights": ["/dashboard/web-verkeer"],
+  "/api/assistent": ["/dashboard/assistent"],
   "/api/bunny-upload": ["/dashboard/mail-builder"],
   "/api/contact-filter-import": ["/dashboard/contact-filter-import"],
   "/api/database": ["/dashboard/database"],

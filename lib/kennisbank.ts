@@ -968,82 +968,84 @@ const TIP_LABELS: Record<KennisbankTip["type"], string> = {
 };
 
 /**
- * Serialiseert de volledige kennisbank naar platte tekst voor gebruik als
- * context in de system prompt van de kennisbank-assistent (context-stuffing).
+ * Serialiseert één pagina van de kennisbank naar platte tekst, voor de
+ * kennisbank-chat (alle pagina's achter elkaar) en de assistent (één pagina
+ * per keer).
  *
  * Elk onderdeel krijgt een bronlabel (`[bron: slug#sectie]`) met dezelfde
  * ankers als `getToolSections`, zodat de assistent kan aangeven waar een
  * antwoord vandaan komt en de chat daar rechtstreeks naartoe kan linken.
  */
+export function kennisbankToolContext(tool: KennisbankTool): string {
+  const lines: string[] = [];
+  const bron = (id?: string) => `[bron: ${tool.slug}${id ? `#${id}` : ""}]`;
+  lines.push(`## ${tool.name} (categorie: ${tool.category}) ${bron()}`);
+  lines.push(tool.description);
+  if (tool.comingSoon)
+    lines.push("Status: documentatie nog niet beschikbaar (binnenkort).");
+  if (tool.accessUrl || tool.accessNote || tool.accessLinks?.length || tool.docsUrl) {
+    lines.push(`Toegang ${bron("toegang")}`);
+    if (tool.accessUrl) lines.push(`Inloggen: ${tool.accessUrl}`);
+    tool.accessLinks?.forEach((l) => lines.push(`Inloggen (${l.label}): ${l.url}`));
+    if (tool.accessNote) lines.push(`Toegang: ${tool.accessNote}`);
+    if (tool.docsUrl) lines.push(`Officiële documentatie: ${tool.docsUrl}`);
+  }
+  if (tool.features.length > 0) {
+    lines.push(`Mogelijkheden ${bron("mogelijkheden")}`);
+    tool.features.forEach((f) => lines.push(`- ${f.title}: ${f.description}`));
+  }
+  if (tool.steps?.length) {
+    lines.push(`${tool.stepsCaption ?? "Aan de slag"} ${bron("aan-de-slag")}`);
+    tool.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
+  }
+  tool.stepGroups?.forEach((g) => {
+    lines.push(`${g.caption} ${bron(slugify(g.caption))}`);
+    g.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
+  });
+  tool.checklists?.forEach((c) => {
+    lines.push(`Checklist: ${c.caption ?? ""} ${c.caption ? bron(slugify(c.caption)) : bron()}`);
+    if (c.intro) lines.push(c.intro);
+    c.groups.forEach((g) => {
+      lines.push(
+        `${CHECKLIST_LABELS[g.type]}: ${g.title}${g.description ? `. ${g.description}` : ""}`
+      );
+      g.items.forEach((it) =>
+        lines.push(`  - ${it.label}${it.note ? ` (${it.note})` : ""}`)
+      );
+    });
+  });
+  tool.tables?.forEach((t) => {
+    lines.push(`Tabel: ${t.caption ?? ""} ${t.caption ? bron(slugify(t.caption)) : bron()}`);
+    lines.push(t.headers.join(" | "));
+    t.rows.forEach((r) => lines.push(r.join(" | ")));
+  });
+  tool.flows?.forEach((f) => {
+    lines.push(`Flow: ${f.caption ?? ""} ${f.caption ? bron(slugify(f.caption)) : bron()}`);
+    if (f.intro) lines.push(f.intro);
+    f.stages.forEach((s, i) => {
+      const badges = s.badges?.map((b) => b.label).join(", ");
+      lines.push(
+        `Stap ${i + 1}, ${s.title} (${s.visibilityLabel}${badges ? `; ${badges}` : ""}): ${s.description}`
+      );
+    });
+  });
+  tool.embeds?.forEach((e) => {
+    lines.push(
+      `Ingesloten (${e.type}): ${e.caption ?? ""} ${e.caption ? bron(slugify(e.caption)) : bron()}`
+    );
+    if (e.intro) lines.push(e.intro);
+    lines.push(`Link: ${e.openUrl ?? e.url}`);
+  });
+  if (tool.tips?.length) {
+    lines.push(`Tips ${bron("tips")}`);
+    tool.tips.forEach((tip) => lines.push(`- ${TIP_LABELS[tip.type]}: ${tip.text}`));
+  }
+  return lines.join("\n");
+}
+
+/** De volledige kennisbank, voor de system prompt van de kennisbank-chat (context-stuffing). */
 export function buildKennisbankContext(): string {
-  return kennisbankTools
-    .map((tool) => {
-      const lines: string[] = [];
-      const bron = (id?: string) => `[bron: ${tool.slug}${id ? `#${id}` : ""}]`;
-      lines.push(`## ${tool.name} (categorie: ${tool.category}) ${bron()}`);
-      lines.push(tool.description);
-      if (tool.comingSoon)
-        lines.push("Status: documentatie nog niet beschikbaar (binnenkort).");
-      if (tool.accessUrl || tool.accessNote || tool.accessLinks?.length || tool.docsUrl) {
-        lines.push(`Toegang ${bron("toegang")}`);
-        if (tool.accessUrl) lines.push(`Inloggen: ${tool.accessUrl}`);
-        tool.accessLinks?.forEach((l) => lines.push(`Inloggen (${l.label}): ${l.url}`));
-        if (tool.accessNote) lines.push(`Toegang: ${tool.accessNote}`);
-        if (tool.docsUrl) lines.push(`Officiële documentatie: ${tool.docsUrl}`);
-      }
-      if (tool.features.length > 0) {
-        lines.push(`Mogelijkheden ${bron("mogelijkheden")}`);
-        tool.features.forEach((f) => lines.push(`- ${f.title}: ${f.description}`));
-      }
-      if (tool.steps?.length) {
-        lines.push(`${tool.stepsCaption ?? "Aan de slag"} ${bron("aan-de-slag")}`);
-        tool.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
-      }
-      tool.stepGroups?.forEach((g) => {
-        lines.push(`${g.caption} ${bron(slugify(g.caption))}`);
-        g.steps.forEach((s, i) => lines.push(`Stap ${i + 1}, ${s.title}: ${s.description}`));
-      });
-      tool.checklists?.forEach((c) => {
-        lines.push(`Checklist: ${c.caption ?? ""} ${c.caption ? bron(slugify(c.caption)) : bron()}`);
-        if (c.intro) lines.push(c.intro);
-        c.groups.forEach((g) => {
-          lines.push(
-            `${CHECKLIST_LABELS[g.type]}: ${g.title}${g.description ? `. ${g.description}` : ""}`
-          );
-          g.items.forEach((it) =>
-            lines.push(`  - ${it.label}${it.note ? ` (${it.note})` : ""}`)
-          );
-        });
-      });
-      tool.tables?.forEach((t) => {
-        lines.push(`Tabel: ${t.caption ?? ""} ${t.caption ? bron(slugify(t.caption)) : bron()}`);
-        lines.push(t.headers.join(" | "));
-        t.rows.forEach((r) => lines.push(r.join(" | ")));
-      });
-      tool.flows?.forEach((f) => {
-        lines.push(`Flow: ${f.caption ?? ""} ${f.caption ? bron(slugify(f.caption)) : bron()}`);
-        if (f.intro) lines.push(f.intro);
-        f.stages.forEach((s, i) => {
-          const badges = s.badges?.map((b) => b.label).join(", ");
-          lines.push(
-            `Stap ${i + 1}, ${s.title} (${s.visibilityLabel}${badges ? `; ${badges}` : ""}): ${s.description}`
-          );
-        });
-      });
-      tool.embeds?.forEach((e) => {
-        lines.push(
-          `Ingesloten (${e.type}): ${e.caption ?? ""} ${e.caption ? bron(slugify(e.caption)) : bron()}`
-        );
-        if (e.intro) lines.push(e.intro);
-        lines.push(`Link: ${e.openUrl ?? e.url}`);
-      });
-      if (tool.tips?.length) {
-        lines.push(`Tips ${bron("tips")}`);
-        tool.tips.forEach((tip) => lines.push(`- ${TIP_LABELS[tip.type]}: ${tip.text}`));
-      }
-      return lines.join("\n");
-    })
-    .join("\n\n");
+  return kennisbankTools.map(kennisbankToolContext).join("\n\n");
 }
 
 /**

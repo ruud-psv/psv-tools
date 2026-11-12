@@ -15,6 +15,7 @@ import {
   Mail,
   MailPlus,
   Megaphone,
+  MessagesSquare,
   Palette,
   Plug,
   Users,
@@ -98,6 +99,15 @@ export const makeTools: ToolEntry[] = [
 ];
 
 export const knowledgeTools: ToolEntry[] = [
+  {
+    name: "Assistent",
+    title: "Vraag stellen over de data",
+    description:
+      "Eén chat over ticketing, de FANdesk en de kennisbank heen, met een link naar de bron.",
+    href: "/dashboard/assistent",
+    icon: MessagesSquare,
+    badge: "Beta",
+  },
   {
     name: "Kennisbank",
     title: "Kennisbank doorzoeken",

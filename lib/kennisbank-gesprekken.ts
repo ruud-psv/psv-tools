@@ -21,6 +21,8 @@ const MAX_TITEL = 80;
 export interface GesprekBericht {
   role: "user" | "assistant";
   content: string;
+  /** Alleen bij de assistent van PSV Tools: de namen van de geraadpleegde tools. */
+  bronnen?: string[];
 }
 
 export interface Gesprek {
@@ -33,13 +35,9 @@ export interface Gesprek {
 
 export type GesprekSamenvatting = Pick<Gesprek, "id" | "titel" | "updatedAt">;
 
-function mapVoor(email: string): string {
+function mapVoor(prefix: string, email: string): string {
   const hash = createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 32);
-  return `${PREFIX}${hash}/`;
-}
-
-function pathFor(email: string, id: string): string {
-  return `${mapVoor(email)}${id}.json`;
+  return `${prefix}${hash}/`;
 }
 
 export function nieuwGesprekId(): string {
@@ -86,40 +84,52 @@ async function readJson<T>(pathname: string): Promise<T | null> {
   }
 }
 
-export async function saveGesprek(email: string, gesprek: Gesprek): Promise<void> {
-  await put(pathFor(email, gesprek.id), JSON.stringify(gesprek), {
-    access: "private",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: "application/json",
-  });
+/**
+ * De opslag van gesprekken onder één map. De kennisbank-chat en de assistent
+ * bewaren hun gesprekken op dezelfde manier, elk onder een eigen map.
+ */
+export function gesprekkenOpslag(prefix: string) {
+  const pathFor = (email: string, id: string) => `${mapVoor(prefix, email)}${id}.json`;
+
+  async function saveGesprek(email: string, gesprek: Gesprek): Promise<void> {
+    await put(pathFor(email, gesprek.id), JSON.stringify(gesprek), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+    });
+  }
+
+  async function getGesprek(email: string, id: string): Promise<Gesprek | null> {
+    if (!ID_RE.test(id)) return null;
+    const parsed = await readJson<Gesprek>(pathFor(email, id));
+    if (!parsed || typeof parsed !== "object" || parsed.id !== id) return null;
+    return parsed;
+  }
+
+  async function listGesprekken(email: string): Promise<GesprekSamenvatting[]> {
+    const map = mapVoor(prefix, email);
+    const { blobs } = await list({ prefix: map });
+    const ids = blobs
+      .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
+      .map((b) => b.pathname.slice(map.length).replace(/\.json$/, ""))
+      .filter((id) => ID_RE.test(id))
+      .slice(0, MAX_IN_LIJST);
+
+    const results = await Promise.all(ids.map((id) => getGesprek(email, id)));
+    return results
+      .filter((g): g is Gesprek => g !== null)
+      .map(({ id, titel, updatedAt }) => ({ id, titel, updatedAt }))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async function deleteGesprek(email: string, id: string): Promise<boolean> {
+    if (!ID_RE.test(id)) return false;
+    await del(pathFor(email, id));
+    return true;
+  }
+
+  return { saveGesprek, getGesprek, listGesprekken, deleteGesprek };
 }
 
-export async function getGesprek(email: string, id: string): Promise<Gesprek | null> {
-  if (!ID_RE.test(id)) return null;
-  const parsed = await readJson<Gesprek>(pathFor(email, id));
-  if (!parsed || typeof parsed !== "object" || parsed.id !== id) return null;
-  return parsed;
-}
-
-export async function listGesprekken(email: string): Promise<GesprekSamenvatting[]> {
-  const map = mapVoor(email);
-  const { blobs } = await list({ prefix: map });
-  const ids = blobs
-    .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
-    .map((b) => b.pathname.slice(map.length).replace(/\.json$/, ""))
-    .filter((id) => ID_RE.test(id))
-    .slice(0, MAX_IN_LIJST);
-
-  const results = await Promise.all(ids.map((id) => getGesprek(email, id)));
-  return results
-    .filter((g): g is Gesprek => g !== null)
-    .map(({ id, titel, updatedAt }) => ({ id, titel, updatedAt }))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
-export async function deleteGesprek(email: string, id: string): Promise<boolean> {
-  if (!ID_RE.test(id)) return false;
-  await del(pathFor(email, id));
-  return true;
-}
+export const { saveGesprek, getGesprek, listGesprekken, deleteGesprek } = gesprekkenOpslag(PREFIX);

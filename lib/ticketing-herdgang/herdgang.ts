@@ -79,6 +79,13 @@ export function mapArea(area: string): string {
   return area.trim().toUpperCase().replace(/^VAK\s+/, "");
 }
 
+const STANDS = new Set(HERDGANG_AREAS.map((shape) => shape.area));
+
+/** Tribunevakken: wat op de plattegrond staat. Parkeren en de rest tellen apart. */
+export function isHerdgangStand(area: string): boolean {
+  return STANDS.has(mapArea(area));
+}
+
 /**
  * Klassen voor de bezetting van een vak (verkocht gedeeld door capaciteit):
  * één kleur, van licht naar donker, net als de plattegrond van het Philips
