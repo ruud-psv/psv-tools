@@ -135,7 +135,7 @@ function MatchDetail({ match }: { match: MatchRow }) {
           <a
             href={`/api/ticketing-stadion/${match.eventId}/export`}
             download
-            title="Alle tickets van deze wedstrijd als CSV: vak, rij, stoel en sales type"
+            title="Alle stoelen van deze wedstrijd als CSV: vak, rij, stoel, status op de plattegrond en het ticket"
             className="btn btn--medium btn--outlined inline-flex items-center justify-center gap-2 whitespace-nowrap"
           >
             <Download className="h-4 w-4" />

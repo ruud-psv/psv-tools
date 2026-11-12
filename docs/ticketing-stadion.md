@@ -89,13 +89,19 @@ eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
 ## Export per wedstrijd
 
 "Export" naast "Meer info" in de opengeklapte rij van het overzicht downloadt een CSV
-(`;`-gescheiden, UTF-8, opent direct in Excel) met per ticket: wedstrijd, datum, vak, rij,
-stoel, sales type, status, via resale, een anonieme eigenaar en het ticket-id
-(`sales_item_id`).
+(`;`-gescheiden, UTF-8, opent direct in Excel) met **per stoel een regel**, net als de
+plattegrond: wedstrijd, datum, vak, rij, stoel, plattegrond, sales type, status, via
+resale, een anonieme eigenaar en het ticket-id (`sales_item_id`).
 
 - **Bron:** dezelfde stoelstatus als de wedstrijdpagina (`readEventSeats()`). Er gaat geen
   verzoek naar Ringside: die kan niet per wedstrijd filteren (de OpenAPI-spec kent bij elk
   endpoint alleen `cursor` en `limit`), dus de cron houdt de tickets per wedstrijd al bij.
+- **Plattegrond:** de status van de stoel met dezelfde functie en termen als de
+  plattegrond (`seatStatus()`): Vrij, Vrij via resale, Bezet, Doorverkocht via resale of
+  Geblokkeerd. Alle stoelen van de vakken op de plattegrond staan erin, ook vrije en
+  geblokkeerde (die hebben geen ticket; de ticketkolommen zijn dan leeg). Tickets in een
+  staanvak heten "Staanvak". `export.test.ts` controleert dat de export per stoel
+  hetzelfde zegt als de plattegrond.
 - **Sales type en Status** zijn `sale_type` en `resale_status` zoals Ringside ze levert,
   dus ook waarden die we nog niet gezien hebben (zoals `Requested`) komen erin. Sales type
   is `Sale`, `Reservation`, `Reservation Confirmation` of `Update - New`; Status is leeg,
@@ -105,8 +111,8 @@ stoel, sales type, status, via resale, een anonieme eigenaar en het ticket-id
   cron eenmalig een vijfde ronde door `/v1/sales` (`applySalesDetails()`,
   `detailsComplete`); tot die klaar is, volgen ze uit de vlaggen (`Reservation`, `Posted`).
 - **Via resale:** `ja` als het ticket via de resale gekocht is (`is_venue_resale`).
-  Een doorverkochte stoel staat er dus twee keer in: de verkoper met status
-  `Resold - Refunded` en de koper met via resale `ja`.
+  Een doorverkochte stoel heeft dus twee regels: de koper met via resale `ja` en daaronder
+  de verkoper met status `Resold - Refunded`.
 - **Doorverkochte kaarten** houden geen stoel bezet en staan daarom apart in de
   stoelstatus (`resold`, zie `applySalesRow()`), zodat de bezetting niet verandert. Voor
   kaarten die al vóór deze wijziging waren doorverkocht, doet de cron eenmalig een
