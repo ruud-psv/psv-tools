@@ -50,10 +50,14 @@ versie) en grijs komt nog.
      staat er een knop om de cache te legen.
    Of het vaste stukje code in Playable staat, kan PSV Tools niet zien: de API
    van Playable kijkt niet in het `html-element`.
-2. **Aanpassen**: de chat met Claude en het voorbeeld van het concept, op
-   Desktop (1920, 1440, 1280 px), Tablet (1024, 768) of Mobiel (430, 390,
-   360). Die breedtes vallen in de verschillende breekpunten van de Kit; een
-   breed scherm wordt verkleind getoond.
+2. **Aanpassen**: de chat met Claude en het voorbeeld van het concept. Het
+   voorbeeld staat standaard op **Passend**: zo breed als er naast de chat
+   ruimte is, op ware grootte; de hoogte volgt het scherm en het voorbeeld
+   blijft in beeld als je scrolt. Daarnaast vaste breedtes: Desktop (1920,
+   1440, 1280 px), Tablet (1024, 768) of Mobiel (430, 390, 360). Die vallen in
+   de verschillende breekpunten van de Kit; past een breedte niet, dan wordt
+   het voorbeeld verkleind getoond. **Groot scherm** legt het voorbeeld over
+   de hele pagina (Esc of Terug sluit het).
 3. **Publiceren**: het concept live zetten, met daarna meteen opnieuw de
    controle van Bunny.
 4. **Code**: de HTML, CSS en JS zelf, en het vaste stukje voor Playable.
@@ -77,6 +81,16 @@ code dat er precies één keer in staat, en wat ervoor in de plaats komt.
 - Naast de chat staat een **voorbeeld** van het concept, op desktop- en
   mobielbreedte, met dezelfde bundel die op Bunny komt. Zonder de opmaak van
   Playable zelf, dus kijk na het publiceren op de demo.
+- **Aanwijzen**: zet je het voorbeeld op Aanwijzen, dan krijgt wat onder de
+  muis zit een kader, en kies je met een klik een onderdeel. Links en knoppen
+  doen in die stand niets; Esc stopt. Boven het invoerveld staat dan wat je
+  koos, met de lagen erboven (bijvoorbeeld kop › blok › sectie) om een groter
+  stuk te kiezen. Bij je volgende vraag krijgt Claude het onderdeel mee: het
+  pad in de pagina, de tekst en de HTML zoals de browser hem toont (zie
+  `lib/playable-loader/selectie.ts`). Zo slaat "maak deze knop donker" op die
+  ene knop. De keuze blijft staan tot je hem weghaalt; na een wijziging zoekt
+  het voorbeeld hetzelfde onderdeel terug, en lukt dat niet zeker, dan
+  vervalt de keuze. Bij eerdere vragen gaat alleen het pad mee.
 - **Ongedaan maken** zet het concept terug naar voor de laatste wijziging.
 - Pas **Publiceren** zet het live.
 - Vraagt de collega iets wat niet kan of onduidelijk is, dan vraagt Claude door

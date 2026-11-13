@@ -72,11 +72,24 @@ test("leesAntwoord en codeBericht", () => {
   assert.ok(bericht.endsWith("Vraag van de collega:\nMaak de kop rood"));
 });
 
+test("codeBericht: het aangewezen onderdeel tussen de code en de vraag", () => {
+  const selectie = { pad: "div#psvk-app > h2.psvk-title", tekst: "Vooruitblik Boszie", html: '<h2 class="psvk-title">' };
+  const bericht = codeBericht(BRON, "Maak dit korter", selectie);
+  const code = bericht.indexOf("</pagina_js>");
+  const blok = bericht.indexOf("<aangewezen_element>");
+  const vraag = bericht.indexOf("Vraag van de collega:");
+  assert.ok(code < blok && blok < vraag);
+  assert.ok(bericht.includes("Pad in de pagina: div#psvk-app > h2.psvk-title"));
+  assert.ok(bericht.endsWith("Vraag van de collega:\nMaak dit korter"));
+  assert.ok(!codeBericht(BRON, "x", null).includes("<aangewezen_element>"));
+});
+
 test("systemPrompt: de regels en de naslag van de Kit zitten erin", () => {
   const prompt = systemPrompt();
   assert.ok(prompt.includes("## Uitgangspunten"));
   assert.ok(prompt.includes("psvk:ready"));
   assert.ok(prompt.includes("PSV CAMPAIGN KIT"));
+  assert.ok(prompt.includes("<aangewezen_element>"));
 });
 
 /** Een nagebootste Claude die de antwoorden in volgorde teruggeeft. */
@@ -134,6 +147,20 @@ test("vraagAanpassing: wijziging toegepast, code alleen in de laatste beurt", as
   assert.equal(verzoek.messages[0].content, "Hoi");
   assert.ok(String(verzoek.messages[2].content).includes("<pagina_html>"));
   assert.ok(!String(verzoek.messages[2].content).includes("PSV CAMPAIGN KIT"));
+});
+
+test("vraagAanpassing: het aangewezen onderdeel gaat mee in de laatste beurt", async () => {
+  const { client, verzoeken } = fakeClient([{ json: { antwoord: "Welke tekst wil je?", wijzigingen: [] } }]);
+  const resultaat = await vraagAanpassing({
+    client,
+    bron: BRON,
+    berichten: [{ rol: "gebruiker", tekst: "Pas deze kop aan" }],
+    selectie: { pad: "div#psvk-app > h2.psvk-title", tekst: "Vooruitblik Boszie", html: "" },
+  });
+  assert.equal(resultaat.bron, null);
+  const laatste = String(verzoeken[0].messages.at(-1)?.content);
+  assert.ok(laatste.includes("<aangewezen_element>"));
+  assert.ok(laatste.includes("Tekst erin: Vooruitblik Boszie"));
 });
 
 test("vraagAanpassing: past een wijziging niet, dan opnieuw met de fout erbij", async () => {

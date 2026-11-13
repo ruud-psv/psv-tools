@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { AssistentError, MODEL, vraagAanpassing, type Bericht } from "@/lib/playable-loader/assistent";
 import { MAX_FIELD_CHARS, parseCampaignId } from "@/lib/playable-loader/bundle";
+import { leesSelectie } from "@/lib/playable-loader/selectie";
 
 export const dynamic = "force-dynamic";
 // Claude doet er bij een grote pagina soms een minuut over, en probeert het
@@ -53,11 +54,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "De pagina is te groot." }, { status: 400 });
   }
 
+  // Het onderdeel dat de collega in het voorbeeld aanwees, bij de laatste vraag.
+  const selectie = leesSelectie(body?.selectie);
+
   try {
-    const resultaat = await vraagAanpassing({ berichten, bron });
+    const resultaat = await vraagAanpassing({ berichten, bron, selectie });
     console.info(
       `[playable-loader/chat] ${session.email}, campagne ${campaignId ?? "?"}, ${MODEL}: ` +
-        `${resultaat.wijzigingen.length} wijzigingen, tokens in ${resultaat.gebruik.input} ` +
+        `${resultaat.wijzigingen.length} wijzigingen${selectie ? " (aangewezen)" : ""}, tokens in ${resultaat.gebruik.input} ` +
         `(cache ${resultaat.gebruik.cacheRead}), uit ${resultaat.gebruik.output}`
     );
     return NextResponse.json({

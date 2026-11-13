@@ -9,10 +9,12 @@ import {
   ExternalLink,
   FolderOpen,
   Loader2,
+  MousePointerClick,
   RefreshCw,
   Send,
   Undo2,
   Upload,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +22,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlayableLoaderPreview } from "@/components/playable-loader-preview";
+import { PlayableLoaderPreview, type PreviewHandle } from "@/components/playable-loader-preview";
 import { StappenBalk, type Stap, type StapId } from "@/components/playable-loader-steps";
 import { zonderKit, type PageSource } from "@/lib/playable-loader/bundle";
 import type { PlayableCampaign } from "@/lib/playable-loader/playable";
+import { selectieNotitie, type Aanwijzing, type Selectie } from "@/lib/playable-loader/selectie";
 import type { BundleStatus } from "@/lib/playable-loader/status";
 import type { PublishedPage, RecentCampaign } from "@/lib/playable-loader/store";
 import { cn } from "@/lib/utils";
@@ -32,7 +35,8 @@ import { cn } from "@/lib/utils";
  * Playable loader (beta), in stappen zoals een flow in Maileon:
  * 1. Campagne: ID invullen of een recente kiezen; PSV Tools controleert of
  *    Playable de campagne kent en of Bunny de laatste versie geeft.
- * 2. Aanpassen: met Claude, naast een voorbeeld van het concept.
+ * 2. Aanpassen: met Claude, naast een voorbeeld van het concept. In het
+ *    voorbeeld kun je een onderdeel aanwijzen; dat gaat mee met de vraag.
  * 3. Publiceren: het concept live zetten.
  * 4. Code: de HTML, CSS en JS zelf, en het vaste stukje voor Playable.
  */
@@ -58,6 +62,8 @@ interface Wijziging {
 interface ChatBericht {
   rol: "gebruiker" | "assistent";
   tekst: string;
+  /** Het onderdeel dat bij deze vraag was aangewezen in het voorbeeld. */
+  selectie?: Selectie;
   wijzigingen?: Wijziging[];
   fout?: boolean;
 }
@@ -137,6 +143,59 @@ function WijzigingenLijst({ wijzigingen }: { wijzigingen: Wijziging[] }) {
         ))}
       </ul>
     </details>
+  );
+}
+
+/** Wat er in het voorbeeld is aangewezen, met de niveaus erboven om een groter blok te kiezen. */
+function AanwijzingChip({
+  aanwijzing,
+  onNiveau,
+  onWis,
+}: {
+  aanwijzing: Aanwijzing;
+  onNiveau: (niveau: number) => void;
+  onWis: () => void;
+}) {
+  return (
+    <div className="border border-primary bg-primary/5 px-3 py-2 text-xs">
+      <div className="flex items-start gap-2">
+        <MousePointerClick className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="font-heading uppercase tracking-wide text-primary">Aangewezen in het voorbeeld</p>
+          {aanwijzing.tekst && <p className="line-clamp-2 break-words">&ldquo;{aanwijzing.tekst}&rdquo;</p>}
+          <nav aria-label="Kies een groter of kleiner onderdeel" className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+            {aanwijzing.niveaus.map((n, i) => (
+              <span key={i} className="flex items-center gap-1">
+                {i > 0 && <span className="text-muted-foreground" aria-hidden="true">›</span>}
+                <button
+                  type="button"
+                  onClick={() => onNiveau(i)}
+                  aria-current={i === aanwijzing.niveau || undefined}
+                  title={n}
+                  className={cn(
+                    "max-w-[14rem] truncate font-mono transition-colors",
+                    i === aanwijzing.niveau
+                      ? "bg-primary px-1 text-primary-foreground"
+                      : "text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                  )}
+                >
+                  {n}
+                </button>
+              </span>
+            ))}
+          </nav>
+        </div>
+        <button
+          type="button"
+          onClick={onWis}
+          className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
+          aria-label="Aanwijzing weghalen"
+          title="Aanwijzing weghalen"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -236,7 +295,10 @@ export function PlayableLoader() {
   const [vraag, setVraag] = useState("");
   const [bezig, setBezig] = useState(false);
   const [geschiedenis, setGeschiedenis] = useState<PageSource[]>([]);
+  const [aanwijzing, setAanwijzing] = useState<Aanwijzing | null>(null);
   const chatEinde = useRef<HTMLDivElement>(null);
+  const voorbeeld = useRef<PreviewHandle>(null);
+  const vraagVeld = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     chatEinde.current?.scrollIntoView({ block: "nearest" });
@@ -275,6 +337,7 @@ export function PlayableLoader() {
       setSource(loaded.published?.source ?? loaded.starter);
       setChat([]);
       setGeschiedenis([]);
+      setAanwijzing(null);
       setStap("aanpassen");
       window.history.replaceState(null, "", `?campagne=${loaded.campaignId}`);
     } catch (err) {
@@ -288,7 +351,10 @@ export function PlayableLoader() {
 
   async function stuur(tekst: string) {
     if (!data || !tekst.trim() || bezig) return;
-    const nieuw: ChatBericht[] = [...chat, { rol: "gebruiker", tekst: tekst.trim() }];
+    const selectie: Selectie | undefined = aanwijzing
+      ? { pad: aanwijzing.pad, tekst: aanwijzing.tekst, html: aanwijzing.html }
+      : undefined;
+    const nieuw: ChatBericht[] = [...chat, { rol: "gebruiker", tekst: tekst.trim(), selectie }];
     setChat(nieuw);
     setVraag("");
     setBezig(true);
@@ -299,9 +365,17 @@ export function PlayableLoader() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             campaignId: data.campaignId,
-            // Foutmeldingen horen niet bij het gesprek met Claude.
-            berichten: nieuw.filter((b) => !b.fout).map(({ rol, tekst }) => ({ rol, tekst })),
+            // Foutmeldingen horen niet bij het gesprek met Claude. Bij eerdere
+            // vragen staat kort wat er toen was aangewezen; het hele onderdeel
+            // gaat alleen mee met de nieuwe vraag.
+            berichten: nieuw
+              .filter((b) => !b.fout)
+              .map(({ rol, tekst, selectie: s }, i, alle) => ({
+                rol,
+                tekst: s && i < alle.length - 1 ? `${tekst}\n\n${selectieNotitie(s)}` : tekst,
+              })),
             bron: source,
+            selectie: selectie ?? null,
           }),
         })
       );
@@ -315,6 +389,11 @@ export function PlayableLoader() {
     } finally {
       setBezig(false);
     }
+  }
+
+  function wisAanwijzing() {
+    voorbeeld.current?.wis();
+    setAanwijzing(null);
   }
 
   function ongedaan() {
@@ -445,7 +524,7 @@ export function PlayableLoader() {
 
       {/* ---------- 1. Campagne ---------- */}
       {stap === "campagne" && (
-        <Card className="p-6 space-y-6">
+        <Card className="max-w-5xl p-6 space-y-6">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -514,7 +593,7 @@ export function PlayableLoader() {
 
       {/* ---------- 2. Aanpassen ---------- */}
       {stap === "aanpassen" && data && (
-        <div className="grid gap-6 xl:grid-cols-[minmax(320px,2fr)_minmax(0,3fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] xl:items-start">
           <Card className="flex flex-col p-6">
             <h2 className="text-xl mb-1">Wat moet er anders?</h2>
             <p className="text-sm text-muted-foreground mb-4">
@@ -522,7 +601,10 @@ export function PlayableLoader() {
               live als je publiceert.
             </p>
 
-            <div className="flex-1 space-y-3 overflow-y-auto pr-1 xl:max-h-[560px]" aria-live="polite">
+            <div
+              className="flex-1 space-y-3 overflow-y-auto pr-1 xl:max-h-[max(16rem,calc(100svh_-_30rem))]"
+              aria-live="polite"
+            >
               {chat.length === 0 && (
                 <div className="space-y-2">
                   <p className="form-label">Bijvoorbeeld</p>
@@ -551,6 +633,12 @@ export function PlayableLoader() {
                   )}
                 >
                   {b.tekst}
+                  {b.selectie && (
+                    <span className="mt-1 flex items-center gap-1 text-xs opacity-80">
+                      <MousePointerClick className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate font-mono">{b.selectie.pad.split(" > ").pop()}</span>
+                    </span>
+                  )}
                   {b.wijzigingen && b.wijzigingen.length > 0 && <WijzigingenLijst wijzigingen={b.wijzigingen} />}
                 </div>
               ))}
@@ -570,7 +658,20 @@ export function PlayableLoader() {
                 stuur(vraag);
               }}
             >
+              {aanwijzing ? (
+                <AanwijzingChip
+                  aanwijzing={aanwijzing}
+                  onNiveau={(n) => voorbeeld.current?.kiesNiveau(n)}
+                  onWis={wisAanwijzing}
+                />
+              ) : (
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MousePointerClick className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Tip: met Aanwijzen klik je in het voorbeeld aan waar je vraag over gaat.
+                </p>
+              )}
               <Textarea
+                ref={vraagVeld}
                 value={vraag}
                 onChange={(e) => setVraag(e.target.value)}
                 onKeyDown={(e) => {
@@ -580,7 +681,11 @@ export function PlayableLoader() {
                   }
                 }}
                 rows={3}
-                placeholder="Bijvoorbeeld: zet de datum op zondag 15 november, 14.30 uur"
+                placeholder={
+                  aanwijzing
+                    ? "Bijvoorbeeld: maak deze tekst korter"
+                    : "Bijvoorbeeld: zet de datum op zondag 15 november, 14.30 uur"
+                }
                 disabled={bezig}
                 aria-label="Wat moet er anders?"
               />
@@ -615,15 +720,23 @@ export function PlayableLoader() {
             </div>
           </Card>
 
-          <Card className="p-6">
-            <PlayableLoaderPreview bron={source} />
+          <Card className="p-4 sm:p-6 xl:sticky xl:top-4">
+            <PlayableLoaderPreview
+              ref={voorbeeld}
+              bron={source}
+              aanwijzing={aanwijzing}
+              onAanwijzing={(a, klik) => {
+                setAanwijzing(a);
+                if (a && klik) vraagVeld.current?.focus({ preventScroll: true });
+              }}
+            />
           </Card>
         </div>
       )}
 
       {/* ---------- 3. Publiceren ---------- */}
       {stap === "publiceren" && data && (
-        <Card className="p-6 space-y-5">
+        <Card className="max-w-5xl p-6 space-y-5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl">Publiceren</h2>
@@ -684,7 +797,7 @@ export function PlayableLoader() {
 
       {/* ---------- 4. Code ---------- */}
       {stap === "code" && data && (
-        <Card className="p-6">
+        <Card className="max-w-7xl p-6">
           <Tabs defaultValue={published ? "code" : "playable"}>
             <TabsList>
               <TabsTrigger value="code">HTML, CSS en JS</TabsTrigger>

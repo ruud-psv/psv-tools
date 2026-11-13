@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { FRAMEWORK_CSS } from "./kit";
 import { KIT_ACHTERGRONDEN, KIT_COMPONENTEN, KIT_REGELS, KIT_VALKUILEN } from "./skill";
 import { PageSourceError, preparePage, zonderKit, type PageSource } from "./bundle";
+import { selectieTekst, type Selectie } from "./selectie";
 
 export { zonderKit };
 
@@ -122,6 +123,7 @@ Zo werk je:
 - Teksten op de pagina: Nederlands, tegenwoordige tijd, "je" en niet "u". PSV FANstore, Philips Stadion, seizoen als 2026-2027.
 - Beelden en links: gebruik alleen adressen die de collega geeft of die al in de code staan. Verzin geen adressen.
 - Voeg geen scripts van buiten, trackingcode, of formulieren die gegevens versturen toe. Zeg dat dat via het digital team loopt.
+- Staat er een <aangewezen_element> bij de vraag, dan heeft de collega dat onderdeel in het voorbeeld aangeklikt. Pas dat onderdeel aan (of wat er direct bij hoort), niet een ander stuk met dezelfde tekst. Gaat de vraag duidelijk over iets anders, volg dan de vraag.
 - Is de vraag onduidelijk, of mis je iets (een tekst, een beeldadres, een link), vraag het dan en geef geen wijzigingen.
 - Kan iets niet binnen de Kit of Playable, leg uit waarom en geef geen wijzigingen.
 
@@ -138,8 +140,10 @@ export function systemPrompt(): string {
   ].join("\n\n");
 }
 
-export function codeBericht(bron: PageSource, vraag: string): string {
-  return `<pagina_html>\n${bron.html}\n</pagina_html>\n\n<pagina_css>\n${bron.css}\n</pagina_css>\n\n<pagina_js>\n${bron.js}\n</pagina_js>\n\nVraag van de collega:\n${vraag}`;
+export function codeBericht(bron: PageSource, vraag: string, selectie?: Selectie | null): string {
+  const code = `<pagina_html>\n${bron.html}\n</pagina_html>\n\n<pagina_css>\n${bron.css}\n</pagina_css>\n\n<pagina_js>\n${bron.js}\n</pagina_js>`;
+  const aangewezen = selectie ? `\n\n${selectieTekst(selectie)}` : "";
+  return `${code}${aangewezen}\n\nVraag van de collega:\n${vraag}`;
 }
 
 /** Leest het JSON-antwoord; geeft null bij iets onbruikbaars. */
@@ -164,10 +168,12 @@ export function leesAntwoord(tekst: string): { antwoord: string; wijzigingen: Wi
 /**
  * Vraagt Claude om een aanpassing en voert die uit. `berichten` is het
  * gesprek tot nu toe; de laatste is de nieuwe vraag van de collega.
+ * `selectie` is het onderdeel dat de collega in het voorbeeld aanwees.
  */
 export async function vraagAanpassing(args: {
   berichten: Bericht[];
   bron: PageSource;
+  selectie?: Selectie | null;
   client?: Anthropic;
 }): Promise<AssistentAntwoord & { gebruik: { input: number; output: number; cacheRead: number } }> {
   const { berichten } = args;
@@ -185,7 +191,7 @@ export async function vraagAanpassing(args: {
     role: b.rol === "gebruiker" ? "user" : "assistant",
     content: b.tekst,
   }));
-  messages.push({ role: "user", content: codeBericht(bron, laatste.tekst) });
+  messages.push({ role: "user", content: codeBericht(bron, laatste.tekst, args.selectie) });
 
   const gebruik = { input: 0, output: 0, cacheRead: 0 };
 
