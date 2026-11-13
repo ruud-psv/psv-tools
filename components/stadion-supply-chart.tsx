@@ -11,14 +11,14 @@ import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupanc
  * vrije verkoop (vrije plaatsen) en de resale (door de houder aangeboden).
  *
  * Bovenaan het totaal met de verdeling in één balk, daaronder per vak een
- * gestapelde staaf. Het is de stand van nu; hoe het aanbod over de tijd
- * verloopt, volgt zodra de stand per uur wordt vastgelegd.
+ * gestapelde staaf. Het is de stand van nu; het verloop over de dagen staat in
+ * `stadion-supply-history-chart.tsx`, met dezelfde kleuren.
  *
  * Kleuren uit de PSV-tokens. Goud haalt tegen wit geen 3:1; daarom staan de
  * getallen er altijd bij (legenda, tooltip en tabel) en hangt niets aan kleur
  * alleen.
  */
-const SERIES = [
+export const SUPPLY_SERIES = [
   { key: "free", label: "Vrije verkoop", color: tokens.color.red.secondary },
   { key: "resale", label: "Resale", color: tokens.color.gold },
 ] as const;
@@ -34,7 +34,7 @@ interface Row {
 }
 
 /** Ronde stappen voor de as: 0, 50, 100, … tot net boven het hoogste vak. */
-function axisTicks(max: number): number[] {
+export function axisTicks(max: number): number[] {
   if (max <= 4) return Array.from({ length: Math.max(max, 1) + 1 }, (_, i) => i);
   const rough = max / 5;
   const magnitude = 10 ** Math.floor(Math.log10(rough));
@@ -54,7 +54,7 @@ function SupplyTooltip({ active, payload }: { active?: boolean; payload?: { payl
     <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <p className="font-heading uppercase tracking-wide">Vak {row.area}</p>
       <p className="mt-1 text-sm font-bold">{number.format(row.total)} te koop</p>
-      {SERIES.map((series) => (
+      {SUPPLY_SERIES.map((series) => (
         <p key={series.key} className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
           <span className="h-2 w-2 rounded-sm" style={{ background: series.color }} />
           {series.label}: <span className="text-foreground">{number.format(row[series.key])}</span>
@@ -95,14 +95,14 @@ export function StadionSupplyChart({ total, areas }: { total: Occupancy; areas: 
           role="img"
           aria-label={`Van de ${number.format(supply)} plaatsen te koop: ${number.format(total.free)} in de vrije verkoop en ${number.format(total.resale)} in de resale.`}
         >
-          {SERIES.map((series) =>
+          {SUPPLY_SERIES.map((series) =>
             total[series.key] > 0 ? (
               <div key={series.key} style={{ background: series.color, flexGrow: total[series.key] }} className="min-w-0.5 basis-0" />
             ) : null
           )}
         </div>
         <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-          {SERIES.map((series) => (
+          {SUPPLY_SERIES.map((series) => (
             <li key={series.key} className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-sm" style={{ background: series.color }} />
               {series.label}
@@ -139,7 +139,7 @@ export function StadionSupplyChart({ total, areas }: { total: Occupancy; areas: 
                 tickFormatter={(value: number) => number.format(value)}
               />
               <Tooltip cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.5 }} content={<SupplyTooltip />} />
-              {SERIES.map((series, index) => (
+              {SUPPLY_SERIES.map((series, index) => (
                 <Bar
                   key={series.key}
                   dataKey={series.key}
@@ -150,7 +150,7 @@ export function StadionSupplyChart({ total, areas }: { total: Occupancy; areas: 
                   // Een rand in de kleur van de kaart houdt de segmenten uit elkaar.
                   stroke="hsl(var(--card))"
                   strokeWidth={2}
-                  radius={index === SERIES.length - 1 ? [4, 4, 0, 0] : 0}
+                  radius={index === SUPPLY_SERIES.length - 1 ? [4, 4, 0, 0] : 0}
                   isAnimationActive={false}
                 />
               ))}

@@ -10,11 +10,13 @@
 
 import { put } from "@vercel/blob";
 import { readPrivateBlob } from "../blob/read";
-import type { EventStates } from "../ringside/seat-state";
+import { todayInAmsterdam, type EventStates } from "../ringside/seat-state";
 import { readEventSeats, type SeatIndex } from "../ringside/seat-store";
+import { emptySupplyHistory, recordSupply, type SupplyHistory } from "./supply-history";
 import { isPsvHomeMatch, summarizeMatch, type StadionMatch } from "./summary";
 
 const SUMMARY_PATH = "ticketing-stadion/summary.json";
+const SUPPLY_PATH = "ticketing-stadion/aanbod.json";
 
 export interface StadionSummary {
   generatedAt: string;
@@ -55,21 +57,68 @@ export function buildStadionSummary(events: EventStates): StadionSummary {
  * thuiswedstrijd van PSV 1 veranderd of verdwenen is. Gooit nooit: de
  * stoelstatus zelf is dan al veilig opgeslagen, en de volgende run probeert
  * het opnieuw.
+ *
+ * Geeft de samenvatting terug (nieuw of de opgeslagen), of `null` als dat
+ * mislukte.
  */
 export async function refreshStadionSummary(
   events: EventStates,
   changed: Set<string>,
   removed: string[]
-): Promise<void> {
+): Promise<StadionSummary | null> {
   try {
     const touched = [...changed, ...removed].some((eventId) => {
       const event = events.get(eventId);
       return !event || isPsvHomeMatch(event.name);
     });
-    if (!touched && (await readStadionSummary())) return;
-    await writeStadionSummary(buildStadionSummary(events));
+    if (!touched) {
+      const stored = await readStadionSummary();
+      if (stored) return stored;
+    }
+    const summary = buildStadionSummary(events);
+    await writeStadionSummary(summary);
+    return summary;
   } catch (error) {
     console.error("[ticketing-stadion] samenvatting bijwerken mislukt:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/* ---------- Aanbod per dag ---------- */
+
+/** Het aanbod per dag van alle thuiswedstrijden; leeg als het er (nog) niet is. */
+export async function readSupplyHistory(): Promise<SupplyHistory> {
+  const bytes = await readPrivateBlob(SUPPLY_PATH);
+  if (!bytes) return emptySupplyHistory();
+  try {
+    const parsed = JSON.parse(bytes.toString("utf8")) as Partial<SupplyHistory> | null;
+    return parsed?.matches && typeof parsed.matches === "object" ? { matches: parsed.matches } : emptySupplyHistory();
+  } catch {
+    console.error(`[ticketing-stadion] ${SUPPLY_PATH} niet te lezen.`);
+    throw new Error(`${SUPPLY_PATH} staat in de opslag maar is niet te lezen`);
+  }
+}
+
+/**
+ * Na een run van de stoelstatus: legt het aanbod van vandaag vast voor elke
+ * thuiswedstrijd in de samenvatting (zie `recordSupply()`). Schrijft alleen als
+ * er iets veranderd is. Gooit nooit, net als `refreshStadionSummary()`.
+ *
+ * Een bestand dat er wel is maar niet te lezen, wordt niet overschreven: dan
+ * zou de historie verloren gaan.
+ */
+export async function recordStadionSupply(summary: StadionSummary): Promise<void> {
+  try {
+    const { history, changed } = recordSupply(await readSupplyHistory(), Object.values(summary.matches), todayInAmsterdam());
+    if (!changed) return;
+    await put(SUPPLY_PATH, JSON.stringify(history), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+    });
+  } catch (error) {
+    console.error("[ticketing-stadion] aanbod per dag vastleggen mislukt:", error instanceof Error ? error.message : error);
   }
 }
 

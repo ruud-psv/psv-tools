@@ -106,6 +106,18 @@ export function matchContext(
     );
   }
 
+  const supply = (data.supply ?? []).filter((point) => point.free !== null && point.resale !== null);
+  if (supply.length) {
+    lines.push("");
+    lines.push("AANBOD PER DAG (stand aan het eind van de dag, vandaag = nu; alle vakken samen): datum: vrije verkoop + resale = totaal te koop");
+    lines.push(`Vastgelegd sinds ${supply[0].date}; eerdere dagen zijn niet bekend.`);
+    lines.push(
+      supply
+        .map((point) => `${point.date}: ${point.free} + ${point.resale} = ${(point.free ?? 0) + (point.resale ?? 0)}`)
+        .join(" | ")
+    );
+  }
+
   if (data.sales && match.eventDate) {
     lines.push("");
     lines.push("VERKOOP PER DAG (dagen voor de aftrap: aantal; 0 = wedstrijddag)");

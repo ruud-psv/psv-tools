@@ -13,7 +13,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
-import { RingsideMatchSales } from "@/components/ringside-match-sales";
+import { RingsideMatchSales, type MatchDetail } from "@/components/ringside-match-sales";
 import { StadionChat } from "@/components/stadion-chat";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +45,8 @@ interface MatchRow {
 
 interface Overview {
   matches: MatchRow[];
+  /** Gespeelde wedstrijden waarvan de eindstand per stoel bewaard is. */
+  archived?: string[];
   summaryAt: string;
   seats: {
     ready: boolean;
@@ -59,6 +61,45 @@ interface Overview {
 
 /** Vanaf deze bezetting heet een wedstrijd (bijna) uitverkocht. */
 const NEARLY_SOLD_OUT = 0.95;
+
+/**
+ * De exportknoppen bij een gekozen gespeelde wedstrijd. De verkoop per dag is
+ * er van elke wedstrijd; de export per stoel alleen als de eindstand bewaard is
+ * (of de wedstrijd nog komt).
+ */
+function PlayedMatchExports({ match, perSeat }: { match: MatchDetail; perSeat: boolean }) {
+  return (
+    <>
+      <a
+        href={`/api/ticketing-stadion/${match.productId}/export/verkoop`}
+        download
+        title="De verkoop per dag van deze wedstrijd als CSV: per dag losse verkoop, resale, seizoenkaarten en vrijkaarten"
+        className="btn btn--medium btn--outlined inline-flex items-center justify-center gap-2 whitespace-nowrap"
+      >
+        <Download className="h-4 w-4" />
+        Export verkoop per dag
+      </a>
+      {perSeat ? (
+        <a
+          href={`/api/ticketing-stadion/${match.productId}/export`}
+          download
+          title="Alle stoelen van deze wedstrijd als CSV, met de eindstand: vak, rij, stoel, status op de plattegrond en het ticket"
+          className="btn btn--medium btn--outlined inline-flex items-center justify-center gap-2 whitespace-nowrap"
+        >
+          <Download className="h-4 w-4" />
+          Export per stoel
+        </a>
+      ) : (
+        <span
+          className="text-xs text-muted-foreground max-w-[16rem]"
+          title="De stoelstatus houdt alleen komende wedstrijden bij. Vanaf 13 november 2026 wordt de eindstand van elke gespeelde thuiswedstrijd bewaard."
+        >
+          Geen export per stoel: de eindstand van deze wedstrijd is niet bewaard.
+        </span>
+      )}
+    </>
+  );
+}
 
 /** Het opengeklapte deel van een rij: alles wat niet in de kolommen past. */
 function MatchDetail({ match }: { match: MatchRow }) {
@@ -295,6 +336,7 @@ export function TicketingStadion() {
   }
 
   const { matches, seats, sales } = overview;
+  const seatExportIds = new Set([...matches.map((match) => match.eventId), ...(overview.archived ?? [])]);
   const next = matches[0];
   const soldLast7 = matches.reduce((sum, match) => sum + (match.pace?.last7Days ?? 0), 0);
   const free = matches.reduce((sum, match) => sum + match.total.free, 0);
@@ -392,10 +434,15 @@ export function TicketingStadion() {
           <h2 className="text-xl">Gespeelde wedstrijden vergelijken</h2>
           <p className="text-sm text-muted-foreground max-w-3xl">
             Zoek een eerdere thuiswedstrijd en zie de verkoop per dag tot de aftrap. Leg er tot drie andere naast, zoals
-            dezelfde tegenstander in een ander seizoen.
+            dezelfde tegenstander in een ander seizoen. Met de exportknoppen download je de gekozen wedstrijd als CSV.
           </p>
         </div>
-        <RingsideMatchSales onlyPsvHome />
+        <RingsideMatchSales
+          onlyPsvHome
+          renderActions={(match) => (
+            <PlayedMatchExports match={match} perSeat={seatExportIds.has(match.productId)} />
+          )}
+        />
       </section>
 
       {(seats.lastError || sales.lastError) && (

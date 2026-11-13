@@ -18,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StadiumOccupancyMap } from "@/components/stadium-occupancy-map";
 import { StadionChat } from "@/components/stadion-chat";
 import { StadionSupplyChart } from "@/components/stadion-supply-chart";
+import { StadionSupplyHistoryChart } from "@/components/stadion-supply-history-chart";
 import { StadionDailySalesChart, type DailySalesSeries } from "@/components/stadion-daily-sales-chart";
 import {
   daysLabel,
@@ -33,6 +34,7 @@ import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
 import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
 import type { ComparableMatch, Comparison, SalesPace } from "@/lib/ticketing-stadion/summary";
+import type { SupplyPoint } from "@/lib/ticketing-stadion/supply-history";
 
 interface MatchResponse {
   match: {
@@ -47,6 +49,7 @@ interface MatchResponse {
   seatMaps: SeatMaps;
   freeGroups: { total: FreeGroups; byArea: Record<string, FreeGroups> };
   sales: { perOffset: Record<string, number>; total: number; season: string } | null;
+  supply: SupplyPoint[];
   pace: SalesPace | null;
   comparison: Comparison;
   comparable: ComparableMatch[];
@@ -549,6 +552,19 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
             </p>
           </div>
           <StadionSupplyChart total={match.total} areas={match.areas} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div>
+            <h2 className="text-xl">Aanbod per dag</h2>
+            <p className="text-sm text-muted-foreground max-w-3xl">
+              Hetzelfde aanbod, maar dan opgeteld over alle vakken en per dag: hoeveel er aan het eind van de dag nog te
+              koop was in de vrije verkoop en in de resale.
+            </p>
+          </div>
+          <StadionSupplyHistoryChart points={data.supply ?? []} />
         </CardContent>
       </Card>
 

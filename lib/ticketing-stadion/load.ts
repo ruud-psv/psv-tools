@@ -10,9 +10,16 @@
 import { countFreeGroups } from "../aangrenzende-stoelen/neighbors";
 import { buildSeatMaps, type SeatMaps } from "../aangrenzende-stoelen/seat-map";
 import { todayInAmsterdam, toNeighborInput } from "../ringside/seat-state";
-import { isSeatIngestLocked, readEventSeats, readSeatIndex, readSeatState } from "../ringside/seat-store";
+import {
+  isSeatIngestLocked,
+  readEventSeats,
+  readSeatArchiveIndex,
+  readSeatIndex,
+  readSeatState,
+} from "../ringside/seat-store";
 import { readMatchSales, readState as readSalesState, type EventSales } from "../ringside/store";
-import { buildStadionSummaryFromIndex, readStadionSummary } from "./store";
+import { buildStadionSummaryFromIndex, readStadionSummary, readSupplyHistory } from "./store";
+import { emptySupplyHistory, supplySeries, type SupplyDays } from "./supply-history";
 import {
   comparableMatches,
   compareMatch,
@@ -27,11 +34,13 @@ import {
 export const EVENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export async function loadStadionOverview() {
-  const [seatState, salesState, sales, stored] = await Promise.all([
+  const [seatState, salesState, sales, stored, archive] = await Promise.all([
     readSeatState(),
     readSalesState(),
     readMatchSales(),
     readStadionSummary(),
+    // Alleen voor de exportknop bij gespeelde wedstrijden; een fout mag het overzicht niet breken.
+    readSeatArchiveIndex().catch(() => ({})),
   ]);
   const summary = stored ?? (await buildStadionSummaryFromIndex(await readSeatIndex()));
   const today = todayInAmsterdam();
@@ -57,6 +66,8 @@ export async function loadStadionOverview() {
 
   return {
     matches,
+    /** Gespeelde wedstrijden waarvan de eindstand per stoel bewaard is (voor de export). */
+    archived: Object.keys(archive),
     summaryAt: summary.generatedAt,
     seats: {
       ready: seatState.manifestsComplete && seatState.salesComplete,
@@ -78,16 +89,26 @@ export type StadionOverview = Awaited<ReturnType<typeof loadStadionOverview>>;
 
 /** Eén wedstrijd, of `null` als er geen stoelstatus van is (gespeeld, of onbekend). */
 export async function loadStadionMatch(eventId: string) {
-  const [event, seatState, salesState, sales] = await Promise.all([
+  const [event, seatState, salesState, sales, supplyHistory] = await Promise.all([
     readEventSeats(eventId),
     readSeatState(),
     readSalesState(),
     readMatchSales(),
+    // Een kapot bestand mag de pagina niet breken; dan alleen de stand van nu.
+    readSupplyHistory().catch(() => emptySupplyHistory()),
   ]);
   if (!event) return null;
 
   const match = summarizeMatch(event);
-  const daysOut = Math.max(daysUntil(match.eventDate, todayInAmsterdam()) ?? 0, 0);
+  const today = todayInAmsterdam();
+  const daysOut = Math.max(daysUntil(match.eventDate, today) ?? 0, 0);
+
+  // Vandaag is de stand van nu, net als de cijfers erboven; de cron legt hem
+  // pas na zijn volgende run vast.
+  const supplyDays: SupplyDays = {
+    ...supplyHistory.matches[eventId]?.days,
+    [today]: [match.total.free, match.total.resale],
+  };
 
   // Alle vakken op de plattegrond, ook die Aangrenzende stoelen uitsluit.
   const { seats, tickets } = toNeighborInput(event);
@@ -102,6 +123,7 @@ export async function loadStadionMatch(eventId: string) {
     seatMaps,
     freeGroups,
     sales: own ? { perOffset: own.perOffset, total: own.total, season: own.season } : null,
+    supply: supplySeries(supplyDays, match.eventDate),
     pace: own ? salesPace(own.perOffset, daysOut) : null,
     comparison: compareMatch(match, daysOut, sales),
     comparable: comparableMatches(sales, eventId, match.eventDate ?? own?.eventDate ?? ""),

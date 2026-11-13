@@ -79,6 +79,11 @@ function cell(value: string): string {
   return /[";\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
+/** Regels → CSV-tekst. De BOM laat Excel de tekst als UTF-8 lezen. */
+export function toCsv(lines: readonly (readonly string[])[]): string {
+  return "\uFEFF" + lines.map((line) => line.map(cell).join(";")).join("\r\n") + "\r\n";
+}
+
 function compare(a: string, b: string): number {
   return a.localeCompare(b, "nl", { numeric: true });
 }
@@ -177,12 +182,11 @@ export function buildSalesExport(event: EventSeatState): string {
     for (const ticket of place.tickets) lines.push([...seatCells, ...ticket]);
   }
 
-  // De BOM laat Excel de tekst als UTF-8 lezen.
-  return "﻿" + lines.map((line) => line.map(cell).join(";")).join("\r\n") + "\r\n";
+  return toCsv(lines);
 }
 
 /** `PSV - Ajax` op 28-11-2026 → `verkoop-psv-ajax-2026-11-28.csv`. */
-export function exportFileName(event: EventSeatState): string {
+export function exportFileName(event: Pick<EventSeatState, "name" | "eventDate">, prefix = "verkoop"): string {
   const slug = (event.name ?? "wedstrijd")
     .toLowerCase()
     .normalize("NFD")
@@ -190,5 +194,5 @@ export function exportFileName(event: EventSeatState): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   const day = (event.eventDate ?? "").slice(0, 10);
-  return `verkoop-${slug || "wedstrijd"}${day ? `-${day}` : ""}.csv`;
+  return `${prefix}-${slug || "wedstrijd"}${day ? `-${day}` : ""}.csv`;
 }

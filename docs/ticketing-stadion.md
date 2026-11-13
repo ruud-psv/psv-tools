@@ -70,8 +70,12 @@ opengeklapte rij van het overzicht.
   (`components/stadion-supply-chart.tsx`): vrije plaatsen in de vrije verkoop en kaarten
   die houders in de resale hebben aangeboden. Bovenaan het totaal met de verdeling,
   daaronder per vak (de dertig vakken met het meeste aanbod; de rest staat in de tabel).
-  Het is de stand van nu; het verloop over de tijd volgt uit de meting per uur (fase 2 in
-  [ticketing-verloop.md](ticketing-verloop.md)).
+  Het is de stand van nu; het verloop staat in "Aanbod per dag".
+- **Aanbod per dag:** hetzelfde aanbod, opgeteld over alle vakken, als gestapelde staaf per
+  dag: vrije verkoop en resale (`components/stadion-supply-history-chart.tsx`). Per dag de
+  stand aan het eind van de dag; vandaag is de stand van nu (de pagina zet de stand uit de
+  stoelstatus erbij, zodat de laatste staaf gelijk is aan de cijfers erboven). Een dag
+  zonder meting blijft leeg. Zie "Aanbod per dag vastleggen" hieronder.
 - **Verkoop per dag:** zonder seizoenkaarten en vrijkaarten (`readMatchSales()` in
   `lib/ringside/store.ts`), dus alleen losse verkoop en resale. Dat geldt ook
   voor het tempo, de vergelijking met eerder, de lijst met gespeelde wedstrijden en de
@@ -82,7 +86,23 @@ opengeklapte rij van het overzicht.
   dan krijgt die per dag een eigen staaf ernaast, op hetzelfde aantal dagen voor de aftrap.
   Dagen die nog moeten komen, blijven leeg.
 
-API: `GET /api/ticketing-stadion/<eventId>` leest één stoelenkaart en de verkoop per dag;
+### Aanbod per dag vastleggen
+
+De stoelstatus kent alleen de stand van nu, en wanneer een kaart in de resale is gezet,
+bewaart Ringside niet. Het verloop is dus niet terug te rekenen; de cron legt het vast
+vanaf 13 november 2026. Na elke run van de stoelstatus (elk kwartier) schrijft
+`recordStadionSupply()` in `lib/ticketing-stadion/store.ts` per thuiswedstrijd de stand
+van vandaag weg in `ticketing-stadion/aanbod.json` (Vercel Blob): per Nederlandse
+kalenderdag `[vrije verkoop, resale]`. De laatste meting van een dag blijft staan.
+
+- Alleen schrijven als er iets veranderd is; anders niets.
+- Een gespeelde wedstrijd krijgt geen nieuwe dag meer: de laatste dag is zijn eindstand.
+- Na 400 dagen na de wedstrijd ruimt de cron de wedstrijd op.
+- Een bestand dat er wel is maar niet te lezen, wordt niet overschreven.
+- Rekenwerk in `lib/ticketing-stadion/supply-history.ts` (getest). De chat krijgt het
+  aanbod per dag ook mee.
+
+API: `GET /api/ticketing-stadion/<eventId>` leest één stoelenkaart, het aanbod per dag en de verkoop per dag;
 `GET /api/ticketing-stadion/verkoop?ids=…` geeft de verkoop per dag van de gekozen
 eerdere wedstrijden. Geen van beide doet een verzoek naar Ringside.
 
@@ -124,10 +144,35 @@ resale, een anonieme eigenaar en het ticket-id (`sales_item_id`).
   `Reservation Cancellation`; die vallen bij het inlezen af) en de CRM ID. Die staat niet in `/v1/sales`, alleen via
   `own_client_guid` in `/v1/clients`, en de tool bewaart geen persoonsgegevens. De kolom
   "Eigenaar (anoniem)" is een hash: gelijke waarde is dezelfde eigenaar.
-- **Alleen komende wedstrijden;** een gespeelde wedstrijd staat niet meer in de stoelstatus.
+- **Gespeelde wedstrijden:** de stoelstatus ruimt een wedstrijd de dag na de wedstrijd op.
+  Voor een thuiswedstrijd van PSV 1 bewaart de cron dan eerst de eindstand in
+  `ringside/stoelen/archief/<eventId>.json.gz`, met een index in
+  `ringside/stoelen/archief/index.json` (`archiveEventSeats()` in
+  `lib/ringside/seat-store.ts`). Na de wedstrijddag komt er niets meer bij, dus dat is de
+  eindstand. Een eindstand wordt één keer bewaard en niet overschreven. Lukt het bewaren
+  niet, dan blijft het bestand van de stoelstatus staan. De export leest eerst de
+  stoelstatus en anders het archief (`readEventSeatsOrArchive()`). Dit werkt vanaf de
+  wedstrijden die na 13 november 2026 zijn opgeruimd; van eerdere wedstrijden is de
+  stoelstatus al weg.
 
 Code: `lib/ticketing-stadion/export.ts` (getest) en
 `app/api/ticketing-stadion/[eventId]/export/route.ts` (met login).
+
+## Export van gespeelde wedstrijden
+
+Onder "Gespeelde wedstrijden vergelijken" staan bij de gekozen wedstrijd twee knoppen:
+
+- **Export verkoop per dag**, voor elke wedstrijd in de verkoop per dag, ook van eerdere
+  seizoenen: per kalenderdag een regel met wedstrijd, datum, seizoen, dag, dagen tot de
+  wedstrijd, losse verkoop, resale, seizoenkaart, vrijkaart en totaal. Alleen de vakken op
+  de plattegrond, net als de grafieken; hier wel met seizoenkaarten en vrijkaarten als
+  eigen kolom. Code: `lib/ticketing-stadion/sales-export.ts` (getest) en
+  `app/api/ticketing-stadion/[eventId]/export/verkoop/route.ts` (met login). Leest de
+  verkoop per dag uit de opslag, geen verzoek naar Ringside.
+- **Export per stoel**, dezelfde export als bij de komende wedstrijden, met de eindstand.
+  Alleen als die bewaard is (zie hierboven); welke dat zijn, geeft het overzicht mee
+  (`archived` in `loadStadionOverview()`). Anders staat er dat de eindstand niet bewaard
+  is.
 
 ## Fase 4: Ticket Inzichten vervangen
 

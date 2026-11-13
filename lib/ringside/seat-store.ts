@@ -10,7 +10,9 @@
  *
  * - **de toestand van de ingest**: cursors, voortgang en het slot;
  * - **een index**: welke wedstrijden er zijn, met tellingen, zodat het overzicht
- *   niet elk groot bestand hoeft te openen.
+ *   niet elk groot bestand hoeft te openen;
+ * - **een archief**: de eindstand van gespeelde thuiswedstrijden van PSV 1,
+ *   voor de export van Ticketing Stadion. Zie `archiveEventSeats()`.
  */
 
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -21,9 +23,14 @@ import { summarizeEvent, type EventSeatState, type EventStates } from "./seat-st
 const PREFIX = "ringside/stoelen";
 const STATE_PATH = `${PREFIX}/state.json`;
 const INDEX_PATH = `${PREFIX}/index.json`;
+const ARCHIVE_INDEX_PATH = `${PREFIX}/archief/index.json`;
 
 function eventPath(eventId: string): string {
   return `${PREFIX}/events/${eventId}.json.gz`;
+}
+
+function archivePath(eventId: string): string {
+  return `${PREFIX}/archief/${eventId}.json.gz`;
 }
 
 export interface SeatIngestState {
@@ -231,4 +238,99 @@ export async function writeEventSeats(
   }
   await writeJson(INDEX_PATH, index);
   return index;
+}
+
+/* ---------- Archief ---------- */
+
+export interface SeatArchiveEntry {
+  eventId: string;
+  name: string | null;
+  eventDate: string | null;
+  archivedAt: string;
+}
+
+export type SeatArchiveIndex = Record<string, SeatArchiveEntry>;
+
+/** Welke gespeelde wedstrijden een eindstand in het archief hebben. */
+export async function readSeatArchiveIndex(): Promise<SeatArchiveIndex> {
+  return (await readJson<SeatArchiveIndex>(ARCHIVE_INDEX_PATH)) ?? {};
+}
+
+/** De eindstand van een gespeelde wedstrijd, of `null` als die niet bewaard is. */
+export async function readArchivedEventSeats(eventId: string): Promise<EventSeatState | null> {
+  const bytes = await readPrivateBlob(archivePath(eventId));
+  if (!bytes) return null;
+  try {
+    return JSON.parse(gunzipSync(bytes).toString("utf8")) as EventSeatState;
+  } catch {
+    console.error(`[ringside/stoelen] eindstand van ${eventId} niet te lezen.`);
+    return null;
+  }
+}
+
+/** De stoelstatus van een komende wedstrijd, of anders de eindstand uit het archief. */
+export async function readEventSeatsOrArchive(eventId: string): Promise<EventSeatState | null> {
+  return (await readEventSeats(eventId)) ?? (await readArchivedEventSeats(eventId));
+}
+
+/**
+ * Bewaart de eindstand van wedstrijden die voorbij zijn, vóórdat
+ * `writeEventSeats()` hun bestand opruimt. Na de wedstrijddag komt er niets
+ * meer bij (de ingest slaat regels van gespeelde wedstrijden over), dus de
+ * laatste stand is de eindstand.
+ *
+ * Geeft de wedstrijden terug waarvan het bewaren mislukte. Hun bestand moet
+ * blijven staan: dan vindt `readEventSeatsOrArchive()` het daar nog.
+ */
+export async function archiveEventSeats(events: EventSeatState[]): Promise<Set<string>> {
+  const failed = new Set<string>();
+  if (events.length === 0) return failed;
+
+  // Een eindstand wordt één keer bewaard. Duikt een gespeelde wedstrijd toch
+  // weer op (een losse regel uit de stroom), dan overschrijft die halve stand
+  // de echte eindstand niet.
+  let existing: SeatArchiveIndex;
+  try {
+    existing = await readSeatArchiveIndex();
+  } catch (error) {
+    console.error("[ringside/stoelen] archief-index niet te lezen:", error instanceof Error ? error.message : error);
+    for (const event of events) failed.add(event.eventId);
+    return failed;
+  }
+  const pending = events.filter((event) => !existing[event.eventId]);
+
+  const results = await Promise.allSettled(
+    pending.map((event) =>
+      put(archivePath(event.eventId), gzipSync(JSON.stringify(event)), {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/gzip",
+      })
+    )
+  );
+  const now = new Date().toISOString();
+  const added: SeatArchiveIndex = {};
+  results.forEach((result, i) => {
+    const event = pending[i];
+    if (result.status === "fulfilled") {
+      added[event.eventId] = { eventId: event.eventId, name: event.name, eventDate: event.eventDate, archivedAt: now };
+    } else {
+      failed.add(event.eventId);
+      console.error(
+        `[ringside/stoelen] eindstand van ${event.eventId} bewaren mislukt:`,
+        result.reason instanceof Error ? result.reason.message : result.reason
+      );
+    }
+  });
+
+  if (Object.keys(added).length) {
+    try {
+      await writeJson(ARCHIVE_INDEX_PATH, { ...existing, ...added });
+    } catch (error) {
+      // Het bestand zelf staat er; alleen de knop in het overzicht ontbreekt dan.
+      console.error("[ringside/stoelen] archief-index bijwerken mislukt:", error instanceof Error ? error.message : error);
+    }
+  }
+  return failed;
 }

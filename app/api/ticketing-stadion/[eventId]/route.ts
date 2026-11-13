@@ -4,8 +4,8 @@ import { EVENT_ID, loadStadionMatch } from "@/lib/ticketing-stadion/load";
 
 /**
  * Eén thuiswedstrijd voor Ticketing Stadion: bezetting per vak, de stoelen per
- * vak voor de plattegrond, groepjes vrije stoelen en de verkoop per dag. Zie
- * `loadStadionMatch()`.
+ * vak voor de plattegrond, groepjes vrije stoelen, het aanbod per dag en de
+ * verkoop per dag. Zie `loadStadionMatch()`.
  */
 
 export const dynamic = "force-dynamic";

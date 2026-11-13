@@ -10,7 +10,7 @@ soort ticket, voor [Ticketing Stadion](ticketing-stadion.md) en
 |---|---|---|
 | 0 | Meten in Ringside hoe resale en seizoenkaart te herkennen zijn | klaar (10 november 2026) |
 | 1 | Nieuwe ingest: verkoop per dag en per reeks, met terugwerkende kracht | gebouwd |
-| 2 | Lopende wedstrijden uit de stoelstatus, meting per uur, eindstand bevriezen | nog niet |
+| 2 | Lopende wedstrijden uit de stoelstatus, meting per uur, eindstand bevriezen | deels: aanbod per dag en de eindstand per stoel worden bewaard (zie [ticketing-stadion.md](ticketing-stadion.md)) |
 | 3 | Grafiek in Ticketing Stadion: vrije verkoop / resale, spreiding van eerdere wedstrijden, piekdagen | nog niet |
 | 4 | Dezelfde grafiek in Ticketing Herdgang | nog niet |
 | 5 | Opruimen: `.github/workflows/ticket-snapshot.yml` roept een route aan die niet meer bestaat | nog niet |

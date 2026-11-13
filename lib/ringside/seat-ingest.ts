@@ -14,7 +14,8 @@
 
 import { readFeed, type FeedResult } from "./feed";
 import { readKnownProducts } from "./store";
-import { refreshStadionSummary } from "../ticketing-stadion/store";
+import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
+import { recordStadionSupply, refreshStadionSummary } from "../ticketing-stadion/store";
 import {
   applyManifestCapacity,
   applyManifestRow,
@@ -26,11 +27,13 @@ import {
   localizeStoredEventDates,
   prunePastEvents,
   todayInAmsterdam,
+  type EventSeatState,
   type EventStates,
   type ManifestFeedRow,
   type SalesFeedRow,
 } from "./seat-state";
 import {
+  archiveEventSeats,
   isSeatIngestLocked,
   readAllEventSeats,
   readSeatIndex,
@@ -133,6 +136,7 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
   // Tijden die nog in UTC staan, eenmalig omzetten. Vóór de nieuwe rijen: die
   // komen al omgezet binnen.
   for (const eventId of localizeStoredEventDates(events)) changed.add(eventId);
+  const beforePrune = new Map(events);
   const removed = prunePastEvents(events, cutoff, productDates);
   const resets: string[] = [];
   const cursors = { manifests: state.manifestsCursor, sales: state.salesCursor };
@@ -258,9 +262,18 @@ export async function runSeatIngest(state: SeatIngestState, deadline: number): P
     }
   }
 
-  if (changed.size || removed.length) await writeEventSeats(events, changed, removed);
+  // De eindstand van gespeelde thuiswedstrijden bewaren voor de export van
+  // Ticketing Stadion. Lukt dat niet, dan blijft het bestand gewoon staan.
+  const archive = removed
+    .map((eventId) => beforePrune.get(eventId))
+    .filter((event): event is EventSeatState => event !== undefined && isPsvHomeMatch(event.name));
+  const notArchived = await archiveEventSeats(archive);
+  const toDelete = removed.filter((eventId) => !notArchived.has(eventId));
+
+  if (changed.size || removed.length) await writeEventSeats(events, changed, toDelete);
   // Ticketing Stadion leest een kleine samenvatting in plaats van de stoelenkaarten.
-  await refreshStadionSummary(events, changed, removed);
+  const summary = await refreshStadionSummary(events, changed, removed);
+  if (summary) await recordStadionSupply(summary);
 
   // Pas nu de data veilig staat, mag de voortgang mee.
   state.manifestsCursor = cursors.manifests;

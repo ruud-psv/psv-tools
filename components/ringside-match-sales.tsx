@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Search, Loader2, AlertTriangle, X, ArrowUpDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ interface MatchSummary {
   hasSales: boolean;
 }
 
-interface MatchDetail extends MatchSummary {
+export interface MatchDetail extends MatchSummary {
   perOffset: Record<string, number>;
 }
 
@@ -61,7 +61,14 @@ function soldWithin(perOffset: Record<string, number>, offset: number): number {
   return total;
 }
 
-export function RingsideMatchSales({ onlyPsvHome = false }: { onlyPsvHome?: boolean } = {}) {
+export function RingsideMatchSales({
+  onlyPsvHome = false,
+  renderActions,
+}: {
+  onlyPsvHome?: boolean;
+  /** Knoppen bij de gekozen wedstrijd, zoals de export in Ticketing Stadion. */
+  renderActions?: (match: MatchDetail) => ReactNode;
+} = {}) {
   const [matches, setMatches] = useState<MatchSummary[]>([]);
   const [status, setStatus] = useState<IngestStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -359,16 +366,19 @@ export function RingsideMatchSales({ onlyPsvHome = false }: { onlyPsvHome?: bool
                 <Stat label="Verkoopdagen" value={points.filter((p) => (p.sold ?? 0) > 0).length} />
               </div>
 
-              <div className="flex gap-2">
-                {(["perDag", "tempo"] as ComparisonMode[]).map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => setMode(option)}
-                    className={`btn btn--medium ${mode === option ? "" : "btn--outlined"}`}
-                  >
-                    {option === "perDag" ? "Per dag" : "Tempo"}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex gap-2">
+                  {(["perDag", "tempo"] as ComparisonMode[]).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setMode(option)}
+                      className={`btn btn--medium ${mode === option ? "" : "btn--outlined"}`}
+                    >
+                      {option === "perDag" ? "Per dag" : "Tempo"}
+                    </button>
+                  ))}
+                </div>
+                {renderActions && <div className="flex flex-wrap items-center gap-2">{renderActions(primary)}</div>}
               </div>
 
               <Card>
