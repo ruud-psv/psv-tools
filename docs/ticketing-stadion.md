@@ -307,3 +307,16 @@ Seizoensoverzicht en seizoenkaart tegenover losse verkoop (eerst nagaan met
 
 - Telt het bezoekersvak mee in de capaciteit? Nu wel, net als de sfeervakken en de
   rolstoelplaatsen.
+
+## Seizoensoverzicht
+
+`/dashboard/ticketing-stadion/seizoen` zet de vrije verkoop en de resale van alle
+thuiswedstrijden van PSV 1 in een seizoen naast elkaar: een staaf per wedstrijd, een tabel
+met het aandeel resale en een CSV (`/api/ticketing-stadion/seizoen?season=26/27&format=csv`).
+
+Er wordt niets extra uit Ringside gelezen: het is een optelling van de verkoop per dag die
+de ingest al per wedstrijd bewaart (`buildSeasonOverview()` in
+`lib/ticketing-stadion/season.ts`, zie [ticketing-verloop.md](ticketing-verloop.md)).
+Alleen de tribunevakken, zonder seizoenkaarten en vrijkaarten. Voor wedstrijden die nog
+gespeeld moeten worden geldt de bekende beperking van het verloop: een retour gaat er niet
+af en een gewijzigd ticket kan dubbel tellen.

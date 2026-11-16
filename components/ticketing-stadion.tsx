@@ -363,6 +363,12 @@ export function TicketingStadion() {
         </div>
       )}
 
+      <div className="flex justify-end">
+        <Link href="/dashboard/ticketing-stadion/seizoen" className="btn btn--medium btn--outlined inline-flex items-center gap-2">
+          Seizoensoverzicht: vrije verkoop en resale
+        </Link>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5">
