@@ -43,3 +43,47 @@ export function readShareToken(token: string | null | undefined): string | null 
     return null;
   }
 }
+
+/* ---------- Seizoensoverzicht ---------- */
+
+/** Wat een deellink naar het seizoensoverzicht vastlegt: het seizoen en de uitgezette wedstrijden. */
+export interface SeasonShare {
+  season: string;
+  exclude: string[];
+}
+
+const SEASON = /^\d{2}\/\d{2}$/;
+
+/** Eigen sleutel, zodat een token van een wedstrijd nooit als seizoenstoken geldt of andersom. */
+function signSeason(payload: string): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) throw new Error("SESSION_SECRET is niet geconfigureerd of te kort.");
+  const seasonKey = createHmac("sha256", Buffer.from(secret, "hex")).update("deellink:ticketing-stadion-seizoen").digest();
+  return createHmac("sha256", seasonKey).update(payload).digest("base64url");
+}
+
+export function isSeason(value: unknown): value is string {
+  return typeof value === "string" && SEASON.test(value);
+}
+
+export function createSeasonShareToken(share: SeasonShare): string {
+  const payload = Buffer.from(JSON.stringify({ s: share.season, x: share.exclude })).toString("base64url");
+  return `${payload}.${signSeason(payload)}`;
+}
+
+export function readSeasonShareToken(token: string | null | undefined): SeasonShare | null {
+  if (!token) return null;
+  const [payload, signature, ...rest] = token.split(".");
+  if (!payload || !signature || rest.length) return null;
+  try {
+    const expected = Buffer.from(signSeason(payload));
+    const actual = Buffer.from(signature);
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+    const { s, x } = JSON.parse(Buffer.from(payload, "base64url").toString()) as { s?: unknown; x?: unknown };
+    if (!isSeason(s)) return null;
+    const exclude = Array.isArray(x) ? x.filter((id): id is string => typeof id === "string" && EVENT_ID.test(id)) : [];
+    return { season: s, exclude };
+  } catch {
+    return null;
+  }
+}

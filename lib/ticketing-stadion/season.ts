@@ -71,7 +71,7 @@ export function buildSeasonOverview(sales: Iterable<EventSales>, season: string,
 }
 
 export function buildSeasonCsv(overview: SeasonOverview): string {
-  const lines = [["Wedstrijd", "Datum", "Gespeeld", "Vrije verkoop", "Resale", "Totaal", "Aandeel resale", "Seizoenkaarten", "Vrijkaarten"]];
+  const lines = [["Wedstrijd", "Datum", "Gespeeld", "Verkocht vrije verkoop", "Verkocht resale", "Totaal verkocht", "Aandeel resale", "Seizoenkaarten", "Vrijkaarten"]];
   for (const match of overview.matches) {
     const total = match.free + match.resale;
     lines.push([

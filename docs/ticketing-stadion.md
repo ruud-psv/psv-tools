@@ -324,3 +324,8 @@ af en een gewijzigd ticket kan dubbel tellen.
 Per wedstrijd staat in de tabel een vinkje: uitgevinkte wedstrijden tellen niet mee in de
 cijfers bovenaan, de grafiek, het totaal en de CSV. De keuze wordt per seizoen in de browser
 onthouden (`localStorage`), dus niet gedeeld met collega's.
+
+**Deel link** maakt een link naar `/share/stadion/seizoen?token=…`, te openen zonder login. Het
+ondertekende token (`createSeasonShareToken()`) legt het seizoen en de uitgezette wedstrijden
+vast; die zijn voor de ontvanger niet te zien. De link toont de cijfers van het moment van
+openen en verloopt niet. Het overzicht gaat over verkochte tickets, niet over het aanbod.

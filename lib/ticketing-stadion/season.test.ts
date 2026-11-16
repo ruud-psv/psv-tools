@@ -40,3 +40,15 @@ test("seizoensoverzicht als CSV", () => {
   const csv = buildSeasonCsv(buildSeasonOverview(SALES, "26/27", "2026-11-16"));
   assert.match(csv, /PSV - Ajax;2026-09-20;ja;150;30;180;16,7%;20000;0/);
 });
+
+test("deellink van het seizoen: ondertekend, met de uitgezette wedstrijden", async () => {
+  process.env.SESSION_SECRET = "ab".repeat(32);
+  const { createSeasonShareToken, readSeasonShareToken, createShareToken, readShareToken } = await import("./share");
+  const id = "11111111-1111-4111-8111-111111111111";
+  const token = createSeasonShareToken({ season: "26/27", exclude: [id] });
+  assert.deepEqual(readSeasonShareToken(token), { season: "26/27", exclude: [id] });
+  assert.equal(readSeasonShareToken(token.slice(0, -2) + "xx"), null);
+  // Een token van een wedstrijd geldt niet als seizoenstoken, en andersom.
+  assert.equal(readSeasonShareToken(createShareToken(id)), null);
+  assert.equal(readShareToken(token), null);
+});
