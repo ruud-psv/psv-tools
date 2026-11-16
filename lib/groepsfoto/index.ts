@@ -1,9 +1,10 @@
 /**
  * Groepsfoto Creator — gedeelde logica tussen de UI en de API-routes.
  *
- * De gebruiker uploadt een selfie, en een beeldmodel zet die persoon als extra
- * lid van de groep op een vaste sfeerfoto met PSV-spelers: een kerstkaart, een
- * huldiging, een andere groepssetting. De basisfoto's beheren we zelf; het
+ * De gebruiker uploadt een selfie, en een beeldmodel laat die persoon de plek
+ * innemen van precies één speler op een vaste sfeerfoto met PSV-spelers: een
+ * kerstkaart, een huldiging, een andere groepssetting. Het aantal mensen op de
+ * foto blijft dus gelijk. De basisfoto's beheren we zelf; het
  * model krijgt altijd twee beelden, in een vaste volgorde: eerst de basisfoto,
  * dan de selfie. De prompt leunt op die volgorde.
  */
@@ -26,9 +27,7 @@ export {
 
 /**
  * Modellen die een instructie plus meerdere beelden aannemen. Een model met
- * één beeldveld valt af: dat mist de basisfoto of de selfie. Face-swap-
- * modellen vallen ook af: die vervangen een speler in plaats van iemand toe
- * te voegen.
+ * één beeldveld valt af: dat mist de basisfoto of de selfie.
  */
 export const AANBEVOLEN_MODELLEN: Model[] = [
   {
@@ -92,7 +91,7 @@ export interface Basisfoto {
   gelegenheid: Gelegenheid;
   breedte: number;
   hoogte: number;
-  /** Engels of Nederlands: waar in de groep ruimte is voor een extra persoon. */
+  /** Engels of Nederlands: welke speler het best vervangen kan worden. */
   plaatsingshint?: string;
   /** Engels of Nederlands: wat de groep draagt, voor kleding "passend bij de foto". */
   kleding?: string;
@@ -122,28 +121,29 @@ export type Positie = "automatisch" | "links" | "midden" | "rechts" | "vooraan";
 export const POSITIES: Keuze<Positie>[] = [
   {
     waarde: "automatisch",
-    label: "Waar het het mooist past",
-    prompt: "wherever there is natural room in the group and it looks most natural",
+    label: "Wie het mooist past",
+    prompt:
+      "the one player whose position, pose and visibility make the swap look most natural",
   },
   {
     waarde: "links",
-    label: "Links in de groep",
-    prompt: "at the left end of the group, next to the leftmost player",
+    label: "De speler helemaal links",
+    prompt: "the leftmost player in the group",
   },
   {
     waarde: "midden",
-    label: "In het midden",
-    prompt: "in the middle of the group, between the players, slightly behind them if needed",
+    label: "De speler in het midden",
+    prompt: "the player closest to the centre of the group",
   },
   {
     waarde: "rechts",
-    label: "Rechts in de groep",
-    prompt: "at the right end of the group, next to the rightmost player",
+    label: "De speler helemaal rechts",
+    prompt: "the rightmost player in the group",
   },
   {
     waarde: "vooraan",
-    label: "Vooraan",
-    prompt: "in front of the group, crouching or sitting so that no player is hidden",
+    label: "De speler vooraan",
+    prompt: "the player who is most in the foreground, closest to the camera",
   },
 ];
 
@@ -152,8 +152,8 @@ export type Kleding = "passend" | "eigen" | "shirt";
 export const KLEDING: Keuze<Kleding>[] = [
   {
     waarde: "passend",
-    label: "Passend bij de foto",
-    prompt: "dressed in the same style of clothing as the players in the first image",
+    label: "Kleding van de vervangen speler",
+    prompt: "wearing exactly the outfit the replaced player wears in the first image",
   },
   {
     waarde: "eigen",
@@ -194,27 +194,36 @@ function zin(tekst: string): string {
 
 /**
  * Zet de instellingen om in één prompt. De opbouw ligt vast, van breed naar
- * specifiek: de opdracht, de identiteit van de toegevoegde persoon, waar hij
- * staat, wat hij draagt, het samensmelten met de foto, en als laatste de harde
- * eisen (die wegen achteraan het zwaarst).
+ * specifiek: de opdracht (één speler vervangen), wie er vervangen wordt, de
+ * identiteit van de nieuwe persoon, wat hij draagt, het samensmelten met de
+ * foto, en als laatste de harde eisen (die wegen achteraan het zwaarst).
+ *
+ * De prompt zegt nergens "add": zodra het model iemand mag toevoegen, zet het
+ * de selfie ernaast in plaats van op de plek van een speler. Daarom staat het
+ * gelijkblijvende aantal mensen er twee keer in.
  *
  * De spelers worden bewust niet bij naam genoemd: het model hoeft niet te
- * weten wie het zijn, alleen dat het ze niet mag veranderen.
+ * weten wie het zijn, alleen dat het de anderen niet mag veranderen.
  */
 export function bouwPrompt(input: PromptInput): string {
   const delen: string[] = [];
 
   delen.push(
-    "Edit the first image, a festive group photo of football players. Add the person from the second image into the photo as one extra member of the group, as if they posed together with the players in the same moment."
-  );
-
-  delen.push(
-    "Keep the added person's identity exactly as in the second image: the same face, facial features, skin tone, hair, facial hair, glasses if any, and apparent age. They must be clearly recognisable as the same person. Show them with a natural, friendly expression that fits the photo."
+    "Edit the first image, a festive group photo of football players. Replace exactly one of the players with the person from the second image, so that this person takes that player's place in the group. Do not add anyone: the photo must show the same number of people as before."
   );
 
   const positie = vindPositie(input.positie) ?? POSITIES[0];
-  delen.push(`Place them ${positie.prompt}.`);
-  if (input.plaatsingshint?.trim()) delen.push(zin(`Placement note: ${input.plaatsingshint}`));
+  delen.push(`The player to replace is ${positie.prompt}.`);
+  if (input.plaatsingshint?.trim()) {
+    delen.push(zin(`Note about which player to replace: ${input.plaatsingshint}`));
+  }
+  delen.push(
+    "The new person stands in exactly the same spot, with the same pose, body position and size in the frame as the replaced player. The replaced player must be completely gone, with no trace or duplicate of them left anywhere in the image."
+  );
+
+  delen.push(
+    "Keep the new person's identity exactly as in the second image: the same face, facial features, skin tone, hair, facial hair, glasses if any, and apparent age. They must be clearly recognisable as the same person, not a blend with the replaced player. Show them with a natural, friendly expression that fits the photo."
+  );
 
   const kleding = vindKleding(input.kleding) ?? KLEDING[0];
   if (kleding.waarde === "passend" && input.groepskleding?.trim()) {
@@ -230,7 +239,7 @@ export function bouwPrompt(input: PromptInput): string {
   if (input.extra?.trim()) delen.push(zin(`Additional wishes: ${input.extra}`));
 
   delen.push(
-    "Hard requirements: do not change the players in any way — keep their faces, expressions, poses, clothing and the number of people exactly as in the first image. Do not change the background, the setting or the decorations. Keep the original framing and aspect ratio of the first image. Photorealistic result, no illustration style. Add exactly one person. No text, no logos, no watermarks."
+    "Hard requirements: replace exactly one player and no more. Do not change any of the other players in any way — keep their faces, expressions, poses, clothing and positions exactly as in the first image. The total number of people stays exactly the same as in the first image: nobody is added and nobody is removed. Do not change the background, the setting or the decorations. Keep the original framing and aspect ratio of the first image. Photorealistic result, no illustration style. No text, no logos, no watermarks."
   );
 
   return delen.join(" ");

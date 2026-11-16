@@ -574,7 +574,7 @@ export function GroepsfotoCreator() {
             )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            De groepsfoto met spelers waar jij in komt. De bibliotheek is gedeeld: wat jij
+            De groepsfoto met spelers waarop jij de plek van één speler inneemt. De bibliotheek is gedeeld: wat jij
             toevoegt, ziet iedereen.
           </p>
           <input
@@ -648,11 +648,11 @@ export function GroepsfotoCreator() {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="foto-hint">Waar is ruimte in de groep? (optioneel)</Label>
+                <Label htmlFor="foto-hint">Welke speler kan het best vervangen worden? (optioneel)</Label>
                 <Input
                   id="foto-hint"
                   maxLength={200}
-                  placeholder="there is a gap between the second and third player from the left"
+                  placeholder="the second player from the left, he stands fully visible"
                   value={nieuweFoto.plaatsingshint}
                   onChange={(e) => setNieuweFoto({ ...nieuweFoto, plaatsingshint: e.target.value })}
                 />
@@ -745,7 +745,7 @@ export function GroepsfotoCreator() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="bewerk-hint">Waar is ruimte in de groep?</Label>
+                    <Label htmlFor="bewerk-hint">Welke speler kan het best vervangen worden?</Label>
                     <Input
                       id="bewerk-hint"
                       maxLength={200}
@@ -765,7 +765,7 @@ export function GroepsfotoCreator() {
               ) : (
                 <>
                   {gekozenFoto.kleding && <p>Kleding: {gekozenFoto.kleding}</p>}
-                  {gekozenFoto.plaatsingshint && <p>Ruimte: {gekozenFoto.plaatsingshint}</p>}
+                  {gekozenFoto.plaatsingshint && <p>Vervangen: {gekozenFoto.plaatsingshint}</p>}
                   <div className="flex flex-wrap gap-3">
                     <button
                       type="button"
@@ -799,7 +799,7 @@ export function GroepsfotoCreator() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="positie">Waar sta je?</Label>
+              <Label htmlFor="positie">Wie vervang je?</Label>
               <Select value={positie} onValueChange={(v) => setPositie(v as Positie)}>
                 <SelectTrigger id="positie">
                   <SelectValue />

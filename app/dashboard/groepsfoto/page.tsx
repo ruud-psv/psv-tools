@@ -14,7 +14,7 @@ export default function GroepsfotoPage() {
       <div className="mb-6">
         <h1 className="text-3xl tracking-tight">Groepsfoto Creator</h1>
         <p className="mt-1 text-muted-foreground">
-          Zet jezelf op de foto met de spelers, voor een kerstkaart of een andere groepsfoto.
+          Neem de plek in van één speler op de foto, voor een kerstkaart of een andere groepsfoto.
           Upload een selfie, kies een foto en download het resultaat als PNG.
         </p>
       </div>
