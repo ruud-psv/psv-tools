@@ -11,7 +11,7 @@ import { buildSeasonCsv, buildSeasonOverview } from "@/lib/ticketing-stadion/sea
  * `lib/ticketing-stadion/season.ts`.
  *
  * `?season=26/27` kiest het seizoen (standaard het lopende), `?format=csv`
- * geeft het als bestand.
+ * geeft het als bestand; `&exclude=<id>,<id>` laat wedstrijden uit de CSV.
  */
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,9 @@ export async function GET(req: NextRequest) {
     const overview = buildSeasonOverview(Object.values(sales), season, today);
 
     if (req.nextUrl.searchParams.get("format") === "csv") {
-      return new NextResponse(buildSeasonCsv(overview), {
+      const exclude = new Set((req.nextUrl.searchParams.get("exclude") ?? "").toLowerCase().split(",").filter(Boolean));
+      const chosen = { ...overview, matches: overview.matches.filter((match) => !exclude.has(match.eventId)) };
+      return new NextResponse(buildSeasonCsv(chosen), {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
           "Content-Disposition": `attachment; filename="verkoop-thuiswedstrijden-${season.replace("/", "-")}.csv"`,

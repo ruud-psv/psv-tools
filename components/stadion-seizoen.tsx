@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, ArrowLeft, Download, Loader2 } from "lucide-react";
@@ -19,6 +19,10 @@ import type { SeasonMatch, SeasonOverview } from "@/lib/ticketing-stadion/season
 type Payload = SeasonOverview & { sales: { complete: boolean; caughtUpAt: string | null; lastError: string | null } };
 
 const AXIS_TICK = { fontSize: 10, fill: "hsl(var(--muted-foreground))" };
+
+function storageKey(season: string): string {
+  return `stadion-seizoen-uit:${season}`;
+}
 
 function dateLabel(eventDate: string, options: Intl.DateTimeFormatOptions): string {
   const parsed = new Date(`${eventDate.slice(0, 10)}T12:00:00Z`);
@@ -106,13 +110,36 @@ function SeasonChart({ matches }: { matches: SeasonMatch[] }) {
   );
 }
 
-function SeasonTable({ matches, totals }: { matches: SeasonMatch[]; totals: SeasonOverview["totals"] }) {
+function SeasonTable({
+  matches,
+  totals,
+  excluded,
+  onToggle,
+  onToggleAll,
+}: {
+  matches: SeasonMatch[];
+  totals: SeasonOverview["totals"];
+  excluded: ReadonlySet<string>;
+  onToggle: (eventId: string) => void;
+  onToggleAll: (include: boolean) => void;
+}) {
   const highest = Math.max(1, ...matches.map((match) => match.free + match.resale));
+  const allIncluded = matches.every((match) => !excluded.has(match.eventId));
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] text-sm">
         <thead>
           <tr className="text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
+            <th className="w-8 py-2 font-normal">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-psv-red-primary"
+                checked={allIncluded}
+                onChange={(event) => onToggleAll(event.target.checked)}
+                aria-label="Alle wedstrijden meetellen"
+                title="Alle wedstrijden meetellen"
+              />
+            </th>
             <th className="py-2 font-normal">Wedstrijd</th>
             <th className="py-2 font-normal">Datum</th>
             <th className="py-2 text-right font-normal">Vrije verkoop</th>
@@ -125,8 +152,18 @@ function SeasonTable({ matches, totals }: { matches: SeasonMatch[]; totals: Seas
         <tbody>
           {matches.map((match) => {
             const total = match.free + match.resale;
+            const included = !excluded.has(match.eventId);
             return (
-              <tr key={match.eventId} className="border-t border-border">
+              <tr key={match.eventId} className={`border-t border-border ${included ? "" : "opacity-50"}`}>
+                <td className="py-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-psv-red-primary"
+                    checked={included}
+                    onChange={() => onToggle(match.eventId)}
+                    aria-label={`${match.name} meetellen in het overzicht`}
+                  />
+                </td>
                 <td className="py-2">
                   <Link href={`/dashboard/ticketing-stadion/${match.eventId}`} className="font-medium hover:underline">
                     {match.name}
@@ -153,8 +190,8 @@ function SeasonTable({ matches, totals }: { matches: SeasonMatch[]; totals: Seas
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-border font-medium">
-            <td className="py-2 font-heading uppercase tracking-wide" colSpan={2}>
-              Totaal
+            <td className="py-2 font-heading uppercase tracking-wide" colSpan={3}>
+              Totaal{totals.matches < matches.length ? ` (${totals.matches} van ${matches.length} wedstrijden)` : ""}
             </td>
             <td className="py-2 text-right tabular-nums">{number.format(totals.free)}</td>
             <td className="py-2 text-right tabular-nums">{number.format(totals.resale)}</td>
@@ -172,6 +209,37 @@ export function StadionSeizoen() {
   const [season, setSeason] = useState<string | null>(null);
   const [payload, setPayload] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Wedstrijden die niet meetellen in de cijfers en de grafiek. Per seizoen
+  // onthouden in deze browser.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+  const shownSeason = payload?.season ?? null;
+
+  useEffect(() => {
+    if (!shownSeason) return;
+    let stored: string[] = [];
+    try {
+      const raw = JSON.parse(localStorage.getItem(storageKey(shownSeason)) ?? "[]");
+      if (Array.isArray(raw)) stored = raw.filter((id): id is string => typeof id === "string");
+    } catch {
+      // Geen opslag of onleesbaar: dan telt alles mee.
+    }
+    setExcluded(new Set(stored));
+  }, [shownSeason]);
+
+  const updateExcluded = useCallback(
+    (next: Set<string>) => {
+      setExcluded(next);
+      if (!shownSeason) return;
+      try {
+        localStorage.setItem(storageKey(shownSeason), JSON.stringify([...next]));
+      } catch {
+        // Niet te bewaren; de keuze geldt dan tot de pagina sluit.
+      }
+    },
+    [shownSeason]
+  );
+
+  const included = useMemo(() => (payload?.matches ?? []).filter((match) => !excluded.has(match.eventId)), [payload, excluded]);
 
   const load = useCallback(async (wanted: string | null) => {
     try {
@@ -219,7 +287,15 @@ export function StadionSeizoen() {
     );
   }
 
-  const { matches, totals, seasons, sales } = payload;
+  const { matches: allMatches, seasons, sales } = payload;
+  const matches = included;
+  const totals = {
+    matches: matches.length,
+    played: matches.filter((match) => match.played).length,
+    free: matches.reduce((sum, match) => sum + match.free, 0),
+    resale: matches.reduce((sum, match) => sum + match.resale, 0),
+  };
+  const left = allMatches.filter((match) => excluded.has(match.eventId));
   const total = totals.free + totals.resale;
   const withSales = matches.filter((match) => match.free + match.resale > 0);
   const topResale = withSales.reduce<SeasonMatch | null>(
@@ -257,7 +333,7 @@ export function StadionSeizoen() {
             </div>
           )}
           <a
-            href={`/api/ticketing-stadion/seizoen?season=${encodeURIComponent(payload.season)}&format=csv`}
+            href={`/api/ticketing-stadion/seizoen?season=${encodeURIComponent(payload.season)}&format=csv${left.length ? `&exclude=${left.map((match) => match.eventId).join(",")}` : ""}`}
             className="btn btn--medium btn--outlined inline-flex items-center gap-2"
           >
             <Download className="h-4 w-4" />
@@ -272,7 +348,7 @@ export function StadionSeizoen() {
         </div>
       )}
 
-      {matches.length === 0 ? (
+      {allMatches.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">Er staan geen thuiswedstrijden van dit seizoen in de verkoop per dag.</CardContent>
         </Card>
@@ -281,17 +357,21 @@ export function StadionSeizoen() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Card>
               <CardContent className="p-5">
-                <Stat label="Thuiswedstrijden" value={number.format(totals.matches)} hint={`${totals.played} gespeeld, ${upcoming} nog te spelen`} />
+                <Stat
+                  label="Thuiswedstrijden"
+                  value={number.format(totals.matches)}
+                  hint={`${totals.played} gespeeld, ${upcoming} nog te spelen${left.length ? `; ${left.length} uitgezet` : ""}`}
+                />
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-5">
-                <Stat label="Vrije verkoop" value={number.format(totals.free)} hint={`gemiddeld ${number.format(Math.round(totals.free / totals.matches))} per wedstrijd`} />
+                <Stat label="Vrije verkoop" value={number.format(totals.free)} hint={totals.matches ? `gemiddeld ${number.format(Math.round(totals.free / totals.matches))} per wedstrijd` : undefined} />
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-5">
-                <Stat label="Resale" value={number.format(totals.resale)} hint={`gemiddeld ${number.format(Math.round(totals.resale / totals.matches))} per wedstrijd`} />
+                <Stat label="Resale" value={number.format(totals.resale)} hint={totals.matches ? `gemiddeld ${number.format(Math.round(totals.resale / totals.matches))} per wedstrijd` : undefined} />
               </CardContent>
             </Card>
             <Card>
@@ -310,10 +390,25 @@ export function StadionSeizoen() {
               <CardTitle>Per wedstrijd</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <SeasonChart matches={matches} />
-              <SeasonTable matches={matches} totals={totals} />
+              {matches.length > 0 ? (
+                <SeasonChart matches={matches} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Alle wedstrijden staan uit. Vink er hieronder een aan.</p>
+              )}
+              <SeasonTable
+                matches={allMatches}
+                totals={totals}
+                excluded={excluded}
+                onToggle={(eventId) => {
+                  const next = new Set(excluded);
+                  if (!next.delete(eventId)) next.add(eventId);
+                  updateExcluded(next);
+                }}
+                onToggleAll={(include) => updateExcluded(include ? new Set() : new Set(allMatches.map((match) => match.eventId)))}
+              />
               <p className="text-xs text-muted-foreground">
-                Verkochte tickets in de tribunevakken, zonder seizoenkaarten, vrijkaarten en parkeren. Resale is wat via de resale gekocht is; een
+                Met het vinkje bepaal je of een wedstrijd meetelt in de cijfers, de grafiek, het totaal en de CSV; de keuze wordt in deze browser
+                onthouden. Verkochte tickets in de tribunevakken, zonder seizoenkaarten, vrijkaarten en parkeren. Resale is wat via de resale gekocht is; een
                 doorverkocht ticket telt alleen daar. {upcoming > 0 && "Bij wedstrijden die nog gespeeld moeten worden is het de stand tot nu toe; die kan iets te hoog zijn, omdat een retour er nog niet af gaat en een gewijzigd ticket dubbel kan tellen. "}
                 {sales.caughtUpAt && `Bijgewerkt tot ${formatDateTime(sales.caughtUpAt)}.`}
               </p>

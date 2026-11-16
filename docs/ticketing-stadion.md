@@ -320,3 +320,7 @@ de ingest al per wedstrijd bewaart (`buildSeasonOverview()` in
 Alleen de tribunevakken, zonder seizoenkaarten en vrijkaarten. Voor wedstrijden die nog
 gespeeld moeten worden geldt de bekende beperking van het verloop: een retour gaat er niet
 af en een gewijzigd ticket kan dubbel tellen.
+
+Per wedstrijd staat in de tabel een vinkje: uitgevinkte wedstrijden tellen niet mee in de
+cijfers bovenaan, de grafiek, het totaal en de CSV. De keuze wordt per seizoen in de browser
+onthouden (`localStorage`), dus niet gedeeld met collega's.
