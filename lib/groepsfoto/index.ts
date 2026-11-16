@@ -153,17 +153,19 @@ export const KLEDING: Keuze<Kleding>[] = [
   {
     waarde: "passend",
     label: "Kleding van de vervangen speler",
-    prompt: "wearing exactly the outfit the replaced player wears in the first image",
+    prompt: "Their clothing stays exactly as it is in the first image",
   },
   {
     waarde: "eigen",
     label: "Eigen kleding van de selfie",
-    prompt: "wearing their own clothes from the second image",
+    prompt:
+      "Change this one player's clothing to the clothes the person wears in the second image; nobody else's clothing changes",
   },
   {
     waarde: "shirt",
     label: "PSV-thuisshirt",
-    prompt: "wearing the red and white PSV Eindhoven home shirt",
+    prompt:
+      "Change this one player's top to the red and white PSV Eindhoven home shirt; nobody else's clothing changes",
   },
 ];
 
@@ -193,53 +195,60 @@ function zin(tekst: string): string {
 }
 
 /**
- * Zet de instellingen om in één prompt. De opbouw ligt vast, van breed naar
- * specifiek: de opdracht (één speler vervangen), wie er vervangen wordt, de
- * identiteit van de nieuwe persoon, wat hij draagt, het samensmelten met de
- * foto, en als laatste de harde eisen (die wegen achteraan het zwaarst).
+ * Zet de instellingen om in één prompt. Het uitgangspunt is een zo klein
+ * mogelijke bewerking: van precies één speler verandert alleen het hoofd (en
+ * de huidskleur), al het andere op de foto blijft zoals het is. Hoe minder het
+ * model opnieuw mag tekenen, hoe minder er verschuift aan de andere spelers,
+ * de kleding en de achtergrond.
  *
- * De prompt zegt nergens "add": zodra het model iemand mag toevoegen, zet het
- * de selfie ernaast in plaats van op de plek van een speler. Daarom staat het
- * gelijkblijvende aantal mensen er twee keer in.
+ * De opbouw ligt vast: de opdracht, wie er vervangen wordt, wat er aan die ene
+ * speler verandert en wat niet, het samensmelten, en als laatste de harde
+ * eisen (die wegen achteraan het zwaarst).
  *
- * De spelers worden bewust niet bij naam genoemd: het model hoeft niet te
- * weten wie het zijn, alleen dat het de anderen niet mag veranderen.
+ * Twee dingen staan er bewust niet in. "Add": zodra het model iemand mag
+ * toevoegen, zet het de selfie ernaast in plaats van op de plek van een
+ * speler. En "no text, no logos": dan poetst het model ook de sponsors en het
+ * clublogo van de shirts.
+ *
+ * De spelers worden niet bij naam genoemd: het model hoeft niet te weten wie
+ * het zijn, alleen dat het de anderen niet mag veranderen.
  */
 export function bouwPrompt(input: PromptInput): string {
   const delen: string[] = [];
 
   delen.push(
-    "Edit the first image, a festive group photo of football players. Replace exactly one of the players with the person from the second image, so that this person takes that player's place in the group. Do not add anyone: the photo must show the same number of people as before."
+    "Make one small, local edit to the first image, a group photo of football players, and leave everything else exactly as it is. Swap exactly one player for the person in the second image: that player's head becomes the head of the person in the second image. The photo keeps the same number of people."
   );
 
   const positie = vindPositie(input.positie) ?? POSITIES[0];
-  delen.push(`The player to replace is ${positie.prompt}.`);
+  delen.push(`The player to swap is ${positie.prompt}.`);
   if (input.plaatsingshint?.trim()) {
-    delen.push(zin(`Note about which player to replace: ${input.plaatsingshint}`));
+    delen.push(zin(`Note about which player to swap: ${input.plaatsingshint}`));
   }
+
   delen.push(
-    "The new person stands in exactly the same spot, with the same pose, body position and size in the frame as the replaced player. The replaced player must be completely gone, with no trace or duplicate of them left anywhere in the image."
+    "Give this player the face, facial features, hair, facial hair, glasses if any, skin tone and apparent age of the person in the second image, so that they are clearly recognisable as that person and not a blend with the original player. Match the skin tone of the visible neck, arms and hands to the new face. Use a natural, friendly expression that fits the photo. Nothing of the original player's face or hair remains."
   );
 
   delen.push(
-    "Keep the new person's identity exactly as in the second image: the same face, facial features, skin tone, hair, facial hair, glasses if any, and apparent age. They must be clearly recognisable as the same person, not a blend with the replaced player. Show them with a natural, friendly expression that fits the photo."
+    "Keep this player's body, pose, position and size in the frame exactly as they are in the first image."
   );
 
   const kleding = vindKleding(input.kleding) ?? KLEDING[0];
   if (kleding.waarde === "passend" && input.groepskleding?.trim()) {
-    delen.push(zin(`They are dressed like the players: ${input.groepskleding}`));
+    delen.push(zin(`${kleding.prompt} (${zin(input.groepskleding).slice(0, -1)})`));
   } else {
-    delen.push(`They are ${kleding.prompt}.`);
+    delen.push(`${kleding.prompt}.`);
   }
 
   delen.push(
-    "Blend them in seamlessly: match the lighting direction, colour temperature, colour grading, sharpness, depth of field, grain and camera perspective of the first image. Their head and body must be in realistic scale relative to the players around them, with correct shadows and overlaps."
+    "Blend the new head in seamlessly: match the lighting direction, colour temperature, colour grading, sharpness, depth of field and grain of the first image, at a head size that is in realistic proportion to the body and to the players around them."
   );
 
   if (input.extra?.trim()) delen.push(zin(`Additional wishes: ${input.extra}`));
 
   delen.push(
-    "Hard requirements: replace exactly one player and no more. Do not change any of the other players in any way — keep their faces, expressions, poses, clothing and positions exactly as in the first image. The total number of people stays exactly the same as in the first image: nobody is added and nobody is removed. Do not change the background, the setting or the decorations. Keep the original framing and aspect ratio of the first image. Photorealistic result, no illustration style. No text, no logos, no watermarks."
+    "Hard requirements: only this one player changes. Every other person stays identical to the first image: the same faces, expressions, hair, poses, clothing and positions. Nobody is added and nobody is removed. The background, setting, decorations, lighting, colours, framing and aspect ratio stay identical to the first image. Take nothing from the second image except the person's own appearance: not its background or its lighting. Keep all existing logos, sponsors and text on clothing and in the scene as they are, and do not add any new text, logos or watermarks. Photorealistic result, no illustration style."
   );
 
   return delen.join(" ");
