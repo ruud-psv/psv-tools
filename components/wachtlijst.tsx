@@ -30,6 +30,8 @@ import type { WaitlistStatus } from "@/lib/wachtlijst/status";
 interface Payload {
   status: WaitlistStatus;
   analysis: WaitlistAnalysis | null;
+  /** De producten waar de cijfers over gaan; de pre wachtlijst zit er niet bij. */
+  shownProducts: { productId: string; name: string }[];
 }
 
 const IN_COLOR = tokens.color.red.primary;
@@ -234,7 +236,18 @@ function RankList({ rows, total }: { rows: { key: string; label: string; count: 
   );
 }
 
-function StatusPanel({ status, busy, onStart }: { status: WaitlistStatus; busy: boolean; onStart: (query?: string) => void }) {
+function StatusPanel({
+  status,
+  shownProducts,
+  busy,
+  onStart,
+}: {
+  status: WaitlistStatus;
+  shownProducts: Payload["shownProducts"];
+  busy: boolean;
+  onStart: (query?: string) => void;
+}) {
+  const hidden = status.products.filter((product) => !shownProducts.some((shown) => shown.productId === product.productId));
   const [chosen, setChosen] = useState("");
   const working = busy || status.running;
 
@@ -294,10 +307,11 @@ function StatusPanel({ status, busy, onStart }: { status: WaitlistStatus; busy: 
           {working ? "Bezig met inlezen" : status.phase === "leeg" ? "Start inlezen" : "Nu bijwerken"}
         </Button>
         {status.salesCaughtUpAt && <span>Bijgewerkt tot {formatDateTime(status.salesCaughtUpAt)}</span>}
-        {status.products.length > 0 && (
+        {shownProducts.length > 0 && (
           <span>
-            Product: {status.products.map((product) => product.name).join(", ")}
+            Product: {shownProducts.map((product) => product.name).join(", ")}
             {status.chosenByHand ? " (met de hand gekozen)" : ""}
+            {hidden.length > 0 ? `. Niet meegeteld: ${hidden.map((product) => product.name).join(", ")}` : ""}
           </span>
         )}
       </div>
@@ -585,7 +599,7 @@ export function Wachtlijst() {
       )}
       {payload && (
         <>
-          <StatusPanel status={payload.status} busy={busy} onStart={start} />
+          <StatusPanel status={payload.status} shownProducts={payload.shownProducts ?? []} busy={busy} onStart={start} />
           {payload.analysis && <Analysis analysis={payload.analysis} status={payload.status} />}
         </>
       )}

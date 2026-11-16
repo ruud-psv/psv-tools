@@ -320,6 +320,20 @@ export function applyClient(
   return true;
 }
 
+/** Een voorportaal van de wachtlijst ("Pre wachtlijst"): wel ingelezen, niet getoond. */
+const PRE_WAITLIST_NAME = /\bpre[\s-]*(wacht|wait)/i;
+
+/**
+ * De producten die de pagina laat zien: de wachtlijst zelf, zonder de pre
+ * wachtlijst. Het inlezen bewaart beide; dit is alleen een filter op wat
+ * getoond wordt. Blijft er zo niets over, dan telt alles.
+ */
+export function shownProductIds(data: WaitlistData): string[] {
+  const all = Object.keys(data.products);
+  const shown = all.filter((id) => !PRE_WAITLIST_NAME.test(data.products[id].name));
+  return shown.length ? shown : all;
+}
+
 /** De vingerafdrukken van iedereen met een regel op de wachtlijst. */
 export function waitlistOwners(data: WaitlistData, onlyActive = false): Set<string> {
   const owners = new Set<string>();

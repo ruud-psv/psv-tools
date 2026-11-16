@@ -169,8 +169,10 @@ function mergeIntervals(intervals: Interval[]): Interval[] {
 export function buildWaitlistAnalysis(
   data: WaitlistData,
   today: string,
-  productId: string | null = null
+  /** Alleen deze producten; `null` is alles. */
+  productIds: readonly string[] | null = null
 ): WaitlistAnalysis {
+  const only = productIds ? new Set(productIds) : null;
   const saleTypes: Record<string, number> = {};
   let rowCount = 0;
   let rowsWithoutOwner = 0;
@@ -178,7 +180,7 @@ export function buildWaitlistAnalysis(
   // 1. Regels per inschrijving (`product_item_id`).
   const items = new Map<string, { product: string; owner: string; rows: (typeof data.rows)[string][] }>();
   for (const row of Object.values(data.rows)) {
-    if (productId && row[0] !== productId) continue;
+    if (only && !only.has(row[0])) continue;
     rowCount++;
     saleTypes[row[4] || "(leeg)"] = (saleTypes[row[4] || "(leeg)"] ?? 0) + 1;
     if (!row[2]) rowsWithoutOwner++;

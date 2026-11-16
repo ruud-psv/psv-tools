@@ -9,6 +9,7 @@ import {
   emptyWaitlistData,
   ownersToLookUp,
   postcodeCode,
+  shownProductIds,
   waitlistOwners,
   type SalesFeedRow,
 } from "./data";
@@ -160,4 +161,23 @@ test("een nieuwe doorloop van de klanten: eerste keer, na een week of bij veel o
   assert.equal(needsClientsPass(data, 60, now), true);
   data.clientsPassDoneAt = "2026-11-01T12:00:00Z";
   assert.equal(needsClientsPass(data, 3, now), true);
+});
+
+test("de pre wachtlijst wordt wel ingelezen maar niet getoond", () => {
+  const PRE = "44444444-4444-4444-8444-444444444444";
+  const data = withProduct();
+  applyProducts(data, [{ product_id: PRE, product_type: "Memberships", product_description: "Pre wachtlijst" }]);
+  assert.equal(Object.keys(data.products).length, 2);
+  assert.deepEqual(shownProductIds(data), [PRODUCT]);
+
+  applySale(data, sale("a", "c1", "2026-01-10"));
+  applySale(data, sale("b", "c2", "2026-01-11", { product_id: PRE }));
+  applySale(data, sale("c", "c3", "2026-01-12", { product_id: PRE }));
+  assert.equal(buildWaitlistAnalysis(data, "2026-11-16").size.people, 3);
+  assert.equal(buildWaitlistAnalysis(data, "2026-11-16", shownProductIds(data)).size.people, 1);
+  assert.equal(buildWaitlistAnalysis(data, "2026-11-16", [PRE]).size.people, 2);
+
+  // Alleen een pre wachtlijst gevonden: dan liever die dan niets.
+  delete data.products[PRODUCT];
+  assert.deepEqual(shownProductIds(data), [PRE]);
 });

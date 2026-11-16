@@ -25,6 +25,10 @@ Ringside kan niet op product filteren (`lib/wachtlijst/ingest.ts`):
 
 1. **Producten.** De wachtlijst is elk product met "wachtlijst" (of "waiting list") in de naam.
    Past er geen, dan toont de pagina de producten van het type `Memberships` om uit te kiezen.
+   Ringside heeft er twee: "Pre wachtlijst" en "Wachtlijst". Beide worden ingelezen, maar de
+   pagina toont alleen de wachtlijst zelf (`shownProductIds()`). Dat is een filter op wat
+   getoond wordt en raakt het inlezen niet. `/api/wachtlijst?productId=<id>` geeft de pre
+   wachtlijst alsnog.
 2. **Verkoop.** `/v1/sales` wordt één keer helemaal doorgelopen (ruim 15 miljoen regels, een
    paar uur in een ketting van runs); alleen de regels van de wachtlijst blijven bewaard.
    Daarna leest een run alleen wat erbij kwam. Per `sales_item_id` wint de laatste versie.
