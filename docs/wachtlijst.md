@@ -59,3 +59,14 @@ Vercel Blob, `ringside/wachtlijst/data.json.gz` (regels, klantgegevens en cursor
 `state.json` (slot en laatste fout). Per persoon: een vingerafdruk van de klant-GUID
 (`ownerFingerprint()`, niet terug te rekenen), het geboortejaar en de vier cijfers van de
 postcode. Geen naam, adres, geboortedatum of klantnummer.
+
+## Grafieken
+
+De wachtlijst ging in mei 2026 open en liep toen in één of twee dagen vol. Een grafiek vanaf
+nul en vanaf de eerste dag laat alleen die sprong zien. Daarom (`lib/wachtlijst/chart.ts`):
+
+- **De start wordt afgeknipt** (`launchCut()`): de dagen in het begin waarop in één dag 5% of
+  meer van de hoogste stand instroomde. De stand na de start staat apart als "Bij de start".
+- **De as van de omvang zoomt in** op het bereik van de data (`zoomDomain()`) en begint dus
+  niet bij nul; dat staat onder de grafiek.
+- **Per dag en per week** in plaats van per maand; vergelijkingen met een jaar eerder zijn weg.

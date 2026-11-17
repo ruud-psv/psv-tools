@@ -28,6 +28,15 @@ export interface MonthPoint {
   size: number;
 }
 
+export interface DayPoint {
+  /** `YYYY-MM-DD`. */
+  day: string;
+  joined: number;
+  left: number;
+  /** Aantal mensen op de wachtlijst aan het eind van de dag. */
+  size: number;
+}
+
 export interface Bucket {
   label: string;
   count: number;
@@ -50,11 +59,12 @@ export interface WaitlistAnalysis {
   };
   flow: {
     months: MonthPoint[];
+    /** Elke dag vanaf de eerste inschrijving tot en met vandaag. */
+    days: DayPoint[];
+    last7: { joined: number; left: number };
     last30: { joined: number; left: number };
-    last365: { joined: number; left: number };
-    previous365: { joined: number; left: number };
-    /** De omvang een jaar geleden. */
-    sizeYearAgo: number;
+    /** Alle instroom sinds de eerste inschrijving. */
+    joinedTotal: number;
     firstSignup: string | null;
     /** Uitstroom waarvan de datum uit `last_touched_at` komt in plaats van een retourregel. */
     leftDateEstimated: number;
@@ -68,7 +78,7 @@ export interface WaitlistAnalysis {
     unknown: number;
     average: number | null;
     median: number | null;
-    /** Gemiddelde leeftijd van wie zich in de laatste 365 dagen inschreef. */
+    /** Gemiddelde leeftijd van wie zich in de laatste 90 dagen inschreef. */
     averageRecent: number | null;
     knownRecent: number;
   };
@@ -112,7 +122,7 @@ const AGE_BUCKETS: [label: string, from: number, to: number][] = [
   ["65+", 65, 200],
 ];
 
-const WAITING_BUCKETS: [label: string, fromDays: number, toDays: number][] = [
+const YEAR_BUCKETS: [label: string, fromDays: number, toDays: number][] = [
   ["< 3 maanden", 0, 90],
   ["3-12 maanden", 91, 365],
   ["1-2 jaar", 366, 730],
@@ -120,6 +130,21 @@ const WAITING_BUCKETS: [label: string, fromDays: number, toDays: number][] = [
   ["3-5 jaar", 1096, 1826],
   ["5+ jaar", 1827, Infinity],
 ];
+
+/**
+ * De groepen voor de wachttijd. Bestaat de wachtlijst korter dan een jaar, dan
+ * per maand (dertig dagen); met jaargroepen zou bijna iedereen in dezelfde
+ * groep vallen.
+ */
+function waitingBuckets(longestDays: number): [label: string, fromDays: number, toDays: number][] {
+  if (longestDays > 365) return YEAR_BUCKETS;
+  const count = Math.max(Math.ceil((longestDays + 1) / 30), 1);
+  return Array.from({ length: count }, (_, index) => [
+    index === 0 ? "< 1 maand" : `${index}-${index + 1} mnd`,
+    index * 30,
+    index === count - 1 ? Infinity : index * 30 + 29,
+  ]);
+}
 
 function shiftDay(day: string, days: number): string {
   const date = new Date(`${day}T12:00:00Z`);
@@ -274,8 +299,17 @@ export function buildWaitlistAnalysis(
     };
     return { joined: sum(joinedOn), left: sum(leftOn) };
   };
-  const yearAgo = shiftDay(today, -365);
-  const last365 = window(yearAgo, today);
+  const days: DayPoint[] = [];
+  if (firstSignup) {
+    let size = 0;
+    for (let day = firstSignup; day <= today; day = shiftDay(day, 1)) {
+      const joined = joinedOn.get(day) ?? 0;
+      const left = leftOn.get(day) ?? 0;
+      size += joined - left;
+      days.push({ day, joined, left, size });
+    }
+  }
+  const recentFrom = shiftDay(today, -90);
 
   // 4. Wachttijd, leeftijd en postcode van wie er nu op staat.
   const waitingDays = current.map(({ since }) => Math.max(daysBetween(since, today), 0));
@@ -293,7 +327,7 @@ export function buildWaitlistAnalysis(
     const year = client?.[0] ?? null;
     if (year !== null) {
       ages.push(thisYear - year);
-      if (since > yearAgo) agesRecent.push(thisYear - year);
+      if (since > recentFrom) agesRecent.push(thisYear - year);
     }
 
     const code = client?.[1] ?? "";
@@ -330,16 +364,16 @@ export function buildWaitlistAnalysis(
     },
     flow: {
       months,
+      days,
+      last7: window(shiftDay(today, -7), today),
       last30: window(shiftDay(today, -30), today),
-      last365,
-      previous365: window(shiftDay(today, -730), yearAgo),
-      sizeYearAgo: current.length - last365.joined + last365.left,
+      joinedTotal: [...joinedOn.values()].reduce((sum, count) => sum + count, 0),
       firstSignup,
       leftDateEstimated,
       leftTotal,
     },
     waiting: {
-      buckets: WAITING_BUCKETS.map(([label, from, to]) => ({
+      buckets: waitingBuckets(Math.max(0, ...waitingDays)).map(([label, from, to]) => ({
         label,
         count: waitingDays.filter((days) => days >= from && days <= to).length,
       })),

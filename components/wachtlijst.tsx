@@ -19,7 +19,8 @@ import tokens from "@psv/branding/tokens/tokens.json";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { number, share, Stat, formatDateTime } from "@/components/ticketing-stadion-parts";
-import type { Bucket, MonthPoint, WaitlistAnalysis } from "@/lib/wachtlijst/analysis";
+import type { Bucket, DayPoint, WaitlistAnalysis } from "@/lib/wachtlijst/analysis";
+import { groupPeriods, launchCut, zoomDomain, type PeriodPoint } from "@/lib/wachtlijst/chart";
 import type { WaitlistStatus } from "@/lib/wachtlijst/status";
 
 /**
@@ -68,6 +69,10 @@ function monthLabel(month: string, long = false): string {
   return date.toLocaleDateString("nl-NL", { month: long ? "long" : "short", year: long ? "numeric" : "2-digit", timeZone: "UTC" });
 }
 
+function dayLabel(day: string, options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }): string {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("nl-NL", { ...options, timeZone: "UTC" });
+}
+
 function signed(value: number): string {
   return `${value > 0 ? "+" : value < 0 ? "−" : ""}${number.format(Math.abs(value))}`;
 }
@@ -93,31 +98,45 @@ function ChartTooltip({ title, lines }: { title: string; lines: { label: string;
   );
 }
 
-function SizeChart({ months }: { months: MonthPoint[] }) {
+/**
+ * De omvang per dag. De as begint niet bij nul maar ligt om de waarden heen:
+ * de lijst beweegt met tientallen op een totaal van duizenden, en vanaf nul is
+ * dat een vlakke lijn.
+ */
+function SizeChart({ days }: { days: DayPoint[] }) {
+  const domain = zoomDomain(days.map((day) => day.size));
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={months} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <AreaChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.6} vertical={false} />
-          <XAxis dataKey="month" tickFormatter={(m: string) => monthLabel(m)} minTickGap={24} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} tick={AXIS_TICK} />
-          <YAxis allowDecimals={false} width={48} tickLine={false} axisLine={false} tick={AXIS_TICK} tickFormatter={(v: number) => number.format(v)} />
+          <XAxis dataKey="day" tickFormatter={(day: string) => dayLabel(day)} minTickGap={32} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} tick={AXIS_TICK} />
+          <YAxis domain={domain} allowDecimals={false} width={52} tickLine={false} axisLine={false} tick={AXIS_TICK} tickFormatter={(v: number) => number.format(v)} />
           <Tooltip
             content={({ active, payload }) => {
-              const row = active ? (payload?.[0]?.payload as MonthPoint | undefined) : undefined;
+              const row = active ? (payload?.[0]?.payload as DayPoint | undefined) : undefined;
               return row ? (
-                <ChartTooltip title={monthLabel(row.month, true)} lines={[{ label: "Op de wachtlijst, eind van de maand", value: number.format(row.size) }]} />
+                <ChartTooltip
+                  title={dayLabel(row.day, { weekday: "short", day: "numeric", month: "long" })}
+                  lines={[
+                    { label: "Op de wachtlijst", value: number.format(row.size) },
+                    { label: "Die dag", value: `${number.format(row.joined)} erbij, ${number.format(row.left)} eraf` },
+                  ]}
+                />
               ) : null;
             }}
           />
-          <Area type="monotone" dataKey="size" stroke={IN_COLOR} strokeWidth={2} fill={IN_COLOR} fillOpacity={0.12} isAnimationActive={false} />
+          <Area type="stepAfter" dataKey="size" stroke={IN_COLOR} strokeWidth={2} fill={IN_COLOR} fillOpacity={0.12} baseValue={domain[0]} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-function FlowChart({ months }: { months: MonthPoint[] }) {
-  const rows = months.map((month) => ({ ...month, out: -month.left }));
+function FlowChart({ points, unit }: { points: PeriodPoint[]; unit: "dag" | "week" }) {
+  const rows = points.map((point) => ({ ...point, out: -point.left }));
+  const title = (point: PeriodPoint) =>
+    unit === "week" ? `Week van ${dayLabel(point.start, { day: "numeric", month: "long" })}` : dayLabel(point.start, { weekday: "short", day: "numeric", month: "long" });
   return (
     <div className="space-y-2">
       <ul className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
@@ -134,16 +153,16 @@ function FlowChart({ months }: { months: MonthPoint[] }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} stackOffset="sign" margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.6} vertical={false} />
-            <XAxis dataKey="month" tickFormatter={(m: string) => monthLabel(m)} minTickGap={24} tickLine={false} axisLine={false} tick={AXIS_TICK} />
-            <YAxis allowDecimals={false} width={48} tickLine={false} axisLine={false} tick={AXIS_TICK} tickFormatter={(v: number) => number.format(Math.abs(v))} />
+            <XAxis dataKey="start" tickFormatter={(day: string) => dayLabel(day)} minTickGap={24} tickLine={false} axisLine={false} tick={AXIS_TICK} />
+            <YAxis allowDecimals={false} width={52} tickLine={false} axisLine={false} tick={AXIS_TICK} tickFormatter={(v: number) => number.format(Math.abs(v))} />
             <ReferenceLine y={0} stroke="hsl(var(--border))" />
             <Tooltip
               cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.5 }}
               content={({ active, payload }) => {
-                const row = active ? (payload?.[0]?.payload as MonthPoint | undefined) : undefined;
+                const row = active ? (payload?.[0]?.payload as PeriodPoint | undefined) : undefined;
                 return row ? (
                   <ChartTooltip
-                    title={monthLabel(row.month, true)}
+                    title={title(row)}
                     lines={[
                       { label: "Instroom", value: number.format(row.joined), color: IN_COLOR },
                       { label: "Uitstroom", value: number.format(row.left), color: OUT_COLOR },
@@ -321,10 +340,16 @@ function StatusPanel({
 
 function Analysis({ analysis, status }: { analysis: WaitlistAnalysis; status: WaitlistStatus }) {
   const { size, flow, waiting, age, postcode, quality } = analysis;
-  const growth = size.people - flow.sizeYearAgo;
-  const recentMonths = flow.months.slice(-36);
-  const tableMonths = flow.months.slice(-12).reverse();
-  const busiest = flow.months.reduce<MonthPoint | null>((top, month) => (!top || month.joined > top.joined ? month : top), null);
+  const tableMonths = [...flow.months].reverse();
+  // De grafieken beginnen na de start, toen de lijst in één klap volliep.
+  const cut = launchCut(flow.days);
+  const launch = cut >= 0 ? flow.days[cut] : null;
+  const sizeDays = launch ? flow.days.slice(cut) : flow.days;
+  const flowDays = launch ? flow.days.slice(cut + 1) : flow.days;
+  const periods = groupPeriods(flowDays);
+  const since = flowDays.reduce((sum, day) => ({ joined: sum.joined + day.joined, left: sum.left + day.left }), { joined: 0, left: 0 });
+  const weeks = Math.max(flowDays.length / 7, 1);
+  const startLabel = flow.firstSignup ? dayLabel(flow.firstSignup, { day: "numeric", month: "long", year: "numeric" }) : null;
   const clientsReady = status.clientsPassDoneAt !== null;
 
   const regions = postcode.regions.slice(0, 15).map((region) => ({
@@ -347,13 +372,9 @@ function Analysis({ analysis, status }: { analysis: WaitlistAnalysis; status: Wa
               value={number.format(size.people)}
               hint={size.signups !== size.people ? `${number.format(size.signups)} inschrijvingen` : "unieke personen"}
             />
-            <Stat
-              label="Groei in een jaar"
-              value={signed(growth)}
-              hint={flow.sizeYearAgo > 0 ? `${signed(Math.round((growth / flow.sizeYearAgo) * 100))}% t.o.v. ${number.format(flow.sizeYearAgo)} een jaar geleden` : undefined}
-            />
+            <Stat label="Laatste 7 dagen" value={signed(flow.last7.joined - flow.last7.left)} hint={`${number.format(flow.last7.joined)} erbij, ${number.format(flow.last7.left)} eraf`} />
             <Stat label="Laatste 30 dagen" value={signed(flow.last30.joined - flow.last30.left)} hint={`${number.format(flow.last30.joined)} erbij, ${number.format(flow.last30.left)} eraf`} />
-            <Stat label="Wacht al (mediaan)" value={waitingLabel(waiting.medianDays)} hint={flow.firstSignup ? `eerste inschrijving ${monthLabel(flow.firstSignup.slice(0, 7), true)}` : undefined} />
+            <Stat label="Wacht al (mediaan)" value={waitingLabel(waiting.medianDays)} hint={startLabel ? `eerste inschrijving ${startLabel}` : undefined} />
           </div>
           {size.perProduct.length > 1 && (
             <RankList rows={size.perProduct.map((p) => ({ key: p.productId, label: p.name, count: p.people }))} total={size.people} />
@@ -371,25 +392,36 @@ function Analysis({ analysis, status }: { analysis: WaitlistAnalysis; status: Wa
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Instroom, 12 maanden" value={number.format(flow.last365.joined)} hint={`${number.format(flow.previous365.joined)} in het jaar ervoor`} />
-            <Stat label="Uitstroom, 12 maanden" value={number.format(flow.last365.left)} hint={`${number.format(flow.previous365.left)} in het jaar ervoor`} />
-            <Stat label="Gemiddeld per maand" value={signed(Math.round((flow.last365.joined - flow.last365.left) / 12))} hint="per saldo, laatste 12 maanden" />
-            {busiest && <Stat label="Drukste maand" value={monthLabel(busiest.month, true)} hint={`${number.format(busiest.joined)} inschrijvingen`} />}
+            {launch ? (
+              <Stat label="Bij de start" value={number.format(launch.size)} hint={`op de lijst op ${dayLabel(launch.day, { day: "numeric", month: "long" })}`} />
+            ) : (
+              <Stat label="Instroom sinds het begin" value={number.format(flow.joinedTotal)} hint={startLabel ? `sinds ${startLabel}` : undefined} />
+            )}
+            <Stat label={launch ? "Instroom sinds de start" : "Instroom"} value={number.format(since.joined)} hint={`gemiddeld ${number.format(Math.round(since.joined / weeks))} per week`} />
+            <Stat label={launch ? "Uitstroom sinds de start" : "Uitstroom"} value={number.format(since.left)} hint={`gemiddeld ${number.format(Math.round(since.left / weeks))} per week`} />
+            <Stat label="Per saldo" value={signed(since.joined - since.left)} hint={`gemiddeld ${signed(Math.round((since.joined - since.left) / weeks))} per week`} />
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-heading text-sm uppercase tracking-wide">Omvang per maand</h4>
-            <SizeChart months={flow.months} />
+            <h4 className="font-heading text-sm uppercase tracking-wide">Omvang per dag</h4>
+            <SizeChart days={sizeDays} />
+            <p className="text-xs text-muted-foreground">
+              De verticale as begint niet bij nul, zodat de beweging te zien is.
+              {launch && startLabel
+                ? ` De grafiek begint op ${dayLabel(launch.day, { day: "numeric", month: "long" })}: de wachtlijst ging op ${startLabel} open en stond ${cut === 0 ? "aan het eind van die dag" : `na ${cut + 1} dagen`} op ${number.format(launch.size)} mensen.`
+                : ""}
+            </p>
           </div>
           <div className="space-y-2">
             <h4 className="font-heading text-sm uppercase tracking-wide">
-              Instroom en uitstroom per maand{recentMonths.length < flow.months.length ? ", laatste drie jaar" : ""}
+              Instroom en uitstroom per {periods.unit}
+              {launch ? ", na de start" : ""}
             </h4>
-            <FlowChart months={recentMonths} />
+            <FlowChart points={periods.points} unit={periods.unit} />
           </div>
 
           <details className="text-sm">
-            <summary className="cursor-pointer text-xs font-heading uppercase tracking-wide text-muted-foreground">Laatste 12 maanden als tabel</summary>
+            <summary className="cursor-pointer text-xs font-heading uppercase tracking-wide text-muted-foreground">Per maand als tabel</summary>
             <table className="mt-2 w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-heading uppercase tracking-wide text-muted-foreground">
@@ -449,7 +481,7 @@ function Analysis({ analysis, status }: { analysis: WaitlistAnalysis; status: Wa
                 <Stat label="Gemiddelde leeftijd" value={age.average === null ? "–" : `${decimal.format(age.average)} jaar`} />
                 <Stat label="Mediaan" value={age.median === null ? "–" : `${decimal.format(age.median)} jaar`} />
                 <Stat
-                  label="Nieuw in 12 maanden"
+                  label="Nieuw in 90 dagen"
                   value={age.averageRecent === null ? "–" : `${decimal.format(age.averageRecent)} jaar`}
                   hint={`gemiddeld, ${number.format(age.knownRecent)} mensen`}
                 />

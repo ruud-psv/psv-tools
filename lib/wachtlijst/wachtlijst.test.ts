@@ -13,6 +13,7 @@ import {
   waitlistOwners,
   type SalesFeedRow,
 } from "./data";
+import { groupPeriods, launchCut, zoomDomain } from "./chart";
 import { needsClientsPass } from "./ingest";
 
 const PRODUCT = "11111111-1111-4111-8111-111111111111";
@@ -135,7 +136,13 @@ test("analyse: omvang, verloop, leeftijd en postcode", () => {
   assert.deepEqual(june, { month: "2026-06", joined: 0, left: 1, size: 2 });
   // c3 geeft geen uitstroom in september.
   assert.equal(analysis.flow.months.find((month) => month.month === "2026-09")?.left, 0);
-  assert.equal(analysis.flow.sizeYearAgo, 2);
+  assert.equal(analysis.flow.joinedTotal, 5);
+  assert.deepEqual(analysis.flow.last7, { joined: 0, left: 0 });
+  // Per dag: van de eerste inschrijving tot en met vandaag, eindigend op de stand van nu.
+  assert.equal(analysis.flow.days[0].day, "2025-01-10");
+  assert.deepEqual(analysis.flow.days[analysis.flow.days.length - 1], { day: "2026-11-16", joined: 0, left: 0, size: 3 });
+  // Langer dan een jaar: de wachttijd in jaargroepen.
+  assert.equal(analysis.waiting.buckets[0].label, "< 3 maanden");
 
   assert.equal(analysis.age.known, 2);
   assert.equal(analysis.age.unknown, 1);
@@ -180,4 +187,47 @@ test("de pre wachtlijst wordt wel ingelezen maar niet getoond", () => {
   // Alleen een pre wachtlijst gevonden: dan liever die dan niets.
   delete data.products[PRODUCT];
   assert.deepEqual(shownProductIds(data), [PRE]);
+});
+
+test("grafieken: de start afknippen, inzoomen en per week groeperen", () => {
+  const data = withProduct();
+  // Start op 4 mei 2026: 40 mensen op dag één, daarna af en toe iemand.
+  for (let i = 0; i < 40; i++) applySale(data, sale(`s${i}`, `c${i}`, "2026-05-04"));
+  applySale(data, sale("t0", "t0", "2026-05-01"));
+  applySale(data, sale("n1", "n1", "2026-06-10"));
+  applySale(data, sale("n2", "n2", "2026-09-02"));
+  applySale(data, sale("s0b", "c0", "2026-07-01", { product_item_id: "item-s0", sale_type: "Return" }));
+  applySale(data, sale("s0", "c0", "2026-05-04", { current_status: false }));
+
+  const { flow, waiting } = buildWaitlistAnalysis(data, "2026-11-16");
+  assert.equal(flow.days[0].size, 1);
+  const cut = launchCut(flow.days);
+  assert.equal(flow.days[cut].day, "2026-05-04");
+  assert.equal(flow.days[cut].size, 41);
+
+  // Na de start beweegt de lijst tussen 41 en 42; de as ligt daar omheen.
+  const [bottom, top] = zoomDomain(flow.days.slice(cut).map((day) => day.size));
+  assert.ok(bottom > 30 && bottom <= 41 && top >= 42 && top < 50, `${bottom}-${top}`);
+
+  const periods = groupPeriods(flow.days.slice(cut + 1));
+  assert.equal(periods.unit, "week");
+  assert.equal(periods.points[0].start, "2026-05-05");
+  assert.equal(periods.points[1].start, "2026-05-11");
+  assert.equal(periods.points.reduce((sum, point) => sum + point.joined, 0), 2);
+  assert.equal(periods.points.reduce((sum, point) => sum + point.left, 0), 1);
+  assert.equal(groupPeriods(flow.days.slice(-10)).unit, "dag");
+
+  // Korter dan een jaar: de wachttijd per maand.
+  assert.equal(waiting.buckets[0].label, "< 1 maand");
+  assert.equal(waiting.buckets.reduce((sum, bucket) => sum + bucket.count, 0), 42);
+
+  // Geleidelijke groei: niets afknippen.
+  const steady = Array.from({ length: 100 }, (_, i) => ({ day: String(i), joined: 1, left: 0, size: i + 1 }));
+  assert.equal(launchCut(steady), -1);
+
+  // Start over twee dagen verspreid, zonder iemand ervoor: de tweede dag is het eind van de start.
+  const spread = Array.from({ length: 100 }, (_, i) => ({ day: String(i), joined: i === 0 ? 8800 : i === 1 ? 1600 : 5, left: 0, size: 0 }));
+  let size = 0;
+  for (const day of spread) day.size = size += day.joined;
+  assert.equal(launchCut(spread), 1);
 });
