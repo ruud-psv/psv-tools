@@ -18,7 +18,11 @@ import { waitlistStatus } from "@/lib/wachtlijst/status";
  *   klantgegevens opnieuw door.
  * - `?productId=<id>[,<id>]` kiest het product met de hand als de naam niet op
  *   "wachtlijst" past. `?productId=auto` zet het terug op naam.
- * - `?chain=0` doet één run; `?force=1` negeert het slot; `?seconds=` het budget.
+ * - `?chain=0` doet één run; `?force=1` negeert het slot.
+ * - `?seconds=` is het budget van de eerste run. De knop op de pagina vraagt
+ *   een korte run, zodat hij snel antwoord krijgt. De vervolgruns van de
+ *   ketting krijgen altijd het volle budget: de parameter gaat in de ketting
+ *   wel mee, en met twintig seconden per run komt de eerste vulling niet af.
  */
 
 export const dynamic = "force-dynamic";
@@ -44,7 +48,10 @@ export async function GET(req: NextRequest) {
   }
   const restartParam = searchParams.get("restart");
   const restart = restartParam === "1" ? "all" : restartParam === "clients" ? "clients" : null;
-  const budget = Math.min(Math.max(Number(searchParams.get("seconds")) || DEFAULT_BUDGET_SECONDS, 10), 280);
+  // Een vervolgrun herken je aan `chain` boven nul; `chain=0` is een losse run met de hand.
+  const chainedRun = Number(searchParams.get("chain")) > 0;
+  const requestedSeconds = chainedRun ? 0 : Number(searchParams.get("seconds"));
+  const budget = Math.min(Math.max(requestedSeconds || DEFAULT_BUDGET_SECONDS, 10), 280);
   const startedAt = Date.now();
 
   const outcome = await runLockedWaitlistIngest(budget * 1000, {
