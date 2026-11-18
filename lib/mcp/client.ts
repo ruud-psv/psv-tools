@@ -194,7 +194,10 @@ export function describeError(err: unknown): string {
     return "De server vraagt om in te loggen (401). Controleer het token in de omgevingsvariabele.";
   }
   if (err instanceof StreamableHTTPError) {
-    if (err.code === 401) return "De server weigert het token (401). Controleer de omgevingsvariabele.";
+    if (err.code === 401) {
+      const reden = serverMessage(err.message)?.replace(/\.+$/, "");
+      return `De server weigert het token (401)${reden ? `: ${reden}` : ""}. Controleer de omgevingsvariabele.`;
+    }
     if (err.code === 403) return "De server geeft geen toegang (403). Heeft het token de juiste rechten?";
     if (err.code === 404) return "Op deze URL staat geen MCP-server (404). Controleer het pad, vaak eindigt het op /mcp.";
     if (err.code === 405) return "De server ondersteunt geen Streamable HTTP (405). Alleen Streamable HTTP wordt ondersteund.";

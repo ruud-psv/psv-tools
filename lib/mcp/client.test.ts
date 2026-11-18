@@ -27,6 +27,10 @@ test("de melding van de server zonder de JSON eromheen", () => {
   // Zonder leesbare melding: de ruwe tekst, afgekapt.
   assert.match(describeError(new StreamableHTTPError(502, "Error POSTing to endpoint: Bad gateway")), /Bad gateway/);
   assert.match(describeError(new StreamableHTTPError(401, "x")), /weigert het token \(401\)/);
+  assert.equal(
+    describeError(new StreamableHTTPError(401, 'Error POSTing to endpoint: {"error":{"message":"Invalid OAuth access token."}}')),
+    "De server weigert het token (401): Invalid OAuth access token. Controleer de omgevingsvariabele."
+  );
 });
 
 test("een gedeeld token gaat nooit naar een andere partij, ook niet uit oude opslag", async () => {

@@ -94,6 +94,20 @@ const INGEBOUWD = [
     } satisfies Omit<Draft, "url">,
     uitleg: "Google Analytics, gehost in PSV Tools zelf. Zet eerst MCP_GA_TOKEN in Vercel.",
   },
+  {
+    pad: "/api/mcp/meta-ads",
+    draft: {
+      id: "metaads",
+      idTouched: true,
+      name: "Meta Ads",
+      authType: "bearer",
+      envVar: "MCP_META_TOKEN",
+      header: "",
+      page: "/dashboard/paid-ads",
+      enabled: true,
+    } satisfies Omit<Draft, "url">,
+    uitleg: "Meta Ads, gehost in PSV Tools zelf, met het account van Paid Ads. Zet eerst MCP_META_TOKEN in Vercel.",
+  },
 ];
 
 function draftAuth(d: Draft): McpAuth {

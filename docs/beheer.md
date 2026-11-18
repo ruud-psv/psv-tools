@@ -143,22 +143,49 @@ opnieuw.
 
 ## Meta Ads
 
-Meta host een eigen MCP-server. Volgens handleidingen van derden staat die op
-`https://mcp.facebook.com/ads` en accepteert hij een bearer-token van een
-system user; dat is nog niet tegen de documentatie van Meta gecontroleerd.
+Er zijn twee servers voor Meta Ads:
 
-1. Voeg in Beheer > MCP Servers toe: naam `Meta Ads`, id `metaads`, URL
-   `https://mcp.facebook.com/ads`, Bearer-token uit `META_ADS_ACCESS_TOKEN`
-   (hetzelfde token als Paid Ads), pagina Paid Ads.
-2. Klik **Verbinding testen**.
-3. Zet alleen tools aan die rapporteren of opvragen. De server van Meta heeft
-   ook tools die campagnes en budgetten wijzigen. Het token van Paid Ads is
-   bedoeld met alleen `ads_read`; controleer dat in Meta Bedrijfsinstellingen,
-   dan weigert Meta schrijfacties hoe dan ook.
+- **De server van Meta zelf** (`https://mcp.facebook.com/ads`). Die weigerde
+  het token van Paid Ads met een 401; vermoedelijk wil hij inloggen via OAuth
+  of een extra recht. `META_ADS_ACCESS_TOKEN` mag er wel naartoe (zie
+  gedeelde tokens), voor als dat later wel werkt.
+- **De ingebouwde server van PSV Tools** (`/api/mcp/meta-ads`), hieronder.
+  Die gebruikt het token en account van Paid Ads, dus hij werkt zonder OAuth.
 
-Weigert Meta het token, dan vraagt de server waarschijnlijk OAuth of een extra
-recht. Een alternatief is dan een eigen Meta-server in PSV Tools, zoals bij
-Google Analytics.
+## Ingebouwde server: Meta Ads
+
+Leest met `META_ADS_ACCESS_TOKEN` en alleen het account in
+`META_ADS_ACCOUNT_ID`, net als het Paid Ads-dashboard. Hij doet alleen
+GET-verzoeken naar de Graph API: aanmaken of wijzigen kan hij niet.
+
+| Tool | Wat hij doet |
+|---|---|
+| `rapport` | Insights op account-, campagne-, advertentieset- of advertentieniveau: het model kiest zelf de velden, de periode, per dag/week/maand, de uitsplitsing (leeftijd, geslacht, plaatsing, land) en filters op naam of id. Acties (`actions`) per soort. Met dezelfde attributie als Ads Manager. |
+| `campagnes` | De campagnes, advertentiesets of advertenties met status, doel, budget en looptijd; ook om een naam of id te vinden. |
+
+| Onderdeel | Bestand |
+|---|---|
+| Het endpoint | `app/api/mcp/meta-ads/route.ts` |
+| Token, sessies en foutantwoorden (gedeeld met Google Analytics) | `lib/mcp/servers/http.ts` (met tests) |
+| De tools | `lib/mcp/servers/meta-ads.ts` (met tests) |
+| Parameters voor Meta en tekst voor het model | `lib/meta-ads/rapport.ts` (met tests) |
+| De Graph-client (alleen GET) | `lib/meta-ads/client.ts` (met tests) |
+
+### Aanzetten
+
+1. Maak een willekeurig token van minstens 32 tekens en zet het in Vercel als
+   `MCP_META_TOKEN` (Production). Dat is het wachtwoord van dit endpoint, niet
+   een token van Meta. Deploy opnieuw.
+2. Verwijder in Beheer > MCP Servers een eerdere server met het id `metaads`
+   (bijvoorbeeld die naar `mcp.facebook.com`).
+3. Klik bij **Ingebouwd: Meta Ads** op **Invullen**, en dan op **Opslaan**.
+4. Klik **Verbinding testen** en zet `rapport` en `campagnes` aan.
+5. Vraag in de assistent bijvoorbeeld: "Welke 5 campagnes hadden de afgelopen
+   7 dagen de meeste linkkliks, en wat was de CPC?" Alleen wie Paid Ads mag
+   zien, krijgt deze tools.
+
+Buiten PSV Tools werkt hij net als de Google Analytics-server, met
+`MCP_META_TOKEN` als bearer-token.
 
 ## Ingebouwde server: Google Analytics
 
@@ -178,7 +205,8 @@ Alle drie lezen alleen en zeggen dat ook, dus ze kunnen in Beheer meteen aan.
 
 | Onderdeel | Bestand |
 |---|---|
-| Het endpoint (token, Streamable HTTP zonder sessies) | `app/api/mcp/google-analytics/route.ts` |
+| Het endpoint | `app/api/mcp/google-analytics/route.ts` |
+| Token, sessies en foutantwoorden | `lib/mcp/servers/http.ts` (met tests) |
 | De tools | `lib/mcp/servers/google-analytics.ts` (met tests) |
 | Verzoek aan GA en tekst voor het model | `lib/google-analytics/rapport.ts` (met tests) |
 | Service-account en sites | `lib/google-analytics/client.ts` |
