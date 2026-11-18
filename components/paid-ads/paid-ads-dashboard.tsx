@@ -10,42 +10,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertTriangle,
-  Banknote,
-  BarChart3,
-  Eye,
-  Gauge,
-  Loader2,
-  MousePointerClick,
-  Plug,
-  Percent,
-  RefreshCw,
-  Target,
-  TrendingUp,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { AlertTriangle, Loader2, Plug, RefreshCw } from "lucide-react";
 import {
   BENCHMARK_LABELS,
   benchmarkMetrics,
-  byPlatform,
-  deltaFor,
-  derive,
   EMPTY_FILTERS,
   filterCampaigns,
   itemKey,
   narrowResponse,
   optionsFrom,
-  quickInsights,
   scoreCampaigns,
   totalsOf,
   withoutPhase,
-  type MetricKey,
   type PaidFilters,
-  type Tone,
 } from "@/lib/paid-ads/derive";
-import { eur, longDate, nl, pct, roas, signed } from "@/lib/paid-ads/format";
+import { longDate } from "@/lib/paid-ads/format";
 import {
   BenchmarkKey,
   PaidAdsResponse,
@@ -56,21 +35,9 @@ import {
   PHASE_LABELS,
   PLATFORM_LABELS,
 } from "@/lib/paid-ads/types";
-import {
-  Badge,
-  DataTable,
-  EmptySection,
-  KpiCard,
-  PLATFORM_DOT,
-  SectionCard,
-  Td,
-  Th,
-  TONE_MARK,
-  TotalTile,
-  VolumeBar,
-} from "./shared";
+import { PLATFORM_DOT } from "./shared";
 import { ExecutiveView } from "./executive-view";
-import { CampaignView, PhaseTag } from "./campaign-view";
+import { CampaignView } from "./campaign-view";
 import { CreativeView } from "./creative-view";
 import { AudienceView } from "./audience-view";
 import { OverzichtView } from "./overzicht-view";
@@ -99,26 +66,6 @@ const WARNING_PARTS: Record<PaidAdsWarning["part"], string> = {
   status: "aan/uit-status van advertenties",
 };
 
-/** De KPI-tegels bovenaan, met hun eenheid en icoon. */
-const KPI_TILES: {
-  key: MetricKey;
-  label: string;
-  sub: string;
-  format: (v: number | null) => string;
-  icon: React.ReactNode;
-}[] = [
-  { key: "spend", label: "Besteed bedrag", sub: "mediabudget", format: (v) => eur(v), icon: <Wallet className="h-3.5 w-3.5" /> },
-  { key: "revenue", label: "Conversiewaarde", sub: "omzet uit conversies", format: (v) => eur(v), icon: <Banknote className="h-3.5 w-3.5" /> },
-  { key: "roas", label: "ROAS", sub: "omzet per bestede euro", format: (v) => roas(v), icon: <Gauge className="h-3.5 w-3.5" /> },
-  { key: "results", label: "Resultaten", sub: "conversies en leads", format: (v) => nl(v), icon: <Target className="h-3.5 w-3.5" /> },
-  { key: "costPerResult", label: "Kosten per resultaat", sub: "gemiddeld", format: (v) => eur(v, 2), icon: <TrendingUp className="h-3.5 w-3.5" /> },
-  { key: "cpc", label: "CPC", sub: "kosten per klik", format: (v) => eur(v, 2), icon: <MousePointerClick className="h-3.5 w-3.5" /> },
-  { key: "cvr", label: "Conversieratio", sub: "van klik naar resultaat", format: (v) => pct(v), icon: <Percent className="h-3.5 w-3.5" /> },
-  { key: "ctr", label: "CTR", sub: "click-through rate", format: (v) => pct(v), icon: <BarChart3 className="h-3.5 w-3.5" /> },
-  { key: "reach", label: "Bereik", sub: "unieke mensen", format: (v) => nl(v), icon: <Users className="h-3.5 w-3.5" /> },
-  { key: "impressions", label: "Weergaven", sub: "advertentievertoningen", format: (v) => nl(v), icon: <Eye className="h-3.5 w-3.5" /> },
-];
-
 export function PaidAdsDashboard() {
   const [data, setData] = useState<PaidAdsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +75,6 @@ export function PaidAdsDashboard() {
   const [view, setView] = useState<ViewKey>("overzicht");
   const [benchmark, setBenchmark] = useState<BenchmarkKey>("previous");
   const [filters, setFilters] = useState<PaidFilters>(EMPTY_FILTERS);
-  const [campaignGroup, setCampaignGroup] = useState<string | null>(null);
 
   const fetchData = useCallback(async (p: PeriodKey) => {
     setLoading(true);
@@ -213,34 +159,6 @@ export function PaidAdsDashboard() {
   );
   const unitOptions = useMemo(() => optionsFrom(allCampaigns, (c) => c.businessUnit), [allCampaigns]);
   const objectiveOptions = useMemo(() => optionsFrom(allCampaigns, (c) => c.objective), [allCampaigns]);
-  const groupOptions = useMemo(() => optionsFrom(allCampaigns, (c) => c.campaignGroup), [allCampaigns]);
-
-  // Cross-platform campagne: dezelfde campagne die op meerdere kanalen draait.
-  const activeGroup = campaignGroup ?? groupOptions[0] ?? null;
-  const groupRows = useMemo(
-    () => (activeGroup ? allCampaigns.filter((c) => c.campaignGroup === activeGroup) : []),
-    [allCampaigns, activeGroup]
-  );
-  const groupTotals = useMemo(
-    () => totalsOf(groupRows, revenuePlatforms),
-    [groupRows, revenuePlatforms]
-  );
-
-  const quick = useMemo(() => {
-    if (!data || scored.length === 0) return [];
-    return quickInsights(
-      scored,
-      byPlatform(filtered),
-      totals,
-      benchmarkLabel,
-      {
-        results: deltaFor("results", totals.results, benchmarkTotals?.results ?? null),
-        cvr: deltaFor("cvr", totals.cvr, benchmarkTotals?.cvr ?? null),
-      },
-      { eur, pct, signed }
-    );
-  }, [data, scored, filtered, totals, benchmarkLabel, benchmarkTotals]);
-
   const viewProps = {
     data: viewData as PaidAdsResponse,
     scored,
@@ -479,161 +397,23 @@ export function PaidAdsDashboard() {
               />
             )}
 
-            {view !== "overzicht" && (
-            <>
-            {/* Funnel — tegelijk het fasefilter */}
-            <FunnelOverview
-              campaigns={funnelCampaigns}
-              active={filters.phase}
-              onSelect={(phase) => setFilters((f) => ({ ...f, phase }))}
-            />
-
-            {/* Quick insights */}
-            <SectionCard title="Quick insights">
-              {quick.length === 0 ? (
-                <EmptySection>
-                  Inzichten verschijnen zodra er campagnedata is voor deze periode.
-                </EmptySection>
-              ) : (
-                <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-                  {quick.map((insight, i) => (
-                    <div key={i} className="flex items-start gap-2.5 text-sm leading-snug">
-                      <Badge tone={insight.tone} className="mt-0.5 justify-center px-1.5">
-                        {TONE_MARK[insight.tone]}
-                      </Badge>
-                      <span className="text-muted-foreground">{insight.text}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-
-            {/* Campagne over alle platformen */}
-            <SectionCard
-              title="Campagne totaal — alle platformen"
-              hint={
-                groupRows.length > 0
-                  ? `${groupRows.length} kanalen · ${[...new Set(groupRows.map((r) => PLATFORM_LABELS[r.platform]))].join(", ")}`
-                  : undefined
-              }
-              action={
-                groupOptions.length > 0 && (
-                  <Select value={activeGroup ?? ""} onValueChange={setCampaignGroup}>
-                    <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {groupOptions.map((g) => (
-                        <SelectItem key={g} value={g}>{g}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )
-              }
-            >
-              {groupRows.length === 0 ? (
-                <EmptySection>
-                  Campagnes die onder één naam op meerdere kanalen draaien worden hier bij elkaar
-                  opgeteld.
-                </EmptySection>
-              ) : (
-                <>
-                  <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    <TotalTile label="Besteed bedrag" value={eur(groupTotals.spend)} />
-                    <TotalTile label="Bereik" value={nl(groupTotals.reach)} />
-                    <TotalTile label="Clicks" value={nl(groupTotals.clicks)} />
-                    <TotalTile label="Resultaten" value={nl(groupTotals.results)} />
-                    <TotalTile label="Kosten per resultaat" value={eur(groupTotals.costPerResult, 2)} />
-                    <TotalTile label="ROAS" value={roas(groupTotals.roas)} />
-                  </div>
-                  <DataTable>
-                    <thead>
-                      <tr className="border-b border-border">
-                        <Th className="pl-0">Platform</Th>
-                        <Th>Fase</Th>
-                        <Th className="min-w-[150px]">Aandeel budget</Th>
-                        <Th align="right">Bereik</Th>
-                        <Th align="right">Clicks</Th>
-                        <Th align="right">Resultaten</Th>
-                        <Th align="right">CPA</Th>
-                        <Th align="right" className="pr-0">Besteed</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupRows.map((row) => {
-                        const d = derive(row.metrics);
-                        const share =
-                          groupTotals.spend > 0 ? (row.metrics.spend / groupTotals.spend) * 100 : 0;
-                        return (
-                          <tr key={row.id} className="border-b border-border/50 last:border-0 hover:bg-muted/40">
-                            <Td className="whitespace-nowrap pl-0 font-medium">
-                              <span
-                                className={cn(
-                                  "mr-2 inline-block h-2.5 w-2.5 rounded-full",
-                                  PLATFORM_DOT[row.platform]
-                                )}
-                              />
-                              {PLATFORM_LABELS[row.platform]}
-                            </Td>
-                            <Td><PhaseTag phase={row.phase} /></Td>
-                            <Td>
-                              <div className="flex items-center gap-2">
-                                <VolumeBar width={share} />
-                                <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
-                                  {pct(share, 0)}
-                                </span>
-                              </div>
-                            </Td>
-                            <Td align="right">{nl(row.metrics.reach)}</Td>
-                            <Td align="right">{nl(row.metrics.clicks)}</Td>
-                            <Td align="right">{nl(row.metrics.results)}</Td>
-                            <Td align="right" className="text-muted-foreground">{eur(d.costPerResult, 2)}</Td>
-                            <Td align="right" className="pr-0 font-semibold">{eur(row.metrics.spend)}</Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </DataTable>
-                </>
-              )}
-            </SectionCard>
-
-            {/* KPI's */}
-            <div className="grid grid-cols-2 gap-3.5 md:grid-cols-5">
-              {KPI_TILES.map((tile) => {
-                const value = totals[tile.key] as number | null;
-                const d = deltaFor(tile.key, value, (benchmarkTotals?.[tile.key] as number | null) ?? null);
-                return (
-                  <KpiCard
-                    key={tile.key}
-                    label={tile.label}
-                    value={tile.format(value)}
-                    sub={
-                      tile.key === "spend" && data.targets.budget != null
-                        ? `van ${eur(data.targets.budget)} budget`
-                        : (tile.key === "revenue" || tile.key === "roas") && missingRevenue.length > 0
-                          ? `excl. ${missingRevenue.map((p) => PLATFORM_LABELS[p]).join(", ")}`
-                          : tile.sub
-                    }
-                    delta={d.value != null ? signed(d.value, d.unit) : null}
-                    deltaTone={d.tone as Tone}
-                    icon={tile.icon}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Zoekveld boven de campagnetabel */}
+            {/* Campagnes: de funnel is tegelijk het fasefilter, met een zoekveld erbij. */}
             {view === "campaign" && (
-              <div className="flex justify-end">
-                <Input
-                  value={filters.query}
-                  onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value }))}
-                  placeholder="Zoek op campagne, platform of exploitatie"
-                  className="w-72"
+              <>
+                <FunnelOverview
+                  campaigns={funnelCampaigns}
+                  active={filters.phase}
+                  onSelect={(phase) => setFilters((f) => ({ ...f, phase }))}
                 />
-              </div>
-            )}
-
-            </>
+                <div className="flex justify-end">
+                  <Input
+                    value={filters.query}
+                    onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value }))}
+                    placeholder="Zoek op campagne, platform of exploitatie"
+                    className="w-72"
+                  />
+                </div>
+              </>
             )}
 
             {view === "executive" && <ExecutiveView {...viewProps} />}
@@ -641,6 +421,10 @@ export function PaidAdsDashboard() {
             {view === "creative" && <CreativeView {...viewProps} />}
             {view === "audience" && <AudienceView {...viewProps} />}
 
+            <p className="text-xs text-muted-foreground">
+              Dit dashboard toont bewust de kern. Mis je iets, laat het het paid-team weten, dan
+              komt het erbij.
+            </p>
             <p className="text-xs text-muted-foreground">
               Periode {longDate(data.period.from)} t/m {longDate(data.period.to)} · opgehaald om{" "}
               {new Date(data.fetchedAt).toLocaleTimeString("nl-NL", {

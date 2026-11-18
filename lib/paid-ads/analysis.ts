@@ -93,16 +93,26 @@ export function buildPaidAdsContext(data: PaidAdsResponse): string {
 
   // Alleen advertenties die aan staan, of waarvan de status onbekend is.
   const ads = data.ads.filter((a) => a.active !== false);
-  const redenen = perKoopreden(ads, data.adSets);
-  if (redenen.length) {
-    lines.push("", "PER KOOPREDEN (uit de naam van advertentie of set):");
-    for (const r of redenen) {
-      lines.push(
-        `- ${r.label}: ${nl(r.advertenties)} advertenties · ${eur(r.metrics.spend)} · ${nl(r.metrics.results)} resultaten · CPA ${eur(r.derived.costPerResult, 2)} · CTR ${pct(r.derived.ctr)}${r.derived.roas != null ? ` · ROAS ${roas(r.derived.roas)}` : ""}`
-      );
+  // Per exploitatie: koopredenen alleen binnen een exploitatie vergelijken.
+  const unitVan = new Map(data.campaigns.map((c) => [`${c.platform}:${c.id}`, c.businessUnit]));
+  const perUnit = new Map<string, typeof ads>();
+  for (const a of ads) {
+    const unit = unitVan.get(`${a.platform}:${a.campaignId}`) ?? "Overig";
+    perUnit.set(unit, [...(perUnit.get(unit) ?? []), a]);
+  }
+  if (perUnit.size) {
+    lines.push("", "PER KOOPREDEN, PER EXPLOITATIE (uit de naam van advertentie of set):");
+    for (const [unit, unitAds] of perUnit) {
+      lines.push(`${unit}:`);
+      const redenen = perKoopreden(unitAds, data.adSets);
+      for (const r of redenen) {
+        lines.push(
+          `- ${r.label}: ${nl(r.advertenties)} advertenties · ${eur(r.metrics.spend)} · ${nl(r.metrics.results)} resultaten · CPA ${eur(r.derived.costPerResult, 2)} · CTR ${pct(r.derived.ctr)}${r.derived.roas != null ? ` · ROAS ${roas(r.derived.roas)}` : ""}`
+        );
+      }
+      const zonder = KOOPREDENEN.filter((k) => !redenen.some((r) => r.key === k.key)).map((k) => k.label);
+      if (zonder.length) lines.push(`  Niet gebruikt: ${zonder.join(", ")}.`);
     }
-    const zonder = KOOPREDENEN.filter((k) => !redenen.some((r) => r.key === k.key)).map((k) => k.label);
-    if (zonder.length) lines.push(`Niet gebruikt in deze periode: ${zonder.join(", ")}.`);
   }
 
   const tests = testOverzicht(ads, data.adSets, data.campaigns);
