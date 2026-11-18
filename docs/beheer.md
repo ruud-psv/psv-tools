@@ -187,6 +187,46 @@ GET-verzoeken naar de Graph API: aanmaken of wijzigen kan hij niet.
 Buiten PSV Tools werkt hij net als de Google Analytics-server, met
 `MCP_META_TOKEN` als bearer-token.
 
+## Playable
+
+Playable heeft een eigen MCP-server, maar die werkt alleen met Gemini Enterprise
+en Microsoft 365 Copilot: bij het aanmaken van een MCP-client in Playable
+(Developer > Developer apps) kies je een van die twee. De assistent van PSV
+Tools kan daar niet inloggen. Daarom host PSV Tools een eigen server.
+
+## Ingebouwde server: Playable
+
+Leest met de app-sleutels van Landingspagina's (`PLAYABLE_CLIENT_ID`,
+`PLAYABLE_SECRET`). Het token vraagt alleen `campaigns.list` en
+`campaigns.view`, dus ook als de app in Playable meer mag (zie
+`docs/playable-api.md`), kan de server niets aanmaken, wijzigen of
+verwijderen. Hij geeft geen registraties met persoonsgegevens, alleen aantallen.
+
+| Tool | Wat hij doet |
+|---|---|
+| `campagnes` | Zoekt campagnes op naam, DMID-nummer of het laatste stuk van de URL (spaties en hoofdletters tellen niet: "Coen Dillen" vindt ook `club.psv.nl/coendillen`). Met id, type, actief, looptijd en URL. |
+| `statistieken` | De totalen van 1 tot 10 campagnes over de hele looptijd: sessies, aanmeldingen, unieke aanmeldingen, conversie, apparaten, gemiddelde tijd en shares. Dezelfde cijfers als Landingspagina's. |
+| `aanmeldingen_per_dag` | Aanmeldingen per dag voor één campagne. Dit endpoint (`/v1/campaign/{id}/statistics/registrations`) wordt elders in PSV Tools nog niet gebruikt: test hem eerst met **Proberen**. |
+
+| Onderdeel | Bestand |
+|---|---|
+| Het endpoint | `app/api/mcp/playable/route.ts` |
+| De tools | `lib/mcp/servers/playable.ts` (met tests) |
+| Zoeken en tekst voor het model | `lib/playable/rapport.ts` (met tests) |
+| De API-client (token met leesrechten, alleen GET) | `lib/playable/client.ts` (met tests) |
+
+### Aanzetten
+
+1. Maak een willekeurig token van minstens 32 tekens en zet het in Vercel als
+   `MCP_PLAYABLE_TOKEN` (Production). Deploy opnieuw.
+2. Klik in Beheer > MCP Servers bij **Ingebouwd: Playable** op **Invullen**, en
+   dan op **Opslaan**.
+3. Klik **Verbinding testen** en zet `campagnes` en `statistieken` aan. Probeer
+   `aanmeldingen_per_dag` eerst met **Proberen** (bijvoorbeeld
+   `{"campagne_id": <id>}`) en zet hem alleen aan als er cijfers uitkomen.
+4. Vraag in de assistent bijvoorbeeld: "Hoeveel aanmeldingen had de Coen
+   Dillen-pagina?" Alleen wie Landingspagina's mag zien, krijgt deze tools.
+
 ## Ingebouwde server: Google Analytics
 
 PSV Tools is zelf ook een MCP-server voor Google Analytics, op

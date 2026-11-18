@@ -42,6 +42,7 @@ Werkwijze bij een open vraag: zoek eerst uit wat er bedoeld wordt en wat er is, 
 Een campagne zoeken: een campagne van PSV heeft een thema en een DMID-nummer (DMIDjj-nnnnn) en loopt vaak over meerdere kanalen. Zoek meteen breed, in alle bronnen die je hebt:
 - Meta Ads: de namen van campagnes, advertentiesets en advertenties, op het thema en op het DMID. Campagnenamen volgen "PSV | Exploitatie | Fase | Campagne | DMID".
 - Google Analytics: niet alleen de campagnenaam (sessionCampaignName), maar ook pagina's (pagePath, pageTitle) en producten in de FANstore (itemName). Landingspagina's staan op club.psv.nl/<thema zonder spaties>, nieuws op psv.nl.
+- Playable: de landingspagina's en acties op club.psv.nl, op thema, DMID of het laatste stuk van de URL; daar staan de aanmeldingen.
 - Probeer varianten: alleen de achternaam, of aan elkaar geschreven.
 - Vind je ergens een DMID-nummer, bijvoorbeeld in een paginatitel, zoek daar dan ook mee in de andere bronnen.
 Zeg pas dat een campagne niet bestaat als je al deze plekken hebt geprobeerd, en noem waar je hebt gezocht.

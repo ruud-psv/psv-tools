@@ -108,6 +108,20 @@ const INGEBOUWD = [
     } satisfies Omit<Draft, "url">,
     uitleg: "Meta Ads, gehost in PSV Tools zelf, met het account van Paid Ads. Zet eerst MCP_META_TOKEN in Vercel.",
   },
+  {
+    pad: "/api/mcp/playable",
+    draft: {
+      id: "playable",
+      idTouched: true,
+      name: "Playable",
+      authType: "bearer",
+      envVar: "MCP_PLAYABLE_TOKEN",
+      header: "",
+      page: "/dashboard/landingspaginas",
+      enabled: true,
+    } satisfies Omit<Draft, "url">,
+    uitleg: "Playable (landingspagina's), gehost in PSV Tools zelf, met de koppeling van Landingspagina's. Zet eerst MCP_PLAYABLE_TOKEN in Vercel.",
+  },
 ];
 
 function draftAuth(d: Draft): McpAuth {
