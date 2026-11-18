@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
-import { isValidShareToken } from "@/lib/share-token";
+import { reportForShareToken } from "@/lib/share-access";
+import { checkFanstoreRequest, sharedProducts } from "@/lib/share-scope";
 
 export const revalidate = 300;
 
@@ -64,11 +65,22 @@ export interface ProductTrendData {
 }
 
 export async function GET(req: NextRequest) {
+  // Met een deeltoken (rapport-deelpagina, zonder login): alleen de periode en
+  // producten die het rapport deelt. Zonder token: ingelogd.
   const shareToken = req.nextUrl.searchParams.get("token");
+  let onlyProducts: Set<string> | null = null;
   if (shareToken) {
-    if (!isValidShareToken(shareToken)) {
-      return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
-    }
+    const access = await reportForShareToken(shareToken);
+    if ("error" in access) return access.error;
+    const params = req.nextUrl.searchParams;
+    const denied = checkFanstoreRequest(
+      access.report.sources,
+      { startDate: params.get("startDate"), endDate: params.get("endDate"), product: params.get("product") },
+      new Date()
+    );
+    if (denied) return NextResponse.json({ error: denied }, { status: 403 });
+    const products = sharedProducts(access.report.sources);
+    if (products) onlyProducts = new Set(products);
   } else {
     const sessionCookie = req.cookies.get("psv_session")?.value;
     const authError = authorize(sessionCookie);
@@ -215,6 +227,13 @@ export async function GET(req: NextRequest) {
       })),
       fetchedAt: new Date().toISOString(),
     };
+
+    // Rapport met een productselectie: geen andere producten of categorieën
+    // meesturen. De winkeltotalen blijven; die toont de deelpagina erbij.
+    if (onlyProducts) {
+      data.topProducts = data.topProducts.filter((p) => onlyProducts.has(p.name));
+      data.topCategories = [];
+    }
 
     return NextResponse.json(data);
   } catch (e) {

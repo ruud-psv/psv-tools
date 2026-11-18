@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BetaAnalyticsDataClient, protos } from "@google-analytics/data";
 import { authorize } from "@/lib/auth";
-import { isValidShareToken } from "@/lib/share-token";
+import { reportForShareToken } from "@/lib/share-access";
+import { checkWebRequest } from "@/lib/share-scope";
 
 export const revalidate = 300;
 
@@ -264,10 +265,19 @@ async function fetchSiteData(
 /* ---------- GET Handler ---------- */
 
 export async function GET(req: NextRequest) {
+  // Met een deeltoken (rapport-deelpagina, zonder login): alleen een site,
+  // pagina's en periode die het rapport deelt. Zonder token: ingelogd.
   const shareToken = req.nextUrl.searchParams.get("token");
   if (shareToken) {
-    const ok = isValidShareToken(shareToken);
-    if (!ok) return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
+    const access = await reportForShareToken(shareToken);
+    if ("error" in access) return access.error;
+    const params = req.nextUrl.searchParams;
+    const denied = checkWebRequest(
+      access.report.sources,
+      { site: params.get("site"), paths: resolvePaths(params).paths, from: params.get("from"), to: params.get("to") },
+      new Date()
+    );
+    if (denied) return NextResponse.json({ error: denied }, { status: 403 });
   } else {
     const sessionCookie = req.cookies.get("psv_session")?.value;
     const authError = authorize(sessionCookie);

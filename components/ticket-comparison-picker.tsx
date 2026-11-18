@@ -204,8 +204,8 @@ export function TicketComparisonPicker({
   }, [index]);
 
   /**
-   * Onbekende id's uit de selectie halen zodra de index binnen is. Een
-   * share-token is niet ondertekend, dus er kan alles in staan; zonder deze
+   * Onbekende id's uit de selectie halen zodra de index binnen is. De
+   * selectie kan uit een deellink of de URL komen, dus er kan alles in staan; zonder deze
    * stap zou zo'n id als naamloze regel in de lijst blijven staan.
    */
   useEffect(() => {

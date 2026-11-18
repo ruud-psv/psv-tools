@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { deleteReport, getReport, parseReportInput, saveReport, type ReportRecord } from "@/lib/reports";
 import { deleteAnalysis } from "@/lib/report-analysis";
+import { createShareToken } from "@/lib/share-token";
+import { REPORT_TOKEN_TTL_SECONDS } from "@/lib/share-access";
 
 export const dynamic = "force-dynamic";
 
 // GET is bewust publiek: de deelbare rapportpagina (/share/rapportage?id=...)
-// wordt zonder login bekeken en heeft alleen de rapportconfiguratie nodig.
+// wordt zonder login bekeken. Het (niet te raden) rapport-id is de deellink.
+// Naast de configuratie krijgt de pagina hier een ondertekend deeltoken voor
+// dít rapport, waarmee hij de data-endpoints aanroept; de pagina maakt zelf
+// geen tokens.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -19,7 +24,12 @@ export async function GET(
     // zonder de aanmaker (e-mailadres) te lekken naar externe kijkers.
     // Periode zit per bron in `sources` (genormaliseerd door getReport).
     const { id: rid, title, intro, sources } = report;
-    return NextResponse.json({ report: { id: rid, title, intro, sources } });
+    const now = Date.now();
+    const token = createShareToken({ kind: "report", id: rid }, { expiresInSeconds: REPORT_TOKEN_TTL_SECONDS, now });
+    return NextResponse.json({
+      report: { id: rid, title, intro, sources },
+      share: { token, expiresAt: Math.floor(now / 1000) + REPORT_TOKEN_TTL_SECONDS },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[reports/:id] GET mislukt:", msg);

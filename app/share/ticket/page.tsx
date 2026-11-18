@@ -31,8 +31,9 @@ interface ShareParams {
 }
 
 /**
- * Het share-token is niet ondertekend, dus de inhoud is niet te vertrouwen: een
- * bewerkte link kan er honderden id's in stoppen. Daarom kappen op het maximum
+ * De selectie is niet te vertrouwen: `?compare=` in de URL kiest de bezoeker
+ * zelf, en wat in het (ondertekende) token staat, controleert de server bij het
+ * maken niet. Er kunnen dus honderden id's in staan. Daarom kappen op het maximum
  * en alleen strings overhouden; onbekende id's leveren straks simpelweg geen
  * dagreeks op en vallen stil weg.
  */
@@ -43,7 +44,7 @@ function sanitizeCompare(value: unknown): string[] {
     .slice(0, MAX_COMPARE);
 }
 
-/** Zelfde reden als `sanitizeCompare`: het token is niet ondertekend. */
+/** Zelfde reden als `sanitizeCompare`: de inhoud van het token is niet gecontroleerd. */
 function sanitizeTypes(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value

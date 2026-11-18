@@ -88,24 +88,8 @@ export function stripName(name: string): string {
     .trim() || name;
 }
 
-export function getDateRange(preset: string, customFrom?: string, customTo?: string) {
-  if (preset === "custom" && customFrom && customTo) return { from: customFrom, to: customTo };
-  const now = new Date();
-  const to = now.toISOString().slice(0, 10);
-  switch (preset) {
-    case "7d":  { const d = new Date(now); d.setDate(d.getDate() - 7);   return { from: d.toISOString().slice(0, 10), to }; }
-    case "30d": { const d = new Date(now); d.setDate(d.getDate() - 30);  return { from: d.toISOString().slice(0, 10), to }; }
-    case "90d": { const d = new Date(now); d.setDate(d.getDate() - 90);  return { from: d.toISOString().slice(0, 10), to }; }
-    case "6m":  { const d = new Date(now); d.setMonth(d.getMonth() - 6); return { from: d.toISOString().slice(0, 10), to }; }
-    case "1y":  { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return { from: d.toISOString().slice(0, 10), to }; }
-    case "seizoen2425": return { from: "2024-07-01", to: "2025-06-30" };
-    case "seizoen2526": {
-      const end = new Date(Math.min(new Date("2026-06-30").getTime(), now.getTime()));
-      return { from: "2025-07-01", to: end.toISOString().slice(0, 10) };
-    }
-    default: { const d = new Date(now); d.setDate(d.getDate() - 30); return { from: d.toISOString().slice(0, 10), to }; }
-  }
-}
+/** Staat in `lib/date-range.ts`, zodat de server dezelfde periodes kan narekenen. */
+export { getDateRange } from "@/lib/date-range";
 
 export function computeTotals(mailings: MailingSummary[]): Totals {
   if (!mailings.length) return { mailings: 0, recipients: 0, uniqueOpens: 0, avgOpenRate: 0, uniqueClicks: 0, avgClickRate: 0, avgCtor: 0, bounces: 0, avgBounceRate: 0, unsubscriptions: 0, avgUnsubRate: 0 };

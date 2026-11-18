@@ -31,6 +31,8 @@ import {
 type ReportData = (payload: object | null, sig: string) => void;
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
+/** Haal een nieuw deeltoken als het huidige binnen deze tijd verloopt. */
+const TOKEN_RENEW_MARGIN = 2 * 60 * 60 * 1000;
 
 const PSV_LOGO = "https://www.psv.nl/upload/23adcb48-abc3-487f-9158-6bc7822599a6_PSV_logo_color.svg";
 const CHART_COLORS = ["#e82026", "#bb9753", "#09101d", "#c00d0d", "#2e5aac", "#287d3c"];
@@ -41,7 +43,7 @@ interface CampaignParams {
   kind: "campaign";
   name: string;
   intro?: string;
-  // Legacy globale periode (oude ?token=-links); nieuwe rapporten hebben periode per bron.
+  // Legacy globale periode van oude rapporten; nieuwe rapporten hebben periode per bron.
   from?: string;
   to?: string;
   sources: {
@@ -74,11 +76,6 @@ function resolvePeriod(
   }
   if (legacyFrom && legacyTo) return { from: legacyFrom, to: legacyTo };
   return getDateRange("30d");
-}
-
-/** Base64url token voor de data/insights endpoints (client-side variant van Buffer#base64url). */
-function makeShareToken(payload: object): string {
-  return btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /** Normalize legacy `path` (single string) and new `paths` (array) into one list. */
@@ -1262,63 +1259,48 @@ function CombinedAnalysisBlock({
 function ShareRapportageContent() {
   const urlParams = useSearchParams();
   const reportId = urlParams.get("id") ?? "";
-  const legacyToken = urlParams.get("token") ?? "";
 
   const [params, setParams] = useState<CampaignParams | null>(null);
+  // Ondertekend deeltoken voor dit rapport, van de server (`/api/reports/[id]`).
+  const [share, setShare] = useState<{ token: string; expiresAt: number } | null>(null);
+  const token = share?.token ?? "";
   const [loading, setLoading] = useState(true);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
   const [refreshTick, setRefreshTick] = useState(0);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  // Token voor de data/insights endpoints is volledig afleidbaar uit de URL.
-  const token = useMemo(
-    () => (reportId ? makeShareToken({ kind: "report", id: reportId }) : legacyToken),
-    [reportId, legacyToken]
-  );
-
   useEffect(() => {
-    if (reportId) {
-      // Opgeslagen rapport: configuratie ophalen via het rapport-id
-      fetch(`/api/reports/${encodeURIComponent(reportId)}`)
-        .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)).catch(() => Promise.reject(`Fout ${r.status}`)))
-        .then((data) => {
-          const report = data?.report as ReportRecord | undefined;
-          if (!report || !report.sources) {
-            setTokenError("Rapport niet gevonden.");
-            setLoading(false);
-            return;
-          }
-          setParams({
-            kind: "campaign",
-            name: report.title,
-            intro: report.intro,
-            from: report.from,
-            to: report.to,
-            sources: report.sources,
-          });
-          setLoading(false);
-          setLastRefresh(new Date());
-        })
-        .catch((err) => { setTokenError(String(err)); setLoading(false); });
+    if (!reportId) {
+      // Oude `?token=`-links waren niet ondertekend en werken niet meer.
+      setTokenError("Deze link is niet meer geldig. Vraag de maker van het rapport om een nieuwe link.");
+      setLoading(false);
       return;
     }
-
-    if (!legacyToken) { setTokenError("Ongeldige link"); setLoading(false); return; }
-    fetch(`/api/share?token=${encodeURIComponent(legacyToken)}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(`Fout ${r.status}`))
+    // Opgeslagen rapport: configuratie en deeltoken ophalen via het rapport-id
+    fetch(`/api/reports/${encodeURIComponent(reportId)}`)
+      .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)).catch(() => Promise.reject(`Fout ${r.status}`)))
       .then((data) => {
-        if (!data || data.kind !== "campaign") {
-          setTokenError("Deze link hoort niet bij een campagne-rapportage.");
+        const report = data?.report as ReportRecord | undefined;
+        if (!report || !report.sources || !data?.share?.token) {
+          setTokenError("Rapport niet gevonden.");
           setLoading(false);
           return;
         }
-        setParams(data as CampaignParams);
+        setShare(data.share);
+        setParams({
+          kind: "campaign",
+          name: report.title,
+          intro: report.intro,
+          from: report.from,
+          to: report.to,
+          sources: report.sources,
+        });
         setLoading(false);
         setLastRefresh(new Date());
       })
       .catch((err) => { setTokenError(String(err)); setLoading(false); });
-  }, [reportId, legacyToken]);
+  }, [reportId]);
 
   useEffect(() => {
     if (!params) return;
@@ -1328,6 +1310,21 @@ function ShareRapportageContent() {
     }, REFRESH_INTERVAL);
     return () => clearInterval(id);
   }, [params]);
+
+  // Het deeltoken verloopt na een dag. Een pagina die lang openstaat (bv. op
+  // een scherm) haalt bij het verversen op tijd een nieuw.
+  useEffect(() => {
+    if (refreshTick === 0 || !share || !reportId) return;
+    if (share.expiresAt * 1000 - Date.now() > TOKEN_RENEW_MARGIN) return;
+    let active = true;
+    fetch(`/api/reports/${encodeURIComponent(reportId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (active && data?.share?.token) setShare(data.share); })
+      .catch(() => { /* volgende verversing opnieuw proberen */ });
+    return () => { active = false; };
+    // Alleen bij een verversing, niet bij elk nieuw token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   /* ---- Gecombineerde AI-analyse: opgeslagen, alleen (her)genereren via de knop ---- */
   const enabledKeys = useMemo(() => {
@@ -1395,33 +1392,21 @@ function ShareRapportageContent() {
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
-      // Rapport-id → opslaan zodat een refresh geen nieuwe AI-call doet.
-      const endpoint = reportId
-        ? `/api/reports/${encodeURIComponent(reportId)}/analysis`
-        : "/api/share/insights";
-      const requestBody = reportId
-        ? { token, sig: sigAtRun, payload }
-        : { token, source: "combined", payload };
-      const res = await fetch(endpoint, {
+      // Opslaan bij het rapport, zodat een refresh geen nieuwe AI-call doet.
+      const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}/analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ token, sig: sigAtRun, payload }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e?.error ?? `Fout ${res.status}`);
       }
       const data = await res.json();
-      if (reportId) {
-        const a = data.analysis;
-        setAnalysis(a.result as CombinedInsightResult);
-        setAnalyzedSig(a.sig ?? sigAtRun);
-        setGeneratedAt(a.generatedAt ?? null);
-      } else {
-        setAnalysis(data as CombinedInsightResult);
-        setAnalyzedSig(sigAtRun);
-        setGeneratedAt(new Date().toISOString());
-      }
+      const a = data.analysis;
+      setAnalysis(a.result as CombinedInsightResult);
+      setAnalyzedSig(a.sig ?? sigAtRun);
+      setGeneratedAt(a.generatedAt ?? null);
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Analyse mislukt");
     } finally {

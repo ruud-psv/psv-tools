@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeCombined, type CombinedInsightInput } from "@/lib/insights/combined";
-import { isValidShareToken } from "@/lib/share-token";
+import { reportForShareToken } from "@/lib/share-access";
 import { getAnalysis, saveAnalysis, type StoredAnalysis } from "@/lib/report-analysis";
 import { InsightAnalysisError, InsightConfigError } from "@/lib/insights/runner";
 
@@ -37,20 +37,13 @@ export async function POST(
     return NextResponse.json({ error: "Ongeldige request body." }, { status: 400 });
   }
 
-  if (!body.token || !body.payload) {
-    return NextResponse.json({ error: "Token en payload zijn verplicht." }, { status: 400 });
-  }
-  if (!isValidShareToken(body.token)) {
-    return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
-  }
-  // Token moet bij dit rapport horen.
-  try {
-    const decoded = JSON.parse(Buffer.from(body.token, "base64url").toString());
-    if (decoded?.id && decoded.id !== id) {
-      return NextResponse.json({ error: "Token hoort niet bij dit rapport." }, { status: 403 });
-    }
-  } catch {
-    return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
+  // Eerst het token: het moet ondertekend zijn en bij dít rapport horen,
+  // anders geen AI-aanroep (die kost geld).
+  const access = await reportForShareToken(typeof body?.token === "string" ? body.token : null, id);
+  if ("error" in access) return access.error;
+
+  if (!body.payload) {
+    return NextResponse.json({ error: "Payload is verplicht." }, { status: 400 });
   }
 
   try {

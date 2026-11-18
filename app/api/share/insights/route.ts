@@ -5,7 +5,8 @@ import { analyzeAnalytics, type AnalyticsInsightInput } from "@/lib/insights/ana
 import { analyzeFanstore, type FanstoreInsightInput } from "@/lib/insights/fanstore";
 import { analyzeCombined, type CombinedInsightInput } from "@/lib/insights/combined";
 import { InsightAnalysisError, InsightConfigError } from "@/lib/insights/runner";
-import { isValidShareToken } from "@/lib/share-token";
+import { reportForShareToken } from "@/lib/share-access";
+import { checkInsightSource } from "@/lib/share-scope";
 
 interface RequestBody {
   token: string;
@@ -21,14 +22,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ongeldige request body." }, { status: 400 });
   }
 
-  if (!body.token || !body.source || !body.payload) {
-    return NextResponse.json({ error: "Token, source en payload zijn verplicht." }, { status: 400 });
-  }
+  // Eerst het token: zonder geldig rapporttoken geen AI-aanroep (die kost geld).
+  const access = await reportForShareToken(typeof body?.token === "string" ? body.token : null);
+  if ("error" in access) return access.error;
 
-  // Validate token via base64url decode (stateless)
-  if (!isValidShareToken(body.token)) {
-    return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
+  if (!body.source || !body.payload) {
+    return NextResponse.json({ error: "Source en payload zijn verplicht." }, { status: 400 });
   }
+  const denied = checkInsightSource(access.report.sources, body.source);
+  if (denied) return NextResponse.json({ error: denied }, { status: 403 });
 
   try {
     let analysis: unknown;
