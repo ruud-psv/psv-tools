@@ -265,7 +265,7 @@ function EmailOutput({ data }: { data: EmailData }) {
           <div className="grid gap-3 sm:grid-cols-2">
             {metaItems.map((item) => (
               <div key={item.label} className="rounded-md border border-border bg-muted/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {item.label}
                 </p>
                 <p className="mt-1 text-sm font-medium whitespace-pre-wrap">

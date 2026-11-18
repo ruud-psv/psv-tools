@@ -1062,7 +1062,7 @@ export function KleurplaatCreator() {
             <button
               type="button"
               onClick={() => setToevoegenOpen(true)}
-              className="inline-flex items-center gap-1 text-xs uppercase tracking-wide text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
               <Plus className="h-3 w-3" /> Model toevoegen
             </button>
@@ -1236,7 +1236,7 @@ export function KleurplaatCreator() {
               <button
                 type="button"
                 onClick={() => setPromptZichtbaar((v) => !v)}
-                className="text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 {promptZichtbaar ? "Prompt verbergen" : "Gebruikte prompt tonen"}
               </button>

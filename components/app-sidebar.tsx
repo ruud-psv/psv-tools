@@ -47,7 +47,7 @@ function RailItem({
       >
         <Icon className="h-5 w-5" />
       </span>
-      <span className="max-w-full truncate font-text text-[10px] uppercase tracking-wide">{label}</span>
+      <span className="max-w-full truncate font-text text-[11px] leading-tight">{label}</span>
     </>
   );
   return href ? (
@@ -63,7 +63,7 @@ function RailItem({
 
 function BetaLabel() {
   return (
-    <span className="flex-shrink-0 rounded-sm border border-psv-gold/60 px-1.5 py-px font-text text-[10px] uppercase tracking-wide text-psv-gold">
+    <span className="flex-shrink-0 rounded-sm border border-psv-gold/60 px-1.5 py-px font-text text-[10px] text-psv-gold">
       Beta
     </span>
   );
@@ -87,7 +87,7 @@ function Panel({
   return (
     <div className={cn("w-60 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar", className)}>
       <div className="flex h-16 items-center justify-between gap-2 border-b border-sidebar-border px-4">
-        <p className="truncate font-text text-lg uppercase tracking-wide text-sidebar-foreground">
+        <p className="truncate font-text text-lg font-bold text-sidebar-foreground">
           {section.name}
         </p>
         <button
@@ -104,7 +104,7 @@ function Panel({
         {section.groups.map((group, i) => (
           <div key={group.title ?? i}>
             {group.title && (
-              <p className="mb-1 px-2 font-text text-xs uppercase tracking-wider text-psv-gray-09">
+              <p className="mb-1 px-2 font-text text-xs font-bold text-psv-gray-09">
                 {group.title}
               </p>
             )}

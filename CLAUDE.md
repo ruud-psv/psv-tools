@@ -70,3 +70,4 @@ Gebruik in componenten:
 - Knoppen: `font-heading` + `uppercase` + `tracking-wide`
 - Geen hardcoded kleuren — gebruik Tailwind tokens of CSS custom properties
 - Sidebar: donker thema (neutralDark achtergrond), alle teksten in `font-text` (PSV Text)
+- Alleen PSV Condensed (`font-heading`) mag in hoofdletters (`uppercase`); tekst in PSV Sans of PSV Text nooit in all caps

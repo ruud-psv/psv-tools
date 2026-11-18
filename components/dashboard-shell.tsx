@@ -28,7 +28,7 @@ export function DashboardShell({
           <Menu className="h-5 w-5" />
         </button>
         <Image src="/images/psv-logo.png" alt="PSV" width={28} height={28} />
-        <span className="text-sm font-text uppercase tracking-wide text-sidebar-foreground">
+        <span className="text-sm font-text text-sidebar-foreground">
           PSV Tools
         </span>
       </div>
