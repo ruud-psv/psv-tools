@@ -227,6 +227,34 @@ verwijderen. Hij geeft geen registraties met persoonsgegevens, alleen aantallen.
 4. Vraag in de assistent bijvoorbeeld: "Hoeveel aanmeldingen had de Coen
    Dillen-pagina?" Alleen wie Landingspagina's mag zien, krijgt deze tools.
 
+## Ingebouwde server: Maileon
+
+Maileon heeft geen eigen MCP-server. PSV Tools host er een op `/api/mcp/maileon`, met de sleutel van
+DM Performance (`MAILEON_API_KEY`). Die sleutel kan in Maileon veel meer (contacten lezen, mailings
+versturen); de server gebruikt alleen de lijst met mailings en de samenvatting van de resultaten per
+mailing, met GET. Geen contacten, geen klikken per persoon: alleen totalen.
+
+| Tool | Wat hij doet |
+|---|---|
+| `mailings` | De verstuurde mailings in een periode (status done of archived), nieuwste eerst, met verzendmoment, id, naam en type. Zoekt op een woord uit de naam of het DMID-nummer, zonder dat spaties en hoofdletters tellen. |
+| `resultaten` | Per mailing en in totaal: ontvangers, uniek geopend, open %, uniek geklikt, klik %, CTOR, bounces en afmeldingen. Dezelfde cijfers als DM Performance. Hooguit 300 mailings per vraag. |
+
+| Onderdeel | Bestand |
+|---|---|
+| Het endpoint | `app/api/mcp/maileon/route.ts` |
+| De tools | `lib/mcp/servers/maileon.ts` (met tests) |
+| XML lezen, zoeken en tekst voor het model | `lib/maileon/rapport.ts` (met tests) |
+| De API-client (alleen GET, twee endpoints) | `lib/maileon/client.ts` (met tests) |
+
+### Aanzetten
+
+1. Maak een willekeurig token van minstens 32 tekens en zet het in Vercel als `MCP_MAILEON_TOKEN`
+   (Production). Deploy opnieuw.
+2. Klik in Beheer > MCP Servers bij **Ingebouwd: Maileon** op **Invullen**, en dan op **Opslaan**.
+3. Klik **Verbinding testen** en zet `mailings` en `resultaten` aan.
+4. Vraag in de assistent bijvoorbeeld: "Hoe deden de mailings van oktober het?" Alleen wie DM
+   Performance mag zien, krijgt deze tools.
+
 ## Ingebouwde server: Google Analytics
 
 PSV Tools is zelf ook een MCP-server voor Google Analytics, op

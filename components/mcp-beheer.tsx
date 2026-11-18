@@ -122,6 +122,20 @@ const INGEBOUWD = [
     } satisfies Omit<Draft, "url">,
     uitleg: "Playable (landingspagina's), gehost in PSV Tools zelf, met de koppeling van Landingspagina's. Zet eerst MCP_PLAYABLE_TOKEN in Vercel.",
   },
+  {
+    pad: "/api/mcp/maileon",
+    draft: {
+      id: "maileon",
+      idTouched: true,
+      name: "Maileon",
+      authType: "bearer",
+      envVar: "MCP_MAILEON_TOKEN",
+      header: "",
+      page: "/dashboard/dm-performance",
+      enabled: true,
+    } satisfies Omit<Draft, "url">,
+    uitleg: "Maileon (mailings en resultaten), gehost in PSV Tools zelf, met de koppeling van DM Performance. Zet eerst MCP_MAILEON_TOKEN in Vercel.",
+  },
 ];
 
 function draftAuth(d: Draft): McpAuth {
