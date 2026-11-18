@@ -129,7 +129,7 @@ bewaarde code weer in de drie velden in Playable.
   breder gebruikt wordt.
 - **Wie publiceert, zet JavaScript op club.psv.nl.** De tool staat bij de
   beta tools, en die ziet standaard iedereen. Beperk de toegang in
-  Gebruikersbeheer voordat er een live campagne aan hangt.
+  Beheer > Gebruikers voordat er een live campagne aan hangt.
 - **Valt Bunny weg of zit er een fout in de JS, dan is de pagina leeg.**
   PSV Tools weigert JavaScript die niet te lezen is, maar een fout die pas in
   de browser optreedt, vangt hij niet.

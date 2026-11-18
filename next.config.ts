@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
       { source: "/dashboard/ticket-inzichten-new", destination: "/dashboard/ticketing-stadion", permanent: false },
       { source: "/dashboard/ticket-inzichten", destination: "/dashboard/ticketing-stadion", permanent: false },
       { source: "/dashboard/ticket-inzichten/:path*", destination: "/dashboard/ticketing-stadion", permanent: false },
+      // Gebruikersbeheer is het tabblad Gebruikers van Beheer geworden.
+      { source: "/dashboard/gebruikersbeheer", destination: "/dashboard/beheer", permanent: false },
     ];
   },
 };

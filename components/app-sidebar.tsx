@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { FlaskConical, LogOut, PanelLeftClose, PanelLeftOpen, UserCog } from "lucide-react";
+import { FlaskConical, LogOut, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ import {
   betaTools as allBetaTools,
   navItems,
 } from "@/lib/tools";
-import { USER_ADMIN_HREF } from "@/lib/access";
+import { ADMIN_HREF } from "@/lib/access";
 
 export function AppSidebar({
   allowedPages,
@@ -288,17 +288,17 @@ export function AppSidebar({
         <div className="px-2 py-4 border-t border-sidebar-border space-y-0.5">
           {isAdmin && (
             <Link
-              href={USER_ADMIN_HREF}
+              href={ADMIN_HREF}
               onClick={onMobileClose}
               className={cn(
                 "flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                pathname.startsWith(USER_ADMIN_HREF)
+                pathname.startsWith(ADMIN_HREF)
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
                   : "text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}
             >
-              <UserCog className="h-4 w-4 flex-shrink-0" />
-              <span>Gebruikersbeheer</span>
+              <Settings className="h-4 w-4 flex-shrink-0" />
+              <span>Beheer</span>
             </Link>
           )}
           {betaTools.length > 0 && (

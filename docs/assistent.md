@@ -9,6 +9,7 @@ leest alleen: er wordt niets aangemaakt of gewijzigd.
 | Onderdeel | Bestand |
 |---|---|
 | De tools (per databron) | `lib/assistent/tools.ts` |
+| De tools van MCP-servers (aan te zetten in Beheer > MCP Servers) | `lib/mcp/assistent.ts` |
 | Rechten en controle van de invoer | `lib/assistent/toegang.ts` |
 | De chat-route (model, tool-rondes, stream) | `app/api/assistent/chat/route.ts` |
 | Gesprekken per collega (Vercel Blob, map `assistent-gesprekken/`) | `lib/assistent/gesprekken.ts` |
@@ -28,7 +29,7 @@ haalt het model opnieuw op wat het nodig heeft.
 
 ## Rechten
 
-Elke tool hoort bij een pagina. Wie een pagina niet mag zien (Gebruikersbeheer), krijgt de tools
+Elke tool hoort bij een pagina. Wie een pagina niet mag zien (Beheer > Gebruikers), krijgt de tools
 van die pagina niet, ook niet als het model erom vraagt. De pagina Assistent zelf staat bij de beta
 tools: wie het niveau "Alles" heeft ziet hem niet, en bij "Specifieke pagina's" is hij per
 gebruiker aan of uit te zetten.
@@ -57,6 +58,23 @@ Zet in `lib/assistent/tools.ts` een tool bij en neem hem op in `ASSISTENT_TOOLS`
 - `velden`: de invoer, met een `pattern` voor alles wat een id of datum is.
 - `run`: geeft tekst terug, zo compact als de vraag toelaat. Hergebruik de functie die de pagina
   zelf gebruikt.
+
+Een bron die een MCP-server heeft, kan ook zonder code: voeg de server toe in Beheer > MCP
+Servers en zet de tools aan. Zie `docs/beheer.md`.
+
+## Tools van MCP-servers
+
+Naast de eigen tools krijgt de assistent de tools van MCP-servers die een admin in Beheer heeft
+aangezet. Ze heten `mcp_<server>_<tool>` en horen bij de pagina die bij de server is gekozen; wie
+die pagina niet mag zien, krijgt ze niet. Alleen tools die lezen kunnen aan.
+
+- Er wordt pas verbinding gemaakt als het model een MCP-tool aanroept, en na de vraag worden de
+  verbindingen gesloten.
+- Het model krijgt de beschrijving en het schema zoals een admin ze heeft goedgekeurd.
+- Geeft de server een fout (bijvoorbeeld een ongeldig veld), dan ziet het model die melding en kan
+  het de aanroep aanpassen. Is de server onbereikbaar, dan meldt het model dat de bron nu niet
+  bereikbaar is.
+- Onder het antwoord staat de pagina van de server als bron.
 
 Nog niet aangesloten: DM Performance, Paid Ads, Web Verkeer, FANstore, Landingspagina's, UTM
 Builder, Mail Builder, Rapportages, Database, Aangrenzende stoelen en Contact Filter Import.

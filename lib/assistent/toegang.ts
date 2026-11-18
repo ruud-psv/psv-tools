@@ -27,6 +27,42 @@ export interface AssistentTool {
   run(invoer: Record<string, string>): Promise<string>;
 }
 
+/**
+ * Een tool zoals de chat hem aan het model geeft en uitvoert: de eigen tools
+ * hierboven en de tools van MCP-servers (`lib/mcp/assistent.ts`). Voor beide
+ * geldt hetzelfde: de pagina bepaalt wie hem krijgt, de invoer wordt eerst
+ * gecontroleerd, en de uitkomst is tekst.
+ */
+export interface ChatTool {
+  name: string;
+  label: string;
+  page: string;
+  description: string;
+  inputSchema: { type: "object"; [key: string]: unknown };
+  lees(invoer: unknown): { invoer: Record<string, unknown> } | { fout: string };
+  run(invoer: Record<string, unknown>): Promise<string>;
+}
+
+/**
+ * Een fout die het model mag lezen en waarop het de aanroep kan aanpassen,
+ * zoals de melding van een MCP-server over een ongeldig veld. Andere fouten
+ * krijgt het model niet te zien.
+ */
+export class ToolFout extends Error {}
+
+export function alsChatTool(tool: AssistentTool): ChatTool {
+  return {
+    name: tool.name,
+    label: tool.label,
+    page: tool.page,
+    description: tool.description,
+    inputSchema: invoerSchema(tool),
+    lees: (invoer) => leesInvoer(tool, invoer),
+    // `lees` gaf alleen tekstvelden door (zie `leesInvoer`).
+    run: (invoer) => tool.run(invoer as Record<string, string>),
+  };
+}
+
 export function toolsVoor<T extends Pick<AssistentTool, "page">>(pages: readonly string[], tools: readonly T[]): T[] {
   return tools.filter((tool) => pages.includes(tool.page));
 }

@@ -1,7 +1,7 @@
 import { betaTools, insightTools, knowledgeTools, makeTools } from "@/lib/tools";
 
 /**
- * Gebruikersbeheer: wie mag welke pagina zien. Nieuwe collega's worden in de
+ * Beheer > Gebruikers: wie mag welke pagina zien. Nieuwe collega's worden in de
  * Azure portal toegevoegd; hier staat alleen welk niveau iemand krijgt. Wie
  * niet in de lijst staat — ook iemand die nog nooit heeft ingelogd — krijgt
  * `DEFAULT_LEVEL`.
@@ -13,7 +13,7 @@ import { betaTools, insightTools, knowledgeTools, makeTools } from "@/lib/tools"
 export type AccessLevel = "admin" | "all" | "all-beta" | "custom";
 
 export const ACCESS_LEVELS: { value: AccessLevel; label: string; description: string }[] = [
-  { value: "admin", label: "Admin", description: "Alle pagina's, beta tools en gebruikersbeheer." },
+  { value: "admin", label: "Admin", description: "Alle pagina's, beta tools en het beheer." },
   { value: "all-beta", label: "Alles + beta", description: "Alle pagina's en de beta tools." },
   { value: "all", label: "Alles", description: "Alle pagina's, zonder de beta tools." },
   { value: "custom", label: "Specifieke pagina's", description: "Alleen de aangevinkte pagina's." },
@@ -22,7 +22,8 @@ export const ACCESS_LEVELS: { value: AccessLevel; label: string; description: st
 /** Het niveau van iedereen die (nog) niet in de lijst staat. */
 export const DEFAULT_LEVEL: AccessLevel = "all-beta";
 
-export const USER_ADMIN_HREF = "/dashboard/gebruikersbeheer";
+/** De beheerpagina (tabbladen Gebruikers en MCP-servers); alleen voor admins. */
+export const ADMIN_HREF = "/dashboard/beheer";
 
 export interface UserAccess {
   email: string;
@@ -85,6 +86,8 @@ const API_PAGES: Record<string, string[]> = {
 };
 
 export const USERS_API = "/api/users";
+/** De API's van de beheerpagina, zoals de MCP-servers; alleen voor admins. */
+export const ADMIN_API = "/api/beheer";
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -145,7 +148,7 @@ function under(pathname: string, prefix: string): boolean {
 
 /** De pagina waar een dashboard-pad bij hoort; `null` voor paden zonder eigen recht (zoals het overzicht). */
 export function pageForPath(pathname: string): string | null {
-  if (under(pathname, USER_ADMIN_HREF)) return USER_ADMIN_HREF;
+  if (under(pathname, ADMIN_HREF)) return ADMIN_HREF;
   // Langste match eerst: `/dashboard/ticket-inzichten-new` mag niet als `/dashboard/ticket-inzichten` tellen.
   const match = ALL_PAGES.filter((href) => under(pathname, href)).sort((a, b) => b.length - a.length)[0];
   return match ?? null;
@@ -154,12 +157,12 @@ export function pageForPath(pathname: string): string | null {
 export function canAccessPath(access: EffectiveAccess, pathname: string): boolean {
   const page = pageForPath(pathname);
   if (page === null) return true;
-  if (page === USER_ADMIN_HREF) return access.isAdmin;
+  if (page === ADMIN_HREF) return access.isAdmin;
   return access.pages.includes(page);
 }
 
 export function canAccessApi(access: EffectiveAccess, pathname: string): boolean {
-  if (under(pathname, USERS_API)) return access.isAdmin;
+  if (under(pathname, USERS_API) || under(pathname, ADMIN_API)) return access.isAdmin;
   const prefix = Object.keys(API_PAGES).find((p) => under(pathname, p));
   if (!prefix) return true;
   return API_PAGES[prefix].some((href) => access.pages.includes(href));

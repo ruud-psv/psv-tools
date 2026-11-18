@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  USER_ADMIN_HREF,
+  ADMIN_HREF,
   canAccessApi,
   canAccessPath,
   pageForPath,
@@ -23,8 +23,10 @@ test("onbekende gebruiker krijgt alles + beta, maar geen beheer", () => {
   assert.equal(access.level, "all-beta");
   assert.ok(canAccessPath(access, "/dashboard/kleurplaat"));
   assert.ok(canAccessPath(access, "/dashboard/paid-ads"));
-  assert.ok(!canAccessPath(access, USER_ADMIN_HREF));
+  assert.ok(!canAccessPath(access, ADMIN_HREF));
   assert.ok(!canAccessApi(access, "/api/users"));
+  assert.ok(!canAccessApi(access, "/api/beheer/mcp"));
+  assert.ok(!canAccessApi(access, "/api/beheer/mcp/proberen"));
 });
 
 test("alles: geen beta tools", () => {
@@ -48,10 +50,12 @@ test("specifieke pagina's: alleen wat is aangevinkt, plus het overzicht", () => 
 });
 
 test("admin en ADMIN_EMAILS mogen het beheer in", () => {
-  assert.ok(canAccessPath(resolveAccess("baas@psv.nl", users, []), USER_ADMIN_HREF));
+  assert.ok(canAccessPath(resolveAccess("baas@psv.nl", users, []), ADMIN_HREF));
   const viaEnv = resolveAccess("beperkt@psv.nl", users, parseAdminEmails("x@psv.nl, BEPERKT@psv.nl"));
   assert.ok(viaEnv.isAdmin);
   assert.ok(canAccessApi(viaEnv, "/api/users"));
+  assert.ok(canAccessApi(viaEnv, "/api/beheer/mcp/sync"));
+  assert.equal(pageForPath("/dashboard/beheer"), ADMIN_HREF);
 });
 
 test("Playable loader is een beta tool, los van Landingspagina's", () => {
