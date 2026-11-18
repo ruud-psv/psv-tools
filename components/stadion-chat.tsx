@@ -132,7 +132,7 @@ export function StadionChat({
                 type="button"
                 onClick={() => ask(suggestion)}
                 disabled={busy}
-                className="tag tag--outlined normal-case tracking-normal font-sans text-left"
+                className="tag tag--outlined normal-case tracking-normal font-text text-left"
               >
                 {suggestion}
               </button>

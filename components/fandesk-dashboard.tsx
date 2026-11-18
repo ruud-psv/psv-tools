@@ -1161,7 +1161,7 @@ function TaxonomyTable({
             </th>
             <th className="py-2 text-right font-heading text-xs uppercase tracking-wide text-muted-foreground">
               Vorige periode
-              <span className="block font-sans normal-case tracking-normal">{previousLabel}</span>
+              <span className="block font-text normal-case tracking-normal">{previousLabel}</span>
             </th>
           </tr>
         </thead>
@@ -1487,7 +1487,7 @@ function ContentCard({
             <p className="text-xs font-heading uppercase tracking-wide text-muted-foreground mb-2">
               Meest voorkomende vragen
               {themeTotal > 0 && (
-                <span className="font-sans normal-case tracking-normal">
+                <span className="font-text normal-case tracking-normal">
                   {" "}
                   — aandeel van {formatNumber(themeTotal)} vragen met onderwerp
                 </span>

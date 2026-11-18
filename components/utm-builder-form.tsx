@@ -128,7 +128,7 @@ export function UtmBuilderForm({
 
       {/* Required UTM fields */}
       <div className="space-y-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <p className="font-sans text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Verplichte parameters
         </p>
 
@@ -190,7 +190,7 @@ export function UtmBuilderForm({
 
       {/* Optional UTM fields */}
       <div className="space-y-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <p className="font-sans text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Optionele parameters
         </p>
 
@@ -226,7 +226,7 @@ export function UtmBuilderForm({
         <>
           <Separator />
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <p className="font-sans text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Gegenereerde link
             </p>
             <div

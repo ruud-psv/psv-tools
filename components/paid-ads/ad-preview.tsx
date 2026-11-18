@@ -183,7 +183,7 @@ function PreviewPanel({
             )}
           >
             {f.label}
-            <span className="ml-1 font-sans normal-case tracking-normal opacity-80">{f.ratio}</span>
+            <span className="ml-1 font-text normal-case tracking-normal opacity-80">{f.ratio}</span>
           </button>
         ))}
       </div>

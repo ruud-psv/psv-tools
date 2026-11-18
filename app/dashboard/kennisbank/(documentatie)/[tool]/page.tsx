@@ -81,7 +81,7 @@ function StepList({ steps }: { steps: KennisbankStep[] }) {
             {i + 1}
           </div>
           <div className="pt-0.5">
-            <p className="text-sm font-semibold">{step.title}</p>
+            <p className="font-sans text-sm font-semibold">{step.title}</p>
             <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
               {step.description}
             </p>

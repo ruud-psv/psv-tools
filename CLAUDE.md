@@ -12,9 +12,9 @@ Dit project volgt de PSV huisstijl. Het pakket `@psv/branding` is geinstalleerd.
 
 ### Fonts
 
-- `psv-condensed` (Bold 700) — koppen, knoppen, labels
-- `psv-sans` (Regular 400, Bold 700) — body tekst
-- `psv-text` (Regular 400, Bold 700) — lange teksten, artikelen
+- `psv-condensed` (Bold 700) — koppen, knoppen, labels (`font-heading`)
+- `psv-sans` (Regular 400, Bold 700) — alleen kopteksten die niet PSV Condensed zijn (`font-sans`)
+- `psv-text` (Regular 400, Bold 700) — alle bodytekst, de standaard op `body` (`font-text`)
 
 ### Kleuren
 
@@ -69,4 +69,4 @@ Gebruik in componenten:
 - Labels: `font-heading` + `uppercase` + `tracking-wide`
 - Knoppen: `font-heading` + `uppercase` + `tracking-wide`
 - Geen hardcoded kleuren — gebruik Tailwind tokens of CSS custom properties
-- Sidebar: donker thema (neutralDark achtergrond)
+- Sidebar: donker thema (neutralDark achtergrond), alle teksten in `font-text` (PSV Text)

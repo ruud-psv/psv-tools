@@ -584,7 +584,7 @@ export function SourceTab({
                   <div key={key}>
                     <Label className="mb-1.5 block text-xs">
                       {COLUMN_LABELS[key]}{" "}
-                      <span className="font-sans normal-case tracking-normal text-muted-foreground">
+                      <span className="font-text normal-case tracking-normal text-muted-foreground">
                         ({result.report.detection.source[key] === "header"
                           ? "op koptekst"
                           : "op positie"}

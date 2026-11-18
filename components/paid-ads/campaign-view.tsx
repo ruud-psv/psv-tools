@@ -208,7 +208,7 @@ function Highlight({
         {mark}
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold">
+        <p className="font-sans text-sm font-semibold">
           {name} <span className="font-normal text-muted-foreground">· {platform}</span>
         </p>
         <p className="text-xs text-muted-foreground">{why}</p>

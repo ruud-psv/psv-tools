@@ -803,11 +803,11 @@ function DmInsightsPanel({
       const line = lines[i].trim();
       if (!line) { i++; continue; }
       if (line.startsWith("### ")) {
-        out.push(<p key={i} className="font-semibold">{bold(line.slice(4))}</p>); i++;
+        out.push(<p key={i} className="font-sans font-semibold">{bold(line.slice(4))}</p>); i++;
       } else if (line.startsWith("## ")) {
-        out.push(<p key={i} className="font-semibold">{bold(line.slice(3))}</p>); i++;
+        out.push(<p key={i} className="font-sans font-semibold">{bold(line.slice(3))}</p>); i++;
       } else if (line.startsWith("# ")) {
-        out.push(<p key={i} className="font-semibold">{bold(line.slice(2))}</p>); i++;
+        out.push(<p key={i} className="font-sans font-semibold">{bold(line.slice(2))}</p>); i++;
       } else if (line.startsWith("- ") || line.startsWith("* ")) {
         const items: string[] = [];
         while (i < lines.length && (lines[i].trim().startsWith("- ") || lines[i].trim().startsWith("* "))) {
