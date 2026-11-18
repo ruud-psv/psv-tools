@@ -164,6 +164,24 @@ export class McpSession {
   }
 }
 
+/**
+ * De melding die een server in zijn foutantwoord zette, zoals
+ * `{"jsonrpc":"2.0","error":{"message":"..."}}`. De SDK zet dat antwoord als
+ * ruwe tekst in de foutmelding.
+ */
+export function serverMessage(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  try {
+    const body = JSON.parse(text.slice(start)) as { error?: unknown; message?: unknown };
+    const error = body.error as { message?: unknown } | string | undefined;
+    const message = typeof error === "string" ? error : typeof error?.message === "string" ? error.message : body.message;
+    return typeof message === "string" && message.trim() ? message.trim().slice(0, 300) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Een foutmelding voor het beheer: wat er misging en waar je moet kijken. */
 export function describeError(err: unknown): string {
   if (err instanceof McpConfigError) return err.message;
@@ -175,6 +193,8 @@ export function describeError(err: unknown): string {
     if (err.code === 403) return "De server geeft geen toegang (403). Heeft het token de juiste rechten?";
     if (err.code === 404) return "Op deze URL staat geen MCP-server (404). Controleer het pad, vaak eindigt het op /mcp.";
     if (err.code === 405) return "De server ondersteunt geen Streamable HTTP (405). Alleen Streamable HTTP wordt ondersteund.";
+    const message = serverMessage(err.message);
+    if (message) return err.code ? `De server gaf een fout (${err.code}): ${message}` : `De server gaf een fout: ${message}`;
   }
   if (err instanceof McpError && err.code === ErrorCode.RequestTimeout) return "De server reageerde niet op tijd.";
   if (err instanceof TypeError && /fetch failed/i.test(err.message)) {

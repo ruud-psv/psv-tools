@@ -27,8 +27,12 @@ function fout(status: number, message: string, headers?: Record<string, string>)
 
 function controleerToken(header: string | null): Response | null {
   const token = process.env[TOKEN_ENV]?.trim();
-  if (!token || token.length < MIN_TOKEN_LENGTH) {
-    return fout(503, `Deze MCP-server staat uit: zet ${TOKEN_ENV} (minstens ${MIN_TOKEN_LENGTH} tekens) in Vercel.`);
+  if (!token) return fout(503, `Deze MCP-server staat uit: ${TOKEN_ENV} is niet gezet in Vercel.`);
+  if (token.length < MIN_TOKEN_LENGTH) {
+    return fout(
+      503,
+      `Deze MCP-server staat uit: ${TOKEN_ENV} is korter dan ${MIN_TOKEN_LENGTH} tekens. Zet in Vercel een langer token en deploy opnieuw.`
+    );
   }
   const gegeven = Buffer.from(header?.startsWith("Bearer ") ? header.slice(7).trim() : "");
   const verwacht = Buffer.from(token);
