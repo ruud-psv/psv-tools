@@ -36,8 +36,12 @@ import type { PaidViewProps } from "./shared";
 import { AdHoverPreview } from "./ad-preview";
 import { cn } from "@/lib/utils";
 
-/** Zoveel creatives staan er in het overzicht; de rest staat onder Creatives. */
-const TOP_CREATIVES = 4;
+/**
+ * Zoveel creatives per exploitatie staan er in het overzicht; de rest staat
+ * onder Creatives. Met één exploitatie in beeld is er ruimte voor meer.
+ */
+const TOP_PER_UNIT = 2;
+const TOP_SINGLE_UNIT = 4;
 
 const OORDEEL: Record<TestOordeel, { label: string; tone: Tone }> = {
   "te-vroeg": { label: `Nog te vroeg (< € ${TEST_DREMPEL})`, tone: "neutral" },
@@ -71,18 +75,38 @@ export function OverzichtView({
   // Alleen wat aan staat; advertenties met een onbekende status tellen mee.
   const ads = useMemo(() => data.ads.filter((a) => a.active !== false), [data.ads]);
   const units = useMemo(() => businessUnitPerformance(scored, data.targets), [scored, data.targets]);
-  const redenen = useMemo(() => perKoopreden(ads, data.adSets), [ads, data.adSets]);
+  // Creatives en koopredenen alleen binnen een exploitatie vergelijken: een
+  // ticketingadvertentie hoort niet naast een PSV Connect-advertentie.
+  const unitOf = useMemo(() => {
+    const camps = new Map(data.campaigns.map((c) => [`${c.platform}:${c.id}`, c.businessUnit]));
+    return (ad: PaidAdsAd) => camps.get(`${ad.platform}:${ad.campaignId}`) ?? "Overig";
+  }, [data.campaigns]);
+  const unitKeys = useMemo(
+    () => units.map((u) => u.key).filter((key) => ads.some((a) => unitOf(a) === key)),
+    [units, ads, unitOf]
+  );
+  const [gekozen, setGekozen] = useState<string | null>(null);
+  const redenUnit = gekozen && unitKeys.includes(gekozen) ? gekozen : unitKeys[0] ?? null;
+  const unitAds = useMemo(() => ads.filter((a) => unitOf(a) === redenUnit), [ads, unitOf, redenUnit]);
+  const unitSpend = unitAds.reduce((sum, a) => sum + a.metrics.spend, 0);
+  const redenen = useMemo(() => perKoopreden(unitAds, data.adSets), [unitAds, data.adSets]);
   const tests = useMemo(() => testOverzicht(ads, data.adSets, data.campaigns), [ads, data.adSets, data.campaigns]);
   const idle = useMemo(() => adsWithoutResults(ads, data.adSets, data.campaigns), [ads, data.adSets, data.campaigns]);
   const sets = useMemo(() => new Map(data.adSets.map((s) => [`${s.platform}:${s.id}`, s])), [data.adSets]);
-  const top = useMemo(
-    () =>
-      [...ads]
-        .filter((a) => a.metrics.results > 0)
-        .sort((a, b) => b.metrics.results - a.metrics.results || b.metrics.spend - a.metrics.spend)
-        .slice(0, TOP_CREATIVES),
-    [ads]
-  );
+  const top = useMemo(() => {
+    const perUnit = unitKeys.length === 1 ? TOP_SINGLE_UNIT : TOP_PER_UNIT;
+    return unitKeys
+      .map((unit) => ({
+        unit,
+        ads: ads
+          .filter((a) => unitOf(a) === unit && a.metrics.results > 0)
+          .sort((a, b) => b.metrics.results - a.metrics.results || b.metrics.spend - a.metrics.spend)
+          .slice(0, perUnit),
+      }))
+      .filter((g) => g.ads.length > 0);
+  }, [ads, unitKeys, unitOf]);
+  const koopredenLabel = (ad: PaidAdsAd) =>
+    KOOPREDENEN.find((k) => k.key === koopredenVan(ad, sets.get(`${ad.platform}:${ad.adSetId}`)))?.label ?? null;
 
   const delta = (key: "spend" | "revenue" | "results" | "costPerResult") => {
     const d = deltaFor(key, totals[key], benchmark?.[key] ?? null);
@@ -178,7 +202,7 @@ export function OverzichtView({
       {/* Wat de creatives doen */}
       <SectionCard
         title="Wat de creatives doen"
-        hint="meeste resultaat, alleen advertenties die aan staan"
+        hint="meeste resultaat per exploitatie, alleen advertenties die aan staan"
         action={
           <button
             type="button"
@@ -192,13 +216,16 @@ export function OverzichtView({
         {top.length === 0 ? (
           <EmptySection>Nog geen advertenties met resultaat in deze periode.</EmptySection>
         ) : (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {top.map((ad) => (
-              <TopCreative
-                key={`${ad.platform}-${ad.id}`}
-                ad={ad}
-                koopreden={KOOPREDENEN.find((k) => k.key === koopredenVan(ad, sets.get(`${ad.platform}:${ad.adSetId}`)))?.label ?? null}
-              />
+          <div className={cn("grid grid-cols-1 gap-x-6 gap-y-5", top.length > 1 && "lg:grid-cols-2")}>
+            {top.map((g) => (
+              <div key={g.unit}>
+                <p className="mb-2 font-heading text-xs uppercase tracking-wide text-muted-foreground">{g.unit}</p>
+                <div className={cn("grid grid-cols-2 gap-4", top.length === 1 && "lg:grid-cols-4")}>
+                  {g.ads.map((ad) => (
+                    <TopCreative key={`${ad.platform}-${ad.id}`} ad={ad} koopreden={koopredenLabel(ad)} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -217,7 +244,31 @@ export function OverzichtView({
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {/* Koopredenen */}
-        <SectionCard title="Koopredenen" hint="waarom een fan koopt, uit de naam van advertentie of set">
+        <SectionCard
+          title="Koopredenen"
+          hint={redenUnit ? `${redenUnit} · uit de naam van advertentie of set` : "uit de naam van advertentie of set"}
+        >
+          {unitKeys.length > 1 && (
+            <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Exploitatie">
+              {unitKeys.map((unit) => (
+                <button
+                  key={unit}
+                  type="button"
+                  role="tab"
+                  aria-selected={unit === redenUnit}
+                  onClick={() => setGekozen(unit)}
+                  className={cn(
+                    "rounded-sm px-2.5 py-1 font-heading text-[11px] uppercase tracking-wide transition-colors",
+                    unit === redenUnit
+                      ? "bg-psv-neutralDark text-white"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          )}
           {redenen.length === 0 ? (
             <EmptySection />
           ) : (
@@ -261,11 +312,10 @@ export function OverzichtView({
                 {benoemd.length === 0
                   ? "Nog geen koopreden herkend. "
                   : `${nl(benoemd.length)} van de ${KOOPREDENEN.length} koopredenen in gebruik. `}
-                {onbekend && tests.totaalSpend > 0
-                  ? `${pct((onbekend.metrics.spend / Math.max(tests.totaalSpend, 1)) * 100, 0)} van het budget heeft nog geen koopreden in de naam. `
+                {onbekend && unitSpend > 0
+                  ? `${pct((onbekend.metrics.spend / unitSpend) * 100, 0)} van het budget heeft nog geen koopreden in de naam. `
                   : ""}
-                Zet de koopreden in de naam, bijvoorbeeld &quot;| Matchday |&quot;. Vergelijk koopredenen bij voorkeur
-                binnen één exploitatie: filter daarvoor bovenaan.
+                Zet de koopreden in de naam, bijvoorbeeld &quot;| Matchday |&quot;.
               </p>
             </>
           )}
