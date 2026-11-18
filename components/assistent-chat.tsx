@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, Database, Loader2, MessageSquarePlus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUp, Check, Database, Loader2, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
-import type { GesprekSamenvatting } from "@/lib/kennisbank-gesprekken";
+import type { GesprekSamenvatting, GesprekStap } from "@/lib/kennisbank-gesprekken";
 
 /**
  * De chat van de assistent: één gesprek over de databronnen van PSV Tools
@@ -30,10 +30,41 @@ interface Beurt {
   role: "user" | "assistant";
   content: string;
   bronnen?: Bron[];
+  stappen?: GesprekStap[];
+}
+
+/** Wat de assistent heeft opgezocht, met welke invoer: uitklapbaar onder het antwoord. */
+function Zoekstappen({ stappen }: { stappen: GesprekStap[] }) {
+  const mislukt = stappen.filter((s) => !s.ok).length;
+  return (
+    <details className="text-xs text-muted-foreground">
+      <summary className="cursor-pointer select-none font-heading uppercase tracking-wide hover:text-foreground">
+        Zoekstappen ({stappen.length}
+        {mislukt > 0 ? `, ${mislukt} mislukt` : ""})
+      </summary>
+      <ol className="mt-2 space-y-2 border-l border-border pl-3">
+        {stappen.map((stap, i) => (
+          <li key={i} className="flex gap-2">
+            {stap.ok ? (
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-label="gelukt" />
+            ) : (
+              <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-error" aria-label="mislukt" />
+            )}
+            <div className="min-w-0">
+              <span className="text-foreground">{stap.label}</span>
+              <code className="mt-0.5 block break-all font-mono text-[11px] leading-snug">{stap.invoer}</code>
+              {stap.melding && <span className="mt-0.5 block text-error">{stap.melding}</span>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
 }
 
 function Antwoord({ beurt, bezig }: { beurt: Beurt; bezig: boolean }) {
   const bronnen = beurt.bronnen ?? [];
+  const stappen = beurt.stappen ?? [];
   // Meerdere tools van dezelfde pagina tonen als één bron.
   const paginas = bronnen.filter((b, i) => bronnen.findIndex((x) => x.href === b.href) === i);
 
@@ -65,6 +96,8 @@ function Antwoord({ beurt, bezig }: { beurt: Beurt; bezig: boolean }) {
           ))}
         </div>
       )}
+
+      {stappen.length > 0 && <Zoekstappen stappen={stappen} />}
     </div>
   );
 }
@@ -181,13 +214,16 @@ export function AssistentChat() {
       let rest = "";
       let antwoord = "";
       const bronnen: Bron[] = [];
+      const stappen: GesprekStap[] = [];
       const verwerk = (regel: string) => {
         if (!regel.trim()) return;
-        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string } & Partial<Bron>;
+        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string } & Partial<Bron> & Partial<GesprekStap>;
         if (gebeurtenis.t === "tekst") antwoord += gebeurtenis.d ?? "";
         else if (gebeurtenis.t === "wis") antwoord = "";
         else if (gebeurtenis.t === "bron" && gebeurtenis.naam && gebeurtenis.label && gebeurtenis.href)
           bronnen.push({ naam: gebeurtenis.naam, label: gebeurtenis.label, href: gebeurtenis.href });
+        else if (gebeurtenis.t === "stap" && gebeurtenis.label && typeof gebeurtenis.invoer === "string")
+          stappen.push({ label: gebeurtenis.label, invoer: gebeurtenis.invoer, ok: gebeurtenis.ok === true, melding: gebeurtenis.melding });
         else if (gebeurtenis.t === "fout") throw new Error(gebeurtenis.d || "Er ging iets mis.");
       };
       while (true) {
@@ -197,7 +233,7 @@ export function AssistentChat() {
         const regels = rest.split("\n");
         rest = done ? "" : (regels.pop() ?? "");
         regels.forEach(verwerk);
-        setBeurten([...geschiedenis, { role: "assistant", content: antwoord, bronnen: [...bronnen] }]);
+        setBeurten([...geschiedenis, { role: "assistant", content: antwoord, bronnen: [...bronnen], stappen: [...stappen] }]);
         if (done) break;
       }
       if (!antwoord.trim()) throw new Error("Er kwam geen antwoord terug.");
@@ -237,10 +273,11 @@ export function AssistentChat() {
       const bekend: Record<string, Bron> = data.bronnen ?? {};
       setGesprekId(id);
       setBeurten(
-        (data.gesprek.berichten as { role: Beurt["role"]; content: string; bronnen?: string[] }[]).map((b) => ({
+        (data.gesprek.berichten as { role: Beurt["role"]; content: string; bronnen?: string[]; stappen?: GesprekStap[] }[]).map((b) => ({
           role: b.role,
           content: b.content,
           bronnen: (b.bronnen ?? []).map((naam) => bekend[naam]).filter(Boolean),
+          stappen: b.stappen ?? [],
         }))
       );
       plakRef.current = true;

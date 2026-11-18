@@ -74,3 +74,8 @@ test("per dag: een lijst wordt een tabel, de rest compacte JSON", () => {
   assert.match(perDagTekst(1, undefined, { data: { "2026-10-01": 120 } }), /\{"2026-10-01":120\}/);
   assert.match(perDagTekst(1, undefined, { data: [] }), /Geen aanmeldingen per dag/);
 });
+
+test("melding als Playable meer campagnes noemt dan er zijn opgehaald", () => {
+  assert.match(campagnesTekst([], 500, { zoek: "x" }, 812), /Playable noemt 812 campagnes, maar er zijn er 500 opgehaald/);
+  assert.doesNotMatch(campagnesTekst([], 500, { zoek: "x" }, 500), /Let op/);
+});

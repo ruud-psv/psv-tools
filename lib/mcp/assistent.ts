@@ -55,7 +55,9 @@ export function mcpToolsUit(
             }
             throw err;
           }
-          console.info(`[assistent] mcp ${server.id}/${tool.name}: ${uitkomst.isError ? "fout" : "ok"} in ${uitkomst.ms} ms`);
+          console.info(
+            `[assistent] mcp ${server.id}/${tool.name}: ${uitkomst.isError ? "fout" : "ok"} in ${uitkomst.ms} ms; invoer ${JSON.stringify(invoer).slice(0, 300)}`
+          );
           // De melding van de server mag het model lezen, zodat het de invoer kan aanpassen.
           if (uitkomst.isError) throw new ToolFout(`${server.name} gaf een fout: ${uitkomst.text.slice(0, 2_000)}`);
           return uitkomst.text;

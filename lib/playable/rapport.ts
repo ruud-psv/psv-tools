@@ -95,13 +95,21 @@ function limiet(waarde: number | undefined, standaard: number): number {
   return Math.min(Math.max(1, Math.floor(waarde)), MAX_RIJEN);
 }
 
-export function campagnesTekst(gevonden: PlayableCampagne[], totaal: number, invoer: CampagnesInvoer): string {
+export function campagnesTekst(
+  gevonden: PlayableCampagne[],
+  totaal: number,
+  invoer: CampagnesInvoer,
+  volgensPlayable?: number
+): string {
   const max = limiet(invoer.limiet, 50);
   const getoond = gevonden.slice(0, max);
   const filter = [invoer.alleen_actief && "alleen actief", invoer.zoek && `met "${invoer.zoek}"`].filter(Boolean).join(", ");
   const regels = [
     `PLAYABLE · campagnes${filter ? ` (${filter})` : ""} · ${gevonden.length} gevonden van ${totaal}`,
   ];
+  if (volgensPlayable && volgensPlayable > totaal) {
+    regels.push(`Let op: Playable noemt ${volgensPlayable} campagnes, maar er zijn er ${totaal} opgehaald. De zoekuitkomst is onvolledig.`);
+  }
   if (getoond.length === 0) {
     regels.push("Geen campagnes gevonden. Probeer een ander woord, een deel van het DMID-nummer of het laatste stuk van de URL.");
     return regels.join("\n");

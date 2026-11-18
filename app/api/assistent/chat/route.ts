@@ -6,7 +6,7 @@ import { getGesprek, saveGesprek } from "@/lib/assistent/gesprekken";
 import { alsChatTool, ToolFout, toolsVoor, type ChatTool } from "@/lib/assistent/toegang";
 import { ASSISTENT_TOOLS } from "@/lib/assistent/tools";
 import { mcpToolsVoor } from "@/lib/mcp/assistent";
-import { isGesprekId, nieuwGesprekId, parseBerichten, titelVan } from "@/lib/kennisbank-gesprekken";
+import { isGesprekId, nieuwGesprekId, parseBerichten, titelVan, type GesprekStap } from "@/lib/kennisbank-gesprekken";
 import { todayInAmsterdam } from "@/lib/ringside/seat-state";
 
 /**
@@ -19,7 +19,9 @@ import { todayInAmsterdam } from "@/lib/ringside/seat-state";
  *
  * Het antwoord komt binnen als regels JSON terwijl het model schrijft:
  * `{t:"tekst",d}` voor een stuk tekst, `{t:"bron",naam,label,href}` zodra een
- * tool is gebruikt en `{t:"fout",d}` als het misgaat. Het id van het gesprek
+ * tool is gebruikt, `{t:"stap",label,invoer,ok,melding?}` voor elke
+ * tool-aanroep (zodat je ziet wat er is gezocht) en `{t:"fout",d}` als het
+ * misgaat. Het id van het gesprek
  * staat in de header `X-Gesprek-Id`.
  */
 
@@ -60,6 +62,28 @@ De kennisbank beschrijft hoe PSV met een tool werkt; algemene kennis over die to
 Antwoord in het Nederlands, kort en direct, als een collega. Begin met het antwoord, of met je vraag als je eerst iets moet weten. Gebruik **vet** voor de kerngetallen, "- " voor opsommingen en "1. " voor stappen op volgorde; geen tabellen, geen kopjes en geen em-dash. De chat toont zelf welke bronnen je hebt gebruikt, dus die hoef je niet op te sommen.`;
 
 const WEIGERING = "Op deze vraag kan ik geen antwoord geven. Probeer het anders te formuleren.";
+
+/** Zoveel stappen per antwoord worden getoond en bewaard. */
+const MAX_STAPPEN = 40;
+
+function kort(tekst: string, max: number): string {
+  return tekst.length > max ? `${tekst.slice(0, max - 1)}…` : tekst;
+}
+
+/** Een tool-aanroep zoals de collega hem onder het antwoord ziet. */
+function stapVan(
+  tools: ChatTool[],
+  aanroep: Anthropic.Beta.BetaToolUseBlock,
+  resultaat: Anthropic.Beta.BetaToolResultBlockParam
+): GesprekStap {
+  const ok = !resultaat.is_error;
+  return {
+    label: tools.find((t) => t.name === aanroep.name)?.label ?? aanroep.name,
+    invoer: kort(JSON.stringify(aanroep.input ?? {}), 400),
+    ok,
+    ...(!ok && typeof resultaat.content === "string" && { melding: kort(resultaat.content, 300) }),
+  };
+}
 
 type Bericht = Anthropic.Beta.BetaMessageParam;
 
@@ -127,6 +151,7 @@ export async function POST(req: NextRequest) {
       const stuur = (regel: Record<string, unknown>) => controller.enqueue(encoder.encode(`${JSON.stringify(regel)}\n`));
       let antwoord = "";
       const bronnen: string[] = [];
+      const stappen: GesprekStap[] = [];
 
       try {
         for (let ronde = 0; ; ronde++) {
@@ -179,6 +204,12 @@ export async function POST(req: NextRequest) {
           }
           messages.push({ role: "assistant", content: message.content });
           const uitkomsten = await Promise.all(aanroepen.map((aanroep) => voerUit(tools, aanroep)));
+          uitkomsten.forEach(({ resultaat }, i) => {
+            if (stappen.length >= MAX_STAPPEN) return;
+            const stap = stapVan(tools, aanroepen[i], resultaat);
+            stappen.push(stap);
+            stuur({ t: "stap", ...stap });
+          });
           for (const { tool } of uitkomsten) {
             if (!tool || bronnen.includes(tool.name)) continue;
             bronnen.push(tool.name);
@@ -216,7 +247,12 @@ export async function POST(req: NextRequest) {
                 ? eerder[i]
                 : b
             ),
-            { role: "assistant", content: antwoord.trim(), ...(bronnen.length > 0 && { bronnen }) },
+            {
+              role: "assistant",
+              content: antwoord.trim(),
+              ...(bronnen.length > 0 && { bronnen }),
+              ...(stappen.length > 0 && { stappen }),
+            },
           ],
           createdAt: bestaand?.createdAt ?? nu,
           updatedAt: nu,

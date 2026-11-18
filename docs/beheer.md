@@ -204,7 +204,7 @@ verwijderen. Hij geeft geen registraties met persoonsgegevens, alleen aantallen.
 
 | Tool | Wat hij doet |
 |---|---|
-| `campagnes` | Zoekt campagnes op naam, DMID-nummer of het laatste stuk van de URL (spaties en hoofdletters tellen niet: "Coen Dillen" vindt ook `club.psv.nl/coendillen`). Met id, type, actief, looptijd en URL. |
+| `campagnes` | Haalt alle campagnes op (Playable bepaalt hoeveel per pagina; de client leest het aantal pagina's uit het eerste antwoord en meldt het als de lijst onvolledig is) en zoekt op naam, DMID-nummer of het laatste stuk van de URL (spaties en hoofdletters tellen niet: "Coen Dillen" vindt ook `club.psv.nl/coendillen`). Met id, type, actief, looptijd en URL. |
 | `statistieken` | De totalen van 1 tot 10 campagnes over de hele looptijd: sessies, aanmeldingen, unieke aanmeldingen, conversie, apparaten, gemiddelde tijd en shares. Dezelfde cijfers als Landingspagina's. |
 | `aanmeldingen_per_dag` | Aanmeldingen per dag voor één campagne. Dit endpoint (`/v1/campaign/{id}/statistics/registrations`) wordt elders in PSV Tools nog niet gebruikt: test hem eerst met **Proberen**. |
 

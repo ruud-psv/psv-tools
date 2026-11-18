@@ -26,7 +26,8 @@ import {
 
 /** Wat de server van Playable nodig heeft; in de tests een nepversie. */
 export interface PlayableApi {
-  campagnes(): Promise<PlayableCampagne[]>;
+  /** Alle campagnes, en het totaal dat Playable zelf noemt (als het dat doet). */
+  campagnes(): Promise<{ lijst: PlayableCampagne[]; totaal?: number }>;
   statistieken(id: number): Promise<PlayableStatistieken>;
   aanmeldingenPerDag(id: number): Promise<unknown>;
 }
@@ -72,7 +73,7 @@ export function createPlayableServer({ playable }: { playable: () => PlayableApi
   }
 
   async function vindCampagne(api: PlayableApi, id: number): Promise<PlayableCampagne | undefined> {
-    return (await api.campagnes()).find((c) => c.id === id);
+    return (await api.campagnes()).lijst.find((c) => c.id === id);
   }
 
   server.registerTool(
@@ -89,8 +90,8 @@ export function createPlayableServer({ playable }: { playable: () => PlayableApi
     },
     async (invoer) =>
       voerUit("campagnes", async (api) => {
-        const alle = await api.campagnes();
-        return campagnesTekst(zoekCampagnes(alle, invoer), alle.length, invoer);
+        const { lijst, totaal } = await api.campagnes();
+        return campagnesTekst(zoekCampagnes(lijst, invoer), lijst.length, invoer, totaal);
       })
   );
 
@@ -107,7 +108,7 @@ export function createPlayableServer({ playable }: { playable: () => PlayableApi
     async ({ campagne_ids }) =>
       voerUit("statistieken", async (api) => {
         const ids = [...new Set(campagne_ids)];
-        const alle = await api.campagnes().catch(() => [] as PlayableCampagne[]);
+        const alle = (await api.campagnes().catch(() => ({ lijst: [] as PlayableCampagne[] }))).lijst;
         // Per campagne apart: één fout id mag de andere niet tegenhouden.
         const rijen: StatistiekenRij[] = await Promise.all(
           ids.map(async (id) => {

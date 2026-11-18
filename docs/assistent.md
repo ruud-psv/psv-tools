@@ -42,6 +42,14 @@ gekomen:
   alleen op campagnenamen gezocht en dus niet gevonden, terwijl de pagina's en producten er wel
   waren.
 
+## Zoekstappen
+
+Onder elk antwoord staat een uitklapbaar blok **Zoekstappen**: elke tool-aanroep met het label, de
+invoer (site, periode, filters, zoekwoorden) en of het lukte, met de foutmelding als het misging.
+Zo is te zien wat de assistent heeft opgezocht als een antwoord niet klopt. De stappen worden bij
+het gesprek bewaard (`stappen` in `lib/kennisbank-gesprekken.ts`), zonder de uitkomsten. Het
+serverlog noemt bij een MCP-aanroep ook de invoer.
+
 ## Rechten
 
 Elke tool hoort bij een pagina. Wie een pagina niet mag zien (Beheer > Gebruikers), krijgt de tools

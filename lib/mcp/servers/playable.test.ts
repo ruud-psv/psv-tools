@@ -10,10 +10,12 @@ import { createPlayableServer, type PlayableApi } from "./playable";
 
 const nep: PlayableApi = {
   async campagnes() {
-    return [
-      normaliseerCampagne({ id: 1, name: "Fanstore - Coen Dillen tenue - DMID26-17577", active: true, live_url: "https://club.psv.nl/coendillen", created_on: "2026-10-01" }),
-      normaliseerCampagne({ id: 2, name: "Ticketing - Wachtlijst SCC - DMID26-11224", active: false, created_on: "2026-05-06" }),
-    ];
+    return {
+      lijst: [
+        normaliseerCampagne({ id: 1, name: "Fanstore - Coen Dillen tenue - DMID26-17577", active: true, live_url: "https://club.psv.nl/coendillen", created_on: "2026-10-01" }),
+        normaliseerCampagne({ id: 2, name: "Ticketing - Wachtlijst SCC - DMID26-11224", active: false, created_on: "2026-05-06" }),
+      ],
+    };
   },
   async statistieken(id) {
     if (id === 404) throw new PlayableFout("Campaign not found", 404);

@@ -14,15 +14,28 @@ import {
  * alleen leesrechten (`LEES_SCOPES`) en de client doet alleen GET-verzoeken.
  *
  * Playable vraagt tokens te hergebruiken; daarom een cache per
- * serverinstantie. De campagnelijst wordt een minuut bewaard: één vraag aan de
- * assistent zoekt vaak meerdere keren.
+ * serverinstantie. De campagnelijst wordt tien minuten bewaard: één vraag aan
+ * de assistent zoekt vaak meerdere keren, en de lijst is lang.
+ *
+ * Hoeveel campagnes er per pagina komen, bepaalt Playable (`per_page` wordt
+ * niet altijd gevolgd). Daarom leest de client het aantal pagina's uit het
+ * eerste antwoord en haalt hij de rest in groepjes tegelijk op.
  */
 
-const MAX_PAGINAS = 50;
-const LIJST_CACHE_MS = 60_000;
+/** Ruim boven het aantal campagnes van PSV, ook bij 10 per pagina. */
+const MAX_PAGINAS = 600;
+/** Zoveel pagina's tegelijk. */
+const TEGELIJK = 8;
+const LIJST_CACHE_MS = 10 * 60_000;
+
+type Pagina = {
+  data?: Record<string, unknown>[];
+  links?: { next?: string | null };
+  meta?: { last_page?: unknown; total?: unknown; per_page?: unknown };
+};
 
 let tokenCache: { clientId: string; token: string; expiresAt: number } | null = null;
-let lijstCache: { clientId: string; campagnes: PlayableCampagne[]; at: number } | null = null;
+let lijstCache: { clientId: string; lijst: PlayableCampagne[]; totaal?: number; at: number } | null = null;
 
 async function leesFout(res: Response): Promise<string> {
   const text = await res.text();
@@ -76,19 +89,49 @@ export function playableApi(config: { clientId: string; clientSecret: string }, 
   return {
     async campagnes() {
       if (lijstCache && lijstCache.clientId === config.clientId && Date.now() - lijstCache.at < LIJST_CACHE_MS) {
-        return lijstCache.campagnes;
+        return { lijst: lijstCache.lijst, totaal: lijstCache.totaal };
       }
-      const campagnes: PlayableCampagne[] = [];
-      for (let pagina = 1; pagina <= MAX_PAGINAS; pagina++) {
-        const body = (await get("/v1/campaigns", { per_page: "100", page: String(pagina) })) as {
-          data?: Record<string, unknown>[];
-          links?: { next?: string | null };
-        };
-        campagnes.push(...(body.data ?? []).map(normaliseerCampagne));
-        if (!body.links?.next) break;
+      const pagina = (nummer: number) => get("/v1/campaigns", { per_page: "100", page: String(nummer) }) as Promise<Pagina>;
+      const eerste = await pagina(1);
+      const paginas: Pagina[] = [eerste];
+      const totaal = Number(eerste.meta?.total) || undefined;
+      const perPagina = Number(eerste.meta?.per_page) || eerste.data?.length || 0;
+      const laatste = Number(eerste.meta?.last_page) || (totaal && perPagina ? Math.ceil(totaal / perPagina) : undefined);
+
+      if (laatste) {
+        // Het aantal pagina's is bekend: alles in groepjes tegelijk.
+        for (let start = 2; start <= Math.min(laatste, MAX_PAGINAS); start += TEGELIJK) {
+          const nummers = Array.from({ length: Math.min(TEGELIJK, Math.min(laatste, MAX_PAGINAS) - start + 1) }, (_, i) => start + i);
+          paginas.push(...(await Promise.all(nummers.map(pagina))));
+        }
+      } else if (eerste.links?.next) {
+        // Onbekend: groepjes vooruit, maar alleen tot en met de eerste pagina
+        // zonder vervolg; wat daarna in het groepje binnenkwam telt niet mee.
+        let klaar = false;
+        for (let start = 2; start <= MAX_PAGINAS && !klaar; start += TEGELIJK) {
+          const groep = await Promise.all(Array.from({ length: TEGELIJK }, (_, i) => pagina(start + i)));
+          for (const p of groep) {
+            if (!p.data?.length) {
+              klaar = true;
+              break;
+            }
+            paginas.push(p);
+            if (!p.links?.next) {
+              klaar = true;
+              break;
+            }
+          }
+        }
       }
-      lijstCache = { clientId: config.clientId, campagnes, at: Date.now() };
-      return campagnes;
+
+      const perId = new Map<number, PlayableCampagne>();
+      for (const p of paginas) for (const raw of p.data ?? []) {
+        const campagne = normaliseerCampagne(raw);
+        perId.set(campagne.id, campagne);
+      }
+      const lijst = [...perId.values()];
+      lijstCache = { clientId: config.clientId, lijst, totaal, at: Date.now() };
+      return { lijst, totaal };
     },
     statistieken: async (id) => normaliseerStatistieken(await get(`/v1/campaign/${id}/statistics`)),
     aanmeldingenPerDag: (id) => get(`/v1/campaign/${id}/statistics/registrations`),

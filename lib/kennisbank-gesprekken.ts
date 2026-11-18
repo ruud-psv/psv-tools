@@ -18,11 +18,24 @@ export const MAX_BERICHTEN = 40;
 const MAX_BERICHT = 8000;
 const MAX_TITEL = 80;
 
+/** Eén tool-aanroep van de assistent, zoals de chat hem onder het antwoord toont. */
+export interface GesprekStap {
+  /** Het label van de tool, zoals "Google Analytics · Rapport". */
+  label: string;
+  /** De invoer als compacte JSON, afgekapt. */
+  invoer: string;
+  ok: boolean;
+  /** Bij een fout: de melding die het model kreeg, afgekapt. */
+  melding?: string;
+}
+
 export interface GesprekBericht {
   role: "user" | "assistant";
   content: string;
   /** Alleen bij de assistent van PSV Tools: de namen van de geraadpleegde tools. */
   bronnen?: string[];
+  /** Alleen bij de assistent van PSV Tools: welke tools met welke invoer zijn aangeroepen. */
+  stappen?: GesprekStap[];
 }
 
 export interface Gesprek {
