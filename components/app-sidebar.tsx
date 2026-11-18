@@ -7,7 +7,7 @@ import Image from "next/image";
 import { LogOut, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ADMIN_HREF } from "@/lib/access";
-import { firstHref, isUnder, sectionForPath, sectionsFor, type NavSection } from "@/lib/navigation";
+import { activeHref, firstHref, isUnder, sectionForPath, sectionsFor, type NavSection } from "@/lib/navigation";
 
 const COLLAPSED_KEY = "sidebar-panel-collapsed";
 
@@ -72,13 +72,14 @@ function BetaLabel() {
 /** Het paneel naast de rail: de pagina's onder het actieve onderdeel. */
 function Panel({
   section,
-  pathname,
+  currentHref,
   onCollapse,
   onNavigate,
   className,
 }: {
   section: NavSection;
-  pathname: string;
+  /** De link van de huidige pagina (zie `activeHref`). */
+  currentHref: string | null;
   onCollapse: () => void;
   onNavigate?: () => void;
   className?: string;
@@ -110,7 +111,7 @@ function Panel({
             <ul className="space-y-0.5">
               {group.links.map((link) => {
                 const Icon = link.icon;
-                const active = isUnder(pathname, link.href);
+                const active = link.href === currentHref;
                 return (
                   <li key={link.href}>
                     <Link
@@ -237,7 +238,7 @@ export function AppSidebar({
           // Een nieuwe key per onderdeel, zodat het paneel bij wisselen opnieuw infadet.
           key={active.id}
           section={active}
-          pathname={pathname}
+          currentHref={activeHref(sections, pathname)}
           onCollapse={() => setPanelCollapsed(true)}
           onNavigate={onMobileClose}
           // Op mobiel staat het paneel altijd open in de lade; inklappen is voor desktop.
