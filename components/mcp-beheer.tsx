@@ -77,6 +77,24 @@ const EMPTY_DRAFT: Draft = {
   enabled: true,
 };
 
+/** MCP-servers die PSV Tools zelf host (`app/api/mcp/*`); met één klik in te vullen. */
+const INGEBOUWD = [
+  {
+    pad: "/api/mcp/google-analytics",
+    draft: {
+      id: "googleanalytics",
+      idTouched: true,
+      name: "Google Analytics",
+      authType: "bearer",
+      envVar: "MCP_GA_TOKEN",
+      header: "",
+      page: "/dashboard/web-verkeer",
+      enabled: true,
+    } satisfies Omit<Draft, "url">,
+    uitleg: "Google Analytics, gehost in PSV Tools zelf. Zet eerst MCP_GA_TOKEN in Vercel.",
+  },
+];
+
 function draftAuth(d: Draft): McpAuth {
   if (d.authType === "geen") return { type: "geen" };
   if (d.authType === "bearer") return { type: "bearer", envVar: d.envVar.trim() };
@@ -537,6 +555,7 @@ export function McpBeheer() {
   }
 
   const editing = editingId !== null;
+  const nogNietToegevoegd = INGEBOUWD.filter((i) => !servers.some((s) => new URL(s.url).pathname === i.pad));
 
   return (
     <div className="space-y-6">
@@ -552,6 +571,31 @@ export function McpBeheer() {
           <h2 className="font-heading text-xl uppercase tracking-wide">
             {editing ? "Server bewerken" : "Server toevoegen"}
           </h2>
+
+          {!editing &&
+            !loading &&
+            nogNietToegevoegd.map((ingebouwd) => (
+              <div
+                key={ingebouwd.pad}
+                className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <span>
+                  <span className="font-heading uppercase tracking-wide">Ingebouwd: </span>
+                  {ingebouwd.uitleg}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDraft({ ...ingebouwd.draft, url: `${window.location.origin}${ingebouwd.pad}` });
+                    setFormError(null);
+                  }}
+                >
+                  Invullen
+                </Button>
+              </div>
+            ))}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="form-group">

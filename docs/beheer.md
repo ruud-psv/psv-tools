@@ -128,9 +128,70 @@ opnieuw.
   interne adressen.
 - **Alleen Streamable HTTP.** Servers die alleen lokaal draaien (stdio), zoals
   de officiële Google Analytics- en Google Ads-servers, moeten eerst ergens
-  over HTTP worden gehost, bijvoorbeeld op Cloud Run.
+  over HTTP worden gehost. Voor Google Analytics is dat niet nodig: PSV Tools
+  heeft een eigen server (hieronder).
 - De uitkomst van een tool is data. De assistent krijgt de instructie nooit
   instructies uit een uitkomst te volgen, en een uitkomst gaat met maximaal
   60.000 tekens naar het model.
 - Inloggen met OAuth (een "Koppelen"-knop) is er nog niet; servers die alleen
   OAuth kennen kunnen nog niet worden toegevoegd.
+
+## Ingebouwde server: Google Analytics
+
+PSV Tools is zelf ook een MCP-server voor Google Analytics, op
+`/api/mcp/google-analytics`. Hij gebruikt dezelfde koppeling als Web Verkeer
+(het service-account in `GA_SERVICE_ACCOUNT_JSON` en de properties in
+`GA_PROPERTY_*`) en kan alleen bij die vier sites: psv.nl, ticketshop.psv.nl,
+psvfanstore.nl en acties.psv.nl.
+
+| Tool | Wat hij doet |
+|---|---|
+| `rapport` | Een rapport over een periode: het model kiest zelf metrics, dimensies, filters, sortering en eventueel een vergelijkingsperiode. Met het totaal over alle rijen. |
+| `realtime` | De afgelopen 30 minuten. |
+| `velden` | De namen van metrics en dimensies zoeken, ook eigen velden (`customEvent:...`). |
+
+Alle drie lezen alleen en zeggen dat ook, dus ze kunnen in Beheer meteen aan.
+
+| Onderdeel | Bestand |
+|---|---|
+| Het endpoint (token, Streamable HTTP zonder sessies) | `app/api/mcp/google-analytics/route.ts` |
+| De tools | `lib/mcp/servers/google-analytics.ts` (met tests) |
+| Verzoek aan GA en tekst voor het model | `lib/google-analytics/rapport.ts` (met tests) |
+| Service-account en sites | `lib/google-analytics/client.ts` |
+
+### Aanzetten
+
+1. Maak een willekeurig token van minstens 32 tekens, bijvoorbeeld met de
+   wachtwoordgenerator van NordPass (40 tekens of meer).
+2. Zet het in Vercel als `MCP_GA_TOKEN` (Production) en deploy opnieuw. Zonder
+   dit token staat de server uit.
+3. Ga naar Beheer > MCP Servers en klik bij **Ingebouwd: Google Analytics** op
+   **Invullen**, en dan op **Opslaan**. Het formulier gebruikt hetzelfde
+   `MCP_GA_TOKEN` om in te loggen.
+4. Klik **Verbinding testen** en zet `rapport`, `realtime` en `velden` aan.
+5. Vraag in de assistent bijvoorbeeld: "Wat waren gisteren de best bekeken
+   pagina's op psv.nl?" Alleen wie Web Verkeer mag zien, krijgt deze tools.
+
+### Buiten PSV Tools
+
+Elke MCP-client die Streamable HTTP met een bearer-token ondersteunt, kan de
+server ook gebruiken, bijvoorbeeld Claude Code:
+
+```
+claude mcp add --transport http psv-google-analytics https://tools.psv.nl/api/mcp/google-analytics --header "Authorization: Bearer <MCP_GA_TOKEN>"
+```
+
+Er is één token voor iedereen: wie het heeft, kan de cijfers van de vier sites
+lezen. Geef het alleen aan collega's die Web Verkeer mogen zien. Intrekken doe
+je door het token in Vercel te vervangen; de assistent werkt daarna gewoon
+verder, want die leest dezelfde omgevingsvariabele.
+
+### Hoe het werkt
+
+- Elke request staat op zichzelf (geen sessies), zodat het op een
+  Vercel-functie werkt. Alleen POST; GET en DELETE geven 405.
+- Het token wordt in constante tijd vergeleken. Een fout of ontbrekend token
+  geeft 401; zonder `MCP_GA_TOKEN` (of korter dan 32 tekens) geeft de server 503.
+- Een fout van Google Analytics, zoals een onbekende metric, gaat als leesbare
+  melding terug, zodat het model de vraag kan aanpassen.
+- Rapporten geven standaard 10 rijen en hooguit 250.

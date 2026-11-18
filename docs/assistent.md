@@ -76,6 +76,9 @@ die pagina niet mag zien, krijgt ze niet. Alleen tools die lezen kunnen aan.
   bereikbaar is.
 - Onder het antwoord staat de pagina van de server als bron.
 
+Google Analytics komt zo in de assistent: via de MCP-server die PSV Tools zelf host
+(`/api/mcp/google-analytics`). Aanzetten staat in `docs/beheer.md`.
+
 Nog niet aangesloten: DM Performance, Paid Ads, Web Verkeer, FANstore, Landingspagina's, UTM
 Builder, Mail Builder, Rapportages, Database, Aangrenzende stoelen en Contact Filter Import.
 Schrijfacties (iets aanmaken of wijzigen) zijn bewust uitgesteld.
