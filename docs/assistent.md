@@ -17,15 +17,30 @@ leest alleen: er wordt niets aangemaakt of gewijzigd.
 
 1. De browser stuurt de vragen en antwoorden van het gesprek naar `/api/assistent/chat`.
 2. De route bepaalt welke tools de collega krijgt en geeft die mee aan het model
-   (`claude-opus-5-5`, lage effort).
+   (`claude-opus-5-5`, effort gemiddeld: op laag verkende het model te weinig).
 3. Vraagt het model om een tool, dan voert de server hem uit en geeft de tekst terug. Dat herhaalt
-   zich tot er een antwoord is, met een maximum van 8 rondes per vraag.
+   zich tot er een antwoord is, met een maximum van 12 rondes per vraag.
 4. Het antwoord komt binnen terwijl het model schrijft. Onder het antwoord staan de pagina's
    waar de data vandaan komt.
 
 De tools gebruiken dezelfde functies als de pagina's zelf, dus een antwoord gaat over dezelfde
 cijfers als het dashboard. Data uit een eerdere vraag wordt niet bewaard: bij een vervolgvraag
 haalt het model opnieuw op wat het nodig heeft.
+
+## Werkwijze
+
+De instructies staan in `INSTRUCTIES` in de chat-route. Twee onderdelen zijn er na het testen bij
+gekomen:
+
+- **Eerst verkennen, dan concluderen.** Het model zoekt eerst uit wat er bedoeld wordt en wat er
+  is, en haalt daarna de cijfers op. Een open keuze (zoals de periode) vult het zelf in en noemt
+  het. Het vraagt alleen terug als het na het zoeken nog niet weet wat er bedoeld wordt, als er
+  meerdere kandidaten zijn, of als een verkeerde keuze het antwoord misleidend maakt.
+- **Een campagne zoeken.** Breed en in alle bronnen: namen in Meta Ads (thema en DMID-nummer), en
+  in Google Analytics de campagnenaam, pagina's en FANstore-producten. Een DMID-nummer dat het
+  ergens vindt, gebruikt het om verder te zoeken. Aanleiding: "de Coen Dillen-campagne" werd eerst
+  alleen op campagnenamen gezocht en dus niet gevonden, terwijl de pagina's en producten er wel
+  waren.
 
 ## Rechten
 
