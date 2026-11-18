@@ -391,7 +391,7 @@ export function AssistentChat() {
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         {stuk && toonStuk && (
-          <StukPaneel stuk={stuk} onStuk={setStuk} onSluit={() => setToonStuk(false)} className="absolute inset-0 z-20 xl:hidden" />
+          <StukPaneel stuk={stuk} onStuk={setStuk} onSluit={() => setToonStuk(false)} uitgeschakeld={bezig} className="absolute inset-0 z-20 xl:hidden" />
         )}
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
@@ -481,7 +481,9 @@ export function AssistentChat() {
         </div>
       </div>
 
-      {stuk && <StukPaneel stuk={stuk} onStuk={setStuk} className="hidden w-[46%] max-w-3xl flex-shrink-0 border-l border-border xl:flex" />}
+      {stuk && (
+        <StukPaneel stuk={stuk} onStuk={setStuk} uitgeschakeld={bezig} className="hidden w-[46%] max-w-3xl flex-shrink-0 border-l border-border xl:flex" />
+      )}
     </div>
   );
 }

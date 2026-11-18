@@ -25,6 +25,29 @@ deel je het met een link of druk je het af als PDF.
   het niet met een tool heeft opgehaald. Elk blok met cijfers heeft een verplichte bron (bron en
   periode); onderaan het stuk staan alle bronnen en de peildatum.
 
+## Zelf bewerken
+
+Klik in het paneel op **Bewerken** (tijdens een antwoord van de assistent kan dat niet):
+
+- **Klik op een blok** en het wordt ter plekke een invulvorm: tekst, kop, kerngetallen (label,
+  waarde, toelichting), conclusiepunten, tabelcellen met rijen en kolommen, of de data van een
+  grafiek (labels, reeksen, lijn of staven, eenheid). Getallen typ je zoals je gewend bent:
+  "1.400", "12,4" of "€ 374.610". **Opslaan** maakt er een nieuwe versie van.
+- **Titel en ondertitel** pas je direct aan; ze worden opgeslagen als je het veld verlaat of op
+  Enter drukt. Bovenin wissel je tussen one-pager en rapport.
+- **Per blok** kun je omhoog, omlaag en verwijderen. Tussen de blokken staat **Blok toevoegen**.
+  Een nieuw blok begint met voorbeeldinhoud en gaat meteen open.
+- **Dezelfde regels als de assistent.** De server controleert je wijziging met dezelfde regels
+  (`PATCH /api/assistent/stukken/<id>`, `handmatigBewerken` in `lib/stukken/model.ts`), en het
+  model ziet je wijzigingen bij je volgende vraag. Zo kun je afwisselen: zelf iets aanpassen en de
+  assistent iets laten toevoegen.
+- **Geen wijzigingen over elkaar heen.** Elke wijziging gaat uit van de versie die je voor je had.
+  Heeft de assistent het stuk intussen veranderd, dan wordt jouw wijziging niet opgeslagen en zie
+  je de nieuwste versie, met een melding.
+- **Cijfers die je zelf aanpast**, worden niet tegen de bron gecontroleerd. Een nieuw blok met
+  cijfers krijgt als bron "Handmatig ingevuld"; pas die aan als het ergens vandaan komt. De
+  peildatum verandert niet bij een eigen wijziging.
+
 ## Delen
 
 **Delen** maakt een link: `/share/stuk/<id>`, met een willekeurig id dat niet te raden is.
@@ -58,11 +81,11 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 | API's: stuk, lijst, vorige versie, delen | `app/api/assistent/stukken/*` |
 | Weergave in de huisstijl | `components/stuk/stuk-weergave.tsx` |
 | Het paneel naast de chat | `components/stuk/stuk-paneel.tsx` |
+| Zelf bewerken in het voorbeeld | `components/stuk/stuk-bewerker.tsx`, `lib/stukken/bewerken.ts` (met tests) |
 | De deellink en de afdrukpagina | `app/share/stuk/[id]/page.tsx`, `app/stuk/[id]/page.tsx` |
 
 ## Nog niet
 
 - Presentaties (dia's) en export naar PowerPoint.
-- Tekst direct in het voorbeeld aanpassen.
 - Cijfers in een bestaand stuk verversen.
 - Na het inloggen terug naar de gedeelde link.

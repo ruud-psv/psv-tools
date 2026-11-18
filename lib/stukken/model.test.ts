@@ -167,3 +167,26 @@ test("bronnen en samenvatting", () => {
   assert.match(tekst, /b1 kerngetallen: Omzet, Artikelen/);
   assert.match(tekst, /b2 conclusie: 1 punten/);
 });
+
+test("zelf bewerken: dezelfde regels, op de versie die je voor je had", async () => {
+  const { handmatigBewerken, StukConflict } = await import("./model");
+  const s = { ...stuk(), peildatum: "2026-11-01" };
+  const nieuw = handmatigBewerken(
+    s,
+    { basisVersie: 1, titel: "Eigen titel", acties: [{ actie: "wijzigen", blok_id: "b3", blok: { type: "tekst", tekst: "Zelf geschreven." } }], eigenaar: "iemand@anders.nl" },
+    "2026-11-18T13:00:00.000Z"
+  );
+  assert.equal(nieuw.versie, 2);
+  assert.equal(nieuw.titel, "Eigen titel");
+  assert.equal(nieuw.eigenaar, "maker@psv.nl"); // alleen titel, ondertitel, soort en acties tellen
+  assert.equal(nieuw.peildatum, "2026-11-01"); // de peildatum gaat over het ophalen
+  assert.equal(nieuw.vorige[0].titel, "Coen Dillen campagne");
+
+  // De assistent was intussen bezig: geen wijziging eroverheen, wel de nieuwste versie terug.
+  assert.throws(
+    () => handmatigBewerken(nieuw, { basisVersie: 1, titel: "Te laat" }, ""),
+    (err: Error) => err instanceof StukConflict && err.stuk.versie === 2
+  );
+  assert.throws(() => handmatigBewerken(nieuw, { basisVersie: 2, titel: "" }, ""), /titel ontbreekt/);
+  assert.throws(() => handmatigBewerken(nieuw, {}, ""), StukConflict);
+});

@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2, Loader2, Printer, Undo2, X } from "lucide-react";
+import { Check, Link2, Loader2, Pencil, Printer, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { CopyField } from "@/components/copy-field";
 import { StukWeergave, formatDag } from "@/components/stuk/stuk-weergave";
+import { StukBewerker } from "@/components/stuk/stuk-bewerker";
 import { cn } from "@/lib/utils";
 import { STUK_SOORT_LABEL, type Stuk } from "@/lib/stukken/model";
 
 /**
- * Het stuk naast de chat: het voorbeeld, een stap terug, afdrukken en delen.
- * Aanpassen gaat via de chat; de assistent werkt het stuk dan bij.
+ * Het stuk naast de chat: het voorbeeld, zelf bewerken, een stap terug,
+ * afdrukken en delen. Aanpassen kan ook via de chat; de assistent werkt het
+ * stuk dan bij.
  */
 
 function vandaag(): string {
@@ -143,13 +145,28 @@ function Delen({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk) => void }) {
   );
 }
 
-export function StukPaneel({ stuk, onStuk, onSluit, className }: { stuk: Stuk; onStuk: (stuk: Stuk) => void; onSluit?: () => void; className?: string }) {
+export function StukPaneel({
+  stuk,
+  onStuk,
+  onSluit,
+  uitgeschakeld = false,
+  className,
+}: {
+  stuk: Stuk;
+  onStuk: (stuk: Stuk) => void;
+  onSluit?: () => void;
+  /** De assistent is bezig: dan niet beginnen met bewerken. */
+  uitgeschakeld?: boolean;
+  className?: string;
+}) {
   const [delen, setDelen] = useState(Boolean(stuk.deellink));
+  const [bewerken, setBewerken] = useState(false);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
 
   // Ander gesprek, ander stuk: het deelvak opnieuw bepalen.
   useEffect(() => setDelen(Boolean(stuk.deellink)), [stuk.id, stuk.deellink]);
+  useEffect(() => setBewerken(false), [stuk.id]);
 
   async function terug() {
     setFout(null);
@@ -169,6 +186,17 @@ export function StukPaneel({ stuk, onStuk, onSluit, className }: { stuk: Stuk; o
         <Badge variant="secondary">{STUK_SOORT_LABEL[stuk.soort]}</Badge>
         <span className="text-xs text-muted-foreground">Versie {stuk.versie}</span>
         <div className="ml-auto flex items-center gap-1">
+          <Button
+            type="button"
+            variant={bewerken ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setBewerken((b) => !b)}
+            disabled={!bewerken && uitgeschakeld}
+            title={uitgeschakeld && !bewerken ? "Wacht tot de assistent klaar is" : bewerken ? "Klaar met bewerken" : "Het stuk zelf aanpassen"}
+          >
+            {bewerken ? <Check /> : <Pencil />}
+            <span className="hidden sm:inline">{bewerken ? "Klaar" : "Bewerken"}</span>
+          </Button>
           {stuk.vorige.length > 0 && (
             <Button type="button" variant="ghost" size="sm" onClick={terug} disabled={bezig} title="Terug naar de vorige versie">
               {bezig ? <Loader2 className="animate-spin" /> : <Undo2 />}
@@ -195,8 +223,16 @@ export function StukPaneel({ stuk, onStuk, onSluit, className }: { stuk: Stuk; o
       {fout && <p className="form-error px-4 pt-2">{fout}</p>}
       {delen && <Delen stuk={stuk} onStuk={onStuk} />}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-        <StukWeergave stuk={stuk} peildatum={stuk.peildatum} />
-        <p className="mt-6 text-center text-xs text-muted-foreground">Aanpassen? Vraag het in de chat, bijvoorbeeld &quot;maak de titel korter&quot;.</p>
+        {bewerken ? (
+          <StukBewerker stuk={stuk} onStuk={onStuk} />
+        ) : (
+          <>
+            <StukWeergave stuk={stuk} peildatum={stuk.peildatum} />
+            <p className="mt-6 text-center text-xs text-muted-foreground">
+              Aanpassen? Klik op Bewerken, of vraag het in de chat, bijvoorbeeld &quot;maak de titel korter&quot;.
+            </p>
+          </>
+        )}
       </div>
     </section>
   );

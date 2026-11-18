@@ -334,3 +334,30 @@ export function samenvatting(stuk: Stuk): string {
   });
   return `${STUK_SOORT_LABEL[stuk.soort]} "${stuk.titel}", versie ${stuk.versie}, ${stuk.blokken.length} blokken:\n${blokken.join("\n")}`;
 }
+
+/* ---------- Bewerken in het voorbeeld ---------- */
+
+/** Het stuk is intussen gewijzigd (bijvoorbeeld door de assistent); `stuk` is de nieuwste versie. */
+export class StukConflict extends Error {
+  readonly stuk: Stuk;
+  constructor(stuk: Stuk) {
+    super("Het stuk is intussen gewijzigd, bijvoorbeeld door de assistent. Je ziet nu de nieuwste versie.");
+    this.stuk = stuk;
+  }
+}
+
+/**
+ * Een wijziging van de collega zelf, in het voorbeeld. Dezelfde bewerkingen en
+ * regels als de assistent (`pasToe`), op de versie die de collega voor zich had:
+ * is het stuk intussen veranderd, dan een conflict in plaats van eroverheen
+ * schrijven. De peildatum blijft staan: die gaat over het ophalen van de cijfers.
+ */
+export function handmatigBewerken(stuk: Stuk, invoer: unknown, nu: string): Stuk {
+  const raw = (invoer && typeof invoer === "object" ? invoer : {}) as Record<string, unknown>;
+  if (raw.basisVersie !== stuk.versie) throw new StukConflict(stuk);
+  const bewerking: Record<string, unknown> = {};
+  for (const sleutel of ["acties", "titel", "ondertitel", "soort"]) {
+    if (raw[sleutel] !== undefined) bewerking[sleutel] = raw[sleutel];
+  }
+  return nieuweVersie(stuk, pasToe(stuk, bewerking), stuk.peildatum, nu);
+}

@@ -73,7 +73,7 @@ function Grafiek({ blok }: { blok: Extract<Blok, { type: "grafiek" }> }) {
   );
 }
 
-function BlokWeergave({ blok }: { blok: Blok }) {
+export function BlokWeergave({ blok }: { blok: Blok }) {
   switch (blok.type) {
     case "kop":
       return <h2 className="font-heading text-xl uppercase tracking-wide">{blok.tekst}</h2>;
@@ -142,7 +142,7 @@ function BlokWeergave({ blok }: { blok: Blok }) {
 }
 
 /** In een one-pager staan tekst en conclusie naast elkaar; de rest over de hele breedte. */
-function breedte(blok: Blok): string {
+export function breedte(blok: Blok): string {
   return blok.type === "tekst" || blok.type === "conclusie" ? "sm:col-span-1" : "sm:col-span-2";
 }
 
