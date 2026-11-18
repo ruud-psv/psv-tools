@@ -3,6 +3,7 @@ import { requireEmail } from "@/lib/api-session";
 import { deleteGesprek, getGesprek } from "@/lib/assistent/gesprekken";
 import { ASSISTENT_TOOLS } from "@/lib/assistent/tools";
 import { mcpSources } from "@/lib/mcp/config";
+import { deleteStuk } from "@/lib/stukken/store";
 import { readServers } from "@/lib/mcp/store";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const ok = await deleteGesprek(auth.email, id);
     if (!ok) return NextResponse.json({ error: "Ongeldig gesprek id." }, { status: 400 });
+    // Het stuk bij het gesprek en zijn deellink gaan mee.
+    await deleteStuk(auth.email, id).catch((err) =>
+      console.error("[assistent/gesprekken/:id] stuk verwijderen mislukt:", err instanceof Error ? err.message : err)
+    );
     return NextResponse.json({ deleted: true });
   } catch (err) {
     console.error("[assistent/gesprekken/:id] DELETE mislukt:", err instanceof Error ? err.message : String(err));

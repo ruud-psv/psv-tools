@@ -457,3 +457,15 @@
     .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   }
 }
+
+/* Stukken (rapport, one-pager) afdrukken of als PDF opslaan: met de kleuren van de huisstijl. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  html,
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

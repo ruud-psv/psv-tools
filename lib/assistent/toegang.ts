@@ -41,6 +41,8 @@ export interface ChatTool {
   inputSchema: { type: "object"; [key: string]: unknown };
   lees(invoer: unknown): { invoer: Record<string, unknown> } | { fout: string };
   run(invoer: Record<string, unknown>): Promise<string>;
+  /** Geen databron (zoals de tools voor een stuk): niet onder "Bronnen" tonen. */
+  geenBron?: boolean;
 }
 
 /**

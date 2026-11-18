@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, Check, Database, Loader2, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, Database, FileText, Loader2, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
+import { StukPaneel } from "@/components/stuk/stuk-paneel";
+import type { Stuk } from "@/lib/stukken/model";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import type { GesprekSamenvatting, GesprekStap } from "@/lib/kennisbank-gesprekken";
@@ -128,6 +130,12 @@ function LegeStaat({ onKies }: { onKies: (vraag: string) => void }) {
 }
 
 export function AssistentChat() {
+  /** Het stuk bij dit gesprek (rapport of one-pager), als de assistent er een maakte. */
+  const [stuk, setStuk] = useState<Stuk | null>(null);
+  /** Op kleinere schermen: het stuk tonen in plaats van het gesprek. */
+  const [toonStuk, setToonStuk] = useState(false);
+  /** De gesprekken met een stuk, voor het icoon in de lijst. */
+  const [metStuk, setMetStuk] = useState<Set<string>>(new Set());
   const [gesprekken, setGesprekken] = useState<GesprekSamenvatting[]>([]);
   const [gesprekId, setGesprekId] = useState<string | null>(null);
   const [beurten, setBeurten] = useState<Beurt[]>([]);
@@ -148,6 +156,8 @@ export function AssistentChat() {
       if (!res.ok) return;
       const data = await res.json();
       setGesprekken(data.gesprekken ?? []);
+      const stukken = await fetch("/api/assistent/stukken").then((r) => (r.ok ? r.json() : { stukken: [] }));
+      setMetStuk(new Set((stukken.stukken ?? []).map((s: { id: string }) => s.id)));
     } catch {
       // De geschiedenis is bijzaak; de chat werkt ook zonder.
     }
@@ -217,11 +227,16 @@ export function AssistentChat() {
       const stappen: GesprekStap[] = [];
       const verwerk = (regel: string) => {
         if (!regel.trim()) return;
-        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string } & Partial<Bron> & Partial<GesprekStap>;
+        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string; stuk?: Stuk } & Partial<Bron> & Partial<GesprekStap>;
         if (gebeurtenis.t === "tekst") antwoord += gebeurtenis.d ?? "";
         else if (gebeurtenis.t === "wis") antwoord = "";
         else if (gebeurtenis.t === "bron" && gebeurtenis.naam && gebeurtenis.label && gebeurtenis.href)
           bronnen.push({ naam: gebeurtenis.naam, label: gebeurtenis.label, href: gebeurtenis.href });
+        else if (gebeurtenis.t === "stuk" && gebeurtenis.stuk) {
+          const nieuw = gebeurtenis.stuk;
+          setStuk(nieuw);
+          setMetStuk((huidig) => new Set(huidig).add(nieuw.id));
+        }
         else if (gebeurtenis.t === "stap" && gebeurtenis.label && typeof gebeurtenis.invoer === "string")
           stappen.push({ label: gebeurtenis.label, invoer: gebeurtenis.invoer, ok: gebeurtenis.ok === true, melding: gebeurtenis.melding });
         else if (gebeurtenis.t === "fout") throw new Error(gebeurtenis.d || "Er ging iets mis.");
@@ -255,6 +270,8 @@ export function AssistentChat() {
   function nieuwGesprek() {
     stop();
     setGesprekId(null);
+    setStuk(null);
+    setToonStuk(false);
     setBeurten([]);
     setFout(null);
     setInvoer("");
@@ -281,6 +298,10 @@ export function AssistentChat() {
         }))
       );
       plakRef.current = true;
+      // Het stuk bij dit gesprek, als dat er is.
+      setToonStuk(false);
+      const stukRes = await fetch(`/api/assistent/stukken/${id}`);
+      setStuk(stukRes.ok ? ((await stukRes.json()).stuk as Stuk) : null);
     } catch (e) {
       setFout(e instanceof Error ? e.message : "Openen van het gesprek mislukt.");
     } finally {
@@ -348,6 +369,9 @@ export function AssistentChat() {
                         : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     )}
                   >
+                    {metStuk.has(g.id) && (
+                      <FileText className="mr-1.5 inline h-3.5 w-3.5 -translate-y-px text-psv-red-primary" aria-label="met stuk" />
+                    )}
                     {g.titel}
                   </button>
                   <button
@@ -365,12 +389,26 @@ export function AssistentChat() {
         </nav>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {stuk && toonStuk && (
+          <StukPaneel stuk={stuk} onStuk={setStuk} onSluit={() => setToonStuk(false)} className="absolute inset-0 z-20 xl:hidden" />
+        )}
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-psv-red-primary" />
             <h1 className="font-heading text-xl uppercase tracking-tight">Assistent</h1>
           </div>
+          <div className="flex items-center gap-2">
+          {stuk && (
+            <button
+              type="button"
+              onClick={() => setToonStuk(true)}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-xs uppercase tracking-wide text-muted-foreground transition-colors hover:border-psv-red-primary hover:text-foreground xl:hidden"
+            >
+              <FileText className="h-4 w-4 text-psv-red-primary" />
+              Stuk
+            </button>
+          )}
           {heeftGesprek && (
             <button
               type="button"
@@ -381,6 +419,7 @@ export function AssistentChat() {
               <MessageSquarePlus className="h-4 w-4" />
             </button>
           )}
+          </div>
         </header>
 
         <div ref={threadRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
@@ -441,6 +480,8 @@ export function AssistentChat() {
           </form>
         </div>
       </div>
+
+      {stuk && <StukPaneel stuk={stuk} onStuk={setStuk} className="hidden w-[46%] max-w-3xl flex-shrink-0 border-l border-border xl:flex" />}
     </div>
   );
 }

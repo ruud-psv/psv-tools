@@ -42,6 +42,12 @@ gekomen:
   alleen op campagnenamen gezocht en dus niet gevonden, terwijl de pagina's en producten er wel
   waren.
 
+## Stukken
+
+Vraag je om een rapport, een one-pager of iets om te delen, dan maakt de assistent een stuk bij
+het gesprek, naast de chat. Je schaaft het bij via de chat en deelt het met een link. Zie
+`docs/stukken.md`.
+
 ## Zoekstappen
 
 Onder elk antwoord staat een uitklapbaar blok **Zoekstappen**: elke tool-aanroep met het label, de
