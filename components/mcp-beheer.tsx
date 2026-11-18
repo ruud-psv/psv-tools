@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { PAGE_GROUPS } from "@/lib/access";
 import {
   MCP_PAGES,
+  SHARED_TOKENS,
   TOOL_KIND_LABEL,
   canUseTool,
   slugify,
@@ -712,8 +713,9 @@ export function McpBeheer() {
                   className="font-mono"
                 />
                 <p className="form-hint">
-                  Zet het token in Vercel onder deze naam; hij begint met MCP_. Het token zelf komt nooit in PSV Tools
-                  te staan.
+                  Zet het token in Vercel onder deze naam; hij begint met MCP_. Of gebruik een bestaand token:{" "}
+                  {SHARED_TOKENS.map((t) => `${t.envVar} (alleen voor servers van ${t.owner})`).join(", ")}. Het token
+                  zelf komt nooit in PSV Tools te staan.
                 </p>
               </div>
             </div>

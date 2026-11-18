@@ -15,7 +15,8 @@ import { PAGE_GROUPS } from "@/lib/access";
  *   synchroniseren zag, niet wat de server op dat moment zegt. Verandert een
  *   tool bij de leverancier, dan gaat hij uit tot een admin hem opnieuw aanzet.
  * - Een token staat nooit in de opslag: de server verwijst naar een
- *   omgevingsvariabele die met `MCP_` begint.
+ *   omgevingsvariabele die met `MCP_` begint, of naar een bestaand token van
+ *   PSV Tools uit `SHARED_TOKENS`, en dan alleen bij de partij van dat token.
  */
 
 export type McpAuth =
@@ -300,16 +301,51 @@ export function checkServerUrl(raw: string): { url: string } | { error: string }
   return { url: url.toString() };
 }
 
-function checkAuth(input: unknown): { auth: McpAuth } | { error: string } {
+/**
+ * Bestaande tokens van PSV Tools die een MCP-server ook mag gebruiken, zodat
+ * zo'n token op één plek staat. Alleen naar de domeinen van de partij die het
+ * token al krijgt: Paid Ads stuurt `META_ADS_ACCESS_TOKEN` al naar Meta.
+ */
+export const SHARED_TOKENS: { envVar: string; domains: string[]; owner: string }[] = [
+  { envVar: "META_ADS_ACCESS_TOKEN", domains: ["facebook.com", "meta.com"], owner: "Meta" },
+];
+
+function onDomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+/**
+ * Mag dit token naar deze server? Een `MCP_`-variabele overal heen, een
+ * gedeeld token alleen naar de domeinen van zijn eigen partij.
+ */
+export function tokenAllowedFor(envVar: string, url: string): boolean {
+  if (ENV_VAR.test(envVar)) return true;
+  const shared = SHARED_TOKENS.find((t) => t.envVar === envVar);
+  if (!shared) return false;
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return shared.domains.some((domain) => onDomain(host, domain));
+}
+
+function checkAuth(input: unknown, url: string): { auth: McpAuth } | { error: string } {
   const raw = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   if (raw.type === "geen" || raw.type === undefined) return { auth: { type: "geen" } };
   if (raw.type !== "bearer" && raw.type !== "header") return { error: "Kies hoe PSV Tools inlogt bij de server." };
 
   const envVar = typeof raw.envVar === "string" ? raw.envVar.trim() : "";
-  if (!ENV_VAR.test(envVar)) {
+  const shared = SHARED_TOKENS.find((t) => t.envVar === envVar);
+  if (shared && !tokenAllowedFor(envVar, url)) {
+    return { error: `${envVar} mag alleen naar servers van ${shared.owner} (${shared.domains.join(" of ")}).` };
+  }
+  if (!shared && !ENV_VAR.test(envVar)) {
     return {
-      error:
-        "De omgevingsvariabele moet met MCP_ beginnen en mag alleen hoofdletters, cijfers en _ bevatten, bijvoorbeeld MCP_GA_TOKEN.",
+      error: `De omgevingsvariabele moet met MCP_ beginnen en mag alleen hoofdletters, cijfers en _ bevatten, bijvoorbeeld MCP_GA_TOKEN. Bestaande tokens die ook mogen: ${SHARED_TOKENS.map(
+        (t) => `${t.envVar} (alleen voor ${t.owner})`
+      ).join(", ")}.`,
     };
   }
   if (raw.type === "bearer") return { auth: { type: "bearer", envVar } };
@@ -352,7 +388,7 @@ export function sanitizeServerInput(
   const url = checkServerUrl(typeof raw.url === "string" ? raw.url : "");
   if ("error" in url) return url;
 
-  const auth = checkAuth(raw.auth);
+  const auth = checkAuth(raw.auth, url.url);
   if ("error" in auth) return auth;
 
   const page = typeof raw.page === "string" ? raw.page : "";

@@ -5,6 +5,7 @@ import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 
 import {
   resultText,
+  tokenAllowedFor,
   type McpAuth,
   type McpServer,
   type McpServerView,
@@ -48,6 +49,10 @@ export function authIsSet(auth: McpAuth): boolean {
 }
 
 async function connect(server: Pick<McpServer, "url" | "auth">, signal?: AbortSignal) {
+  // Nogmaals vlak voor het versturen: een gedeeld token gaat nooit naar een andere partij.
+  if (server.auth.type !== "geen" && !tokenAllowedFor(server.auth.envVar, server.url)) {
+    throw new McpConfigError(`${server.auth.envVar} mag niet naar ${new URL(server.url).hostname}.`);
+  }
   const transport = new StreamableHTTPClientTransport(new URL(server.url), {
     requestInit: { headers: authHeaders(server.auth) },
   });

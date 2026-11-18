@@ -124,6 +124,11 @@ opnieuw.
   een omgevingsvariabele, en die moet met `MCP_` beginnen. Zo kan niemand via
   het beheer een ander geheim van PSV Tools (zoals `ANTHROPIC_API_KEY`) naar
   een server laten sturen. De pagina toont alleen of het token gezet is.
+- **Uitzondering: gedeelde tokens** (`SHARED_TOKENS` in `lib/mcp/config.ts`).
+  Een bestaand token mag ook, maar alleen naar de partij die het al krijgt:
+  `META_ADS_ACCESS_TOKEN` (van Paid Ads) alleen naar servers op `facebook.com`
+  of `meta.com`. Dat wordt gecontroleerd bij het opslaan én vlak voor elke
+  verbinding.
 - **Alleen https** en een gewone hostnaam: geen IP-adressen, `localhost` of
   interne adressen.
 - **Alleen Streamable HTTP.** Servers die alleen lokaal draaien (stdio), zoals
@@ -135,6 +140,25 @@ opnieuw.
   60.000 tekens naar het model.
 - Inloggen met OAuth (een "Koppelen"-knop) is er nog niet; servers die alleen
   OAuth kennen kunnen nog niet worden toegevoegd.
+
+## Meta Ads
+
+Meta host een eigen MCP-server. Volgens handleidingen van derden staat die op
+`https://mcp.facebook.com/ads` en accepteert hij een bearer-token van een
+system user; dat is nog niet tegen de documentatie van Meta gecontroleerd.
+
+1. Voeg in Beheer > MCP Servers toe: naam `Meta Ads`, id `metaads`, URL
+   `https://mcp.facebook.com/ads`, Bearer-token uit `META_ADS_ACCESS_TOKEN`
+   (hetzelfde token als Paid Ads), pagina Paid Ads.
+2. Klik **Verbinding testen**.
+3. Zet alleen tools aan die rapporteren of opvragen. De server van Meta heeft
+   ook tools die campagnes en budgetten wijzigen. Het token van Paid Ads is
+   bedoeld met alleen `ads_read`; controleer dat in Meta Bedrijfsinstellingen,
+   dan weigert Meta schrijfacties hoe dan ook.
+
+Weigert Meta het token, dan vraagt de server waarschijnlijk OAuth of een extra
+recht. Een alternatief is dan een eigen Meta-server in PSV Tools, zoals bij
+Google Analytics.
 
 ## Ingebouwde server: Google Analytics
 

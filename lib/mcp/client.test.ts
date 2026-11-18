@@ -28,3 +28,16 @@ test("de melding van de server zonder de JSON eromheen", () => {
   assert.match(describeError(new StreamableHTTPError(502, "Error POSTing to endpoint: Bad gateway")), /Bad gateway/);
   assert.match(describeError(new StreamableHTTPError(401, "x")), /weigert het token \(401\)/);
 });
+
+test("een gedeeld token gaat nooit naar een andere partij, ook niet uit oude opslag", async () => {
+  const { inspectServer } = await import("./client");
+  process.env.META_ADS_ACCESS_TOKEN = "geheim";
+  try {
+    await assert.rejects(
+      inspectServer({ url: "https://mcp.example.com/mcp", auth: { type: "bearer", envVar: "META_ADS_ACCESS_TOKEN" } }),
+      (err: Error) => err instanceof McpConfigError && /mag niet naar mcp\.example\.com/.test(err.message)
+    );
+  } finally {
+    delete process.env.META_ADS_ACCESS_TOKEN;
+  }
+});

@@ -246,3 +246,33 @@ test("uitkomst als tekst: tekst, structuur, weggelaten media en afkappen", () =>
   assert.ok(lang.startsWith("x".repeat(10)));
   assert.match(lang, /Afgekapt: de uitkomst was 100 tekens/);
 });
+
+test("gedeeld token: META_ADS_ACCESS_TOKEN alleen naar servers van Meta", async () => {
+  const { tokenAllowedFor } = await import("./config");
+  const meta = {
+    id: "metaads",
+    name: "Meta Ads",
+    url: "https://mcp.facebook.com/ads",
+    auth: { type: "bearer", envVar: "META_ADS_ACCESS_TOKEN" },
+    page: "/dashboard/paid-ads",
+  };
+  const ok = sanitizeServerInput(meta, []);
+  assert.ok("server" in ok);
+  assert.deepEqual(ok.server.auth, { type: "bearer", envVar: "META_ADS_ACCESS_TOKEN" });
+  assert.ok("server" in sanitizeServerInput({ ...meta, url: "https://mcp.ads.meta.com/" }, []));
+  assert.ok("server" in sanitizeServerInput({ ...meta, auth: { type: "header", header: "X-Token", envVar: "META_ADS_ACCESS_TOKEN" } }, []));
+
+  for (const url of ["https://mcp.example.com/mcp", "https://facebook.com.evil.com/mcp", "https://notfacebook.com/mcp"]) {
+    const fout = sanitizeServerInput({ ...meta, url }, []);
+    assert.ok("error" in fout, url);
+    assert.match(fout.error, /META_ADS_ACCESS_TOKEN mag alleen naar servers van Meta/);
+  }
+  // Andere geheimen blijven geweigerd, ook naar Meta.
+  assert.ok("error" in sanitizeServerInput({ ...meta, auth: { type: "bearer", envVar: "ANTHROPIC_API_KEY" } }, []));
+
+  assert.ok(tokenAllowedFor("MCP_WAT_DAN_OOK", "https://ergens.example.com"));
+  assert.ok(tokenAllowedFor("META_ADS_ACCESS_TOKEN", "https://graph.facebook.com"));
+  assert.ok(!tokenAllowedFor("META_ADS_ACCESS_TOKEN", "https://mcp.example.com"));
+  assert.ok(!tokenAllowedFor("SESSION_SECRET", "https://mcp.facebook.com/ads"));
+  assert.ok(!tokenAllowedFor("META_ADS_ACCESS_TOKEN", "geen url"));
+});
