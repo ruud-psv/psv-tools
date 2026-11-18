@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Tools van MCP-servers staan in het beheer; een verwijderde server valt hier weg.
     const bronnen = {
       ...mcpSources(await readServers()),
-      ...Object.fromEntries(ASSISTENT_TOOLS.map((t) => [t.name, { naam: t.name, label: t.label, href: t.page }])),
+      ...Object.fromEntries(ASSISTENT_TOOLS.map((t) => [t.name, { naam: t.name, label: t.label, href: t.href ?? t.page }])),
     };
     return NextResponse.json({ gesprek, bronnen });
   } catch (err) {

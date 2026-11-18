@@ -88,3 +88,37 @@ export function buildSeasonCsv(overview: SeasonOverview): string {
   }
   return toCsv(lines);
 }
+
+const nlGetal = new Intl.NumberFormat("nl-NL");
+
+/**
+ * Het seizoensoverzicht als tekst voor de assistent: dezelfde cijfers als de
+ * pagina Seizoensoverzicht (`/dashboard/ticketing-stadion/seizoen`).
+ */
+export function seasonContext(
+  overview: SeasonOverview,
+  verkoop: { complete: boolean; caughtUpAt: string | null; lastError: string | null }
+): string {
+  const { totals } = overview;
+  const regels = [
+    `SEIZOENSOVERZICHT ${overview.season}: thuiswedstrijden van PSV 1 in het Philips Stadion`,
+    `Seizoenen in de data: ${overview.seasons.join(", ") || "geen"}.`,
+    "Losse verkoop = tickets voor die wedstrijd verkocht in de vrije verkoop; resale = gekocht via de resale. Seizoenkaarten en vrijkaarten staan erbij ter context en zijn geen verkoop voor de wedstrijd zelf.",
+    `Totaal: ${nlGetal.format(totals.matches)} wedstrijden, waarvan ${nlGetal.format(totals.played)} gespeeld. Losse verkoop ${nlGetal.format(totals.free)}, resale ${nlGetal.format(
+      totals.resale
+    )}.`,
+    "",
+    "datum | wedstrijd | gespeeld | losse verkoop | resale | seizoenkaarten | vrijkaarten",
+    ...overview.matches.map((m) =>
+      [m.eventDate.slice(0, 10), m.name, m.played ? "ja" : "nee", m.free, m.resale, m.seasonTickets, m.complimentary].join(" | ")
+    ),
+  ];
+  if (overview.matches.length === 0) regels.push("Geen thuiswedstrijden in dit seizoen.");
+  regels.push(
+    "",
+    `Stand van de verkoopdata: bijgewerkt tot ${verkoop.caughtUpAt ?? "onbekend"}.${
+      verkoop.complete ? "" : " Let op: de verkoop wordt nog ingelezen; aantallen kunnen nog stijgen."
+    }${verkoop.lastError ? ` Laatste fout bij het inlezen: ${verkoop.lastError}` : ""}`
+  );
+  return regels.join("\n");
+}

@@ -1,11 +1,11 @@
 import {
   buildTaxonomy,
   countsByGroup,
-  FandeskTicket,
+  type FandeskTicket,
   levelValue,
   TAXONOMY_LABELS,
   TAXONOMY_LEVELS,
-  TaxonomyNode,
+  type TaxonomyNode,
   TOP_LEVEL,
 } from "@/lib/fandesk";
 

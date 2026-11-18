@@ -251,7 +251,7 @@ export async function POST(req: NextRequest) {
           for (const { tool } of uitkomsten) {
             if (!tool || tool.geenBron || bronnen.includes(tool.name)) continue;
             bronnen.push(tool.name);
-            stuur({ t: "bron", naam: tool.name, label: tool.label, href: tool.page });
+            stuur({ t: "bron", naam: tool.name, label: tool.label, href: tool.href ?? tool.page });
           }
           messages.push({ role: "user", content: uitkomsten.map((u) => u.resultaat) });
         }

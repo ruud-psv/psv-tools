@@ -58,7 +58,10 @@ serverlog noemt bij een MCP-aanroep ook de invoer.
 
 ## Rechten
 
-Elke tool hoort bij een pagina. Wie een pagina niet mag zien (Beheer > Gebruikers), krijgt de tools
+Elke tool hoort bij een pagina. De wachtlijst en het seizoensoverzicht vallen onder de rechten van
+Ticketing Stadion, zoals in het menu; de bron onder het antwoord linkt wel naar hun eigen pagina
+(`href` naast `page`). Een test (`lib/assistent/tools.test.ts`) bewaakt dat elke tool aan een
+pagina uit het gebruikersbeheer hangt. Wie een pagina niet mag zien (Beheer > Gebruikers), krijgt de tools
 van die pagina niet, ook niet als het model erom vraagt. De pagina Assistent zelf staat bij de beta
 tools: wie het niveau "Alles" heeft ziet hem niet, en bij "Specifieke pagina's" is hij per
 gebruiker aan of uit te zetten.
@@ -69,6 +72,8 @@ gebruiker aan of uit te zetten.
 |---|---|---|
 | `ticketing_stadion_overzicht` | Ticketing Stadion | Komende thuiswedstrijden: bezetting, tempo, vergelijking |
 | `ticketing_stadion_wedstrijd` | Ticketing Stadion | Eén wedstrijd: per vak, vrije groepjes, verkoop per dag |
+| `ticketing_stadion_seizoen` | Ticketing Stadion (bron: Seizoensoverzicht) | Alle thuiswedstrijden van een seizoen: losse verkoop, resale, seizoenkaarten en vrijkaarten |
+| `wachtlijst` | Ticketing Stadion (bron: Wachtlijst) | Omvang, verloop per maand en dag, wachttijd, leeftijd en postcode; alleen aantallen |
 | `ticketing_herdgang_wedstrijden` | Ticketing Herdgang | Komende wedstrijden op De Herdgang |
 | `ticketing_herdgang_bezetting` | Ticketing Herdgang | Bezetting per vak van één wedstrijd |
 | `kennisbank_onderwerpen` | Kennisbank | Inhoudsopgave van de kennisbank |

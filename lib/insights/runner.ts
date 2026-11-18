@@ -2,7 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export class InsightConfigError extends Error {}
 export class InsightAnalysisError extends Error {
-  constructor(message: string, public details?: string) { super(message); }
+  // Uitgeschreven veld in plaats van een parameter property: die kan
+  // `node --test` (alleen types strippen) niet lezen.
+  readonly details?: string;
+  constructor(message: string, details?: string) {
+    super(message);
+    this.details = details;
+  }
 }
 
 const DEFAULT_MAX_TOKENS = 2048;

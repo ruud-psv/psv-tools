@@ -52,3 +52,23 @@ test("deellink van het seizoen: ondertekend, met de uitgezette wedstrijden", asy
   assert.equal(readSeasonShareToken(createShareToken(id)), null);
   assert.equal(readShareToken(token), null);
 });
+
+test("seizoen als tekst voor de assistent", async () => {
+  const { seasonContext } = await import("./season");
+  const tekst = seasonContext(
+    {
+      season: "26/27",
+      seasons: ["26/27", "25/26"],
+      matches: [
+        { eventId: "a", name: "PSV - Ajax", eventDate: "2026-09-20T14:30:00", played: true, free: 3200, resale: 900, seasonTickets: 28000, complimentary: 400 },
+        { eventId: "b", name: "PSV - Feyenoord", eventDate: "2026-12-06T16:45:00", played: false, free: 1500, resale: 0, seasonTickets: 28000, complimentary: 0 },
+      ],
+      totals: { matches: 2, played: 1, free: 4700, resale: 900 },
+    },
+    { complete: false, caughtUpAt: "2026-11-18T09:00:00.000Z", lastError: null }
+  );
+  assert.match(tekst, /^SEIZOENSOVERZICHT 26\/27/);
+  assert.match(tekst, /Totaal: 2 wedstrijden, waarvan 1 gespeeld\. Losse verkoop 4\.700, resale 900\./);
+  assert.match(tekst, /2026-09-20 \| PSV - Ajax \| ja \| 3200 \| 900 \| 28000 \| 400/);
+  assert.match(tekst, /de verkoop wordt nog ingelezen/);
+});

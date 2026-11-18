@@ -7,6 +7,9 @@ Pagina: `/dashboard/wachtlijst` (met login, geen ingang in de sidebar). Alleen a
 > kolommen van `/v1/clients` en de naam van het product zijn niet vooraf gemeten. De tool zoekt
 > ze daarom op naam en laat onder "Controle van de data" zien wat hij gebruikt heeft.
 
+De assistent kan dezelfde cijfers gebruiken met de tool `wachtlijst` (`lib/wachtlijst/context.ts`),
+voor wie Ticketing Stadion mag zien.
+
 ## Routes
 
 | Route | Wat |

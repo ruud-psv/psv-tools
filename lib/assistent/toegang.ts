@@ -21,6 +21,8 @@ export interface AssistentTool {
   label: string;
   /** De pagina waar deze data bij hoort; bepaalt wie de tool krijgt. */
   page: string;
+  /** Waar de bron onder het antwoord naartoe linkt, als dat een andere pagina is dan `page`. */
+  href?: string;
   description: string;
   velden: Record<string, ToolVeld>;
   verplicht: string[];
@@ -37,6 +39,8 @@ export interface ChatTool {
   name: string;
   label: string;
   page: string;
+  /** Waar de bron naartoe linkt; standaard `page`. */
+  href?: string;
   description: string;
   inputSchema: { type: "object"; [key: string]: unknown };
   lees(invoer: unknown): { invoer: Record<string, unknown> } | { fout: string };
@@ -57,6 +61,7 @@ export function alsChatTool(tool: AssistentTool): ChatTool {
     name: tool.name,
     label: tool.label,
     page: tool.page,
+    ...(tool.href && { href: tool.href }),
     description: tool.description,
     inputSchema: invoerSchema(tool),
     lees: (invoer) => leesInvoer(tool, invoer),

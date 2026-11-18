@@ -25,9 +25,15 @@ import { readRange } from "../fandesk-store";
 import { dayKeysInRange, periodSig } from "../fandesk-summarize";
 import { getDaySummaries, getPeriodSummary } from "../fandesk-summary-store";
 import { getToolBySlug, getToolSections, kennisbankToolContext, kennisbankTools } from "../kennisbank";
+import { seasonOf } from "../ringside/daily-sales";
 import { todayInAmsterdam } from "../ringside/seat-state";
 import { readEventSeats, readSeatIndex, readSeatState } from "../ringside/seat-store";
-import { readMatchSales } from "../ringside/store";
+import { readEventSales, readMatchSales, readState } from "../ringside/store";
+import { buildSeasonOverview, seasonContext } from "../ticketing-stadion/season";
+import { buildWaitlistAnalysis } from "../wachtlijst/analysis";
+import { productenVoor, wachtlijstContext, type WachtlijstKeuze } from "../wachtlijst/context";
+import { waitlistStatus } from "../wachtlijst/status";
+import { readWaitlistData, readWaitlistState } from "../wachtlijst/store";
 import { isHerdgangMatch } from "../ticketing-herdgang/events";
 import { isHerdgangStand } from "../ticketing-herdgang/herdgang";
 import { occupancyByArea, type Occupancy } from "../ticketing-herdgang/occupancy";
@@ -99,6 +105,56 @@ const stadionWedstrijd: AssistentTool = {
       "EERDERE THUISWEDSTRIJDEN OM MEE TE VERGELIJKEN (naam: id)",
       eerder.join("\n") || "geen",
     ].join("\n");
+  },
+};
+
+const stadionSeizoen: AssistentTool = {
+  name: "ticketing_stadion_seizoen",
+  label: "Ticketing Stadion · seizoen",
+  page: "/dashboard/ticketing-stadion",
+  href: "/dashboard/ticketing-stadion/seizoen",
+  description:
+    "Alle thuiswedstrijden van PSV 1 in het Philips Stadion in één seizoen, ook de gespeelde: per wedstrijd de losse verkoop (vrije verkoop), de resale, seizoenkaarten en vrijkaarten, met totalen. Zoals de pagina Seizoensoverzicht. Gebruik dit voor vragen over een heel seizoen of over gespeelde wedstrijden; voor de komende wedstrijden en de bezetting: ticketing_stadion_overzicht.",
+  velden: {
+    seizoen: { type: "string", description: "Het seizoen, zoals 26/27. Standaard het lopende seizoen.", pattern: "^\\d{2}/\\d{2}$" },
+  },
+  verplicht: [],
+  async run({ seizoen }) {
+    const vandaag = todayInAmsterdam();
+    const [sales, state] = await Promise.all([readEventSales(), readState()]);
+    const overzicht = buildSeasonOverview(Object.values(sales), seizoen || seasonOf(vandaag), vandaag);
+    return seasonContext(overzicht, { complete: state.salesComplete, caughtUpAt: state.caughtUpAt, lastError: state.lastError });
+  },
+};
+
+/* ---------- Wachtlijst ---------- */
+
+const wachtlijst: AssistentTool = {
+  name: "wachtlijst",
+  label: "Wachtlijst",
+  // Uit Ringside, en onder de rechten van Ticketing Stadion (zie lib/navigation.ts).
+  page: "/dashboard/ticketing-stadion",
+  href: "/dashboard/wachtlijst",
+  description:
+    "De wachtlijst van PSV in Ringside, zoals op de pagina Wachtlijst: hoeveel mensen erop staan, het verloop (erbij en eraf per maand en per dag, en de laatste 7 en 30 dagen), hoe lang ze al wachten, en de verdeling naar leeftijd en postcode. Alleen aantallen, geen namen. Standaard zonder de pre wachtlijst; met product \"pre\" de pre wachtlijst, met \"alle\" allebei. Met van en tot (JJJJ-MM-DD, hooguit 92 dagen) het verloop per dag in die periode; anders de laatste 14 dagen.",
+  velden: {
+    product: { type: "string", description: "wachtlijst (standaard), pre of alle.", pattern: "^(wachtlijst|pre|alle)$" },
+    van: { type: "string", description: "Optioneel: eerste dag voor het verloop per dag, JJJJ-MM-DD.", pattern: DAG },
+    tot: { type: "string", description: "Optioneel: laatste dag voor het verloop per dag, JJJJ-MM-DD.", pattern: DAG },
+  },
+  verplicht: [],
+  async run({ product, van, tot }) {
+    if (van && tot && van > tot) return "Ongeldige periode: 'van' ligt na 'tot'.";
+    const [data, state] = await Promise.all([readWaitlistData(), readWaitlistState()]);
+    if (!data || Object.keys(data.rows).length === 0) {
+      return "De wachtlijst is nog niet ingelezen uit Ringside; er zijn nog geen cijfers.";
+    }
+    const keuze = (product || "wachtlijst") as WachtlijstKeuze;
+    const ids = productenVoor(data, keuze);
+    if (ids && ids.length === 0) return keuze === "pre" ? "Er is geen aparte pre wachtlijst in de data." : "Er is geen wachtlijstproduct gevonden.";
+    const analyse = buildWaitlistAnalysis(data, todayInAmsterdam(), ids);
+    const namen = (ids ?? Object.keys(data.products)).map((id) => data.products[id]?.name ?? id);
+    return wachtlijstContext(analyse, waitlistStatus(data, state), { productNamen: namen, van: van || undefined, tot: tot || undefined });
   },
 };
 
@@ -281,6 +337,8 @@ const fandeskTickets: AssistentTool = {
 export const ASSISTENT_TOOLS: AssistentTool[] = [
   stadionOverzicht,
   stadionWedstrijd,
+  stadionSeizoen,
+  wachtlijst,
   herdgangOverzicht,
   herdgangBezetting,
   kennisbankOnderwerpen,

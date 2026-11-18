@@ -1,10 +1,10 @@
 import { put, get, list } from "@vercel/blob";
 import {
   FANDESK_DATA_START,
-  FandeskTicket,
+  type FandeskTicket,
   hasGroup,
   levelValue,
-  RawFandeskItem,
+  type RawFandeskItem,
   TOP_LEVEL,
 } from "@/lib/fandesk";
 
