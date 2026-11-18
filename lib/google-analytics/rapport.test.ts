@@ -143,3 +143,17 @@ test("foutmelding van de Data API zonder gRPC-code", () => {
   assert.equal(gaFoutTekst(new Error("3 INVALID_ARGUMENT: Field foo is not a valid metric.")), "Field foo is not a valid metric.");
   assert.equal(gaFoutTekst("los"), "los");
 });
+
+test("geen toegang: welk account welke rol nodig heeft, of welke API aan moet", async () => {
+  const { geenToegangTekst } = await import("./rapport");
+  const site = { ...psv, envVar: "GA_PROPERTY_PSV" };
+  const geen = Object.assign(new Error("7 PERMISSION_DENIED: User does not have sufficient permissions for this property."), { code: 7 });
+  const tekst = geenToegangTekst(geen, site, "sa@x.iam.gserviceaccount.com")!;
+  assert.match(tekst, /^Google Analytics geeft geen toegang tot psv\.nl \(property 111\): User does not have sufficient permissions/);
+  assert.match(tekst, /geef het service-account sa@x\.iam\.gserviceaccount\.com de rol Lezer op property 111/);
+  assert.match(tekst, /pas dan GA_PROPERTY_PSV in Vercel aan/);
+
+  const uit = Object.assign(new Error("7 PERMISSION_DENIED: Google Analytics Data API has not been used in project 123 before or it is disabled."), { code: 7 });
+  assert.match(geenToegangTekst(uit, site, null)!, /zet de Google Analytics Data API aan/);
+  assert.equal(geenToegangTekst(new Error("3 INVALID_ARGUMENT: kapot"), site, null), null);
+});

@@ -19,6 +19,8 @@ export interface GaSite {
   /** Het domein, zoals `psv.nl`. */
   label: string;
   propertyId: string;
+  /** De omgevingsvariabele met het property-id, voor foutmeldingen. */
+  envVar?: string;
 }
 
 /** Een veldnaam in de Data API, ook eigen velden als `customEvent:speler`. */
@@ -242,6 +244,26 @@ export function veldenTekst(metadata: Metadata, site: GaSite, zoek?: string): st
     .map((v) => `${v.soort} ${v.apiName}: ${v.uiName}${v.description ? `. ${v.description.slice(0, 160)}` : ""}`);
   if (gevonden.length > MAX_VELDEN) regels.push(`… en nog ${gevonden.length - MAX_VELDEN}. Zoek specifieker.`);
   return [kop, ...regels].join("\n");
+}
+
+/**
+ * Weigert Google Analytics de toegang (gRPC-code 7)? Dan zegt de melding wat er
+ * moet gebeuren: meestal mist het service-account de rol Lezer op de property.
+ */
+export function geenToegangTekst(err: unknown, site: GaSite, serviceAccount: string | null): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  const bericht = gaFoutTekst(err);
+  if (code !== 7 && !/PERMISSION_DENIED/.test(err instanceof Error ? err.message : String(err))) return null;
+
+  const kop = `Google Analytics geeft geen toegang tot ${site.label} (property ${site.propertyId}): ${bericht}`;
+  if (/has not been used in project|is disabled|SERVICE_DISABLED/i.test(bericht)) {
+    return `${kop}
+Oplossing: zet de Google Analytics Data API aan in het Google Cloud-project van het service-account.`;
+  }
+  const account = serviceAccount ? `het service-account ${serviceAccount}` : "het service-account uit GA_SERVICE_ACCOUNT_JSON";
+  const variabele = site.envVar ? ` Klopt het id niet, pas dan ${site.envVar} in Vercel aan.` : "";
+  return `${kop}
+Oplossing: geef ${account} de rol Lezer op property ${site.propertyId} in Google Analytics (Beheer > Toegangsbeheer voor property).${variabele}`;
 }
 
 /** De melding van de Data API zonder de gRPC-code ervoor, voor het model. */

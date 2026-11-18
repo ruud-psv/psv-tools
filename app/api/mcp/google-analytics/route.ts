@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { gaApi, gaClient, gaSites } from "@/lib/google-analytics/client";
+import { gaApi, gaClient, gaServiceAccountEmail, gaSites } from "@/lib/google-analytics/client";
 import { createGoogleAnalyticsServer } from "@/lib/mcp/servers/google-analytics";
 
 /**
@@ -50,7 +50,7 @@ async function handle(req: Request): Promise<Response> {
   if (sites.length === 0) return fout(503, "Er zijn geen Google Analytics-properties ingesteld (GA_PROPERTY_*).");
 
   // De GA-client pas maken als een tool hem nodig heeft: tools opvragen werkt ook zonder service-account.
-  const server = createGoogleAnalyticsServer({ sites, ga: () => gaApi(gaClient()) });
+  const server = createGoogleAnalyticsServer({ sites, ga: () => gaApi(gaClient()), serviceAccount: gaServiceAccountEmail });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);
   return transport.handleRequest(req);

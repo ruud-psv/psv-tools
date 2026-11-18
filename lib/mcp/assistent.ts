@@ -1,6 +1,8 @@
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
+
 import { ToolFout, type ChatTool } from "../assistent/toegang";
 import { McpSession } from "./client";
-import { activeTools, checkToolInput, modelInputSchema, modelToolNames } from "./config";
+import { activeTools, checkToolInput, modelInputSchema, modelToolNames, type McpServer } from "./config";
 import { readServers } from "./store";
 
 /**
@@ -16,9 +18,18 @@ export async function mcpToolsVoor(
   pages: readonly string[],
   signal?: AbortSignal
 ): Promise<{ tools: ChatTool[]; sessie: McpSession }> {
+  return mcpToolsUit(await readServers(), pages, signal);
+}
+
+/** Als `mcpToolsVoor`, met de servers als invoer (voor de tests). */
+export function mcpToolsUit(
+  alleServers: McpServer[],
+  pages: readonly string[],
+  signal?: AbortSignal
+): { tools: ChatTool[]; sessie: McpSession } {
   const sessie = new McpSession();
   const tools: ChatTool[] = [];
-  const servers = (await readServers()).filter((s) => s.enabled && pages.includes(s.page));
+  const servers = alleServers.filter((s) => s.enabled && pages.includes(s.page));
 
   for (const server of servers) {
     const namen = modelToolNames(server.id, server.tools.map((t) => t.name));
@@ -34,7 +45,16 @@ export async function mcpToolsVoor(
           return "error" in gelezen ? { fout: gelezen.error } : { invoer: gelezen.input };
         },
         async run(invoer) {
-          const uitkomst = await sessie.callTool(server, tool.name, invoer, signal);
+          let uitkomst;
+          try {
+            uitkomst = await sessie.callTool(server, tool.name, invoer, signal);
+          } catch (err) {
+            // De server keurde de invoer af (zoals een lege lijst): het model kan dat zelf herstellen.
+            if (err instanceof McpError && err.code === ErrorCode.InvalidParams) {
+              throw new ToolFout(`${server.name} keurde de invoer af: ${err.message.replace(/^MCP error -?\d+:\s*/, "")}`);
+            }
+            throw err;
+          }
           console.info(`[assistent] mcp ${server.id}/${tool.name}: ${uitkomst.isError ? "fout" : "ok"} in ${uitkomst.ms} ms`);
           // De melding van de server mag het model lezen, zodat het de invoer kan aanpassen.
           if (uitkomst.isError) throw new ToolFout(`${server.name} gaf een fout: ${uitkomst.text.slice(0, 2_000)}`);

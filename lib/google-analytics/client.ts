@@ -11,24 +11,20 @@ import type { GaApi } from "../mcp/servers/google-analytics";
  */
 
 export function gaSites(env: Record<string, string | undefined> = process.env): GaSite[] {
-  const mapping: [string, string, string | undefined][] = [
-    ["psv", "psv.nl", env.GA_PROPERTY_PSV],
-    ["ticketshop", "ticketshop.psv.nl", env.GA_PROPERTY_TICKETSHOP],
-    ["fanstore", "psvfanstore.nl", env.GA_PROPERTY_FANSTORE],
-    ["acties", "acties.psv.nl", env.GA_PROPERTY_ACTIES],
+  const mapping: [string, string, string][] = [
+    ["psv", "psv.nl", "GA_PROPERTY_PSV"],
+    ["ticketshop", "ticketshop.psv.nl", "GA_PROPERTY_TICKETSHOP"],
+    ["fanstore", "psvfanstore.nl", "GA_PROPERTY_FANSTORE"],
+    ["acties", "acties.psv.nl", "GA_PROPERTY_ACTIES"],
   ];
   return mapping
-    .filter(([, , propertyId]) => Boolean(propertyId?.trim()))
-    .map(([key, label, propertyId]) => ({ key, label, propertyId: propertyId!.trim() }));
+    .filter(([, , envVar]) => Boolean(env[envVar]?.trim()))
+    .map(([key, label, envVar]) => ({ key, label, propertyId: env[envVar]!.trim(), envVar }));
 }
 
 let cached: { json: string; client: BetaAnalyticsDataClient } | null = null;
 
-export function gaClient(): BetaAnalyticsDataClient {
-  const json = process.env.GA_SERVICE_ACCOUNT_JSON;
-  if (!json) throw new GaConfigError("GA_SERVICE_ACCOUNT_JSON ontbreekt.");
-  if (cached?.json === json) return cached.client;
-
+function leesServiceAccount(json: string): Record<string, unknown> {
   let credentials: unknown;
   try {
     credentials = JSON.parse(json);
@@ -44,9 +40,28 @@ export function gaClient(): BetaAnalyticsDataClient {
   if (typeof creds.private_key === "string" && !creds.private_key.includes("\n")) {
     creds.private_key = creds.private_key.replace(/\\n/g, "\n");
   }
-  const client = new BetaAnalyticsDataClient({ credentials: creds });
+  return creds;
+}
+
+export function gaClient(): BetaAnalyticsDataClient {
+  const json = process.env.GA_SERVICE_ACCOUNT_JSON;
+  if (!json) throw new GaConfigError("GA_SERVICE_ACCOUNT_JSON ontbreekt.");
+  if (cached?.json === json) return cached.client;
+  const client = new BetaAnalyticsDataClient({ credentials: leesServiceAccount(json) });
   cached = { json, client };
   return client;
+}
+
+/** Het e-mailadres van het service-account, voor foutmeldingen; geen geheim. */
+export function gaServiceAccountEmail(): string | null {
+  const json = process.env.GA_SERVICE_ACCOUNT_JSON;
+  if (!json) return null;
+  try {
+    const email = leesServiceAccount(json).client_email;
+    return typeof email === "string" ? email : null;
+  } catch {
+    return null;
+  }
 }
 
 /** De client in de vorm die de MCP-server verwacht. */

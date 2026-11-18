@@ -195,3 +195,13 @@ verder, want die leest dezelfde omgevingsvariabele.
 - Een fout van Google Analytics, zoals een onbekende metric, gaat als leesbare
   melding terug, zodat het model de vraag kan aanpassen.
 - Rapporten geven standaard 10 rijen en hooguit 250.
+
+### Problemen
+
+| Melding | Oplossing |
+|---|---|
+| `MCP_GA_TOKEN is niet gezet` | Zet de variabele in Vercel bij **Production** en deploy opnieuw. |
+| `MCP_GA_TOKEN is korter dan 32 tekens` | Maak een langer token, vervang de waarde en deploy opnieuw. |
+| `geeft geen toegang tot <site> (property ...)` | Het service-account mist rechten op die property. Voeg het e-mailadres uit de melding in Google Analytics toe met de rol **Lezer** (Beheer > Toegangsbeheer voor property), of corrigeer het property-id in de genoemde `GA_PROPERTY_*`. Web Verkeer gebruikt hetzelfde account: die site ontbreekt daar dan ook. |
+| `zet de Google Analytics Data API aan` | Zet de Data API aan in het Google Cloud-project van het service-account. |
+| `Input validation error` bij Proberen | De invoer klopt niet met het schema, bijvoorbeeld een lege lijst `metrics`. Voorbeelden staan in de beschrijving van de tool. |

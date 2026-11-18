@@ -12,6 +12,7 @@ import {
   STANDAARD_RIJEN,
   VELDNAAM,
   gaFoutTekst,
+  geenToegangTekst,
   rapportTekst,
   rapportVerzoek,
   realtimeTekst,
@@ -67,7 +68,16 @@ Metrics: activeUsers, screenPageViews, eventCount, keyEvents. Dimensies: unified
 const VELDEN_BESCHRIJVING =
   "Zoekt de metrics en dimensies die een website van PSV in Google Analytics 4 heeft, met hun naam voor het rapport. Zonder zoekterm: alleen de eigen velden (customEvent:...). Met een zoekterm, zoals revenue, page of campaign: alle velden die erop lijken.";
 
-export function createGoogleAnalyticsServer({ sites, ga }: { sites: GaSite[]; ga: () => GaApi }): McpServer {
+export function createGoogleAnalyticsServer({
+  sites,
+  ga,
+  serviceAccount = () => null,
+}: {
+  sites: GaSite[];
+  ga: () => GaApi;
+  /** Het e-mailadres van het service-account, voor de melding bij geen toegang. */
+  serviceAccount?: () => string | null;
+}): McpServer {
   if (sites.length === 0) throw new GaConfigError("Er zijn geen Google Analytics-properties ingesteld (GA_PROPERTY_*).");
 
   const server = new McpServer(GA_SERVER_INFO, {
@@ -111,8 +121,11 @@ export function createGoogleAnalyticsServer({ sites, ga }: { sites: GaSite[]; ga
       console.info(`[mcp/google-analytics] ${tool} ${siteKey}: ok in ${Date.now() - start} ms`);
       return { content: [{ type: "text" as const, text }] };
     } catch (err) {
+      const site = sites.find((s) => s.key === siteKey);
       const text =
-        err instanceof GaInvoerFout || err instanceof GaConfigError ? err.message : `Google Analytics gaf een fout: ${gaFoutTekst(err)}`;
+        err instanceof GaInvoerFout || err instanceof GaConfigError
+          ? err.message
+          : (site && geenToegangTekst(err, site, serviceAccount())) ?? `Google Analytics gaf een fout: ${gaFoutTekst(err)}`;
       console.error(`[mcp/google-analytics] ${tool} ${siteKey}: ${text}`);
       return { isError: true, content: [{ type: "text" as const, text }] };
     }
