@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,9 +53,9 @@ import {
   PaidPlatform,
   PERIODS,
   PeriodKey,
+  PHASE_LABELS,
   PLATFORM_LABELS,
 } from "@/lib/paid-ads/types";
-import type { PaidAdsInsightResult } from "@/lib/insights/paid-ads";
 import {
   Badge,
   DataTable,
@@ -73,16 +73,19 @@ import { ExecutiveView } from "./executive-view";
 import { CampaignView, PhaseTag } from "./campaign-view";
 import { CreativeView } from "./creative-view";
 import { AudienceView } from "./audience-view";
-import { InsightsPanel } from "./insights-panel";
+import { OverzichtView } from "./overzicht-view";
+import { VraagPaneel } from "./vraag-paneel";
 import { FunnelOverview } from "./funnel-view";
 import { MultiSelect, type MultiOption } from "./multi-select";
 import { cn } from "@/lib/utils";
 
+/** Het overzicht eerst; de volledige tabellen staan onder de detailtabbladen. */
 const VIEWS = [
-  { key: "executive", label: "Executive" },
-  { key: "campaign", label: "Campagne-analyse" },
-  { key: "creative", label: "Creative intelligence" },
-  { key: "audience", label: "Audience intelligence" },
+  { key: "overzicht", label: "Overzicht" },
+  { key: "campaign", label: "Campagnes" },
+  { key: "creative", label: "Creatives" },
+  { key: "audience", label: "Doelgroepen" },
+  { key: "executive", label: "Doelen & prognose" },
 ] as const;
 type ViewKey = (typeof VIEWS)[number]["key"];
 
@@ -122,24 +125,14 @@ export function PaidAdsDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   const [period, setPeriod] = useState<PeriodKey>("30d");
-  const [view, setView] = useState<ViewKey>("executive");
+  const [view, setView] = useState<ViewKey>("overzicht");
   const [benchmark, setBenchmark] = useState<BenchmarkKey>("previous");
   const [filters, setFilters] = useState<PaidFilters>(EMPTY_FILTERS);
   const [campaignGroup, setCampaignGroup] = useState<string | null>(null);
 
-  const [insights, setInsights] = useState<PaidAdsInsightResult | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [insightsError, setInsightsError] = useState<string | null>(null);
-  const insightsCache = useRef<Map<string, PaidAdsInsightResult>>(new Map());
-
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [answerLoading, setAnswerLoading] = useState(false);
-  const [answerError, setAnswerError] = useState<string | null>(null);
-
   const fetchData = useCallback(async (p: PeriodKey) => {
     setLoading(true);
     setError(null);
-    insightsCache.current.delete(p);
     try {
       const res = await fetch(`/api/paid-ads?period=${p}`);
       if (!res.ok) {
@@ -157,13 +150,6 @@ export function PaidAdsDashboard() {
   useEffect(() => {
     fetchData(period);
   }, [period, fetchData]);
-
-  useEffect(() => {
-    setInsights(null);
-    setInsightsError(null);
-    setAnswer(null);
-    setAnswerError(null);
-  }, [period]);
 
   /* ---------- Afgeleide waarden ---------- */
 
@@ -264,69 +250,35 @@ export function PaidAdsDashboard() {
     benchmarkLabel,
   };
 
-  /* ---------- AI ---------- */
+  /* ---------- CPA-doelen en vragen ---------- */
 
-  const hasData = allCampaigns.length > 0;
-
-  const runAnalysis = useCallback(async () => {
-    if (!data || !hasData) return;
-    const cached = insightsCache.current.get(period);
-    if (cached) {
-      setInsights(cached);
-      setInsightsError(null);
-      return;
+  // Het doel van één exploitatie opslaan en meteen in de getoonde data zetten.
+  const saveDoel = useCallback(async (exploitatie: string, cpa: number | null) => {
+    const res = await fetch("/api/paid-ads/doelen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exploitatie, cpa }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "Doel opslaan mislukt");
     }
-    setInsightsLoading(true);
-    setInsightsError(null);
-    try {
-      const res = await fetch("/api/paid-ads/insights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: forAnalysis(data), periodLabel }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `API gaf status ${res.status}`);
-      }
-      const result: PaidAdsInsightResult = await res.json();
-      setInsights(result);
-      insightsCache.current.set(period, result);
-    } catch (err) {
-      setInsightsError(err instanceof Error ? err.message : "Analyse mislukt");
-    } finally {
-      setInsightsLoading(false);
-    }
-  }, [data, hasData, period, periodLabel]);
+    const { cpa: doelen } = (await res.json()) as { cpa: Record<string, number> };
+    setData((d) => (d ? { ...d, targets: { ...d.targets, byBusinessUnit: doelen } } : d));
+  }, []);
 
-  const askQuestion = useCallback(
-    async (question: string) => {
-      if (!data || !hasData) return;
-      setAnswerLoading(true);
-      setAnswerError(null);
-      setAnswer(null);
-      try {
-        const res = await fetch("/api/paid-ads/insights/question", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: question }],
-            data: forAnalysis(data),
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `API gaf status ${res.status}`);
-        }
-        const result: { answer: string } = await res.json();
-        setAnswer(result.answer);
-      } catch (err) {
-        setAnswerError(err instanceof Error ? err.message : "Vraag beantwoorden mislukt");
-      } finally {
-        setAnswerLoading(false);
-      }
-    },
-    [data, hasData]
-  );
+  // De filters in woorden, zodat een antwoord weet waarover het gaat.
+  const filterText = useMemo(() => {
+    const parts = [
+      filters.businessUnit !== "alles" ? `exploitatie ${filters.businessUnit}` : null,
+      filters.objective !== "alles" ? `doelstelling ${filters.objective}` : null,
+      filters.platform !== "alles" ? `platform ${PLATFORM_LABELS[filters.platform]}` : null,
+      filters.phase !== "alles" ? `fase ${PHASE_LABELS[filters.phase]}` : null,
+      filters.campaigns.length ? `${filters.campaigns.length} gekozen campagnes` : null,
+      filters.adSets.length ? `${filters.adSets.length} gekozen advertentiesets` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(", ") : "geen";
+  }, [filters]);
 
   /* ---------- Render ---------- */
 
@@ -516,6 +468,19 @@ export function PaidAdsDashboard() {
       ) : (
         data && (
           <>
+            <VraagPaneel data={viewData} periode={periodLabel} filters={filterText} />
+
+            {view === "overzicht" && (
+              <OverzichtView
+                {...viewProps}
+                missingRevenue={missingRevenue.map((p) => PLATFORM_LABELS[p])}
+                onDoel={saveDoel}
+                onNaarCreatives={() => setView("creative")}
+              />
+            )}
+
+            {view !== "overzicht" && (
+            <>
             {/* Funnel — tegelijk het fasefilter */}
             <FunnelOverview
               campaigns={funnelCampaigns}
@@ -631,20 +596,6 @@ export function PaidAdsDashboard() {
               )}
             </SectionCard>
 
-            {/* AI inzichten */}
-            <InsightsPanel
-              insights={insights}
-              loading={insightsLoading}
-              error={insightsError}
-              hasData={hasData}
-              periodLabel={periodLabel}
-              onAnalyze={runAnalysis}
-              onAsk={askQuestion}
-              answer={answer}
-              answerLoading={answerLoading}
-              answerError={answerError}
-            />
-
             {/* KPI's */}
             <div className="grid grid-cols-2 gap-3.5 md:grid-cols-5">
               {KPI_TILES.map((tile) => {
@@ -682,6 +633,9 @@ export function PaidAdsDashboard() {
               </div>
             )}
 
+            </>
+            )}
+
             {view === "executive" && <ExecutiveView {...viewProps} />}
             {view === "campaign" && <CampaignView {...viewProps} />}
             {view === "creative" && <CreativeView {...viewProps} />}
@@ -699,21 +653,6 @@ export function PaidAdsDashboard() {
       )}
     </div>
   );
-}
-
-/**
- * De respons zonder de ruwe dagreeks per campagne en de campagnes van vorig
- * jaar: de analyse gebruikt die niet, en zo blijft het verzoek klein, ook bij
- * een heel seizoen.
- */
-function forAnalysis(data: PaidAdsResponse): PaidAdsResponse {
-  return {
-    ...data,
-    campaignDaily: [],
-    demographics: [],
-    // De vorige periode blijft mee: daaruit komt de ROAS-vergelijking.
-    benchmarks: { ...data.benchmarks, yearAgoCampaigns: null },
-  };
 }
 
 /** Keuzelijst met een "alles"-optie bovenaan. */

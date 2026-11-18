@@ -15,6 +15,7 @@ import {
   type FetchWindow,
   type PaidConnector,
 } from "@/lib/paid-ads/connectors/types";
+import { leesDoelen } from "@/lib/paid-ads/doelen-store";
 import { metaConnector } from "@/lib/paid-ads/connectors/meta";
 import { googleConnector } from "@/lib/paid-ads/connectors/google";
 import { tiktokConnector } from "@/lib/paid-ads/connectors/tiktok";
@@ -139,7 +140,7 @@ function yearAgoWindow(window: FetchWindow): FetchWindow {
  * Doelstellingen komen niet van de advertentieplatformen. Zolang ze nergens
  * zijn vastgelegd blijven ze leeg en toont het dashboard geen doelkolom.
  */
-function getTargets(): PaidAdsTargets {
+async function getTargets(): Promise<PaidAdsTargets> {
   const num = (name: string): number | null => {
     const raw = process.env[name];
     if (!raw) return null;
@@ -154,7 +155,8 @@ function getTargets(): PaidAdsTargets {
     cvr: num("PAID_ADS_TARGET_CVR"),
     cpc: num("PAID_ADS_TARGET_CPC"),
     roas: num("PAID_ADS_TARGET_ROAS"),
-    byBusinessUnit: {},
+    // CPA-doelen per exploitatie stellen collega's zelf in, in het dashboard.
+    byBusinessUnit: (await leesDoelen()).cpa,
   };
 }
 
@@ -288,7 +290,7 @@ export async function GET(req: NextRequest) {
       previousCampaigns,
       yearAgoCampaigns,
     },
-    targets: getTargets(),
+    targets: await getTargets(),
     connectedPlatforms: connected,
     revenuePlatforms: connected.filter((p) => CONNECTORS[p]?.reportsRevenue),
     platformErrors: errors,
