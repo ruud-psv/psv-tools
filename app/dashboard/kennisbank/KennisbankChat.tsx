@@ -22,7 +22,7 @@ import {
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { resolveBron } from "@/lib/kennisbank";
-import { FEEDBACK_FORM_URL } from "@/components/feedback-tab";
+import { FEEDBACK_FORM_URL } from "@/lib/feedback";
 import type { GesprekBericht, GesprekSamenvatting } from "@/lib/kennisbank-gesprekken";
 
 const SUGGESTIES = [

@@ -8,12 +8,14 @@ import {
   byFormat,
   byPlatform,
   businessUnitPerformance,
+  derive,
   saturation,
   roasOf,
   scoreCampaigns,
   totalsOf,
 } from "./derive";
 import { eur, nl, pct, roas } from "./format";
+import { KOOPREDENEN, perKoopreden, TEST_DREMPEL, TESTBUDGET, testOverzicht } from "./methode";
 import { PaidAdsResponse, PHASE_LABELS, PLATFORM_LABELS } from "./types";
 
 /** Hoeveel campagnes er maximaal meegaan; genoeg voor patronen, niet meer dan dat. */
@@ -87,6 +89,58 @@ export function buildPaidAdsContext(data: PaidAdsResponse): string {
   if (hot.length) {
     lines.push("", "VERZADIGING (frequentie boven 3,0):");
     for (const s of hot) lines.push(`- ${s.name} (${s.platform}): frequentie ${nl(s.frequency, 2)} — ${s.status}`);
+  }
+
+  // Alleen advertenties die aan staan, of waarvan de status onbekend is.
+  const ads = data.ads.filter((a) => a.active !== false);
+  // Per exploitatie: koopredenen alleen binnen een exploitatie vergelijken.
+  const unitVan = new Map(data.campaigns.map((c) => [`${c.platform}:${c.id}`, c.businessUnit]));
+  const perUnit = new Map<string, typeof ads>();
+  for (const a of ads) {
+    const unit = unitVan.get(`${a.platform}:${a.campaignId}`) ?? "Overig";
+    perUnit.set(unit, [...(perUnit.get(unit) ?? []), a]);
+  }
+  if (perUnit.size) {
+    lines.push("", "PER KOOPREDEN, PER EXPLOITATIE (uit de naam van advertentie of set):");
+    for (const [unit, unitAds] of perUnit) {
+      lines.push(`${unit}:`);
+      const redenen = perKoopreden(unitAds, data.adSets);
+      for (const r of redenen) {
+        lines.push(
+          `- ${r.label}: ${nl(r.advertenties)} advertenties · ${eur(r.metrics.spend)} · ${nl(r.metrics.results)} resultaten · CPA ${eur(r.derived.costPerResult, 2)} · CTR ${pct(r.derived.ctr)}${r.derived.roas != null ? ` · ROAS ${roas(r.derived.roas)}` : ""}`
+        );
+      }
+      const zonder = KOOPREDENEN.filter((k) => !redenen.some((r) => r.key === k.key)).map((k) => k.label);
+      if (zonder.length) lines.push(`  Niet gebruikt: ${zonder.join(", ")}.`);
+    }
+  }
+
+  const tests = testOverzicht(ads, data.adSets, data.campaigns);
+  lines.push(
+    "",
+    `TESTEN: ${tests.aandeel != null ? `${nl(tests.aandeel, 0)}%` : "geen"} van het budget naar tests (afspraak ${TESTBUDGET.min}-${TESTBUDGET.max}%), ${nl(tests.rijen.length)} testadvertenties.`
+  );
+  for (const t of tests.rijen.slice(0, 15)) {
+    const oordeel = {
+      "te-vroeg": `nog te vroeg, onder € ${TEST_DREMPEL}`,
+      beter: "beter dan bewezen",
+      slechter: "slechter dan bewezen",
+      "geen-vergelijking": "geen bewezen advertenties om mee te vergelijken",
+    }[t.oordeel];
+    lines.push(
+      `- ${t.ad.name}: ${eur(t.ad.metrics.spend)} · ${nl(t.ad.metrics.results)} resultaten · CPA ${eur(t.derived.costPerResult, 2)} tegen ${eur(t.vergelijkCpa, 2)} bewezen · ${oordeel}`
+    );
+  }
+
+  const topAds = [...ads].sort((a, b) => b.metrics.spend - a.metrics.spend).slice(0, 20);
+  if (topAds.length) {
+    lines.push("", `ADVERTENTIES (${topAds.length} met de hoogste besteding, alleen die aan staan):`);
+    for (const a of topAds) {
+      const d = derive(a.metrics);
+      lines.push(
+        `- ${a.name} | ${PLATFORM_LABELS[a.platform]}${a.format ? ` | ${a.format}` : ""} | ${eur(a.metrics.spend)} · ${nl(a.metrics.results)} resultaten · CPA ${eur(d.costPerResult, 2)} · CTR ${pct(d.ctr)}${d.roas != null ? ` · ROAS ${roas(d.roas)}` : ""}`
+      );
+    }
   }
 
   const scored = scoreCampaigns(data.campaigns).slice(0, CAMPAIGN_LIMIT);

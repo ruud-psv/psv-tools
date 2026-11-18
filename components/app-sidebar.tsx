@@ -1,21 +1,144 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { FlaskConical, LogOut, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import {
-  insightTools,
-  knowledgeTools,
-  makeTools,
-  betaTools as allBetaTools,
-  navItems,
-} from "@/lib/tools";
 import { ADMIN_HREF } from "@/lib/access";
+import { activeHref, firstHref, isUnder, sectionForPath, sectionsFor, type NavSection } from "@/lib/navigation";
+
+const COLLAPSED_KEY = "sidebar-panel-collapsed";
+
+/** Eén knop op de rail: icoon met de naam eronder, zoals in Teams en Slack. */
+function RailItem({
+  label,
+  icon: Icon,
+  active,
+  href,
+  onClick,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const className = cn(
+    "group relative flex w-full flex-col items-center gap-1 px-1 py-2 transition-colors",
+    active ? "text-sidebar-foreground" : "text-psv-gray-09 hover:text-sidebar-foreground"
+  );
+  const inner = (
+    <>
+      {/* Rode streep links bij het actieve onderdeel. */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-primary transition-opacity",
+          active ? "opacity-100" : "opacity-0"
+        )}
+      />
+      <span
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+          active ? "bg-sidebar-primary text-sidebar-primary-foreground" : "group-hover:bg-sidebar-accent"
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="max-w-full truncate font-heading text-[10px] uppercase tracking-wide">{label}</span>
+    </>
+  );
+  return href ? (
+    <Link href={href} onClick={onClick} aria-current={active ? "page" : undefined} className={className}>
+      {inner}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} className={className}>
+      {inner}
+    </button>
+  );
+}
+
+function BetaLabel() {
+  return (
+    <span className="flex-shrink-0 rounded-sm border border-psv-gold/60 px-1.5 py-px font-heading text-[10px] uppercase tracking-wide text-psv-gold">
+      Beta
+    </span>
+  );
+}
+
+/** Het paneel naast de rail: de pagina's onder het actieve onderdeel. */
+function Panel({
+  section,
+  currentHref,
+  onCollapse,
+  onNavigate,
+  className,
+}: {
+  section: NavSection;
+  /** De link van de huidige pagina (zie `activeHref`). */
+  currentHref: string | null;
+  onCollapse: () => void;
+  onNavigate?: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("w-60 flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar", className)}>
+      <div className="flex h-16 items-center justify-between gap-2 border-b border-sidebar-border px-4">
+        <p className="truncate font-heading text-lg uppercase tracking-wide text-sidebar-foreground">
+          {section.name}
+        </p>
+        <button
+          type="button"
+          onClick={onCollapse}
+          aria-label="Paneel inklappen"
+          className="hidden flex-shrink-0 rounded-md p-1 text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:block"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+      </div>
+
+      <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4">
+        {section.groups.map((group, i) => (
+          <div key={group.title ?? i}>
+            {group.title && (
+              <p className="mb-1 px-2 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
+                {group.title}
+              </p>
+            )}
+            <ul className="space-y-0.5">
+              {group.links.map((link) => {
+                const Icon = link.icon;
+                const active = link.href === currentHref;
+                return (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      onClick={onNavigate}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <Icon className={cn("h-4 w-4 flex-shrink-0", active && "text-sidebar-primary")} />
+                      <span className="flex-1 truncate">{link.name}</span>
+                      {link.beta && <BetaLabel />}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </div>
+  );
+}
 
 export function AppSidebar({
   allowedPages,
@@ -28,24 +151,26 @@ export function AppSidebar({
   onMobileClose?: () => void;
 }) {
   const pathname = usePathname();
-  const allowed = (entry: { href: string }) => allowedPages.includes(entry.href);
-  const tools = makeTools.filter(allowed);
-  const kennisbank = knowledgeTools.filter(allowed);
-  const insights = insightTools.filter(allowed);
-  const betaTools = allBetaTools.filter(allowed);
   const router = useRouter();
+  const sections = useMemo(() => sectionsFor(allowedPages), [allowedPages]);
+  const active = sectionForPath(sections, pathname);
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") setCollapsed(true);
+    try {
+      if (localStorage.getItem(COLLAPSED_KEY) === "true") setCollapsed(true);
+    } catch {
+      // Zonder opslag blijft het paneel gewoon open.
+    }
   }, []);
 
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      localStorage.setItem("sidebar-collapsed", String(!prev));
-      return !prev;
-    });
+  function setPanelCollapsed(value: boolean) {
+    setCollapsed(value);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, String(value));
+    } catch {
+      // Niet erg: dan onthoudt de browser het alleen niet.
+    }
   }
 
   async function handleLogout() {
@@ -55,296 +180,71 @@ export function AppSidebar({
     router.refresh();
   }
 
+  // Een onderdeel met één pagina heeft geen paneel nodig: de rail brengt je er al.
+  const hasPanel = active !== null && active.groups.flatMap((g) => g.links).length > 1;
+
   return (
-    <aside
-      className={cn(
-        "flex h-screen flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
-      {/* Header */}
-      {collapsed ? (
-        <button
-          onClick={toggleCollapsed}
-          className="flex flex-col items-center gap-2 px-3 py-4 border-b border-sidebar-border hover:bg-sidebar-accent transition-colors"
+    <div className="flex h-screen">
+      <aside className="flex w-[72px] flex-shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar">
+        <Link
+          href="/dashboard"
+          onClick={onMobileClose}
+          title="Overzicht"
+          aria-label="Overzicht"
+          className="flex h-16 w-full flex-shrink-0 items-center justify-center border-b border-sidebar-border transition-opacity hover:opacity-80"
         >
-          <Image
-            src="/images/psv-logo.png"
-            alt="PSV"
-            width={40}
-            height={40}
-          />
-          <PanelLeftOpen className="h-3.5 w-3.5 text-psv-gray-09" />
-        </button>
-      ) : (
-        <div className="flex items-center gap-3 px-3 py-4 border-b border-sidebar-border">
-          <Image
-            src="/images/psv-logo.png"
-            alt="PSV"
-            width={40}
-            height={40}
-            className="flex-shrink-0"
-          />
-          <p className="text-sm font-heading uppercase tracking-wide text-sidebar-foreground truncate flex-1">
-            PSV Tools
-          </p>
-          <button
-            onClick={toggleCollapsed}
-            className="flex-shrink-0 p-1 rounded-md text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+          <Image src="/images/psv-logo.png" alt="PSV" width={36} height={36} />
+        </Link>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-6">
-        {/* Main */}
-        <div>
-          {!collapsed && (
-            <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
-              Navigatie
-            </p>
+        <nav className="flex w-full flex-1 flex-col gap-1 overflow-y-auto py-3" aria-label="Onderdelen">
+          {sections.map((section) => {
+            const isActive = active?.id === section.id;
+            return (
+              <RailItem
+                key={section.id}
+                label={section.name}
+                icon={section.icon}
+                active={isActive}
+                href={isActive ? undefined : firstHref(section)}
+                onClick={() => {
+                  // Nogmaals klikken op het actieve onderdeel klapt het paneel in of uit.
+                  if (isActive) setPanelCollapsed(!collapsed);
+                  else setPanelCollapsed(false);
+                }}
+              />
+            );
+          })}
+        </nav>
+
+        <div className="flex w-full flex-col gap-1 border-t border-sidebar-border py-3">
+          {hasPanel && collapsed && (
+            <RailItem label="Paneel" icon={PanelLeftOpen} active={false} onClick={() => setPanelCollapsed(false)} />
           )}
-          <ul className="space-y-0.5">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = item.exact
-                ? pathname === item.href
-                : pathname.startsWith(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    title={collapsed ? item.name : undefined}
-                    onClick={onMobileClose}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                      collapsed && "justify-center",
-                      isActive
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
-                    {!collapsed && <span className="truncate">{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        {tools.length > 0 && (
-          <>
-            <Separator className="bg-sidebar-border" />
-
-            {/* Tools */}
-            <div>
-              {!collapsed && (
-                <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
-                  Tools
-                </p>
-              )}
-              <ul className="space-y-0.5">
-                {tools.map((tool) => {
-                  const Icon = tool.icon;
-                  const isActive = pathname.startsWith(tool.href);
-                  return (
-                    <li key={tool.href}>
-                      <Link
-                        href={tool.href}
-                        title={collapsed ? tool.name : undefined}
-                        onClick={onMobileClose}
-                        className={cn(
-                          "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                          collapsed && "justify-center",
-                          isActive
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        )}
-                      >
-                        <Icon className="h-4 w-4 flex-shrink-0" />
-                        {!collapsed && (
-                          <>
-                            <span className="truncate flex-1">{tool.name}</span>
-                            {tool.badge && (
-                              <Badge variant="secondary" className="text-xs">
-                                {tool.badge}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </>
-        )}
-
-        {kennisbank.length > 0 && (
-          <>
-            <Separator className="bg-sidebar-border" />
-
-            {/* Kennisbank */}
-            <div>
-              {!collapsed && (
-                <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
-                  Kennisbank
-                </p>
-              )}
-              <ul className="space-y-0.5">
-                {kennisbank.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = pathname.startsWith(item.href);
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        title={collapsed ? item.name : undefined}
-                        onClick={onMobileClose}
-                        className={cn(
-                          "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                          collapsed && "justify-center",
-                          isActive
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        )}
-                      >
-                        <Icon className="h-4 w-4 flex-shrink-0" />
-                        {!collapsed && (
-                          <>
-                            <span className="truncate flex-1">{item.name}</span>
-                            {item.badge && (
-                              <Badge variant="secondary" className="text-xs">
-                                {item.badge}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </>
-        )}
-
-        {insights.length > 0 && (
-          <>
-            <Separator className="bg-sidebar-border" />
-
-            {/* Inzichten */}
-            <div>
-              {!collapsed && (
-                <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
-                  Inzichten
-                </p>
-              )}
-              <ul className="space-y-0.5">
-                {insights.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = pathname.startsWith(item.href);
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        title={collapsed ? item.name : undefined}
-                        onClick={onMobileClose}
-                        className={cn(
-                          "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                          collapsed && "justify-center",
-                          isActive
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        )}
-                      >
-                        <Icon className="h-4 w-4 flex-shrink-0" />
-                        {!collapsed && (
-                          <>
-                            <span className="truncate flex-1">{item.name}</span>
-                            {item.badge && (
-                              <Badge variant="secondary" className="text-xs">
-                                {item.badge}
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </>
-        )}
-      </nav>
-
-      {/* Footer */}
-      {!collapsed && (
-        <div className="px-2 py-4 border-t border-sidebar-border space-y-0.5">
           {isAdmin && (
-            <Link
+            <RailItem
+              label="Beheer"
+              icon={Settings}
+              active={isUnder(pathname, ADMIN_HREF)}
               href={ADMIN_HREF}
               onClick={onMobileClose}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
-                pathname.startsWith(ADMIN_HREF)
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-psv-gray-09 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <Settings className="h-4 w-4 flex-shrink-0" />
-              <span>Beheer</span>
-            </Link>
+            />
           )}
-          {betaTools.length > 0 && (
-            <div className="group relative">
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-focus-within:bg-sidebar-accent group-focus-within:text-sidebar-accent-foreground"
-              >
-                <FlaskConical className="h-4 w-4 flex-shrink-0" />
-                <span>Beta tools</span>
-              </button>
-              <div className="invisible absolute bottom-0 left-full z-50 pl-2 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                <div className="w-56 rounded-md border border-sidebar-border bg-sidebar p-2 shadow-lg">
-                  <p className="px-2 mb-1 font-heading text-xs uppercase tracking-wider text-psv-gray-09">
-                    Beta tools
-                  </p>
-                  <ul className="space-y-0.5">
-                    {betaTools.map((tool) => {
-                      const Icon = tool.icon;
-                      return (
-                        <li key={tool.href}>
-                          <Link
-                            href={tool.href}
-                            onClick={onMobileClose}
-                            className="flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                          >
-                            <Icon className="h-4 w-4 flex-shrink-0" />
-                            <span className="truncate">{tool.name}</span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-psv-gray-09 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <LogOut className="h-4 w-4 flex-shrink-0" />
-            <span>Uitloggen</span>
-          </button>
+          <RailItem label="Uitloggen" icon={LogOut} active={false} onClick={handleLogout} />
         </div>
+      </aside>
+
+      {hasPanel && active && (
+        <Panel
+          // Een nieuwe key per onderdeel, zodat het paneel bij wisselen opnieuw infadet.
+          key={active.id}
+          section={active}
+          currentHref={activeHref(sections, pathname)}
+          onCollapse={() => setPanelCollapsed(true)}
+          onNavigate={onMobileClose}
+          // Op mobiel staat het paneel altijd open in de lade; inklappen is voor desktop.
+          className={cn("flex animate-fade-up [animation-duration:200ms]", collapsed && "lg:hidden")}
+        />
       )}
-    </aside>
+    </div>
   );
 }

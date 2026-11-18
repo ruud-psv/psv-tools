@@ -24,8 +24,8 @@ import { groupPeriods, launchCut, zoomDomain, type PeriodPoint } from "@/lib/wac
 import type { WaitlistStatus } from "@/lib/wachtlijst/status";
 
 /**
- * De wachtlijst uit Ringside: omvang, verloop, leeftijd en postcode. Geen
- * ingang in de sidebar; de pagina staat op `/dashboard/wachtlijst`.
+ * De wachtlijst uit Ringside: omvang, verloop, leeftijd en postcode. In de
+ * sidebar onder Ticketing; de pagina staat op `/dashboard/wachtlijst`.
  */
 
 interface Payload {
