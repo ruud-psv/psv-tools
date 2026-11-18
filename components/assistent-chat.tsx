@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, Check, Database, FileText, Loader2, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, ChevronRight, Database, FileText, History, Loader2, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
 import { StukPaneel } from "@/components/stuk/stuk-paneel";
-import type { Stuk } from "@/lib/stukken/model";
+import { STUK_SOORT_LABEL, type Stuk } from "@/lib/stukken/model";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { pakEersteVraag, SUGGESTIES } from "@/lib/assistent-start";
@@ -128,6 +128,8 @@ export function AssistentChat() {
   const [stuk, setStuk] = useState<Stuk | null>(null);
   /** Op kleinere schermen: het stuk tonen in plaats van het gesprek. */
   const [toonStuk, setToonStuk] = useState(false);
+  /** Op mobiel: de lijst met gesprekken over het gesprek heen tonen. */
+  const [toonGesprekken, setToonGesprekken] = useState(false);
   /** De gesprekken met een stuk, voor het icoon in de lijst. */
   const [metStuk, setMetStuk] = useState<Set<string>>(new Set());
   const [gesprekken, setGesprekken] = useState<GesprekSamenvatting[]>([]);
@@ -277,6 +279,7 @@ export function AssistentChat() {
     setGesprekId(null);
     setStuk(null);
     setToonStuk(false);
+    setToonGesprekken(false);
     setBeurten([]);
     setFout(null);
     setInvoer("");
@@ -284,6 +287,7 @@ export function AssistentChat() {
   }
 
   async function openGesprek(id: string) {
+    setToonGesprekken(false);
     if (id === gesprekId && !bezig) return;
     stop();
     setLaden(true);
@@ -339,9 +343,9 @@ export function AssistentChat() {
 
   const heeftGesprek = beurten.length > 0;
 
-  return (
-    <div className="flex h-full min-h-0">
-      <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-border bg-background md:flex">
+  /** Nieuw gesprek + eerdere gesprekken: in de kolom links (desktop) of over de chat heen (mobiel). */
+  const gesprekkenLijst = (
+    <>
         <div className="p-3">
           <button
             type="button"
@@ -383,7 +387,7 @@ export function AssistentChat() {
                     type="button"
                     onClick={() => verwijder(g.id)}
                     aria-label={`Gesprek verwijderen: ${g.titel}`}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-opacity hover:text-foreground focus:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -392,40 +396,83 @@ export function AssistentChat() {
             </ul>
           )}
         </nav>
+    </>
+  );
+
+  return (
+    <div className="flex h-full min-h-0">
+      <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-border bg-background md:flex">
+        {gesprekkenLijst}
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         {stuk && toonStuk && (
           <StukPaneel stuk={stuk} onStuk={setStuk} onSluit={() => setToonStuk(false)} uitgeschakeld={bezig} className="absolute inset-0 z-20 xl:hidden" />
         )}
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-psv-red-primary" />
-            <h1 className="font-heading text-xl uppercase tracking-tight">Assistent</h1>
+        {toonGesprekken && (
+          <div className="absolute inset-0 z-30 flex flex-col bg-background md:hidden" role="dialog" aria-label="Gesprekken">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p className="font-heading text-xl uppercase tracking-tight">Gesprekken</p>
+              <button
+                type="button"
+                onClick={() => setToonGesprekken(false)}
+                aria-label="Gesprekken sluiten"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {gesprekkenLijst}
           </div>
-          <div className="flex items-center gap-2">
+        )}
+        {/* Kop + (op kleinere schermen) de balk naar het stuk: blijven bovenaan staan. */}
+        <div className="sticky top-0 z-10 flex-shrink-0 bg-background">
+          <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-psv-red-primary" />
+              <h1 className="font-heading text-xl uppercase tracking-tight">Assistent</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setToonGesprekken(true)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-xs uppercase tracking-wide text-muted-foreground transition-colors hover:border-psv-red-primary hover:text-foreground md:hidden"
+              >
+                <History className="h-4 w-4 text-psv-red-primary" />
+                Gesprekken
+              </button>
+              {heeftGesprek && (
+                <button
+                  type="button"
+                  onClick={nieuwGesprek}
+                  aria-label="Nieuw gesprek"
+                  className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:border-psv-red-primary hover:text-foreground md:hidden"
+                >
+                  <MessageSquarePlus className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </header>
           {stuk && (
             <button
               type="button"
               onClick={() => setToonStuk(true)}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-heading text-xs uppercase tracking-wide text-muted-foreground transition-colors hover:border-psv-red-primary hover:text-foreground xl:hidden"
+              className="flex w-full items-center gap-3 border-b border-border bg-card px-4 py-2.5 text-left transition-colors hover:bg-accent/50 sm:px-6 xl:hidden"
             >
-              <FileText className="h-4 w-4 text-psv-red-primary" />
-              Stuk
+              <FileText className="h-5 w-5 flex-shrink-0 text-psv-red-primary" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-heading text-xs uppercase tracking-wide text-muted-foreground">
+                  {STUK_SOORT_LABEL[stuk.soort]} · versie {stuk.versie}
+                </span>
+                <span className="block truncate font-sans text-sm font-semibold text-foreground">{stuk.titel}</span>
+              </span>
+              <span className="flex flex-shrink-0 items-center gap-1 font-heading text-xs uppercase tracking-wide text-psv-red-primary">
+                Bekijken
+                <ChevronRight className="h-4 w-4" />
+              </span>
             </button>
           )}
-          {heeftGesprek && (
-            <button
-              type="button"
-              onClick={nieuwGesprek}
-              aria-label="Nieuw gesprek"
-              className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:border-psv-red-primary hover:text-foreground md:hidden"
-            >
-              <MessageSquarePlus className="h-4 w-4" />
-            </button>
-          )}
-          </div>
-        </header>
+        </div>
 
         <div ref={threadRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
           {laden ? (
