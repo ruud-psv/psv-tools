@@ -7,6 +7,7 @@ import { StukPaneel } from "@/components/stuk/stuk-paneel";
 import type { Stuk } from "@/lib/stukken/model";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
+import { pakEersteVraag, SUGGESTIES } from "@/lib/assistent-start";
 import type { GesprekSamenvatting, GesprekStap } from "@/lib/kennisbank-gesprekken";
 
 /**
@@ -14,13 +15,6 @@ import type { GesprekSamenvatting, GesprekStap } from "@/lib/kennisbank-gesprekk
  * heen. De server haalt de data op (`/api/assistent/chat`); de chat toont het
  * antwoord terwijl het binnenkomt en welke bronnen ervoor zijn geraadpleegd.
  */
-
-const SUGGESTIES = [
-  "Hoe loopt de verkoop van de eerstvolgende thuiswedstrijd?",
-  "Waar gingen de vragen aan de FANdesk deze week over?",
-  "Hoeveel plekken voor twee naast elkaar zijn er nog?",
-  "Hoe deel ik een bestand met persoonsgegevens?",
-];
 
 interface Bron {
   naam: string;
@@ -106,7 +100,7 @@ function Antwoord({ beurt, bezig }: { beurt: Beurt; bezig: boolean }) {
 
 function LegeStaat({ onKies }: { onKies: (vraag: string) => void }) {
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-4 py-10 text-center">
+    <div className="flex min-h-full animate-fade-up flex-col items-center justify-center px-4 py-10 text-center">
       <Sparkles className="mb-3 h-7 w-7 text-psv-red-primary" />
       <h2 className="font-heading text-2xl uppercase tracking-tight">Wat wil je weten?</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -167,6 +161,17 @@ export function AssistentChat() {
     laadGesprekken();
     return () => abortRef.current?.abort();
   }, [laadGesprekken]);
+
+  // Kom je van het dashboard met een vraag, dan start het gesprek meteen.
+  // In een timeout: React draait effecten in ontwikkeling twee keer, en de
+  // opruiming hierboven breekt een lopend verzoek af.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const vraag = pakEersteVraag();
+      if (vraag) stel(vraag);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const el = threadRef.current;
@@ -434,7 +439,7 @@ export function AssistentChat() {
             <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
               {beurten.map((b, i) =>
                 b.role === "user" ? (
-                  <div key={i} className="flex justify-end">
+                  <div key={i} className="flex animate-fade-up justify-end">
                     <p className="max-w-[85%] whitespace-pre-wrap rounded-lg rounded-br-sm bg-psv-red-primary px-4 py-2.5 text-sm text-white">
                       {b.content}
                     </p>

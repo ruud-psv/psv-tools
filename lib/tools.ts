@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 
 /**
- * De ingangen van PSV Tools op één plek. De sidebar gebruikt `name` (kort, past
+ * De ingangen van PSV Tools op één plek. Waar ze in de sidebar hangen staat in
+ * `lib/navigation.ts`. De sidebar gebruikt `name` (kort, past
  * naast een icoon), het dashboard gebruikt `title` + `description` (de vraag
  * "waar kan Tools je mee helpen?" beantwoord je met een handeling, niet met een
  * productnaam). Zo kan er geen ingang bijkomen die maar op één plek opduikt.
@@ -185,7 +186,10 @@ export const insightTools: ToolEntry[] = [
   },
 ];
 
-/** Het BETA-blok in de footer van de sidebar: verschijnt bij hover op "Beta tools". */
+/**
+ * De beta tools: een apart toegangsniveau (`lib/access.ts`). In de sidebar
+ * staan ze onder hun onderdeel, met het label "Beta" (`lib/navigation.ts`).
+ */
 export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Assistent", href: "/dashboard/assistent", icon: MessagesSquare },
   { name: "Kleurplaat Creator", href: "/dashboard/kleurplaat", icon: Palette },
