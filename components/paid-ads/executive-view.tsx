@@ -2,10 +2,7 @@
 
 import { useMemo } from "react";
 import {
-  businessUnitPerformance,
-  byPlatform,
   forecastRows,
-  funnelSteps,
   targetRows,
 } from "@/lib/paid-ads/derive";
 import { eur, nl, pct } from "@/lib/paid-ads/format";
@@ -13,40 +10,31 @@ import {
   Badge,
   DataTable,
   EmptySection,
-  PLATFORM_DOT,
-  SegmentBar,
   SectionCard,
   Td,
   Th,
   TONE_MARK,
-  VolumeBar,
 } from "./shared";
 import type { PaidViewProps } from "./shared";
-import { BudgetVsResults } from "./budget-vs-results";
-import { PaidPlatform, PLATFORM_LABELS } from "@/lib/paid-ads/types";
-import { cn } from "@/lib/utils";
 
 const fmt = { eur, nl, pct };
 
+/**
+ * Doelen en prognose: staan we op koers, en waar komen we uit aan het einde
+ * van de periode. De CPA per exploitatie staat in het overzicht.
+ */
 export function ExecutiveView({ data, scored, totals }: PaidViewProps) {
   const targets = useMemo(() => targetRows(totals, data.targets, fmt), [totals, data.targets]);
-  const funnel = useMemo(() => funnelSteps(totals, fmt), [totals]);
   const forecast = useMemo(
     () => forecastRows(totals, data.period.daysElapsed, data.period.daysTotal),
     [totals, data.period]
   );
-  const units = useMemo(
-    () => businessUnitPerformance(scored, data.targets),
-    [scored, data.targets]
-  );
-  const platforms = useMemo(() => byPlatform(scored), [scored]);
   const hasData = scored.length > 0;
   const hasTargets = targets.some((t) => t.target !== null);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-3">
-        {/* Pas bij 2xl drie naast elkaar: daaronder wordt de doeltabel te smal. */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* KPI's versus doelstelling */}
         <SectionCard
           title="KPI's versus doelstelling"
@@ -89,31 +77,6 @@ export function ExecutiveView({ data, scored, totals }: PaidViewProps) {
           )}
         </SectionCard>
 
-        {/* Funnel health */}
-        <SectionCard title="Doorstroom" hint="van weergave naar resultaat · waar valt het verkeer weg">
-          {!hasData ? (
-            <EmptySection />
-          ) : (
-            <div className="space-y-2">
-              {funnel.map((step) => (
-                <div key={step.label}>
-                  <p className="h-4 text-[10px] text-muted-foreground">{step.step ?? ""}</p>
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="h-9 rounded-sm bg-psv-red-primary/90"
-                      style={{ width: `${step.width}%`, minWidth: "6%" }}
-                    />
-                    <div className="min-w-0">
-                      <p className="font-heading text-lg uppercase leading-none">{nl(step.value)}</p>
-                      <p className="text-xs text-muted-foreground">{step.label}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
         {/* Forecast */}
         <SectionCard
           title="Forecast einde periode"
@@ -148,91 +111,6 @@ export function ExecutiveView({ data, scored, totals }: PaidViewProps) {
         </SectionCard>
       </div>
 
-      {/* Prestatie per exploitatie */}
-      <SectionCard title="Prestatie per exploitatie" hint="index 100 = op doelstelling">
-        {units.length === 0 ? (
-          <EmptySection />
-        ) : (
-          <DataTable>
-            <thead>
-              <tr className="border-b border-border">
-                <Th className="pl-0">Exploitatie</Th>
-                <Th className="min-w-[160px]">Besteed</Th>
-                <Th align="right">Resultaten</Th>
-                <Th align="right">CPA</Th>
-                <Th align="right">Doel</Th>
-                <Th align="right">Index</Th>
-                <Th align="right" className="pr-0">Status</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {units.map((u) => (
-                <tr key={u.key} className="border-b border-border/50 last:border-0 hover:bg-muted/40">
-                  <Td className="whitespace-nowrap pl-0 font-medium">{u.label}</Td>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <VolumeBar width={u.spendShare} />
-                      <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {eur(u.metrics.spend)}
-                      </span>
-                    </div>
-                  </Td>
-                  <Td align="right">{nl(u.metrics.results)}</Td>
-                  <Td align="right" className="whitespace-nowrap">{eur(u.derived.costPerResult, 2)}</Td>
-                  <Td align="right" className="whitespace-nowrap text-muted-foreground">
-                    {u.target != null ? `≤ ${eur(u.target, 2)}` : "—"}
-                  </Td>
-                  <Td align="right">
-                    {u.index != null ? <Badge tone={u.tone}>{u.index}%</Badge> : "—"}
-                  </Td>
-                  <Td align="right" className="pr-0">
-                    <Badge tone={u.tone}>{u.status}</Badge>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-        )}
-      </SectionCard>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <BudgetVsResults
-          title="Budget versus resultaat per platform"
-          campaigns={scored}
-          revenuePlatforms={data.revenuePlatforms}
-          groupBy={(c) => c.platform}
-          labelFor={(k) => PLATFORM_LABELS[k as PaidPlatform] ?? k}
-        />
-
-        {/* Verdeling besteed bedrag */}
-        <SectionCard title="Verdeling besteed bedrag">
-          {platforms.length === 0 ? (
-            <EmptySection />
-          ) : (
-            <>
-              <SegmentBar
-                className="mb-5 h-3.5"
-                segments={platforms.map((p) => ({
-                  key: p.key,
-                  share: p.spendShare,
-                  fill: PLATFORM_DOT[p.key as PaidPlatform],
-                  tip: `${p.label} — ${eur(p.metrics.spend)} · ${pct(p.spendShare, 1)}`,
-                }))}
-              />
-              <div className="space-y-3">
-                {platforms.map((p) => (
-                  <div key={p.key} className="flex items-center gap-3 text-sm">
-                    <span className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", PLATFORM_DOT[p.key as PaidPlatform])} />
-                    <span className="flex-1 text-muted-foreground">{p.label}</span>
-                    <span className="tabular-nums text-muted-foreground">{eur(p.metrics.spend)}</span>
-                    <span className="w-14 text-right font-bold tabular-nums">{pct(p.spendShare, 1)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </SectionCard>
-      </div>
     </div>
   );
 }

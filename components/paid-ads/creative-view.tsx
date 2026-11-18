@@ -5,10 +5,7 @@ import { ChevronRight } from "lucide-react";
 import {
   adsByAdSet,
   adsWithoutResults,
-  byFormat,
   derive,
-  saturation,
-  toneForCpa,
   type AdSetGroup,
 } from "@/lib/paid-ads/derive";
 import { eur, nl, pct, roas } from "@/lib/paid-ads/format";
@@ -21,7 +18,6 @@ import {
 } from "@/lib/paid-ads/types";
 import {
   Badge,
-  BarRow,
   CreativeThumb,
   DataTable,
   EmptySection,
@@ -40,14 +36,11 @@ const VISIBLE_SETS = 8;
 /** Zoveel advertenties staan er standaard in de galerij. */
 const VISIBLE_ADS = 8;
 
-export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
-  const formats = useMemo(() => byFormat(data.ads), [data.ads]);
-  const maxFormatResults = useMemo(
-    () => Math.max(...formats.map((f) => f.metrics.results), 1),
-    [formats]
-  );
-  const saturated = useMemo(() => saturation(scored), [scored]);
-
+/**
+ * De creatives: hoe ze eruitzien, wat elke creative binnen zijn set doet, en
+ * welke geld kosten zonder resultaat.
+ */
+export function CreativeView({ data }: PaidViewProps) {
   // Uitgezette advertenties standaard weg uit de galerij en de lijsten per
   // set. Advertenties waarvan de status onbekend is, blijven staan.
   const [onlyActive, setOnlyActive] = useState(true);
@@ -89,107 +82,6 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
 
       <AdGallery ads={shownAds} adSets={data.adSets} warnings={imageWarnings} />
 
-      {/* Format performance */}
-      <SectionCard title="Format performance" hint="welk format levert het resultaat op">
-        {formats.length === 0 ? (
-          <EmptySection>
-            Formats verschijnen zodra advertenties met een formatlabel binnenkomen.
-          </EmptySection>
-        ) : (
-          <div className="grid grid-cols-[1.6fr_repeat(4,minmax(72px,0.55fr))] items-center gap-x-4 gap-y-3">
-            <p className="font-heading text-[10px] uppercase tracking-wider text-muted-foreground">Format</p>
-            <p className="text-right font-heading text-[10px] uppercase tracking-wider text-muted-foreground">CTR</p>
-            <p className="text-right font-heading text-[10px] uppercase tracking-wider text-muted-foreground">CVR</p>
-            <p className="text-right font-heading text-[10px] uppercase tracking-wider text-muted-foreground">CPA</p>
-            <p className="text-right font-heading text-[10px] uppercase tracking-wider text-muted-foreground">Besteed</p>
-
-            {formats.map((f) => (
-              <FormatRow
-                key={f.key}
-                label={f.label}
-                results={f.metrics.results}
-                width={(f.metrics.results / maxFormatResults) * 100}
-                ctr={f.derived.ctr}
-                cvr={f.derived.cvr}
-                cpa={f.derived.costPerResult}
-                spend={f.metrics.spend}
-                avgCpa={avgCpa}
-              />
-            ))}
-          </div>
-        )}
-      </SectionCard>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Saturation monitor */}
-        <SectionCard title="Saturation monitor" hint="frequentie per campagne">
-          {saturated.length === 0 ? (
-            <EmptySection>
-              Frequentie is beschikbaar zodra een platform bereik én weergaven rapporteert.
-            </EmptySection>
-          ) : (
-            <>
-              <div className="space-y-3">
-                {saturated.map((s) => (
-                  <div key={`${s.platform}-${s.name}`}>
-                    <div className="mb-1.5 flex justify-between gap-3 text-sm">
-                      <span className="truncate text-muted-foreground">
-                        {s.name} <span className="text-psv-gray-09">· {s.platform}</span>
-                      </span>
-                      <Badge tone={s.tone}>{nl(s.frequency, 2)}</Badge>
-                    </div>
-                    <div className="flex">
-                      {/* Schaal tot 8: daarboven is elke campagne verzadigd. */}
-                      <BarRow width={(s.frequency / 8) * 100} tone={s.tone} />
-                    </div>
-                    <p className="mt-1 text-[10px] text-muted-foreground">{s.status}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-4 text-xs text-muted-foreground">
-                Groen onder 3,0 · oranje 3,0-6,0 · rood boven 6,0
-              </p>
-            </>
-          )}
-        </SectionCard>
-
-        {/* Besteed zonder resultaat */}
-        <SectionCard
-          title="Besteed zonder resultaat"
-          hint={
-            idle.count > 0
-              ? `${nl(idle.count)} ${idle.count === 1 ? "advertentie" : "advertenties"} · ${eur(idle.spend)}${
-                  idle.share != null ? ` · ${pct(idle.share, 0)} van het conversiebudget` : ""
-                }`
-              : "conversiecampagnes"
-          }
-        >
-          {idle.rows.length === 0 ? (
-            <EmptySection>
-              Geen advertenties in conversiecampagnes die budget verbruiken zonder resultaat.
-            </EmptySection>
-          ) : (
-            <div className="space-y-3">
-              {idle.rows.map((a) => (
-                <div key={`${a.platform}-${a.id}`} className="flex items-center gap-3">
-                  <AdHoverPreview ad={a}>
-                    <CreativeThumb src={a.thumbnailUrl} alt={a.name} />
-                  </AdHoverPreview>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{a.name}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {PLATFORM_LABELS[a.platform]}
-                      {a.adSetName ? ` · ${a.adSetName}` : ""} · {nl(a.clicks)} clicks · CTR {pct(a.ctr)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">{eur(a.spend)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
       {/* Advertenties per advertentieset */}
       <SectionCard
         title="Advertenties per advertentieset"
@@ -215,6 +107,42 @@ export function CreativeView({ data, scored, avgCpa }: PaidViewProps) {
               </button>
             )}
           </>
+        )}
+      </SectionCard>
+
+      {/* Besteed zonder resultaat */}
+      <SectionCard
+        title="Besteed zonder resultaat"
+        hint={
+          idle.count > 0
+            ? `${nl(idle.count)} ${idle.count === 1 ? "advertentie" : "advertenties"} · ${eur(idle.spend)}${
+                idle.share != null ? ` · ${pct(idle.share, 0)} van het conversiebudget` : ""
+              }`
+            : "conversiecampagnes"
+        }
+      >
+        {idle.rows.length === 0 ? (
+          <EmptySection>
+            Geen advertenties in conversiecampagnes die budget verbruiken zonder resultaat.
+          </EmptySection>
+        ) : (
+          <div className="space-y-3">
+            {idle.rows.map((a) => (
+              <div key={`${a.platform}-${a.id}`} className="flex items-center gap-3">
+                <AdHoverPreview ad={a}>
+                  <CreativeThumb src={a.thumbnailUrl} alt={a.name} />
+                </AdHoverPreview>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">{a.name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {PLATFORM_LABELS[a.platform]}
+                    {a.adSetName ? ` · ${a.adSetName}` : ""} · {nl(a.clicks)} clicks · CTR {pct(a.ctr)}
+                  </p>
+                </div>
+                <span className="shrink-0 text-sm font-semibold tabular-nums">{eur(a.spend)}</span>
+              </div>
+            ))}
+          </div>
         )}
       </SectionCard>
     </div>
@@ -438,45 +366,5 @@ function AdSetBlock({ group, defaultOpen }: { group: AdSetGroup; defaultOpen: bo
         </DataTable>
       </div>
     </details>
-  );
-}
-
-function FormatRow({
-  label,
-  results,
-  width,
-  ctr,
-  cvr,
-  cpa,
-  spend,
-  avgCpa,
-}: {
-  label: string;
-  results: number;
-  width: number;
-  ctr: number | null;
-  cvr: number | null;
-  cpa: number | null;
-  spend: number;
-  avgCpa: number | null;
-}) {
-  return (
-    <>
-      <div className="min-w-0">
-        <div className="mb-1 flex justify-between gap-3 text-sm">
-          <span className="truncate text-muted-foreground">{label}</span>
-          <span className="font-semibold tabular-nums">{nl(results)}</span>
-        </div>
-        <div className="flex">
-          <VolumeBar width={width} />
-        </div>
-      </div>
-      <p className="text-right text-sm tabular-nums">{pct(ctr)}</p>
-      <p className="text-right text-sm tabular-nums">{pct(cvr)}</p>
-      <p className="text-right">
-        <Badge tone={toneForCpa(cpa, avgCpa)}>{eur(cpa, 2)}</Badge>
-      </p>
-      <p className="text-right text-sm tabular-nums text-muted-foreground">{eur(spend)}</p>
-    </>
   );
 }
