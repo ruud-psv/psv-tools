@@ -24,6 +24,14 @@ registerHooks({
         if (existsSync(candidate)) return nextResolve(candidate.href, context);
       }
     }
-    return nextResolve(target, context);
+    try {
+      return nextResolve(target, context);
+    } catch (err) {
+      // Pakketten zonder `exports`-veld, zoals `next/server`: Node wil dan de
+      // extensie erbij (`next/server.js`), de bundler van Next.js niet.
+      const subpath = !local && /^(@[^/]+\/)?[^/@]+\/.+/.test(target) && !/\.[cm]?js$/.test(target);
+      if (subpath && err?.code === "ERR_MODULE_NOT_FOUND") return nextResolve(`${target}.js`, context);
+      throw err;
+    }
   },
 });

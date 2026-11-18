@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireEmail } from "@/lib/api-session";
+import { createShareToken, readShareToken, type SharePayload } from "@/lib/share-token";
 
-interface DmShareParams {
-  q?: string;
-  preset?: string;
-  customFrom?: string;
-  customTo?: string;
-}
+/**
+ * Deellinks voor `/share/dm`, `/share/ticket` en de oude
+ * `/share/rapportage?token=`-links. POST maakt een ondertekend deeltoken (alleen
+ * met login), GET geeft de inhoud van een geldig token terug aan de deelpagina.
+ * Zie `lib/share-token.ts`.
+ */
 
 interface CampaignShareParams {
   kind: "campaign";
@@ -32,39 +34,61 @@ function isCampaignParams(body: unknown): body is CampaignShareParams {
   return true;
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
+/** Een tekstveld uit de body, ingekort; geen tekst wordt `fallback`. */
+function text(value: unknown, fallback: string, max = 200): string {
+  return typeof value === "string" ? value.slice(0, max) : fallback;
+}
 
-    let params: DmShareParams | CampaignShareParams | Record<string, unknown>;
-    if (body && typeof body === "object" && (body as { kind?: string }).kind === "campaign") {
+export async function POST(req: NextRequest) {
+  const session = requireEmail(req);
+  if ("error" in session) return session.error;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Ongeldige request body." }, { status: 400 });
+  }
+
+  try {
+    let params: SharePayload;
+    const kind = body && typeof body === "object" ? (body as { kind?: unknown }).kind : undefined;
+    if (kind === "campaign") {
       if (!isCampaignParams(body)) {
         return NextResponse.json({ error: "Ongeldige campagne payload." }, { status: 400 });
       }
-      params = body;
-    } else if (body && typeof body === "object" && (body as { kind?: string }).kind === "ticket-event") {
-      params = body as Record<string, unknown>;
+      params = body as unknown as SharePayload;
+    } else if (kind === "ticket-event") {
+      params = body as SharePayload;
     } else {
-      const { q = "", preset = "30d", customFrom = "", customTo = "" } = body ?? {};
-      params = { q, preset, customFrom, customTo };
+      // DM Performance: de filters van het dashboard. `kind: "dm"` bepaalt wat
+      // het token van Maileon mag zien (zie `lib/dm-scope.ts`).
+      const b = (body ?? {}) as Record<string, unknown>;
+      params = {
+        kind: "dm",
+        q: text(b.q, ""),
+        preset: text(b.preset, "30d", 20),
+        customFrom: text(b.customFrom, "", 10),
+        customTo: text(b.customTo, "", 10),
+      };
     }
 
-    const token = Buffer.from(JSON.stringify(params)).toString("base64url");
-    return NextResponse.json({ token });
+    return NextResponse.json({ token: createShareToken(params) });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[share] POST mislukt:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[share] POST mislukt:", err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ error: "Deellink maken mislukt." }, { status: 500 });
   }
 }
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
-  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
-  try {
-    const params = JSON.parse(Buffer.from(token, "base64url").toString());
-    return NextResponse.json(params);
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!token) return NextResponse.json({ error: "Deze deellink is ongeldig." }, { status: 400 });
+  const params = readShareToken(token);
+  if (!params) {
+    return NextResponse.json(
+      { error: "Deze deellink is ongeldig of verouderd. Vraag om een nieuwe link." },
+      { status: 401 }
+    );
   }
+  return NextResponse.json(params);
 }

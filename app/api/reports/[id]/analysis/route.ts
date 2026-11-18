@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeCombined, type CombinedInsightInput } from "@/lib/insights/combined";
-import { isValidShareToken } from "@/lib/share-token";
+import { readShareToken } from "@/lib/share-token";
 import { getAnalysis, saveAnalysis, type StoredAnalysis } from "@/lib/report-analysis";
 import { InsightAnalysisError, InsightConfigError } from "@/lib/insights/runner";
 
@@ -40,17 +40,13 @@ export async function POST(
   if (!body.token || !body.payload) {
     return NextResponse.json({ error: "Token en payload zijn verplicht." }, { status: 400 });
   }
-  if (!isValidShareToken(body.token)) {
+  const shared = readShareToken(body.token);
+  if (!shared) {
     return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
   }
   // Token moet bij dit rapport horen.
-  try {
-    const decoded = JSON.parse(Buffer.from(body.token, "base64url").toString());
-    if (decoded?.id && decoded.id !== id) {
-      return NextResponse.json({ error: "Token hoort niet bij dit rapport." }, { status: 403 });
-    }
-  } catch {
-    return NextResponse.json({ error: "Ongeldig token." }, { status: 401 });
+  if (shared.kind !== "report" || shared.id !== id) {
+    return NextResponse.json({ error: "Token hoort niet bij dit rapport." }, { status: 403 });
   }
 
   try {

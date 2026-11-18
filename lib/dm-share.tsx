@@ -73,39 +73,7 @@ export function formatDate(iso: string) {
   } catch { return iso; }
 }
 
-/** Strip DMID-suffix, datumpatronen én achtergebleven " - " separatoren */
-export function stripName(name: string): string {
-  const MONTHS = "januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|okt|nov|dec";
-  return name
-    .replace(/\s*DMID.*/i, "")
-    .replace(/\s*\b\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\b/g, "")
-    .replace(/\s*\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, "")
-    .replace(new RegExp(`\\s*\\b\\d{1,2}\\s+(${MONTHS})\\.?\\s*\\d{0,4}\\b`, "gi"), "")
-    .replace(new RegExp(`\\s*\\b(${MONTHS})\\.?\\s+\\d{4}\\b`, "gi"), "")
-    .replace(/\s+/g, " ")
-    .replace(/(\s*-)+\s*$/, "")
-    .replace(/^\s*(-\s*)+/, "")
-    .trim() || name;
-}
-
-export function getDateRange(preset: string, customFrom?: string, customTo?: string) {
-  if (preset === "custom" && customFrom && customTo) return { from: customFrom, to: customTo };
-  const now = new Date();
-  const to = now.toISOString().slice(0, 10);
-  switch (preset) {
-    case "7d":  { const d = new Date(now); d.setDate(d.getDate() - 7);   return { from: d.toISOString().slice(0, 10), to }; }
-    case "30d": { const d = new Date(now); d.setDate(d.getDate() - 30);  return { from: d.toISOString().slice(0, 10), to }; }
-    case "90d": { const d = new Date(now); d.setDate(d.getDate() - 90);  return { from: d.toISOString().slice(0, 10), to }; }
-    case "6m":  { const d = new Date(now); d.setMonth(d.getMonth() - 6); return { from: d.toISOString().slice(0, 10), to }; }
-    case "1y":  { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return { from: d.toISOString().slice(0, 10), to }; }
-    case "seizoen2425": return { from: "2024-07-01", to: "2025-06-30" };
-    case "seizoen2526": {
-      const end = new Date(Math.min(new Date("2026-06-30").getTime(), now.getTime()));
-      return { from: "2025-07-01", to: end.toISOString().slice(0, 10) };
-    }
-    default: { const d = new Date(now); d.setDate(d.getDate() - 30); return { from: d.toISOString().slice(0, 10), to }; }
-  }
-}
+export { getDateRange, stripName } from "@/lib/dm-scope";
 
 export function computeTotals(mailings: MailingSummary[]): Totals {
   if (!mailings.length) return { mailings: 0, recipients: 0, uniqueOpens: 0, avgOpenRate: 0, uniqueClicks: 0, avgClickRate: 0, avgCtor: 0, bounces: 0, avgBounceRate: 0, unsubscriptions: 0, avgUnsubRate: 0 };

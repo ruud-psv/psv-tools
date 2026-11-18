@@ -1,53 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
+import { maileonAccessFor } from "@/lib/maileon/access";
+import { matchesQueries, scopeWindow } from "@/lib/dm-scope";
+import { fetchArchiveUrl, listSentMailings, MaileonConfigError, MaileonError } from "@/lib/maileon/mailings";
 
-const BASE_URL = "https://api.maileon.com/1.0";
-const MAILEON_MIME = "application/vnd.maileon.api+xml";
+export const dynamic = "force-dynamic";
 
-function getAuthHeader(): string | null {
-  const key = process.env.MAILEON_API_KEY;
-  if (!key) return null;
-  return `Basic ${Buffer.from(key).toString("base64")}`;
-}
-
+/**
+ * De archiefversie (webversie) van een mailing. Met een sessie: elke mailing.
+ * Met een deeltoken (`?token=`): alleen een mailing die bij de gedeelde
+ * weergave hoort (zie `lib/maileon/access.ts`).
+ */
 export async function GET(req: NextRequest) {
+  const access = await maileonAccessFor(req);
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
   const mailingId = req.nextUrl.searchParams.get("mailingId");
   if (!mailingId || !/^\d+$/.test(mailingId)) {
     return NextResponse.json({ error: "Invalid mailingId" }, { status: 400 });
   }
-
-  const auth = getAuthHeader();
-  if (!auth) {
-    console.error("[maileon/archive] MAILEON_API_KEY niet geconfigureerd.");
-    return NextResponse.json({ error: "Server configuratie fout" }, { status: 500 });
-  }
+  const id = Number(mailingId);
 
   try {
-    const res = await fetch(`${BASE_URL}/mailings/${mailingId}/archiveurl`, {
-      headers: { Authorization: auth, Accept: MAILEON_MIME },
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`[maileon/archive] Maileon API ${res.status}: ${text.slice(0, 500)}`);
-      return NextResponse.json({ error: "Ophalen van archive URL mislukt" }, { status: 502 });
+    if (access.scope) {
+      // Alleen mailings die de deelpagina zelf ook toont.
+      const { from, to } = scopeWindow(access.scope);
+      const { queries } = access.scope;
+      const shared = await listSentMailings(from, to);
+      if (!shared.some((m) => m.id === id && matchesQueries(m, queries))) {
+        return NextResponse.json({ error: "Deze mailing hoort niet bij de gedeelde link." }, { status: 403 });
+      }
     }
 
-    const text = await res.text();
-
-    // Extract URL from XML: <archive_url>...</archive_url> or plain text
-    const match = text.match(/<archive_url[^>]*>\s*(https?:\/\/[^\s<]+)\s*<\/archive_url>/i)
-      ?? text.match(/<archiveurl[^>]*>\s*(https?:\/\/[^\s<]+)\s*<\/archiveurl>/i)
-      ?? text.match(/(https?:\/\/\S+)/);
-
-    const archiveUrl = match?.[1]?.trim() ?? text.trim();
-
-    if (!archiveUrl.startsWith("http")) {
-      return NextResponse.json({ error: "Geen geldige archive URL ontvangen" }, { status: 502 });
-    }
-
+    const archiveUrl = await fetchArchiveUrl(id);
     return NextResponse.json({ archiveUrl });
   } catch (err) {
+    if (err instanceof MaileonConfigError) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
     console.error("[maileon/archive] Ophalen mislukt:", err);
-    return NextResponse.json({ error: "Ophalen mislukt" }, { status: 502 });
+    const message = err instanceof MaileonError ? err.message : "Ophalen mislukt";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

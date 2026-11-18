@@ -40,7 +40,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose: () => void }) {
+function MailingDetail({ mailing, token, onClose }: { mailing: MailingSummary; token: string; onClose: () => void }) {
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
 
@@ -48,7 +48,7 @@ function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose:
     setArchiveLoading(true);
     setArchiveError(null);
     try {
-      const res = await fetch(`/api/maileon/archive?mailingId=${mailing.id}`);
+      const res = await fetch(`/api/maileon/archive?mailingId=${mailing.id}&token=${encodeURIComponent(token)}`);
       const data = await res.json();
       if (!res.ok || !data.archiveUrl) throw new Error(data.error ?? "Ophalen mislukt");
       window.open(data.archiveUrl, "_blank", "noopener,noreferrer");
@@ -57,7 +57,7 @@ function MailingDetail({ mailing, onClose }: { mailing: MailingSummary; onClose:
     } finally {
       setArchiveLoading(false);
     }
-  }, [mailing.id]);
+  }, [mailing.id, token]);
 
   return (
     <Card>
@@ -213,9 +213,17 @@ function ShareDmContent() {
       return;
     }
     fetch(`/api/share?token=${encodeURIComponent(token)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(`Fout ${r.status}`)))
-      .then((data: FilterParams) => { setFilter(data); setTokenLoading(false); })
-      .catch((err) => { setTokenError(String(err)); setTokenLoading(false); });
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error ?? `Fout ${r.status}`);
+        return data;
+      })
+      .then((data: FilterParams & { kind?: string }) => {
+        if (data.kind !== "dm") throw new Error("Deze link hoort niet bij DM Performance.");
+        setFilter(data);
+        setTokenLoading(false);
+      })
+      .catch((err) => { setTokenError(err instanceof Error ? err.message : String(err)); setTokenLoading(false); });
   }, [token]);
 
   const { from, to } = useMemo(
@@ -228,9 +236,10 @@ function ShareDmContent() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/maileon?from=${from}&to=${to}`);
-      if (!res.ok) throw new Error(`API fout ${res.status}`);
-      const json = await res.json();
+      // Het deeltoken bepaalt welke periode en mailings de server teruggeeft.
+      const res = await fetch(`/api/maileon?from=${from}&to=${to}&token=${encodeURIComponent(token)}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `API fout ${res.status}`);
       setMailings(json.mailings ?? []);
       setLastFetched(new Date());
     } catch (err) {
@@ -238,7 +247,7 @@ function ShareDmContent() {
     } finally {
       setLoading(false);
     }
-  }, [filter, from, to]);
+  }, [filter, from, to, token]);
 
   useEffect(() => {
     if (!filter) return;
@@ -269,7 +278,7 @@ function ShareDmContent() {
   if (tokenError) {
     return (
       <div className="flex items-center justify-center min-h-screen text-muted-foreground text-sm">
-        Ongeldige of verlopen link.
+        {tokenError}
       </div>
     );
   }
@@ -319,7 +328,7 @@ function ShareDmContent() {
         )}
 
         {/* Detail panel */}
-        {selected && <MailingDetail mailing={selected} onClose={() => setSelected(null)} />}
+        {selected && <MailingDetail mailing={selected} token={token} onClose={() => setSelected(null)} />}
 
         {/* Tabel */}
         {!error && filtered.length > 0 && (

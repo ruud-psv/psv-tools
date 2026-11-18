@@ -31,10 +31,10 @@ interface ShareParams {
 }
 
 /**
- * Het share-token is niet ondertekend, dus de inhoud is niet te vertrouwen: een
- * bewerkte link kan er honderden id's in stoppen. Daarom kappen op het maximum
- * en alleen strings overhouden; onbekende id's leveren straks simpelweg geen
- * dagreeks op en vallen stil weg.
+ * Het share-token is ondertekend, maar `POST /api/share` neemt een
+ * ticket-event-payload zonder controle over: er kunnen honderden id's in
+ * staan. Daarom kappen op het maximum en alleen strings overhouden; onbekende
+ * id's leveren straks simpelweg geen dagreeks op en vallen stil weg.
  */
 function sanitizeCompare(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -43,7 +43,7 @@ function sanitizeCompare(value: unknown): string[] {
     .slice(0, MAX_COMPARE);
 }
 
-/** Zelfde reden als `sanitizeCompare`: het token is niet ondertekend. */
+/** Zelfde reden als `sanitizeCompare`: de inhoud van het token is niet gecontroleerd. */
 function sanitizeTypes(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -110,7 +110,10 @@ function ShareTicketContent() {
       return;
     }
     fetch(`/api/share?token=${encodeURIComponent(token)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(`Fout ${r.status}`)))
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        return r.ok ? data : Promise.reject(data?.error ?? `Fout ${r.status}`);
+      })
       .then((data: ShareParams) => {
         setParams(data);
         setTokenLoading(false);

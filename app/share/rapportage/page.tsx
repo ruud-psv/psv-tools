@@ -14,10 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   computeTotals as computeDmTotals,
-  formatDate, formatNumber, formatPct, formatEuro, getDateRange, stripName,
+  formatDate, formatNumber, formatPct, formatEuro, stripName,
   KpiCard, RateBadge,
   type MailingSummary, type Totals as DmTotals,
 } from "@/lib/dm-share";
+import { collectQueries, matchesQueries, resolvePeriod } from "@/lib/dm-scope";
 import type {
   CombinedInsightResult, CombinedDm, CombinedTicket, CombinedWeb, CombinedFanstore,
 } from "@/lib/insights/combined";
@@ -58,29 +59,6 @@ interface CampaignParams {
   };
 }
 
-/** Los een bron-periode op naar een concreet {from,to}. Relatieve presets worden
- *  op weergavemoment berekend (meebewegend); valt terug op de legacy globale
- *  periode of, als laatste redmiddel, 30 dagen. */
-function resolvePeriod(
-  period: PeriodConfig | undefined,
-  legacyFrom?: string,
-  legacyTo?: string
-): { from: string; to: string } {
-  if (period) {
-    if (period.preset === "custom" && period.from && period.to) {
-      return { from: period.from, to: period.to };
-    }
-    if (period.preset !== "custom") return getDateRange(period.preset);
-  }
-  if (legacyFrom && legacyTo) return { from: legacyFrom, to: legacyTo };
-  return getDateRange("30d");
-}
-
-/** Base64url token voor de data/insights endpoints (client-side variant van Buffer#base64url). */
-function makeShareToken(payload: object): string {
-  return btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
 /** Normalize legacy `path` (single string) and new `paths` (array) into one list. */
 function collectPaths(src: { path?: string; paths?: string[] } | undefined): string[] {
   if (!src) return [];
@@ -108,20 +86,6 @@ function collectWebSites(
   }
   if (src.site) return [{ site: src.site, paths: collectPaths(src) }];
   return [];
-}
-
-/** Normalize legacy `query` (single string) and new `queries` (array) into one list. */
-function collectQueries(src: { query?: string; queries?: string[] } | undefined): string[] {
-  if (!src) return [];
-  const out: string[] = [];
-  if (Array.isArray(src.queries)) {
-    for (const q of src.queries) {
-      const t = q?.trim?.();
-      if (t) out.push(t);
-    }
-  }
-  if (typeof src.query === "string" && src.query.trim()) out.push(src.query.trim());
-  return out;
 }
 
 interface TicketEvent {
@@ -195,22 +159,17 @@ function SectionShell({ icon: Icon, title, subtitle, children }: {
 /* ---------- DM Section ---------- */
 
 function DmSection({
-  from, to, queries, onData,
-}: { from: string; to: string; queries: string[]; onData: ReportData }) {
+  token, from, to, queries, onData,
+}: { token: string; from: string; to: string; queries: string[]; onData: ReportData }) {
   const [mailings, setMailings] = useState<MailingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    if (queries.length === 0) return mailings;
-    const lowered = queries.map((q) => q.toLowerCase());
-    return mailings.filter((m) => {
-      const name = (m.name ?? "").toLowerCase();
-      const subject = (m.subject ?? "").toLowerCase();
-      const stripped = stripName(m.name ?? "").toLowerCase();
-      return lowered.some((q) => name.includes(q) || subject.includes(q) || stripped.includes(q));
-    });
-  }, [mailings, queries]);
+  // Dezelfde filter als de server bij een deeltoken toepast (lib/dm-scope.ts).
+  const filtered = useMemo(
+    () => mailings.filter((m) => matchesQueries(m, queries)),
+    [mailings, queries]
+  );
 
   const totals = useMemo(() => computeDmTotals(filtered), [filtered]);
 
@@ -218,16 +177,17 @@ function DmSection({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/maileon?from=${from}&to=${to}`);
-      if (!res.ok) throw new Error(`API fout ${res.status}`);
-      const json = await res.json();
+      // Het deeltoken bepaalt welke periode en mailings de server teruggeeft.
+      const res = await fetch(`/api/maileon?from=${from}&to=${to}&token=${encodeURIComponent(token)}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `API fout ${res.status}`);
       setMailings(json.mailings ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ophalen mislukt");
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [token, from, to]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -1271,11 +1231,10 @@ function ShareRapportageContent() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  // Token voor de data/insights endpoints is volledig afleidbaar uit de URL.
-  const token = useMemo(
-    () => (reportId ? makeShareToken({ kind: "report", id: reportId }) : legacyToken),
-    [reportId, legacyToken]
-  );
+  // Deeltoken voor de data/insights endpoints. Ondertekend door de server:
+  // bij een opgeslagen rapport komt het mee met de rapportconfiguratie, bij
+  // een oude `?token=`-link is het de link zelf.
+  const [token, setToken] = useState(legacyToken);
 
   useEffect(() => {
     if (reportId) {
@@ -1284,11 +1243,12 @@ function ShareRapportageContent() {
         .then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e?.error ?? `Fout ${r.status}`)).catch(() => Promise.reject(`Fout ${r.status}`)))
         .then((data) => {
           const report = data?.report as ReportRecord | undefined;
-          if (!report || !report.sources) {
+          if (!report || !report.sources || typeof data.token !== "string") {
             setTokenError("Rapport niet gevonden.");
             setLoading(false);
             return;
           }
+          setToken(data.token);
           setParams({
             kind: "campaign",
             name: report.title,
@@ -1306,7 +1266,10 @@ function ShareRapportageContent() {
 
     if (!legacyToken) { setTokenError("Ongeldige link"); setLoading(false); return; }
     fetch(`/api/share?token=${encodeURIComponent(legacyToken)}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(`Fout ${r.status}`))
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        return r.ok ? data : Promise.reject(data?.error ?? `Fout ${r.status}`);
+      })
       .then((data) => {
         if (!data || data.kind !== "campaign") {
           setTokenError("Deze link hoort niet bij een campagne-rapportage.");
@@ -1488,6 +1451,7 @@ function ShareRapportageContent() {
           return (
             <DmSection
               key={`dm-${refreshTick}`}
+              token={token}
               from={range.from}
               to={range.to}
               queries={collectQueries(params.sources.dm)}
