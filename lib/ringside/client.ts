@@ -7,6 +7,7 @@
  */
 
 import { getRingsideToken, resetRingsideToken, RingsideConfigError } from "./auth";
+import { stripIdentity } from "./privacy";
 
 /** Basis-URL van de API; gelijk aan de audience uit de credentials-mail. */
 const DEFAULT_BASE_URL = "https://ringside.seatgeek.com";
@@ -75,7 +76,36 @@ export async function ringsideFetch(
     resetRingsideToken();
     res = await send();
   }
-  return res;
+  return withoutIdentity(res);
+}
+
+/**
+ * Haalt naam, e-mail, telefoon en adresregels uit een JSON-antwoord, zodat die
+ * velden voor de rest van Tools niet bestaan (zie `lib/ringside/privacy.ts`).
+ * Elke route en elke ingest gaat via `ringsideFetch`, dus dit is de enige plek
+ * waar het hoeft.
+ *
+ * Alleen geslaagde antwoorden met een body; een 204/205 en een foutmelding gaan
+ * ongewijzigd door.
+ */
+async function withoutIdentity(res: Response): Promise<Response> {
+  // Bewust niet op content-type: een antwoord zonder (juiste) header mag er
+  // niet ongefilterd langs. Wat geen JSON is, gaat als tekst door.
+  if (!res.ok || res.status === 204 || res.status === 205) return res;
+
+  const text = await res.text();
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  const init = { status: res.status, statusText: res.statusText, headers };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return new Response(text, init);
+  }
+  return new Response(JSON.stringify(stripIdentity(parsed)), init);
 }
 
 /** Als `ringsideFetch`, maar parseert JSON en gooit bij een foutstatus. */

@@ -520,18 +520,22 @@ achternaam, `crm_id`, `client_id`, de laatste cijfers en provider van de
 creditcard en een betalingsreferentie. Dat is AVG-materiaal, en SeatGeek wijst
 er in de credentials-mail expliciet op: "principle of least privilege".
 
-Twee gevolgen:
+Hoe Tools daarmee omgaat (`lib/ringside/privacy.ts`):
 
-- De probe maskeert persoonsvelden standaard (zie `PERSONAL_COLUMN_PATTERN` in
-  de route). `?unmasked=1` zet dat uit — gebruik dat alleen als het echt moet,
-  en plak de uitkomst nergens waar hij blijft staan.
-- Let bij het uitbreiden van dat patroon op de naamgeving per tabel: in
-  `payments` heten de velden `fname` en `crm_id`, in `attendance`
-  `primary_first_name` en `primary_crm_id`. Het patroon ankert daarom op het
-  achtervoegsel. Komt er een tabel bij, controleer dan of de persoonsvelden
-  daarvan ook echt geraakt worden — `?rows=1` laat het direct zien.
-- Ook een `barcode` wordt gemaskeerd: dat is geen persoonsgegeven maar wel een
-  toegangsbewijs.
+- **Naam, e-mail, telefoon en adresregels komen Tools niet in.** `ringsideFetch`
+  haalt die kolommen uit elk antwoord, direct nadat het binnen is
+  (`stripIdentity`). Geen tool gebruikt ze, en zo kan ook een nieuwe tool ze niet
+  per ongeluk tonen of opslaan. Postcode, land, geboortedatum en de klant-GUID
+  blijven staan: daar rekenen de analyses mee, en die bewaren er alleen een
+  afgeleide van (geboortejaar, postcodecode, hash van de GUID).
+- **De probe toont alleen wat expliciet mag.** Waarden zijn zichtbaar voor
+  kolommen op `PROBE_VISIBLE_COLUMNS` (plus `is_`/`has_`-vlaggen); al het andere
+  is gemaskeerd, ook een kolom die SeatGeek later toevoegt. Er is geen manier om
+  het maskeren uit te zetten. Moet een kolom zichtbaar worden, voeg hem dan toe
+  aan de lijst — alleen als hij niet over een persoon gaat.
+- Let bij het uitbreiden van `IDENTITY_COLUMN_PATTERN` op de naamgeving per
+  tabel: in `payments` heet de voornaam `fname`, in `attendance`
+  `primary_first_name`. Het patroon ankert daarom op het achtervoegsel.
 - Ticket Inzichten werkt op aantallen, niet op personen. Wat we straks
   repliceren moet dus zo min mogelijk van deze velden bevatten. `payments` is
   waarschijnlijk helemaal niet de tabel die we nodig hebben.
@@ -550,7 +554,9 @@ ooit uit gehaald en `lib/db.ts` is nog een lege stub.
 
 ## 4. Controleren of het werkt
 
-Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
+Er is een diagnose-endpoint: `GET /api/ringside/probe`, **alleen voor admins**.
+Elke aanroep komt in de log (`[ringside/probe]`) met het e-mailadres van wie
+hem deed.
 
 ```
 # Werken de credentials? Geeft tokengeldigheid terug, niet het token zelf.
@@ -565,36 +571,33 @@ Er is een diagnose-endpoint: `GET /api/ringside/probe` (inloggen vereist).
 # Alleen de kolommen, geen enkele rij — de veiligste manier om een tabel te leren kennen.
 /api/ringside/probe?path=/v1/payments&rows=0
 
-# Meer rijen (max 50), of de volgende pagina.
-/api/ringside/probe?path=/v1/payments&rows=25
-/api/ringside/probe?path=/v1/payments&cursor=cGF5bWVudHMv…
+# Meer rijen (max 10).
+/api/ringside/probe?path=/v1/payments&rows=10
 ```
 
 | Parameter | Betekenis |
 |---|---|
 | `path` | het Ringside-pad, bijvoorbeeld `/v1/sales` |
-| `rows` | aantal voorbeeldrijen, standaard 3, maximaal 50, `0` voor geen |
-| `unmasked=1` | toon persoonsvelden onbewerkt — zie **Persoonsgegevens** |
+| `rows` | aantal voorbeeldrijen, standaard 3, maximaal 10, `0` voor geen |
 | `distinct` | kolommen (komma-gescheiden) waarvan je de voorkomende waarden wil tellen; `a+b` kruist twee kolommen |
 | `refresh=1` | negeer het gecachete token |
 
 `distinct` telt per kolom welke waarden er in deze pagina voorkomen. Dat
 beantwoordt vragen die een schema openlaat — of `capacity` altijd 1 is, welke
 waarden `event_sales_status` aanneemt — zonder rijen met persoonsgegevens op te
-hoeven halen. Gemaskeerde kolommen telt hij niet mee, tenzij je `unmasked=1`
-meegeeft. Combineer met `rows=0`:
+hoeven halen. Gemaskeerde kolommen telt hij niet mee. Combineer met `rows=0`:
 
 ```
 /api/ringside/probe?path=/v1/manifests&rows=0&distinct=capacity,is_ga,is_counted_as_available
 ```
 
-Alle andere querystring-parameters gaan door naar Ringside, dus filters en
-paginatie zijn direct te proberen. Herkent de probe een Ringside-pagina, dan
-geeft hij een `ringside`-samenvatting (aantal rijen, `hasMore`, `cursor`, en de
-kolommen met hun Postgres-type) plus een `sample` met de eerste rijen. De volle
-pagina komt nooit terug: bij tabellen van dit formaat is dat megabytes aan
-persoonsgegevens in je browser. Alleen GET, alleen paden
-binnen `RINGSIDE_BASE_URL`, en het antwoord wordt op 20.000 tekens afgekapt.
+Andere querystring-parameters gaan door naar Ringside, dus filters zijn direct
+te proberen — behalve `cursor`: door een tabel bladeren kan met de probe niet.
+Herkent de probe een Ringside-pagina, dan geeft hij een `ringside`-samenvatting
+(aantal rijen, `hasMore` en de kolommen met hun Postgres-type) plus een
+`sample` met de eerste rijen, gemaskeerd. Is het antwoord geen pagina, dan komt
+alleen de vorm terug (sleutels en typen), of bij een fout de eerste 500 tekens
+van de melding. Alleen GET en alleen paden binnen `RINGSIDE_BASE_URL`.
 
 De probe geeft nooit het access token terug, en het client secret wordt uit
 foutmeldingen geknipt — een probe-respons is dus veilig om te delen bij vragen

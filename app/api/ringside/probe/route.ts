@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authorize } from "@/lib/auth";
+import { verifySession } from "@/lib/auth";
+import { getAccess } from "@/lib/access-store";
 import {
   RingsideAuthError,
   RingsideConfigError,
@@ -8,6 +9,7 @@ import {
   resetRingsideToken,
 } from "@/lib/ringside/auth";
 import { buildRingsideUrl, getRingsideBaseUrl, ringsideFetch } from "@/lib/ringside/client";
+import { isProbeVisibleColumn, maskForProbe } from "@/lib/ringside/privacy";
 
 /**
  * Diagnose-endpoint voor de Ringside-koppeling. Twee functies:
@@ -19,94 +21,26 @@ import { buildRingsideUrl, getRingsideBaseUrl, ringsideFetch } from "@/lib/rings
  *    het antwoord terug. Daarmee brengen we de echte tabellen en kolommen in
  *    kaart, zodat `/api/ticket-feed` daarna van de XML-feed af kan.
  *
- * Alleen bereikbaar met een geldige sessie, en alleen GET — het is een
- * leeshulpmiddel, geen doorgeefluik. Het access token verlaat de server niet.
+ * Alleen voor admins, en alleen GET — het is een leeshulpmiddel, geen
+ * doorgeefluik. Het access token verlaat de server niet.
  *
- * Let op: Ringside-tabellen bevatten persoonsgegevens (namen, CRM-nummers,
- * kaartgegevens). Dit endpoint toont daarom standaard een handvol rijen met
- * gemaskeerde persoonsvelden; zie `maskRow`.
+ * Ringside-tabellen bevatten persoonsgegevens. Naam, e-mail, telefoon en
+ * adresregels haalt `ringsideFetch` er al voor alle code uit. Daarbovenop toont
+ * de probe alleen de waarden van kolommen op een toestaanlijst
+ * (`isProbeVisibleColumn`); al het andere is gemaskeerd, zonder uitzondering.
+ * Elke aanroep komt in de log, met wie hem deed.
  */
-
-/** Laatste vangnet op de responsgrootte. */
-const MAX_BODY_CHARS = 20_000;
 
 /** Aantal rijen dat we standaard tonen — genoeg om de vorm te zien. */
 const DEFAULT_ROWS = 3;
-const MAX_ROWS = 50;
+const MAX_ROWS = 10;
 
 /**
- * Kolommen waarvan de waarde een persoonsgegeven is. Ticket Inzichten werkt op
- * aantallen, niet op personen, dus voor het verkennen van de tabelvorm is de
- * naam van de kolom genoeg en hoeft de waarde er niet bij. Wie de echte waarde
- * moet zien, vraagt expliciet `?unmasked=1`.
+ * Parameters die niet naar Ringside doorgaan. `cursor` hoort erbij: met een
+ * doorgegeven cursor kon je pagina na pagina door een hele tabel bladeren, en
+ * de probe is er om de vorm van een tabel te zien, niet de inhoud.
  */
-const PERSONAL_COLUMN_PATTERN = new RegExp(
-  [
-    // Persoonsnamen. Anker op het achtervoegsel, niet op het begin: dezelfde
-    // gegevens heten per tabel anders — `fname` in payments,
-    // `primary_first_name` in attendance, `own_lname_or_accnt_name` in sales.
-    // Bewust niet elk veld dat op `_name` eindigt: `product_name` draagt de
-    // wedstrijd en `section_name` het vak, en daar draait Ticket Inzichten op.
-    "(^|_)(first_name|last_name|middle_name|full_name)$",
-    "(^|_)(fname|lname)($|_)",
-    "^name$",
-    // Contact- en adresgegevens.
-    "(^|_)(email|phone|mobile|address|street|city|zip|postcode|country|birth|iban|bsn)($|_)",
-    // Pseudonieme klantidentificatie: onder de AVG nog steeds persoonsgegeven.
-    // Zowel `_id` als `_guid`, met en zonder prefix.
-    "(^|_)(crm|client)_(id|guid)$",
-    // Medewerkers zijn ook personen: wie de verkoop deed of bevestigde.
-    "(^|_)(sales_rep|confirmed_by)$",
-    "^user$",
-    // Betaalgegevens.
-    "credit_card",
-    "payment_item_ref",
-    "gateway_transaction",
-    // Codes die toegang of korting geven — geen persoonsgegeven, wel iets dat
-    // je niet in een browser of chat wil laten rondslingeren.
-    "(^|_)barcode",
-    "(^|_)(coupon_code|presale_access_code|access_code)$",
-    // Vrije tekstvelden: daar kan van alles in staan, inclusief wat een
-    // medewerker over een klant noteerde.
-    "^(notes|extra_data|sales_details|user_acknowledgements)$",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Kolommen die het patroon hierboven ten onrechte zou raken. De adresregel
- * reageert op `city` en `country`, maar in `Catalog` gaan die over het stadion
- * en niet over een persoon.
- */
-const NON_PERSONAL_COLUMNS = new Set([
-  "venue",
-  "venue_city",
-  "venue_country",
-  "venue_marquee_city",
-  "venue_state",
-  "venue_timezone",
-]);
-
-/**
- * Toetst een kolomnaam aan het patroon. `sales` heeft een kolom die letterlijk
- * `"user"` heet — inclusief aanhalingstekens — dus die strippen we eerst.
- */
-function isPersonalColumn(column: string): boolean {
-  const name = column.replace(/^"+|"+$/g, "").toLowerCase();
-  if (NON_PERSONAL_COLUMNS.has(name)) return false;
-  return PERSONAL_COLUMN_PATTERN.test(name);
-}
-
-function maskRow(row: Record<string, unknown>): Record<string, unknown> {
-  const masked: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(row)) {
-    const isPersonal = isPersonalColumn(key);
-    // `null` blijft staan: dat een veld leeg is, is zelf geen persoonsgegeven
-    // en juist nuttig om te zien bij het in kaart brengen van een tabel.
-    masked[key] = isPersonal && value !== null ? "«gemaskeerd»" : value;
-  }
-  return masked;
-}
+const BLOCKED_PARAMS = new Set(["path", "refresh", "rows", "distinct", "unmasked", "cursor"]);
 
 /** Hoeveel verschillende waarden we per kolom tonen. */
 const MAX_DISTINCT = 25;
@@ -124,11 +58,7 @@ const MAX_DISTINCT = 25;
  * Aggregaten, dus geen rijen met persoonsgegevens — maar een kolom die
  * gemaskeerd wordt, tellen we alsnog niet.
  */
-function distinctValues(
-  rows: Record<string, unknown>[],
-  terms: string[],
-  unmasked: boolean
-): Record<string, unknown> {
+function distinctValues(rows: Record<string, unknown>[], terms: string[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
   for (const term of terms) {
@@ -141,9 +71,9 @@ function distinctValues(
     // — dan werkt zowel `a+b` als `a%2Bb` als `a%20b`.
     const columns = term.split(/[\s+]+/).filter(Boolean);
 
-    const personal = columns.find((c) => isPersonalColumn(c));
-    if (!unmasked && personal) {
-      result[columns.join(" + ")] = `«${personal} is gemaskeerd — gebruik unmasked=1»`;
+    const personal = columns.find((c) => !isProbeVisibleColumn(c));
+    if (personal) {
+      result[columns.join(" + ")] = `«${personal} is gemaskeerd»`;
       continue;
     }
 
@@ -167,6 +97,23 @@ function distinctValues(
   }
 
   return result;
+}
+
+/** Een foutmelding van Ringside is kort; meer dan dit tonen we niet. */
+const MAX_ERROR_CHARS = 500;
+
+/** De vorm van een antwoord zonder de waarden: sleutels en typen. */
+function describeShape(value: unknown, depth = 0): unknown {
+  if (Array.isArray(value)) {
+    return depth > 2 ? "array" : { array: value.length, item: describeShape(value[0], depth + 1) };
+  }
+  if (typeof value === "object" && value !== null) {
+    if (depth > 2) return "object";
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, describeShape(v, depth + 1)])
+    );
+  }
+  return value === null ? "null" : typeof value;
 }
 
 interface RingsideEnvelope {
@@ -198,10 +145,17 @@ function json(body: unknown, init?: { status?: number }): NextResponse {
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const authError = authorize(req.cookies.get("psv_session")?.value);
-  if (authError) return json({ error: authError }, { status: 401 });
+  const cookie = req.cookies.get("psv_session")?.value;
+  const session = cookie ? verifySession(cookie) : null;
+  if (!session) return json({ error: "Geen geldige sessie. Log opnieuw in." }, { status: 401 });
+  if (!(await getAccess(session.email)).isAdmin) {
+    return json({ error: "De Ringside-probe is alleen voor admins." }, { status: 403 });
+  }
 
   const { searchParams } = new URL(req.url);
+  console.info(
+    `[ringside/probe] ${session.email}: ${searchParams.get("path") ?? "(token)"} ${searchParams.toString()}`
+  );
 
   if (!isRingsideConfigured()) {
     return json(
@@ -239,7 +193,6 @@ export async function GET(req: NextRequest) {
     const rowLimit = Number.isFinite(requestedRows)
       ? Math.min(Math.max(requestedRows, 0), MAX_ROWS)
       : DEFAULT_ROWS;
-    const unmasked = searchParams.get("unmasked") === "1";
 
     // Alles behalve onze eigen parameters gaat als querystring mee naar
     // Ringside, zodat filters en paginatie direct uitgeprobeerd kunnen worden.
@@ -248,10 +201,9 @@ export async function GET(req: NextRequest) {
       .map((c) => c.trim())
       .filter(Boolean);
 
-    const ours = new Set(["path", "refresh", "rows", "unmasked", "distinct"]);
     const forwarded: Record<string, string> = {};
     for (const [key, value] of searchParams.entries()) {
-      if (!ours.has(key)) forwarded[key] = value;
+      if (!BLOCKED_PARAMS.has(key)) forwarded[key] = value;
     }
 
     const res = await ringsideFetch(path, { searchParams: forwarded });
@@ -279,24 +231,22 @@ export async function GET(req: NextRequest) {
         ringside: {
           rows: rows.length,
           hasMore: page.has_more ?? null,
-          cursor: page.cursor ?? null,
           columns:
             page.metadata?.table_definition?.map((c) => `${c.column}: ${c.postgres_type}`) ?? null,
         },
         ...(distinctColumns.length
-          ? { distinct: distinctValues(rows, distinctColumns, unmasked) }
+          ? { distinct: distinctValues(rows, distinctColumns) }
           : {}),
         sample: {
           shown: Math.min(rowLimit, rows.length),
-          masked: !unmasked,
-          rows: rows
-            .slice(0, rowLimit)
-            .map((row) => (unmasked ? row : maskRow(row))),
+          masked: true,
+          rows: rows.slice(0, rowLimit).map(maskForProbe),
         },
       });
     }
 
-    const truncated = text.length > MAX_BODY_CHARS;
+    // Geen Ringside-pagina: dan nooit de body zelf, want daar loopt het
+    // maskeren niet over. Bij een fout de melding (kort), anders alleen de vorm.
     return json({
       configured: true,
       authenticated: true,
@@ -304,8 +254,7 @@ export async function GET(req: NextRequest) {
       status: res.status,
       ok: res.ok,
       contentType: res.headers.get("content-type"),
-      truncated,
-      body: truncated ? text.slice(0, MAX_BODY_CHARS) : (parsed ?? text),
+      ...(res.ok ? { shape: describeShape(parsed ?? text) } : { error: text.slice(0, MAX_ERROR_CHARS) }),
     });
   } catch (error) {
     if (error instanceof RingsideConfigError) {
