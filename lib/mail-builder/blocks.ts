@@ -1,4 +1,4 @@
-import type { Template } from "@/components/mail-builder-form";
+import type { Template } from "@/lib/mail-builder/html";
 
 export type BlockType =
   | "hero"

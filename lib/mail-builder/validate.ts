@@ -1,4 +1,4 @@
-import type { MailBuilderState } from "@/components/mail-builder-form";
+import type { MailBuilderState } from "@/lib/mail-builder/html";
 
 /**
  * Een URL is geldig als hij over https gaat, een echte host heeft en geen
