@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { BRON_ATTR, MAX_BEWERK_TEKST } from "./bewerken";
 import {
   AANWIJZER_JS,
   leesAanwijzing,
@@ -75,4 +76,7 @@ test("AANWIJZER_JS: leesbaar, en veilig in een inline script", () => {
   // De grenzen in het script zijn dezelfde als die van de server.
   assert.ok(AANWIJZER_JS.includes(`.slice(0, ${MAX_TEKST})`));
   assert.ok(AANWIJZER_JS.includes(`.slice(0, ${MAX_SELECTIE_HTML})`));
+  assert.ok(AANWIJZER_JS.includes(`tekst.slice(0, ${MAX_BEWERK_TEKST})`));
+  // De nummers van de bewerkstand gaan niet mee naar Claude.
+  assert.ok(AANWIJZER_JS.includes(`.replace(/ ${BRON_ATTR}=`));
 });

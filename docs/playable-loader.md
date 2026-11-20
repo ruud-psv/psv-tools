@@ -37,11 +37,20 @@ In de stappenbalk is rood de stap waar je bent, groen klaar, oranje vraagt
 aandacht (het concept wijkt af van live, of Bunny geeft niet de laatste
 versie) en grijs komt nog.
 
-1. **Campagne**: ID invullen of een campagne kiezen uit je eigen recente
-   campagnes: die waar jij op hebt gepubliceerd (per collega in Blob onder
-   `playable-loader/gebruikers/`, met een hash van het e-mailadres). Wat je
-   alleen in de chat aanpast wordt niet bewaard, dus dat staat er niet in. Bij
-   het openen controleert PSV Tools:
+1. **Campagne**: ID invullen of een campagne kiezen. Alleen campagnes die
+   volgens het **stramien op Bunny** staan zijn te openen: met een map
+   `playable/pages/<campagne-ID>` in de opslag van Bunny. Een ander ID kan
+   niet worden geopend (de knop Openen gaat uit, en de server weigert het ook
+   bij openen en publiceren). Een nieuwe campagne erbij: maak in Bunny de map
+   `playable/pages/<campagne-ID>` aan en klik op **Vernieuwen**.
+   Bovenaan staan je eigen recente campagnes: die waar jij op hebt
+   gepubliceerd (per collega in Blob onder `playable-loader/gebruikers/`, met
+   een hash van het e-mailadres); staat er een niet (meer) op Bunny, dan is
+   hij grijs. Daaronder de andere campagnes op Bunny, met de laatste
+   publicatie uit PSV Tools of anders de naam uit Playable
+   (`/api/playable-loader/campagnes`). Wat je alleen in de chat aanpast wordt
+   niet bewaard, dus dat staat er niet in. Bij het openen controleert PSV
+   Tools:
    - of Playable de campagne kent (naam, actief of niet, links naar demo en
      live; recht `campaigns.view`). Een onbekend ID zonder pagina in PSV Tools
      opent niet;
@@ -91,10 +100,55 @@ code dat er precies één keer in staat, en wat ervoor in de plaats komt.
   ene knop. De keuze blijft staan tot je hem weghaalt; na een wijziging zoekt
   het voorbeeld hetzelfde onderdeel terug, en lukt dat niet zeker, dan
   vervalt de keuze. Bij eerdere vragen gaat alleen het pad mee.
+- **Bestand**: onder de chat zet je een foto of ander bestand (jpg, png, webp,
+  avif, gif, svg, pdf, mp4 of webm, hooguit 4 MB) op Bunny, in
+  `playable/editor/`. Het adres komt in je vraag, zodat Claude het kan
+  gebruiken ("zet deze foto in de hero"). De naam op Bunny begint met het
+  campagne-ID en de tijd, bijvoorbeeld
+  `244347-20261120-143005-a1b2c3-hero-foto.jpg`, zodat er nooit iets wordt
+  overschreven (`/api/playable-loader/upload`, `lib/playable-loader/bunny.ts`).
 - **Ongedaan maken** zet het concept terug naar voor de laatste wijziging.
 - Pas **Publiceren** zet het live.
 - Vraagt de collega iets wat niet kan of onduidelijk is, dan vraagt Claude door
   en verandert er niets.
+
+## Zelf bewerken in het voorbeeld
+
+Naast **Aanwijzen** staat **Bewerken**: zelf iets aanpassen zonder Claude,
+zoals bij Bewerken in de stukken van de Assistent. Klik een onderdeel aan in
+het voorbeeld; er verschijnt een werkbalk bij:
+
+| Knop | Wat het doet |
+|---|---|
+| Potlood | De tekst ter plekke typen. Enter bewaart, Esc annuleert, Shift+Enter is een nieuwe regel; buiten de tekst klikken bewaart ook. Dubbelklikken op een tekst begint meteen. |
+| Foto | Een andere foto: uploaden naar Bunny (`playable/editor/`), slepen, of een adres plakken, met de alt-tekst. Werkt op een `<img>` (ook als het de enige foto in een blok is) en op een achtergrond in het `style`-attribuut. |
+| Link | Een ander adres voor een link of knop, en wel of niet in een nieuw tabblad. |
+| Pijlen | Het onderdeel omhoog of omlaag in zijn blok. |
+| Dupliceren | Een kopie direct eronder. |
+| Prullenbak | Het onderdeel weghalen. |
+| Stippelvak | Het blok eromheen kiezen (bijvoorbeeld de hele kaart in plaats van de kop). |
+
+Elke wijziging komt in het concept, als regel in de chat (die gaat niet mee
+naar Claude) en is terug te draaien met **Ongedaan maken**, ook bovenin het
+voorbeeld. Pas Publiceren zet het live.
+
+Hoe het werkt (`lib/playable-loader/bewerken.ts`): in het voorbeeld krijgt
+elke starttag uit de bron een nummer (`data-psvk-bron`), het hoeveelste
+element in de HTML. Een aangeklikt element wijst zo altijd naar zijn eigen
+plek in de bron, ook als de Kit er klassen bij zet. De bewerkingen zijn
+tekstbewerkingen op precies die tag; de rest van de HTML blijft letter voor
+letter staan. Op Bunny komen de nummers niet.
+
+Wat niet kan, staat grijs met de reden erbij, en dan vraag je het Claude:
+
+- een tekst die de pagina zelf verandert (zoals een teller), want dan klopt
+  wat je ziet niet met de bron;
+- een onderdeel dat de JavaScript zelf maakt;
+- een achtergrond die in de CSS staat in plaats van in de HTML;
+- een stuk HTML dat niet netjes is afgesloten.
+
+Na een wijziging bouwt het voorbeeld opnieuw op, op dezelfde scrollpositie en
+met hetzelfde onderdeel gekozen. Bij alleen een andere tekst hoeft dat niet.
 
 Het gesprek staat alleen in de browser; na verversen begint het opnieuw. Per
 vraag logt de route het aantal tokens, om de kosten te volgen. Met Opus 5.5
