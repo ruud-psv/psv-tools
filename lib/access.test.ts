@@ -58,6 +58,20 @@ test("admin en ADMIN_EMAILS mogen het beheer in", () => {
   assert.equal(pageForPath("/dashboard/beheer"), ADMIN_HREF);
 });
 
+test("testpagina's onder /marnix: alleen admins, ook de API", () => {
+  for (const email of ["Nieuw@PSV.nl", "alles@psv.nl", "beperkt@psv.nl"]) {
+    const access = resolveAccess(email, users, []);
+    assert.ok(!canAccessPath(access, "/marnix/maileon-concept"), email);
+    assert.ok(!canAccessPath(access, "/marnix"), email);
+    assert.ok(!canAccessApi(access, "/api/marnix/maileon-concept"), email);
+  }
+  const admin = resolveAccess("baas@psv.nl", users, []);
+  assert.ok(canAccessPath(admin, "/marnix/maileon-concept"));
+  assert.ok(canAccessApi(admin, "/api/marnix/maileon-concept"));
+  // Segmentgrens: een ander pad dat toevallig zo begint valt er niet onder.
+  assert.ok(canAccessPath(resolveAccess("alles@psv.nl", users, []), "/marnixx"));
+});
+
 test("Playable loader is een beta tool, los van Landingspagina's", () => {
   const beta = resolveAccess("Nieuw@PSV.nl", users, []);
   assert.ok(canAccessPath(beta, "/dashboard/playable-loader"));

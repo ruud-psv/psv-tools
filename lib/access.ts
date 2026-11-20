@@ -88,6 +88,13 @@ const API_PAGES: Record<string, string[]> = {
 export const USERS_API = "/api/users";
 /** De API's van de beheerpagina, zoals de MCP-servers; alleen voor admins. */
 export const ADMIN_API = "/api/beheer";
+/**
+ * Testpagina's buiten het menu (`/marnix/<tool>`) en hun API's. Alleen voor
+ * admins: ze staan niet in het gebruikersbeheer, en sommige schrijven naar
+ * andere systemen (zoals Maileon).
+ */
+export const TEST_HREF = "/marnix";
+export const TEST_API = "/api/marnix";
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -155,6 +162,7 @@ export function pageForPath(pathname: string): string | null {
 }
 
 export function canAccessPath(access: EffectiveAccess, pathname: string): boolean {
+  if (under(pathname, TEST_HREF)) return access.isAdmin;
   const page = pageForPath(pathname);
   if (page === null) return true;
   if (page === ADMIN_HREF) return access.isAdmin;
@@ -162,7 +170,7 @@ export function canAccessPath(access: EffectiveAccess, pathname: string): boolea
 }
 
 export function canAccessApi(access: EffectiveAccess, pathname: string): boolean {
-  if (under(pathname, USERS_API) || under(pathname, ADMIN_API)) return access.isAdmin;
+  if (under(pathname, USERS_API) || under(pathname, ADMIN_API) || under(pathname, TEST_API)) return access.isAdmin;
   const prefix = Object.keys(API_PAGES).find((p) => under(pathname, p));
   if (!prefix) return true;
   return API_PAGES[prefix].some((href) => access.pages.includes(href));
