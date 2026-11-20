@@ -101,16 +101,16 @@ Waar we op letten:
 
 | Onderdeel | Hoe |
 |---|---|
-| Ingang | Entry in `insightTools` (`lib/tools.ts`). Dan staat hij vanzelf in de sidebar en het gebruikersbeheer |
+| Ingang | Entry in `insightTools` (`lib/tools.ts`) voor naam, icoon en toegang, plus de href in `lib/navigation.ts`: onderdeel Marketing, groep Inzichten, bovenaan |
 | Toegang | `"/api/maandrecap": ["/dashboard/maandrecap"]` in `API_PAGES` (`lib/access.ts`) |
 | Opslag | Vercel Blob, `maandrecap/<YYYY-MM>.json`, net als `lib/reports.ts` |
 | Maileon en GA4 | De ophaallogica uit `app/api/maileon/route.ts` en `app/api/analytics/route.ts` naar `lib/` halen, zodat de recap ze server-side aanroept in plaats van via HTTP de eigen API |
 | SSO | `getActiveVersion()` uit `lib/database/source-store.ts` → `growthByMonth` en `lastRecordDate` |
 | Top 3 campagnes | `listCampaigns()` uit `lib/database/campaign-store.ts` → per campagne `analysis.daily` binnen de maand optellen. Alleen campagnes waarvan de analyse bij de actieve bronversie hoort |
-| Deellink | Ondertekend token zoals `lib/ticketing-stadion/share.ts` (HMAC op `SESSION_SECRET`). **Niet** `isValidShareToken` uit `lib/share-token.ts`: die accepteert elk JSON-object |
-| Deelpagina | Toont alleen de opgeslagen snapshot, dus er hoeven geen data-endpoints open voor lezers zonder login |
+| Deellink | De regels van de stukken hergebruiken (`lib/stukken/delen.ts`): standaard alleen voor ingelogde collega's, openbaar alleen met een verloopdatum. **Niet** `isValidShareToken` uit `lib/share-token.ts`: die accepteert elk JSON-object |
+| Deelpagina | In de stijl van een gedeeld stuk (`components/stuk/stuk-weergave.tsx`): rode balk bovenaan, "PSV · Maandrecap", peildatum, bronnen onderaan en de knop "Afdrukken of PDF". Toont alleen de opgeslagen snapshot, dus er hoeven geen data-endpoints open voor lezers zonder login |
 | Nieuw in PSV Tools | GitHub API: gemergde PR's van `ruud-psv/psv-tools` in de maand, met een read-only token (`GITHUB_TOKEN`). Haiku maakt er gewone taal van via `lib/insights/runner.ts`. Werkt GitHub niet, dan vul je het handmatig in |
-| Huisstijl | Zoals de rest van Tools: kop van de deelpagina uit `app/share/rapportage/page.tsx`, `Card` en de KPI-kaart uit `lib/dm-share.tsx`, `Badge`, `Button` en `.alert--info` |
+| Huisstijl | Zoals de rest van Tools: bodytekst in PSV Text, koppen en labels in PSV Condensed (alleen die in hoofdletters), `Card`, `Badge`, `Button` en `.alert--info` in het redactiescherm |
 
 Datamodel (schets):
 
@@ -160,8 +160,10 @@ interface Kpi {
 
 - **Active Fans en Engaged Fans**: wat is de definitie, wie levert de cijfers aan, en vanaf welke
   maand zijn ze bekend (voor de vergelijking)?
-- **Lezers**: deellink zonder login (iedereen met de link) of alleen met een PSV-account? Wie net
-  buiten de afdeling zit heeft waarschijnlijk geen toegang tot Tools.
+- **Lezers**: volgen we de regels van de stukken (standaard alleen collega's met een PSV-account,
+  openbaar alleen met een verloopdatum)? De deelpagina vraagt alleen een geldige sessie, geen recht op
+  een pagina. Of collega's net buiten de afdeling kunnen inloggen, hangt af van wie in Azure
+  toegang heeft tot PSV Tools; dat moet nog gecontroleerd worden.
 - **Redacteuren**: wie mag een editie maken en publiceren? Alleen admins, of een aparte rol?
 - **Mails verstuurd**: alle Maileon-mailings, of zonder service- en testmails? Tellen
   partnermailings mee?
