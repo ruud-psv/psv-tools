@@ -66,6 +66,17 @@ export class ConceptFout extends Error {
   }
 }
 
+/** Maileon heeft het concept al, maar PSV Tools kon het niet bewaren (Blob). */
+export class BewarenFout extends Error {
+  readonly mailingId: number;
+  constructor(mailingId: number) {
+    super(
+      `Het concept staat in Maileon (mailing ${mailingId}), maar PSV Tools kon het niet bewaren. Er is geen voorbeeldlink, en de volgende keer komt er een nieuw concept.`
+    );
+    this.mailingId = mailingId;
+  }
+}
+
 /* ---------- Invoer ---------- */
 
 export const MAX_ONDERWERP = 1023;

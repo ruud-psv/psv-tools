@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Copy, Download, ExternalLink, FileUp, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, Check, Copy, Download, ExternalLink, FileUp, Loader2, RefreshCw } from "lucide-react";
 
-import { generateEmailHTML, makeInitialState, newBlock, type MailBuilderState } from "@/components/mail-builder-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { MailOpzet, Punt } from "@/lib/asana/brief";
+import { mailUitOpzet } from "@/lib/asana/mail";
 import { MAX_NAAM, NAAM_ADVIES, conceptNaam } from "@/lib/maileon/concept-naam";
-import { mailProblemen } from "@/lib/mail-builder/validate";
+import { generateEmailHTML, type MailBuilderState } from "@/lib/mail-builder/html";
 
 /**
  * Testpagina: een mail als concept in Maileon zetten en de voorbeeldlink
@@ -65,6 +65,19 @@ interface AsanaBrief {
   taak: { gid: string; naam: string; url?: string; sectie?: string };
   punten: Punt[];
 }
+
+interface Ronde {
+  bekeken: number;
+  verwerkt: { gid: string; naam: string; actie: string; melding?: string; mailingId?: number }[];
+}
+
+const ACTIE_TEKST: Record<string, string> = {
+  concept: "concept in Maileon, reactie met de link, naar Feedback",
+  wachten: "brief niet compleet: reactie met wat er mist, naar Wachten op input",
+  fout: "Maileon weigerde; de reden staat in de reactie",
+  storing: "storing, de volgende ronde probeert het opnieuw",
+  teruggezet: "brief niet veranderd, teruggezet",
+};
 
 function tijdstip(iso: string): string {
   return new Date(iso).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -126,33 +139,57 @@ export function MaileonConcept() {
   const [builderState, setBuilderState] = useState<MailBuilderState | null>(null);
   const [voorbeeld, setVoorbeeld] = useState("");
 
+  // Automaat
+  const [ronde, setRonde] = useState<Ronde | null>(null);
+  const [rondeBezig, setRondeBezig] = useState(false);
+  const [rondeFout, setRondeFout] = useState<string | null>(null);
+
   const maileonNaam = conceptNaam(naam, dmid);
   const naamTeLang = maileonNaam.length > MAX_NAAM;
   const naamLang = maileonNaam.length > NAAM_ADVIES;
 
   // De open taken in het Asana-testproject.
-  useEffect(() => {
-    let actief = true;
-    fetch("/api/marnix/asana")
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!actief) return;
-        if (!res.ok) {
-          setTakenFout(data.error ?? `Asana gaf een fout (${res.status}).`);
-          setTaken([]);
-          return;
-        }
-        setTaken((data.taken as TaakKort[] | undefined) ?? []);
-      })
-      .catch(() => {
-        if (!actief) return;
-        setTakenFout("Asana is niet bereikbaar.");
+  const laadTaken = useCallback(async () => {
+    try {
+      const res = await fetch("/api/marnix/asana");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTakenFout(data.error ?? `Asana gaf een fout (${res.status}).`);
         setTaken([]);
-      });
-    return () => {
-      actief = false;
-    };
+        return;
+      }
+      setTakenFout(null);
+      setTaken((data.taken as TaakKort[] | undefined) ?? []);
+    } catch {
+      setTakenFout("Asana is niet bereikbaar.");
+      setTaken([]);
+    }
   }, []);
+
+  useEffect(() => {
+    void laadTaken();
+  }, [laadTaken]);
+
+  /** Eén ronde van de automaat, zonder op de cron te wachten. */
+  async function draaiNu() {
+    setRondeBezig(true);
+    setRondeFout(null);
+    setRonde(null);
+    try {
+      const res = await fetch("/api/marnix/asana/automaat");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRondeFout(data.error ?? `Er ging iets mis (${res.status}).`);
+        return;
+      }
+      setRonde(data as Ronde);
+      void laadTaken();
+    } catch {
+      setRondeFout("PSV Tools is niet bereikbaar.");
+    } finally {
+      setRondeBezig(false);
+    }
+  }
 
   // Staat er al een concept voor deze mail? Dan werkt opnieuw zetten dat concept bij.
   useEffect(() => {
@@ -207,18 +244,19 @@ export function MaileonConcept() {
         return;
       }
       const opzet = u.opzet;
-      const state: MailBuilderState = {
-        ...makeInitialState(opzet.template),
-        ...opzet,
-        blocks: opzet.blocks.map((b) => newBlock(b)),
-      };
+      const mail = mailUitOpzet(opzet);
       // Wat de Mail Builder zelf zou weigeren bij Download, hoort er ook bij.
-      const builder = mailProblemen(state).map((tekst): Punt => ({ soort: "nodig", tekst: `Mail Builder: ${tekst}` }));
+      const builder = mail.problemen.map((tekst): Punt => ({ soort: "nodig", tekst: `Mail Builder: ${tekst}` }));
       setBrief({ taak, punten: [...u.punten, ...builder] });
-      const html = generateEmailHTML(state, true);
-      setBuilderState(state);
-      setBestand({ naam: taak.naam, html, kb: Math.round(html.length / 1024), template: state.template, asanaTaakId: taak.gid });
-      setVoorbeeld(generateEmailHTML(state, false));
+      setBuilderState(mail.state);
+      setBestand({
+        naam: taak.naam,
+        html: mail.html,
+        kb: Math.round(mail.html.length / 1024),
+        template: mail.state.template,
+        asanaTaakId: taak.gid,
+      });
+      setVoorbeeld(mail.voorbeeld);
       setNaam(opzet.mailNaam);
       setDmid(opzet.dmid ?? "");
       setPreviewTekst(opzet.preheaderTekst);
@@ -333,6 +371,45 @@ export function MaileonConcept() {
 
   return (
     <div className="max-w-3xl space-y-6">
+      {/* Automatisch */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">Automatisch</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Elke 5 minuten kijkt PSV Tools in de sectie Nieuwe aanvraag van het Asana-testproject. Is de brief compleet,
+            dan komt de mail als concept in Maileon, met een reactie met de voorbeeldlink, en gaat de taak naar
+            Feedback. Zo niet, dan een reactie met wat er mist, en de taak gaat naar Wachten op input. Past de
+            aanvrager de brief aan, dan pakt de volgende ronde hem weer op.
+          </p>
+          <Button type="button" variant="outline" onClick={draaiNu} disabled={rondeBezig}>
+            {rondeBezig ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            Nu verwerken
+          </Button>
+          {rondeFout && <div className="alert alert--error mb-0">{rondeFout}</div>}
+          {ronde && (
+            <div className="alert alert--info mb-0">
+              <p>
+                {ronde.bekeken} {ronde.bekeken === 1 ? "taak" : "taken"} bekeken.
+                {ronde.verwerkt.length === 0 && " Niets te doen: geen nieuwe of gewijzigde briefs."}
+              </p>
+              {ronde.verwerkt.length > 0 && (
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {ronde.verwerkt.map((v) => (
+                    <li key={v.gid}>
+                      <span className="font-bold">{v.naam}</span>: {ACTIE_TEKST[v.actie] ?? v.actie}
+                      {v.mailingId ? ` (mailing ${v.mailingId})` : ""}
+                      {v.melding && v.actie !== "teruggezet" ? `. ${v.melding}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* 1. De mail */}
       <Card>
         <CardHeader>

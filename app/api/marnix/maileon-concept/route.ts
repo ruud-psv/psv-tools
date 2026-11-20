@@ -1,38 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { AsanaConfigError, AsanaFout, TESTPROJECT, asanaApi, asanaConfig, isGid, type AsanaApi } from "@/lib/asana/client";
-import { conceptReactie } from "@/lib/asana/reactie";
-import { taakMetBrief } from "@/lib/asana/taak-brief";
+import { blobTaakStatus } from "@/lib/asana/automaat-opslag";
 import type { Punt } from "@/lib/asana/brief";
-import {
-  ConceptFout,
-  conceptNaam,
-  controleerInvoer,
-  maileonConceptApi,
-  voorbeeldUitExport,
-  zetConcept,
-  type ConceptUitkomst,
-  type MaileonConceptApi,
-} from "@/lib/maileon/concept";
-import { conceptSleutel, getConcept, nieuwVoorbeeldId, saveConcept, saveVoorbeeld } from "@/lib/maileon/concept-opslag";
+import { AsanaConfigError, AsanaFout, TESTPROJECT, asanaApi, asanaConfig, isGid, type AsanaApi, type AsanaTaak } from "@/lib/asana/client";
+import { conceptReactie } from "@/lib/asana/reactie";
+import { briefHash, taakMetBrief } from "@/lib/asana/taak-brief";
+import { BewarenFout, ConceptFout, conceptNaam, controleerInvoer, maileonConceptApi, type MaileonConceptApi } from "@/lib/maileon/concept";
+import { conceptSleutel, getConcept } from "@/lib/maileon/concept-opslag";
+import { voorbeeldPad, zetConceptMetVoorbeeld, type GezetConcept } from "@/lib/maileon/concept-zetten";
 import { MaileonConfigError, MaileonFout, maileonConfig } from "@/lib/maileon/rapport";
 import { alleenAdmins } from "@/lib/marnix/toegang";
 
 /**
- * Zet een mail uit de Mail Builder als concept in Maileon en maakt er een
- * voorbeeldlink bij. Hoort bij de testpagina `/marnix/maileon-concept`, buiten
- * het menu. Komt de mail uit een taak in het Asana-testproject
- * (`asanaTaakId`), dan zet de route daarna een reactie met de link op die
- * taak en verplaatst hij hem naar de sectie Feedback. Versturen, inplannen en
- * de doelgroep blijven in Maileon; zie `docs/maileon-concept.md`.
+ * Zet een mail als concept in Maileon en maakt er een voorbeeldlink bij. Hoort
+ * bij de testpagina `/marnix/maileon-concept`, buiten het menu. Komt de mail
+ * uit een taak in het Asana-testproject (`asanaTaakId`), dan zet de route
+ * daarna een reactie met de link op die taak, verplaatst hij hem naar
+ * Feedback, en onthoudt hij de versie van de brief voor de automaat.
+ * Versturen, inplannen en de doelgroep blijven in Maileon; zie
+ * `docs/maileon-concept.md`.
  */
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-function linkNaar(voorbeeldId: string): string {
-  return `/share/mail/${voorbeeldId}`;
-}
 
 /** Staat er al een concept voor deze DMID (of naam)? Voor de pagina, vóór het zetten. */
 export async function GET(req: NextRequest) {
@@ -50,7 +40,7 @@ export async function GET(req: NextRequest) {
       mailingId: record.mailingId,
       naam: record.naam,
       bijgewerkt: record.bijgewerkt,
-      voorbeeldUrl: linkNaar(record.voorbeeldId),
+      voorbeeldUrl: voorbeeldPad(record.voorbeeldId),
     },
   });
 }
@@ -61,25 +51,32 @@ interface AsanaUitkomst {
   fout?: string;
 }
 
-/** Reactie op de taak en naar Feedback. Een fout hier laat het concept staan. */
+/** Reactie op de taak, naar Feedback, en de versie onthouden. Een fout hier laat het concept staan. */
 async function meldInAsana(
   api: AsanaApi,
-  taakGid: string,
+  taak: AsanaTaak,
   punten: Punt[],
   concept: { mailingId: number; naam: string; nieuw: boolean; voorbeeldUrl: string }
 ): Promise<AsanaUitkomst> {
   const uit: AsanaUitkomst = { reactie: false };
   try {
-    await api.plaatsReactie(taakGid, conceptReactie({ ...concept, punten }));
+    await api.plaatsReactie(taak.gid, conceptReactie({ ...concept, punten }));
     uit.reactie = true;
     const feedback = (await api.secties(TESTPROJECT)).find((s) => /^feedback$/i.test(s.naam.trim()));
     if (feedback) {
-      await api.naarSectie(feedback.gid, taakGid);
+      await api.naarSectie(feedback.gid, taak.gid);
       uit.sectie = feedback.naam;
     }
+    await blobTaakStatus.save({
+      gid: taak.gid,
+      hash: briefHash(taak),
+      status: "concept",
+      mailingId: concept.mailingId,
+      bijgewerkt: new Date().toISOString(),
+    });
   } catch (err) {
     uit.fout = err instanceof AsanaFout ? `Asana gaf een fout (${err.status}): ${err.message}` : "Asana is niet bereikbaar.";
-    console.error(`[marnix/maileon-concept] Asana-taak ${taakGid}: ${uit.fout}`);
+    console.error(`[marnix/maileon-concept] Asana-taak ${taak.gid}: ${uit.fout}`);
   }
   return uit;
 }
@@ -99,17 +96,20 @@ export async function POST(req: NextRequest) {
 
   // Komt de mail uit Asana? Dan eerst controleren dat de taak in het testproject staat.
   const ruwTaakId = (body as Record<string, unknown>).asanaTaakId;
-  let asana: { api: AsanaApi; gid: string; punten: Punt[] } | null = null;
+  let asana: { api: AsanaApi; taak: AsanaTaak; punten: Punt[] } | null = null;
   if (ruwTaakId !== undefined && ruwTaakId !== null && ruwTaakId !== "") {
     if (typeof ruwTaakId !== "string" || !isGid(ruwTaakId)) return NextResponse.json({ error: "Ongeldig Asana-ID." }, { status: 400 });
     try {
       const api = asanaApi(asanaConfig());
-      const { uitkomst } = await taakMetBrief(api, ruwTaakId);
-      asana = { api, gid: ruwTaakId, punten: uitkomst.punten };
+      const { taak, uitkomst } = await taakMetBrief(api, ruwTaakId);
+      asana = { api, taak, punten: uitkomst.punten };
     } catch (err) {
       if (err instanceof AsanaConfigError) return NextResponse.json({ error: err.message }, { status: 500 });
       if (err instanceof AsanaFout) {
-        return NextResponse.json({ error: err.status === 403 ? err.message : `Asana gaf een fout (${err.status}): ${err.message}` }, { status: err.status === 403 ? 403 : 502 });
+        return NextResponse.json(
+          { error: err.status === 403 ? err.message : `Asana gaf een fout (${err.status}): ${err.message}` },
+          { status: err.status === 403 ? 403 : 502 }
+        );
       }
       return NextResponse.json({ error: "Asana is niet bereikbaar." }, { status: 502 });
     }
@@ -124,17 +124,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: melding }, { status: 500 });
   }
 
-  const sleutel = conceptSleutel(invoer.dmid, invoer.naam);
-  const bestaand = await getConcept(sleutel).catch(() => null);
-  const eerder = invoer.nieuw ? null : bestaand;
-
-  let uitkomst: ConceptUitkomst;
+  let concept: GezetConcept;
   try {
-    uitkomst = await zetConcept(api, invoer, eerder ? { mailingId: eerder.mailingId, hash: eerder.hash } : undefined);
+    concept = await zetConceptMetVoorbeeld(api, invoer, sessie.email);
   } catch (err) {
     if (err instanceof ConceptFout) {
+      const eerder = await getConcept(conceptSleutel(invoer.dmid, invoer.naam)).catch(() => null);
       return NextResponse.json({ error: err.message, code: err.code, mailingId: eerder?.mailingId }, { status: err.status });
     }
+    if (err instanceof BewarenFout) return NextResponse.json({ error: err.message, mailingId: err.mailingId }, { status: 500 });
     if (err instanceof MaileonFout) {
       console.error(`[marnix/maileon-concept] Maileon ${err.status}: ${err.message}`);
       return NextResponse.json({ error: `Maileon gaf een fout (${err.status}): ${err.message}` }, { status: 502 });
@@ -143,63 +141,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Maileon is niet bereikbaar. Probeer het zo nog eens." }, { status: 502 });
   }
 
-  // Het voorbeeld van Maileon zelf, met een algemeen contact; lukt dat niet,
-  // dan een voorbeeld uit de export.
-  let maileonHtml: string | null = null;
-  try {
-    maileonHtml = await api.leesVoorbeeld(uitkomst.mailingId);
-  } catch (err) {
-    console.warn(`[marnix/maileon-concept] geen voorbeeld van Maileon voor ${uitkomst.mailingId}:`, err instanceof Error ? err.message : err);
-  }
-  const bron = maileonHtml ? "maileon" : "export";
-  const html = maileonHtml ?? voorbeeldUitExport(invoer.html, invoer.onderwerp, invoer.previewTekst);
-
-  const nu = new Date().toISOString();
-  // Dezelfde link voor dezelfde mail, ook bij een nieuw concept: zo blijft een link in Asana werken.
-  const voorbeeldId = bestaand?.voorbeeldId ?? nieuwVoorbeeldId();
-  try {
-    await saveVoorbeeld({ id: voorbeeldId, html, bron, mailingId: uitkomst.mailingId, bijgewerkt: nu });
-    await saveConcept({
-      sleutel,
-      naam: invoer.naam,
-      ...(invoer.dmid && { dmid: invoer.dmid }),
-      mailingId: uitkomst.mailingId,
-      hash: uitkomst.hash,
-      voorbeeldId,
-      aangemaakt: bestaand && !uitkomst.nieuw ? bestaand.aangemaakt : nu,
-      bijgewerkt: nu,
-      door: sessie.email,
-    });
-  } catch (err) {
-    console.error("[marnix/maileon-concept] bewaren mislukt:", err instanceof Error ? err.message : err);
-    return NextResponse.json(
-      {
-        error: `Het concept staat in Maileon (mailing ${uitkomst.mailingId}), maar PSV Tools kon het niet bewaren. Er is geen voorbeeldlink, en de volgende keer komt er een nieuw concept.`,
-        mailingId: uitkomst.mailingId,
-      },
-      { status: 500 }
-    );
-  }
-
-  const voorbeeldUrl = linkNaar(voorbeeldId);
   const asanaUitkomst = asana
-    ? await meldInAsana(asana.api, asana.gid, asana.punten, {
-        mailingId: uitkomst.mailingId,
-        naam: invoer.naam,
-        nieuw: uitkomst.nieuw,
-        voorbeeldUrl: new URL(voorbeeldUrl, req.nextUrl.origin).toString(),
+    ? await meldInAsana(asana.api, asana.taak, asana.punten, {
+        mailingId: concept.mailingId,
+        naam: concept.naam,
+        nieuw: concept.nieuw,
+        voorbeeldUrl: new URL(concept.voorbeeldPad, req.nextUrl.origin).toString(),
       })
     : undefined;
 
-  console.info(`[marnix/maileon-concept] mailing ${uitkomst.mailingId} ${uitkomst.nieuw ? "aangemaakt" : "bijgewerkt"}, voorbeeld uit ${bron}${asana ? `, Asana-taak ${asana.gid}` : ""}`);
+  console.info(
+    `[marnix/maileon-concept] mailing ${concept.mailingId} ${concept.nieuw ? "aangemaakt" : "bijgewerkt"}, voorbeeld uit ${concept.voorbeeldBron}` +
+      (asana ? `, Asana-taak ${asana.taak.gid}` : "")
+  );
   return NextResponse.json({
-    mailingId: uitkomst.mailingId,
-    naam: invoer.naam,
-    nieuw: uitkomst.nieuw,
-    vervangen: uitkomst.vervangen,
-    voorbeeldUrl,
-    voorbeeldBron: bron,
-    bijgewerkt: nu,
+    mailingId: concept.mailingId,
+    naam: concept.naam,
+    nieuw: concept.nieuw,
+    vervangen: concept.vervangen,
+    voorbeeldUrl: concept.voorbeeldPad,
+    voorbeeldBron: concept.voorbeeldBron,
+    bijgewerkt: concept.bijgewerkt,
     ...(asanaUitkomst && { asana: asanaUitkomst }),
   });
 }

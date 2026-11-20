@@ -9,7 +9,7 @@
  * verplaatsen van een taak wél regels starten; kijk dat na voordat het
  * project hier wordt verruimd.
  *
- * Inloggen met `ASANA_TOKEN` (een personal access token, of later dat van een
+ * Inloggen met `ASANA_MVA` (een personal access token, of later dat van een
  * serviceaccount). Reacties komen op naam van de eigenaar van het token.
  *
  * API: https://app.asana.com/api/1.0, antwoorden in `{ data }`, fouten in
@@ -33,9 +33,10 @@ export class AsanaFout extends Error {
   }
 }
 
+/** `ASANA_MVA` in Vercel; `ASANA_TOKEN` werkt ook, als reserve. */
 export function asanaConfig(env: Record<string, string | undefined> = process.env): { token: string } {
-  const token = env.ASANA_TOKEN?.trim();
-  if (!token) throw new AsanaConfigError("Asana-koppeling ontbreekt: zet ASANA_TOKEN in Vercel.");
+  const token = (env.ASANA_MVA || env.ASANA_TOKEN)?.trim();
+  if (!token) throw new AsanaConfigError("Asana-koppeling ontbreekt: zet ASANA_MVA in Vercel.");
   return { token };
 }
 
@@ -67,6 +68,8 @@ export interface AsanaBijlage {
 
 export interface AsanaApi {
   takenInProject(project: string): Promise<AsanaTaakKort[]>;
+  /** Open taken in een sectie, met beschrijving: genoeg om de brief te lezen. */
+  takenInSectie(sectieGid: string): Promise<AsanaTaak[]>;
   taak(gid: string): Promise<AsanaTaak>;
   bijlagen(taakGid: string): Promise<AsanaBijlage[]>;
   plaatsReactie(taakGid: string, htmlText: string): Promise<void>;
@@ -173,6 +176,12 @@ export function asanaApi(config: { token: string }, doeFetch: typeof fetch = fet
         const { gid: g, naam, sectie, dueOn } = leesTaak(t, project);
         return { gid: g, naam, ...(sectie && { sectie }), ...(dueOn && { dueOn }) };
       });
+    },
+    async takenInSectie(sectieGid) {
+      const ruw = await vraag<RuweTaak[]>("GET", `/sections/${gid(sectieGid)}/tasks`, {
+        params: { opt_fields: TAAK_VELDEN, completed_since: "now", limit: "100" },
+      });
+      return (ruw ?? []).map((t) => leesTaak(t, TESTPROJECT));
     },
     async taak(taakGid) {
       return leesTaak(await vraag<RuweTaak>("GET", `/tasks/${gid(taakGid)}`, { params: { opt_fields: TAAK_VELDEN } }), TESTPROJECT);

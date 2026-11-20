@@ -113,11 +113,48 @@ er iets in Maileon gebeurt. In het echte productiebord kan het verplaatsen
 naar een andere sectie wél regels starten; kijk dat na voordat het project
 wordt verruimd.
 
-**Inloggen:** `ASANA_TOKEN` in Vercel, een personal access token (Asana →
-profielfoto → Settings → Apps → Developer apps → Create new token). Reacties
-komen op naam van de eigenaar van het token; voor de echte flow is een
-serviceaccount beter. Zonder token toont de pagina een melding en werkt de
-upload uit de Mail Builder gewoon.
+**Inloggen:** `ASANA_MVA` in Vercel (`ASANA_TOKEN` werkt ook, als reserve),
+een personal access token (Asana → profielfoto → Settings → Apps → Developer
+apps → Create new token). Reacties komen op naam van de eigenaar van het
+token; voor de echte flow is een serviceaccount beter. Zonder token toont de
+pagina een melding en werkt de upload uit de Mail Builder gewoon.
+
+## Automatisch
+
+Elke 5 minuten draait `/api/marnix/asana/automaat` (cron in `vercel.json`,
+met `CRON_SECRET`, net als de Ringside-crons). Op de pagina start
+**Nu verwerken** dezelfde ronde meteen. De regels staan in
+`lib/asana/automaat.ts` (met tests):
+
+| Waar de taak staat | Wat de automaat doet |
+|---|---|
+| Nieuwe aanvraag, brief compleet | Concept in Maileon, reactie met de voorbeeldlink, naar **Feedback** |
+| Nieuwe aanvraag, brief niet compleet | Reactie met wat er mist, naar **Wachten op input** |
+| Wachten op input of Feedback, brief aangepast | Opnieuw: concept (of bijgewerkt concept, zelfde link) of de punten |
+| Wachten op input of Feedback, onbekend bij de automaat | Niets |
+| Zonder wijziging terug in Nieuwe aanvraag | Terug naar Feedback of Wachten op input, zonder reactie |
+
+"Compleet" betekent: geen punten onder "Nog nodig", ook niet van de Mail
+Builder zelf. Per versie van de brief (een hash van naam, deadline en
+beschrijving) komt er hooguit één reactie; wat de automaat per taak onthoudt
+staat in Blob onder `asana-mail/taken/<gid>.json`. Ook een concept dat met de
+knop is gezet, wordt daar onthouden, zodat de automaat een latere wijziging
+van de brief oppakt.
+
+- Weigert Maileon het concept (bijvoorbeeld omdat het in Maileon is
+  aangepast), dan één reactie met de reden; de taak blijft staan.
+- Een storing (Maileon of Asana 5xx, geen verbinding) geeft geen reactie; de
+  volgende ronde probeert het opnieuw.
+- Hooguit 5 taken per ronde.
+- De voorbeeldlink gaat naar het productiedomein (`VERCEL_PROJECT_PRODUCTION_URL`,
+  of `PSV_TOOLS_URL` als die gezet is), niet naar het adres dat de cron
+  aanroept.
+
+De HTML maakt de server met dezelfde generator als de Mail Builder:
+`lib/mail-builder/html.ts`. Die is uit `components/mail-builder-form.tsx`
+gehaald zonder iets te veranderen (de HTML van alle templates is byte voor
+byte gelijk gebleven); de component importeert hem en her-exporteert de oude
+namen.
 
 **Wat PSV Tools uit de brief haalt** (`lib/asana/brief.ts`, zonder AI, met
 vaste regels op het sjabloon van de content brief):
@@ -153,9 +190,9 @@ onbekende dynamische velden, en wat de Mail Builder zelf zou weigeren.
 - De header: een afbeelding als bijlage of als link in de brief gaat nog niet
   mee. De mail krijgt de standaardheader van het template, en er komt een
   punt bij.
-- Feedback uit reacties verwerken: pas de brief aan en haal hem opnieuw op.
-  Opnieuw zetten werkt hetzelfde concept bij, met dezelfde voorbeeldlink.
-- Starten vanuit Asana zelf (webhook): nu kies je de taak op de pagina.
+- Feedback uit reacties verwerken: de aanvrager past de brief aan; de
+  automaat werkt dan hetzelfde concept bij, met dezelfde voorbeeldlink.
+- Meteen reageren (webhook van Asana): nu kijkt de cron elke 5 minuten.
 
 ## Eerste test: wat nog niet zeker is
 
@@ -198,4 +235,7 @@ bij de eerste keer op het volgende:
 | Asana: taak ophalen en controleren | `lib/asana/taak-brief.ts` |
 | Asana: de reactie | `lib/asana/reactie.ts` (met tests) |
 | Asana: taken en één taak | `app/api/marnix/asana/route.ts`, `app/api/marnix/asana/[taak]/route.ts` |
-| HTML van de Mail Builder (ook voor de pagina) | `generateEmailHTML`, `makeInitialState` in `components/mail-builder-form.tsx` |
+| HTML van de Mail Builder (pagina, server, Mail Builder zelf) | `lib/mail-builder/html.ts` |
+| Van opzet naar mail | `lib/asana/mail.ts` |
+| Concept zetten met voorbeeld (knop en automaat) | `lib/maileon/concept-zetten.ts` |
+| Automaat: regels, status per taak, route | `lib/asana/automaat.ts` (met tests), `lib/asana/automaat-opslag.ts`, `app/api/marnix/asana/automaat/route.ts` |

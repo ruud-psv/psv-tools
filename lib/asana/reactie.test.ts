@@ -1,7 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { conceptReactie } from "./reactie";
+import { conceptReactie, foutReactie, wachtReactie } from "./reactie";
+
+function alleenToegestaneTags(html: string) {
+  const tags = new Set([...html.matchAll(/<\/?([a-z]+)/g)].map((m) => m[1]));
+  for (const tag of tags) assert.ok(["body", "strong", "code", "a", "ul", "li"].includes(tag), tag);
+}
+
+test("wachtReactie en foutReactie: geëscapet, alleen toegestane tags", () => {
+  const wacht = wachtReactie([
+    { soort: "nodig", tekst: "Nog in te vullen: <KORTINGSCODE>." },
+    { soort: "let-op", tekst: "Onderwerp is lang." },
+  ]);
+  assert.match(wacht, /Nog niet klaar voor Maileon/);
+  assert.match(wacht, /<strong>Nog nodig<\/strong><ul><li>Nog in te vullen: &lt;KORTINGSCODE&gt;\.<\/li><\/ul>/);
+  assert.match(wacht, /<strong>Let op<\/strong>/);
+  alleenToegestaneTags(wacht);
+  const fout = foutReactie("Maileon gaf een fout (409): name <x> exists");
+  assert.match(fout, /name &lt;x&gt; exists/);
+  alleenToegestaneTags(fout);
+});
 
 test("conceptReactie: link, naam en punten, met geëscapete tekst", () => {
   const html = conceptReactie({

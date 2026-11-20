@@ -25,9 +25,11 @@ function nepFetch(antwoorden: { status?: number; body?: unknown }[]) {
   return { doeFetch, verzoeken };
 }
 
-test("asanaConfig vraagt ASANA_TOKEN", () => {
+test("asanaConfig leest ASANA_MVA, met ASANA_TOKEN als reserve", () => {
   assert.throws(() => asanaConfig({}), AsanaConfigError);
-  assert.deepEqual(asanaConfig({ ASANA_TOKEN: " abc " }), { token: "abc" });
+  assert.deepEqual(asanaConfig({ ASANA_MVA: " abc " }), { token: "abc" });
+  assert.deepEqual(asanaConfig({ ASANA_TOKEN: "oud" }), { token: "oud" });
+  assert.deepEqual(asanaConfig({ ASANA_MVA: "nieuw", ASANA_TOKEN: "oud" }), { token: "nieuw" });
 });
 
 test("leesTaak: sectie uit het juiste project, custom fields als naam → waarde", () => {
