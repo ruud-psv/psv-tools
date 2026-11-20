@@ -698,7 +698,7 @@ const DEFAULTS: Record<Template, TemplateDefaults> = {
   },
 };
 
-function makeInitialState(t: Template): MailBuilderState {
+export function makeInitialState(t: Template): MailBuilderState {
   return { template: t, ...DEFAULTS[t] };
 }
 
@@ -2381,7 +2381,7 @@ ${legalRow(state.template, forExport, "#F1F1F1", "#6E6E6E")}
 </html>`;
 }
 
-function generateEmailHTML(state: MailBuilderState, forExport = false): string {
+export function generateEmailHTML(state: MailBuilderState, forExport = false): string {
   if (state.template === "prematch" || state.template === "prematchvrouwen") return generatePrematchHTML(state, forExport);
   if (state.template === "kaartverkoop") return generateKaartverkoopHTML(state, forExport);
   if (state.template === "psvplay") return generatePsvPlayHTML(state, forExport);

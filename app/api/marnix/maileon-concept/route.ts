@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getAccess } from "@/lib/access-store";
-import { requireEmail } from "@/lib/api-session";
+import { AsanaConfigError, AsanaFout, TESTPROJECT, asanaApi, asanaConfig, isGid, type AsanaApi } from "@/lib/asana/client";
+import { conceptReactie } from "@/lib/asana/reactie";
+import { taakMetBrief } from "@/lib/asana/taak-brief";
+import type { Punt } from "@/lib/asana/brief";
 import {
   ConceptFout,
   conceptNaam,
@@ -14,27 +16,19 @@ import {
 } from "@/lib/maileon/concept";
 import { conceptSleutel, getConcept, nieuwVoorbeeldId, saveConcept, saveVoorbeeld } from "@/lib/maileon/concept-opslag";
 import { MaileonConfigError, MaileonFout, maileonConfig } from "@/lib/maileon/rapport";
+import { alleenAdmins } from "@/lib/marnix/toegang";
 
 /**
  * Zet een mail uit de Mail Builder als concept in Maileon en maakt er een
  * voorbeeldlink bij. Hoort bij de testpagina `/marnix/maileon-concept`, buiten
- * het menu. Versturen, inplannen en de doelgroep blijven in Maileon; zie
- * `lib/maileon/concept.ts` en `docs/maileon-concept.md`.
+ * het menu. Komt de mail uit een taak in het Asana-testproject
+ * (`asanaTaakId`), dan zet de route daarna een reactie met de link op die
+ * taak en verplaatst hij hem naar de sectie Feedback. Versturen, inplannen en
+ * de doelgroep blijven in Maileon; zie `docs/maileon-concept.md`.
  */
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-async function alleenAdmins(req: NextRequest): Promise<{ email: string } | { error: NextResponse }> {
-  const sessie = requireEmail(req);
-  if ("error" in sessie) return sessie;
-  // De middleware laat /api/marnix alleen door voor admins. Hier nog eens,
-  // omdat deze route naar Maileon schrijft.
-  if (!(await getAccess(sessie.email)).isAdmin) {
-    return { error: NextResponse.json({ error: "Deze pagina is alleen voor admins." }, { status: 403 }) };
-  }
-  return sessie;
-}
 
 function linkNaar(voorbeeldId: string): string {
   return `/share/mail/${voorbeeldId}`;
@@ -61,6 +55,35 @@ export async function GET(req: NextRequest) {
   });
 }
 
+interface AsanaUitkomst {
+  reactie: boolean;
+  sectie?: string;
+  fout?: string;
+}
+
+/** Reactie op de taak en naar Feedback. Een fout hier laat het concept staan. */
+async function meldInAsana(
+  api: AsanaApi,
+  taakGid: string,
+  punten: Punt[],
+  concept: { mailingId: number; naam: string; nieuw: boolean; voorbeeldUrl: string }
+): Promise<AsanaUitkomst> {
+  const uit: AsanaUitkomst = { reactie: false };
+  try {
+    await api.plaatsReactie(taakGid, conceptReactie({ ...concept, punten }));
+    uit.reactie = true;
+    const feedback = (await api.secties(TESTPROJECT)).find((s) => /^feedback$/i.test(s.naam.trim()));
+    if (feedback) {
+      await api.naarSectie(feedback.gid, taakGid);
+      uit.sectie = feedback.naam;
+    }
+  } catch (err) {
+    uit.fout = err instanceof AsanaFout ? `Asana gaf een fout (${err.status}): ${err.message}` : "Asana is niet bereikbaar.";
+    console.error(`[marnix/maileon-concept] Asana-taak ${taakGid}: ${uit.fout}`);
+  }
+  return uit;
+}
+
 export async function POST(req: NextRequest) {
   const sessie = await alleenAdmins(req);
   if ("error" in sessie) return sessie.error;
@@ -73,6 +96,24 @@ export async function POST(req: NextRequest) {
   }
   const invoer = controleerInvoer(body);
   if ("fout" in invoer) return NextResponse.json({ error: invoer.fout }, { status: 400 });
+
+  // Komt de mail uit Asana? Dan eerst controleren dat de taak in het testproject staat.
+  const ruwTaakId = (body as Record<string, unknown>).asanaTaakId;
+  let asana: { api: AsanaApi; gid: string; punten: Punt[] } | null = null;
+  if (ruwTaakId !== undefined && ruwTaakId !== null && ruwTaakId !== "") {
+    if (typeof ruwTaakId !== "string" || !isGid(ruwTaakId)) return NextResponse.json({ error: "Ongeldig Asana-ID." }, { status: 400 });
+    try {
+      const api = asanaApi(asanaConfig());
+      const { uitkomst } = await taakMetBrief(api, ruwTaakId);
+      asana = { api, gid: ruwTaakId, punten: uitkomst.punten };
+    } catch (err) {
+      if (err instanceof AsanaConfigError) return NextResponse.json({ error: err.message }, { status: 500 });
+      if (err instanceof AsanaFout) {
+        return NextResponse.json({ error: err.status === 403 ? err.message : `Asana gaf een fout (${err.status}): ${err.message}` }, { status: err.status === 403 ? 403 : 502 });
+      }
+      return NextResponse.json({ error: "Asana is niet bereikbaar." }, { status: 502 });
+    }
+  }
 
   let api: MaileonConceptApi;
   try {
@@ -140,14 +181,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  console.info(`[marnix/maileon-concept] mailing ${uitkomst.mailingId} ${uitkomst.nieuw ? "aangemaakt" : "bijgewerkt"}, voorbeeld uit ${bron}`);
+  const voorbeeldUrl = linkNaar(voorbeeldId);
+  const asanaUitkomst = asana
+    ? await meldInAsana(asana.api, asana.gid, asana.punten, {
+        mailingId: uitkomst.mailingId,
+        naam: invoer.naam,
+        nieuw: uitkomst.nieuw,
+        voorbeeldUrl: new URL(voorbeeldUrl, req.nextUrl.origin).toString(),
+      })
+    : undefined;
+
+  console.info(`[marnix/maileon-concept] mailing ${uitkomst.mailingId} ${uitkomst.nieuw ? "aangemaakt" : "bijgewerkt"}, voorbeeld uit ${bron}${asana ? `, Asana-taak ${asana.gid}` : ""}`);
   return NextResponse.json({
     mailingId: uitkomst.mailingId,
     naam: invoer.naam,
     nieuw: uitkomst.nieuw,
     vervangen: uitkomst.vervangen,
-    voorbeeldUrl: linkNaar(voorbeeldId),
+    voorbeeldUrl,
     voorbeeldBron: bron,
     bijgewerkt: nu,
+    ...(asanaUitkomst && { asana: asanaUitkomst }),
   });
 }

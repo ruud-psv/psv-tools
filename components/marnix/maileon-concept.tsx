@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Copy, ExternalLink, FileUp, Loader2 } from "lucide-react";
+import { AlertCircle, Check, Copy, Download, ExternalLink, FileUp, Loader2 } from "lucide-react";
 
+import { generateEmailHTML, makeInitialState, newBlock, type MailBuilderState } from "@/components/mail-builder-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { MailOpzet, Punt } from "@/lib/asana/brief";
 import { MAX_NAAM, NAAM_ADVIES, conceptNaam } from "@/lib/maileon/concept-naam";
+import { mailProblemen } from "@/lib/mail-builder/validate";
 
 /**
- * Testpagina: een mail uit de Mail Builder (de Download, met de opgeslagen
- * staat erin) als concept in Maileon zetten, en de voorbeeldlink delen.
- * Server: `app/api/marnix/maileon-concept/route.ts`.
+ * Testpagina: een mail als concept in Maileon zetten en de voorbeeldlink
+ * delen. De mail komt uit een taak in het Asana-testproject (de content brief
+ * wordt omgezet met de generator van de Mail Builder), of uit een Download van
+ * de Mail Builder. Bij een Asana-taak zet de server daarna een reactie met de
+ * link op de taak. Server: `app/api/marnix/*`.
  */
 
 /** De staat die de Mail Builder achter de HTML zet bij Download. */
@@ -23,6 +28,8 @@ interface Bestand {
   html: string;
   kb: number;
   template?: string;
+  /** Gezet als de mail uit een Asana-taak komt. */
+  asanaTaakId?: string;
 }
 
 interface Uitkomst {
@@ -33,6 +40,7 @@ interface Uitkomst {
   voorbeeldUrl: string;
   voorbeeldBron: "maileon" | "export";
   bijgewerkt: string;
+  asana?: { reactie: boolean; sectie?: string; fout?: string };
 }
 
 interface Bestaand {
@@ -47,8 +55,51 @@ interface Fout {
   code?: string;
 }
 
+interface TaakKort {
+  gid: string;
+  naam: string;
+  sectie?: string;
+}
+
+interface AsanaBrief {
+  taak: { gid: string; naam: string; url?: string; sectie?: string };
+  punten: Punt[];
+}
+
 function tijdstip(iso: string): string {
   return new Date(iso).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+const SELECT_KLASSEN =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
+function PuntenLijst({ punten }: { punten: Punt[] }) {
+  const nodig = punten.filter((p) => p.soort === "nodig");
+  const letOp = punten.filter((p) => p.soort === "let-op");
+  return (
+    <>
+      {nodig.length > 0 && (
+        <div className="alert alert--error mb-0">
+          <p className="font-bold">Nog nodig</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {nodig.map((p) => (
+              <li key={p.tekst}>{p.tekst}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {letOp.length > 0 && (
+        <div className="alert alert--warning mb-0">
+          <p className="font-bold">Let op</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {letOp.map((p) => (
+              <li key={p.tekst}>{p.tekst}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
 }
 
 export function MaileonConcept() {
@@ -65,9 +116,43 @@ export function MaileonConcept() {
   const [gekopieerd, setGekopieerd] = useState(false);
   const invoerRef = useRef<HTMLInputElement>(null);
 
+  // Asana
+  const [taken, setTaken] = useState<TaakKort[] | null>(null);
+  const [takenFout, setTakenFout] = useState<string | null>(null);
+  const [gekozen, setGekozen] = useState("");
+  const [briefBezig, setBriefBezig] = useState(false);
+  const [brief, setBrief] = useState<AsanaBrief | null>(null);
+  const [briefFout, setBriefFout] = useState<string | null>(null);
+  const [builderState, setBuilderState] = useState<MailBuilderState | null>(null);
+  const [voorbeeld, setVoorbeeld] = useState("");
+
   const maileonNaam = conceptNaam(naam, dmid);
   const naamTeLang = maileonNaam.length > MAX_NAAM;
   const naamLang = maileonNaam.length > NAAM_ADVIES;
+
+  // De open taken in het Asana-testproject.
+  useEffect(() => {
+    let actief = true;
+    fetch("/api/marnix/asana")
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!actief) return;
+        if (!res.ok) {
+          setTakenFout(data.error ?? `Asana gaf een fout (${res.status}).`);
+          setTaken([]);
+          return;
+        }
+        setTaken((data.taken as TaakKort[] | undefined) ?? []);
+      })
+      .catch(() => {
+        if (!actief) return;
+        setTakenFout("Asana is niet bereikbaar.");
+        setTaken([]);
+      });
+    return () => {
+      actief = false;
+    };
+  }, []);
 
   // Staat er al een concept voor deze mail? Dan werkt opnieuw zetten dat concept bij.
   useEffect(() => {
@@ -92,10 +177,77 @@ export function MaileonConcept() {
     };
   }, [dmid, naam, maileonNaam.length, uitkomst]);
 
-  function kiesBestand(file: File) {
-    setBestandMelding(null);
+  function wisUitkomst() {
     setUitkomst(null);
     setFout(null);
+    setBestandMelding(null);
+  }
+
+  async function haalBrief() {
+    if (!gekozen) return;
+    wisUitkomst();
+    setBriefBezig(true);
+    setBriefFout(null);
+    setBrief(null);
+    try {
+      const res = await fetch(`/api/marnix/asana/${gekozen}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBriefFout(data.error ?? `Er ging iets mis (${res.status}).`);
+        return;
+      }
+      const taak = data.taak as AsanaBrief["taak"];
+      const u = data.uitkomst as { opzet: MailOpzet | null; onderwerp: string; punten: Punt[] };
+      setOnderwerp(u.onderwerp);
+      if (!u.opzet) {
+        setBrief({ taak, punten: u.punten });
+        setBestand(null);
+        setBuilderState(null);
+        setVoorbeeld("");
+        return;
+      }
+      const opzet = u.opzet;
+      const state: MailBuilderState = {
+        ...makeInitialState(opzet.template),
+        ...opzet,
+        blocks: opzet.blocks.map((b) => newBlock(b)),
+      };
+      // Wat de Mail Builder zelf zou weigeren bij Download, hoort er ook bij.
+      const builder = mailProblemen(state).map((tekst): Punt => ({ soort: "nodig", tekst: `Mail Builder: ${tekst}` }));
+      setBrief({ taak, punten: [...u.punten, ...builder] });
+      const html = generateEmailHTML(state, true);
+      setBuilderState(state);
+      setBestand({ naam: taak.naam, html, kb: Math.round(html.length / 1024), template: state.template, asanaTaakId: taak.gid });
+      setVoorbeeld(generateEmailHTML(state, false));
+      setNaam(opzet.mailNaam);
+      setDmid(opzet.dmid ?? "");
+      setPreviewTekst(opzet.preheaderTekst);
+    } catch {
+      setBriefFout("PSV Tools is niet bereikbaar.");
+    } finally {
+      setBriefBezig(false);
+    }
+  }
+
+  /** Dezelfde mail als Download voor de Mail Builder, om hem daar met de hand bij te werken. */
+  function downloadVoorBuilder() {
+    if (!builderState) return;
+    const html = generateEmailHTML(builderState, true);
+    const staat = JSON.stringify(builderState).replace(/-->/g, "--\\u003E");
+    const blob = new Blob([`${html}\n<!-- mailbuilder-state:${staat} -->`], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `psv-mail-${builderState.template}-${builderState.dmid || "asana"}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function kiesBestand(file: File) {
+    wisUitkomst();
+    setBrief(null);
+    setBuilderState(null);
+    setVoorbeeld("");
     const reader = new FileReader();
     reader.onload = () => {
       const tekst = typeof reader.result === "string" ? reader.result : "";
@@ -131,7 +283,7 @@ export function MaileonConcept() {
   }
 
   const problemen = [
-    !bestand && "Kies de HTML uit de Mail Builder.",
+    !bestand && "Kies een Asana-taak of de HTML uit de Mail Builder.",
     maileonNaam.length < 3 && "Vul de mailnaam in.",
     naamTeLang && `De naam in Maileon is te lang (${maileonNaam.length} tekens).`,
     !onderwerp.trim() && "Vul het onderwerp in.",
@@ -147,7 +299,15 @@ export function MaileonConcept() {
       const res = await fetch("/api/marnix/maileon-concept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: bestand.html, naam, dmid, onderwerp, previewTekst, nieuw }),
+        body: JSON.stringify({
+          html: bestand.html,
+          naam,
+          dmid,
+          onderwerp,
+          previewTekst,
+          nieuw,
+          ...(bestand.asanaTaakId && { asanaTaakId: bestand.asanaTaakId }),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -178,37 +338,113 @@ export function MaileonConcept() {
         <CardHeader>
           <CardTitle className="text-xl">1. De mail</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Gebruik de Download uit de Mail Builder. Daar zit de staat in, zodat naam, DMID en preview-tekst vanzelf
-            worden ingevuld.
-          </p>
-          <input
-            ref={invoerRef}
-            type="file"
-            accept=".html,.htm,text/html"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) kiesBestand(file);
-              if (invoerRef.current) invoerRef.current.value = "";
-            }}
-          />
-          <Button type="button" variant="outline" onClick={() => invoerRef.current?.click()}>
-            <FileUp />
-            {bestand ? "Ander bestand kiezen" : "HTML kiezen"}
-          </Button>
-          {bestand && (
-            <p className="text-sm">
-              <span className="font-bold">{bestand.naam}</span>{" "}
-              <span className="text-muted-foreground">
-                · {bestand.kb} kB{bestand.template ? ` · template ${bestand.template}` : ""}
-              </span>
+        <CardContent className="space-y-5">
+          {/* Uit Asana */}
+          <div className="space-y-3">
+            <Label htmlFor="mc-taak">Uit Asana (testproject)</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select
+                id="mc-taak"
+                className={SELECT_KLASSEN}
+                value={gekozen}
+                onChange={(e) => setGekozen(e.target.value)}
+                disabled={!taken || taken.length === 0}
+              >
+                <option value="">{taken === null ? "Taken laden…" : taken.length ? "Kies een taak" : "Geen open taken"}</option>
+                {(taken ?? []).map((t) => (
+                  <option key={t.gid} value={t.gid}>
+                    {t.naam}
+                    {t.sectie ? ` · ${t.sectie}` : ""}
+                  </option>
+                ))}
+              </select>
+              <Button type="button" onClick={haalBrief} disabled={!gekozen || briefBezig} className="shrink-0">
+                {briefBezig ? <Loader2 className="animate-spin" /> : <Check />}
+                Brief ophalen
+              </Button>
+            </div>
+            {takenFout && <div className="alert alert--error mb-0">{takenFout}</div>}
+            {briefFout && <div className="alert alert--error mb-0">{briefFout}</div>}
+            {brief && (
+              <div className="space-y-3">
+                <p className="text-sm">
+                  <span className="font-bold">{brief.taak.naam}</span>
+                  {brief.taak.sectie && <span className="text-muted-foreground"> · {brief.taak.sectie}</span>}
+                  {brief.taak.url && (
+                    <>
+                      {" "}
+                      <a href={brief.taak.url} target="_blank" rel="noopener noreferrer" className="underline">
+                        Open in Asana
+                      </a>
+                    </>
+                  )}
+                </p>
+                <PuntenLijst punten={brief.punten} />
+                {builderState && (
+                  <Button type="button" size="sm" variant="outline" onClick={downloadVoorBuilder}>
+                    <Download />
+                    Download voor de Mail Builder
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Of uit de Mail Builder */}
+          <div className="space-y-3 border-t border-border pt-5">
+            <Label>Of: HTML uit de Mail Builder</Label>
+            <p className="text-sm text-muted-foreground">
+              Gebruik de Download uit de Mail Builder. Daar zit de staat in, zodat naam, DMID en preview-tekst vanzelf
+              worden ingevuld.
             </p>
-          )}
-          {bestandMelding && <div className={`alert alert--${bestandMelding.soort} mb-0`}>{bestandMelding.tekst}</div>}
+            <input
+              ref={invoerRef}
+              type="file"
+              accept=".html,.htm,text/html"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) kiesBestand(file);
+                if (invoerRef.current) invoerRef.current.value = "";
+              }}
+            />
+            <Button type="button" variant="outline" onClick={() => invoerRef.current?.click()}>
+              <FileUp />
+              HTML kiezen
+            </Button>
+            {bestand && !bestand.asanaTaakId && (
+              <p className="text-sm">
+                <span className="font-bold">{bestand.naam}</span>{" "}
+                <span className="text-muted-foreground">
+                  · {bestand.kb} kB{bestand.template ? ` · template ${bestand.template}` : ""}
+                </span>
+              </p>
+            )}
+            {bestandMelding && <div className={`alert alert--${bestandMelding.soort} mb-0`}>{bestandMelding.tekst}</div>}
+          </div>
         </CardContent>
       </Card>
+
+      {/* Voorbeeld van een mail uit Asana */}
+      {voorbeeld && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Voorbeeld</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Zoals de Mail Builder hem toont. Dynamische velden staan hier nog als token; in het voorbeeld van Maileon
+              zijn ze ingevuld.
+            </p>
+            <iframe
+              title="Voorbeeld van de mail"
+              srcDoc={voorbeeld}
+              sandbox=""
+              className="h-[720px] w-full max-w-[640px] rounded-md border border-border bg-white"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* 2. Gegevens */}
       <Card>
@@ -293,6 +529,11 @@ export function MaileonConcept() {
             {bezig ? <Loader2 className="animate-spin" /> : <Check />}
             {bestaand ? "Concept bijwerken in Maileon" : "Als concept in Maileon zetten"}
           </Button>
+          {bestand?.asanaTaakId && (
+            <p className="text-xs text-muted-foreground">
+              Daarna komt er een reactie met de voorbeeldlink op de Asana-taak, en gaat de taak naar Feedback.
+            </p>
+          )}
 
           {fout && (
             <div className="alert alert--error mb-0 space-y-3">
@@ -339,6 +580,13 @@ export function MaileonConcept() {
                   : "Maileon gaf geen voorbeeld; dit voorbeeld komt uit de export, zonder dynamische velden."}{" "}
                 De link werkt zonder inloggen en blijft hetzelfde bij een nieuwe versie.
               </p>
+              {uitkomst.asana && (
+                <p className="text-xs">
+                  {uitkomst.asana.reactie
+                    ? `Reactie met de link geplaatst in Asana${uitkomst.asana.sectie ? `, taak naar ${uitkomst.asana.sectie}` : ""}.`
+                    : `Het concept staat erin, maar de reactie in Asana lukte niet: ${uitkomst.asana.fout ?? "onbekende fout"}`}
+                </p>
+              )}
             </div>
           )}
 
