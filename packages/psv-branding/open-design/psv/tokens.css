@@ -1,0 +1,96 @@
+/* =============================================
+   PSV — Open Design tokens
+   Afgeleid van ../../css/tokens.css (@psv/branding). Verandert daar een
+   waarde, pas hem dan hier ook aan; DESIGN.md noemt dezelfde waarden.
+   ============================================= */
+:root {
+  /* --- A1 identiteit --- */
+  --bg:            #eeeeee;  /* --color-bg-page (gray-07) */
+  --surface:       #ffffff;
+  --fg:            #000000;  /* --color-text-default */
+  --muted:         #666666;  /* gray-10: 5,7:1 op wit */
+  --border:        #cccccc;  /* gray-08 */
+  --accent:        #e82026;  /* PSV rood */
+  --font-display:  'psv-condensed', 'Arial Narrow', sans-serif-condensed, sans-serif;
+  --font-body:     'psv-text', Georgia, serif;
+
+  /* --- A1 structuur: typografie --- */
+  --text-xs:    12px;
+  --text-sm:    14px;
+  --text-base:  16px;
+  --text-lg:    20px;
+  --text-xl:    26px;  /* H3 */
+  --text-2xl:   36px;  /* H2 / sectietitel */
+  --text-3xl:   72px;  /* H1 */
+  --text-4xl:   96px;  /* hero / branding-display */
+  --leading-body:     1.5;
+  --leading-tight:    1.1;
+  --tracking-display: 0;
+
+  /* --- A1 structuur: layout --- */
+  --section-y-desktop:        48px;
+  --section-y-tablet:         40px;
+  --section-y-phone:          32px;
+  --container-max:            1248px;
+  --container-gutter-desktop: 32px;
+  --container-gutter-tablet:  24px;
+  --container-gutter-phone:   16px;
+
+  /* --- A2 --- */
+  --accent-on:     #ffffff;
+  --accent-hover:  #9c1006;  /* --color-red-dark */
+  --accent-active: #9c1006;
+  --success:       #287d3c;
+  --warn:          #b95000;
+  --danger:        #da1414;
+  --font-mono:     ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+
+  /* PSV is hoekig: knoppen, tags en kaarten hebben geen afronding. */
+  --radius-sm:   0px;
+  --radius-md:   4px;
+  --radius-lg:   8px;
+  --radius-pill: 9999px;
+
+  --elev-flat:   none;
+  --elev-ring:   0 0 0 1px var(--border);
+  --elev-raised: 0 1px 3px rgba(0, 0, 0, 0.5);  /* --shadow-card */
+
+  --focus-ring:  0 0 0 3px color-mix(in oklab, var(--accent), transparent 60%);
+
+  --motion-fast:   150ms;
+  --motion-base:   300ms;  /* --transition-default */
+  --ease-standard: cubic-bezier(0, 0, 0.58, 1);  /* ease-out */
+
+  /* --- B-slots --- */
+  --surface-warm: #f5f5f5;  /* off-white */
+  --fg-2:         #333333;  /* gray-11 */
+  --meta:         var(--muted);
+  --border-soft:  #eeeeee;
+
+  /* --- C: tagkleuren (toegestaan via het prefix --tag-bg-) --- */
+  --tag-bg-red:   #e82026;
+  --tag-bg-black: #000000;
+  --tag-bg-gold:  #bb9753;  /* altijd met zwarte tekst */
+}
+
+/* Donkere variant: zwart als basis, zoals .section--black en de hero. */
+[data-theme="dark"] {
+  --bg:          #000000;
+  --surface:     #09101d;  /* neutral dark */
+  --fg:          #ffffff;
+  --muted:       #cccccc;
+  --border:      #333333;
+  --surface-warm: #09101d;
+  --fg-2:        #eeeeee;
+  --border-soft: #333333;
+  --elev-raised: 0 4px 16px rgba(0, 0, 0, 0.6);
+}

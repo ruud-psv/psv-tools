@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "od-design-system-project/v1",
+  "id": "psv",
+  "name": "PSV",
+  "category": "Sports & Entertainment",
+  "description": "PSV Eindhoven house style: PSV red on white and black, condensed uppercase headings, sharp edges and diagonal cuts.",
+  "source": {
+    "type": "local",
+    "path": "packages/psv-branding/open-design/psv"
+  },
+  "files": {
+    "design": "DESIGN.md",
+    "tokens": "tokens.css"
+  }
+}
