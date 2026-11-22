@@ -42,6 +42,14 @@ gekomen:
   alleen op campagnenamen gezocht en dus niet gevonden, terwijl de pagina's en producten er wel
   waren.
 
+## Titel van een gesprek
+
+Bovenaan de chat en in de lijst met gesprekken staat een titel over waar het gesprek over gaat,
+zoals in Claude: "Ticketverkoop PSV - Go Ahead Eagles" in plaats van de eerste vraag afgekapt. Een
+klein model (`claude-haiku-5-5`, `lib/assistent/titel.ts`) maakt hem bij de eerste vraag, tegelijk
+met het antwoord, dus er komt geen wachttijd bij. Tot hij er is, staat de eerste vraag bovenaan.
+De titel wordt één keer gemaakt; oudere gesprekken krijgen er een bij de eerstvolgende vraag.
+
 ## Stukken
 
 Vraag je om een rapport, een one-pager, een slide deck of iets om te delen, of klik je onder het

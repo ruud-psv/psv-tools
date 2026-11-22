@@ -175,6 +175,8 @@ export function AssistentChat() {
   const [metStuk, setMetStuk] = useState<Set<string>>(new Set());
   const [gesprekken, setGesprekken] = useState<GesprekSamenvatting[]>([]);
   const [gesprekId, setGesprekId] = useState<string | null>(null);
+  /** De titel van het gesprek (gemaakt door de assistent); bovenaan en in de lijst. */
+  const [titel, setTitel] = useState<string | null>(null);
   const [beurten, setBeurten] = useState<Beurt[]>([]);
   const [invoer, setInvoer] = useState("");
   const [bezig, setBezig] = useState(false);
@@ -265,6 +267,7 @@ export function AssistentChat() {
       }
       const id = res.headers.get("X-Gesprek-Id");
       if (id) setGesprekId(id);
+      if (!vorige.length) setTitel(null);
 
       // Het antwoord komt binnen als regels JSON; een regel kan over twee stukken verdeeld zijn.
       const reader = res.body.getReader();
@@ -275,7 +278,7 @@ export function AssistentChat() {
       const stappen: GesprekStap[] = [];
       const verwerk = (regel: string) => {
         if (!regel.trim()) return;
-        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string; stuk?: Stuk } & Partial<Bron> & Partial<GesprekStap>;
+        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string; stuk?: Stuk; titel?: string } & Partial<Bron> & Partial<GesprekStap>;
         if (gebeurtenis.t === "tekst") antwoord += gebeurtenis.d ?? "";
         else if (gebeurtenis.t === "wis") antwoord = "";
         else if (gebeurtenis.t === "bron" && gebeurtenis.naam && gebeurtenis.label && gebeurtenis.href)
@@ -284,6 +287,11 @@ export function AssistentChat() {
           const nieuw = gebeurtenis.stuk;
           setStuk(nieuw);
           setMetStuk((huidig) => new Set(huidig).add(nieuw.id));
+        }
+        else if (gebeurtenis.t === "titel" && gebeurtenis.titel) {
+          const nieuweTitel = gebeurtenis.titel;
+          setTitel(nieuweTitel);
+          if (id) setGesprekken((huidig) => huidig.map((g) => (g.id === id ? { ...g, titel: nieuweTitel } : g)));
         }
         else if (gebeurtenis.t === "stap" && gebeurtenis.label && typeof gebeurtenis.invoer === "string")
           stappen.push({ label: gebeurtenis.label, invoer: gebeurtenis.invoer, ok: gebeurtenis.ok === true, melding: gebeurtenis.melding });
@@ -318,6 +326,7 @@ export function AssistentChat() {
   function nieuwGesprek() {
     stop();
     setGesprekId(null);
+    setTitel(null);
     setStuk(null);
     setToonStuk(false);
     setToonGesprekken(false);
@@ -339,6 +348,7 @@ export function AssistentChat() {
       if (!res.ok) throw new Error(data.error || "Openen van het gesprek mislukt.");
       const bekend: Record<string, Bron> = data.bronnen ?? {};
       setGesprekId(id);
+      setTitel(typeof data.gesprek.titel === "string" ? data.gesprek.titel : null);
       setBeurten(
         (data.gesprek.berichten as { role: Beurt["role"]; content: string; bronnen?: string[]; stappen?: GesprekStap[] }[]).map((b) => ({
           role: b.role,
@@ -383,6 +393,9 @@ export function AssistentChat() {
   }
 
   const heeftGesprek = beurten.length > 0;
+  /** Bovenaan: de titel van het gesprek; tot die er is de eerste vraag; zonder gesprek "Assistent". */
+  const eersteVraag = beurten.find((b) => b.role === "user")?.content.replace(/\s+/g, " ").trim();
+  const kop = titel ?? (eersteVraag ? (eersteVraag.length > 60 ? `${eersteVraag.slice(0, 59)}…` : eersteVraag) : "Assistent");
 
   /** Nieuw gesprek + eerdere gesprekken: in de kolom links (desktop) of over de chat heen (mobiel). */
   const gesprekkenLijst = (
@@ -469,9 +482,11 @@ export function AssistentChat() {
         {/* Kop + (op kleinere schermen) de balk naar het stuk: blijven bovenaan staan. */}
         <div className="sticky top-0 z-10 flex-shrink-0 bg-background">
           <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-psv-red-primary" />
-              <h1 className="font-heading text-xl uppercase tracking-tight">Assistent</h1>
+            <div className="flex min-w-0 items-center gap-2">
+              <Sparkles className="h-4 w-4 flex-shrink-0 text-psv-red-primary" />
+              <h1 className="truncate font-heading text-xl uppercase tracking-tight" title={kop}>
+                {kop}
+              </h1>
             </div>
             <div className="flex items-center gap-2">
               <button

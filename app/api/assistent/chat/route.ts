@@ -7,6 +7,7 @@ import { alsChatTool, ToolFout, toolsVoor, type ChatTool } from "@/lib/assistent
 import { ASSISTENT_TOOLS } from "@/lib/assistent/tools";
 import { mcpToolsVoor } from "@/lib/mcp/assistent";
 import { stukTools } from "@/lib/assistent/stukken-tools";
+import { maakTitel } from "@/lib/assistent/titel";
 import { samenvatting, type Stuk } from "@/lib/stukken/model";
 import { getStuk, saveStuk } from "@/lib/stukken/store";
 import { isGesprekId, nieuwGesprekId, parseBerichten, titelVan, type GesprekStap } from "@/lib/kennisbank-gesprekken";
@@ -182,6 +183,14 @@ export async function POST(req: NextRequest) {
     : null;
   const client = new Anthropic();
   const messages: Bericht[] = berichten.map(({ role, content }) => ({ role, content }));
+  // De titel van het gesprek, zoals in Claude: tegelijk met het antwoord, één keer per gesprek.
+  // Ook voor oude gesprekken die nog de eerste vraag als titel hebben.
+  const titelBelofte: Promise<string | null> = getGesprek(auth.email, gesprekId)
+    .then((g) => (g?.titelGemaakt ? null : maakTitel(client, berichten, afgebroken.signal)))
+    .catch((err) => {
+      if (!afgebroken.signal.aborted) console.error("[assistent] titel maken mislukt:", err instanceof Error ? err.message : err);
+      return null;
+    });
   const encoder = new TextEncoder();
 
   const stroom = new ReadableStream<Uint8Array>({
@@ -270,6 +279,9 @@ export async function POST(req: NextRequest) {
         await mcp.sessie.close();
       }
 
+      const titel = await titelBelofte;
+      if (titel) stuur({ t: "titel", titel });
+
       // Opslaan vóór het sluiten van de stroom: daarna kan de serverless
       // functie al bevroren zijn. Mislukt het, dan heeft de collega het
       // antwoord toch en ontbreekt alleen dit gesprek in de geschiedenis.
@@ -280,7 +292,8 @@ export async function POST(req: NextRequest) {
         const eerder = bestaand?.berichten ?? [];
         await saveGesprek(auth.email, {
           id: gesprekId,
-          titel: bestaand?.titel ?? titelVan(berichten[0].content),
+          titel: titel ?? bestaand?.titel ?? titelVan(berichten[0].content),
+          ...((titel || bestaand?.titelGemaakt) && { titelGemaakt: true }),
           berichten: [
             ...berichten.map((b, i) =>
               b.role === "assistant" && eerder[i]?.role === "assistant" && eerder[i].content === b.content

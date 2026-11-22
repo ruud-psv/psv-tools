@@ -41,6 +41,8 @@ export interface GesprekBericht {
 export interface Gesprek {
   id: string;
   titel: string;
+  /** De titel is door het model gemaakt (en niet de eerste vraag); dan niet opnieuw maken. */
+  titelGemaakt?: boolean;
   berichten: GesprekBericht[];
   createdAt: string;
   updatedAt: string;
