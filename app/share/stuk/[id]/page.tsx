@@ -6,7 +6,8 @@ import { deelToegang } from "@/lib/stukken/delen";
 import { getDeelRecord } from "@/lib/stukken/store";
 import { AfdrukKnop } from "@/components/stuk/afdruk-knop";
 import { StukMelding } from "@/components/stuk/stuk-melding";
-import { StukWeergave, formatDag } from "@/components/stuk/stuk-weergave";
+import { formatDag } from "@/components/stuk/stuk-weergave";
+import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
 
 /**
  * Een gedeeld stuk: de momentopname uit de deellink. Openbaar, of alleen voor
@@ -61,10 +62,10 @@ export default async function GedeeldStukPage({ params }: { params: Promise<{ id
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-8 print:p-0">
-      <div className="mx-auto mb-4 flex max-w-4xl justify-end print:hidden">
+      <div className="mx-auto mb-4 flex max-w-5xl justify-end print:hidden">
         <AfdrukKnop />
       </div>
-      <StukWeergave stuk={record.stuk} peildatum={record.stuk.peildatum} />
+      <StukVoorbeeld stuk={record.stuk} peildatum={record.stuk.peildatum} />
     </main>
   );
 }

@@ -7,6 +7,8 @@ import {
   bronnenVan,
   leesBlok,
   nieuweInhoud,
+  normaliseer,
+  slidesVan,
   nieuweVersie,
   pasToe,
   samenvatting,
@@ -85,14 +87,96 @@ test("blokken: duidelijke fouten voor het model", () => {
   assert.throws(() => leesBlok({ type: "tekst", tekst: "x".repeat(LIMIETEN.tekst + 1) }), /te lang/);
 });
 
-test("nieuw stuk: ids b1, b2, …; een one-pager heeft hooguit 8 blokken", () => {
+test("nieuw stuk: ids b1, b2, …; rapport of deck, een one-pager wordt een rapport", () => {
   const inhoud = nieuweInhoud(invoer);
   assert.deepEqual(inhoud.blokken.map((b) => b.id), ["b1", "b2", "b3"]);
   assert.equal(inhoud.ondertitel, "Speciaal tenue");
-  const teVeel = { ...invoer, blokken: Array.from({ length: 9 }, () => ({ type: "kop", tekst: "x" })) };
-  assert.throws(() => nieuweInhoud(teVeel), /hooguit 8 blokken/);
-  assert.equal(nieuweInhoud({ ...teVeel, soort: "rapport" }).blokken.length, 9);
+  assert.equal(inhoud.soort, "rapport"); // invoer zegt "onepager"
+  assert.equal(nieuweInhoud({ ...invoer, soort: "deck" }).soort, "deck");
+  const teVeel = { ...invoer, blokken: Array.from({ length: LIMIETEN.blokken + 1 }, () => ({ type: "kop", tekst: "x" })) };
+  assert.throws(() => nieuweInhoud(teVeel), /hooguit 40/);
   assert.throws(() => nieuweInhoud({ ...invoer, soort: "presentatie" }), StukFout);
+});
+
+test("opslag van vroeger: een one-pager wordt bij het lezen een rapport, ook in de versies", () => {
+  const oud = { ...stuk(), soort: "onepager", vorige: [{ ...stuk(), soort: "onepager", versie: 0 }] };
+  const nu = normaliseer(oud);
+  assert.equal(nu.soort, "rapport");
+  assert.equal(nu.vorige[0].soort, "rapport");
+  assert.equal(normaliseer({ soort: "deck" }).soort, "deck");
+});
+
+const grafiek = {
+  type: "grafiek",
+  titel: "Losse verkoop",
+  soort: "lijn",
+  labels: ["10 dagen", "9 dagen"],
+  reeksen: [
+    { naam: "Go Ahead Eagles", waarden: [2883, 2887] },
+    { naam: "Willem II", waarden: [2699, 2721] },
+  ],
+  bron: "Ticketing",
+};
+
+test("opmaak: alleen huisstijlkeuzes, en nadruk moet in het blok bestaan", () => {
+  const g = leesBlok({ ...grafiek, opmaak: { grootte: "groot", achtergrond: "zwart", nadruk: "Go Ahead Eagles", kernboodschap: " Voor op de rest " } });
+  assert.deepEqual(g.opmaak, { grootte: "groot", achtergrond: "zwart", nadruk: "Go Ahead Eagles", kernboodschap: "Voor op de rest" });
+  assert.equal(leesBlok({ ...grafiek, opmaak: {} }).opmaak, undefined);
+  assert.throws(() => leesBlok({ ...grafiek, opmaak: { achtergrond: "blauw" } }), /achtergrond moet "wit", "grijs", "rood", "zwart" zijn/);
+  assert.throws(() => leesBlok({ ...grafiek, opmaak: { grootte: "enorm" } }), /grootte/);
+  assert.throws(() => leesBlok({ ...grafiek, opmaak: { nadruk: "PSV" } }), /Kies uit: Go Ahead Eagles, Willem II/);
+  assert.throws(() => leesBlok({ type: "tekst", tekst: "x", opmaak: { nadruk: "x" } }), /geen nadruk/);
+  // Tabel: op de eerste cel van een rij; kerngetallen: op het label.
+  assert.equal(leesBlok({ type: "tabel", kolommen: ["Wedstrijd", "Tickets"], rijen: [["PSV - GAE", "2887"]], bron: "x", opmaak: { nadruk: "PSV - GAE" } }).opmaak?.nadruk, "PSV - GAE");
+  assert.equal(leesBlok({ ...kerngetallen, opmaak: { nadruk: "Omzet" } }).opmaak?.nadruk, "Omzet");
+});
+
+test("opmaken: alleen de vorm verandert; null haalt een veld weg; wijzigen laat de opmaak staan", () => {
+  const s = { ...stuk(), ...nieuweInhoud({ soort: "deck", titel: "T", blokken: [grafiek, { type: "tekst", tekst: "x" }] }) };
+  const a = pasToe(s, { acties: [{ actie: "opmaken", blok_id: "b1", opmaak: { achtergrond: "rood", nadruk: "Willem II" } }] });
+  assert.deepEqual(a.blokken[0].opmaak, { achtergrond: "rood", nadruk: "Willem II" });
+  assert.deepEqual((a.blokken[0] as { reeksen: unknown[] }).reeksen, (s.blokken[0] as { reeksen: unknown[] }).reeksen);
+  const b = pasToe(a, { acties: [{ actie: "opmaken", blok_id: "b1", opmaak: { achtergrond: null, grootte: "half" } }] });
+  assert.deepEqual(b.blokken[0].opmaak, { grootte: "half", nadruk: "Willem II" });
+  assert.equal(pasToe(b, { acties: [{ actie: "opmaken", blok_id: "b1", opmaak: { grootte: "", nadruk: null } }] }).blokken[0].opmaak, undefined);
+  assert.throws(() => pasToe(a, { acties: [{ actie: "opmaken", blok_id: "b1", opmaak: { nadruk: "Sparta" } }] }), /bestaat niet/);
+
+  // Nieuwe inhoud zonder opmaak: de opmaak blijft, een nadruk die niet meer bestaat valt weg.
+  const c = pasToe(a, { acties: [{ actie: "wijzigen", blok_id: "b1", blok: { ...grafiek, reeksen: [{ naam: "Sparta", waarden: [1, 2] }] } }] });
+  assert.deepEqual(c.blokken[0].opmaak, { achtergrond: "rood" });
+  // Met opmaak in het nieuwe blok telt die.
+  const d = pasToe(a, { acties: [{ actie: "wijzigen", blok_id: "b1", blok: { ...grafiek, opmaak: { grootte: "groot" } } }] });
+  assert.deepEqual(d.blokken[0].opmaak, { grootte: "groot" });
+});
+
+test("slides: een kop wordt het hoofdstuk, twee halve blokken delen een slide", () => {
+  const inhoud = nieuweInhoud({
+    soort: "deck",
+    titel: "T",
+    blokken: [
+      kerngetallen,
+      { type: "conclusie", punten: ["a"] },
+      { type: "kop", tekst: "Verkoop" },
+      { ...grafiek, opmaak: { kernboodschap: "Voor op de rest", grootte: "groot" } },
+      { type: "tekst", tekst: "x", opmaak: { grootte: "half" } },
+      { type: "tekst", tekst: "y", opmaak: { grootte: "half", achtergrond: "zwart" } },
+      { type: "tekst", tekst: "z", opmaak: { grootte: "half" } },
+      { type: "kop", tekst: "Aanbod" },
+      { type: "tabel", titel: "Vakken", kolommen: ["Vak"], rijen: [["UU"]], bron: "x", opmaak: { grootte: "half" } },
+    ],
+  });
+  const slides = slidesVan(inhoud);
+  assert.deepEqual(
+    slides.map((s) => [s.sectie ?? "", s.titel ?? "", s.blokken.map((b) => b.id).join("+"), s.achtergrond, s.groot]),
+    [
+      ["", "In cijfers", "b1", "wit", false],
+      ["", "Conclusie", "b2", "rood", false], // een conclusie is standaard rood
+      ["Verkoop", "Voor op de rest", "b4", "wit", true],
+      ["Verkoop", "", "b5+b6", "wit", false], // samen: de achtergrond van het eerste blok
+      ["Verkoop", "", "b7", "wit", false], // een half blok zonder partner: een eigen slide
+      ["Aanbod", "Vakken", "b9", "wit", false], // een kop ertussen breekt het paar
+    ]
+  );
 });
 
 test("bewerken: toevoegen, wijzigen, verwijderen en verplaatsen", () => {
@@ -163,7 +247,7 @@ test("bronnen en samenvatting", () => {
   const s = stuk();
   assert.deepEqual(bronnenVan(s), ["Google Analytics psvfanstore.nl, 19 sep t/m 17 nov 2026"]);
   const tekst = samenvatting(s);
-  assert.match(tekst, /^One-pager "Coen Dillen campagne", versie 1, 3 blokken:/);
+  assert.match(tekst, /^Rapport "Coen Dillen campagne", versie 1, 3 blokken:/);
   assert.match(tekst, /b1 kerngetallen: Omzet, Artikelen/);
   assert.match(tekst, /b2 conclusie: 1 punten/);
 });

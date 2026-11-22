@@ -44,9 +44,10 @@ gekomen:
 
 ## Stukken
 
-Vraag je om een rapport, een one-pager of iets om te delen, dan maakt de assistent een stuk bij
-het gesprek, naast de chat. Je schaaft het bij via de chat en deelt het met een link. Zie
-`docs/stukken.md`.
+Vraag je om een rapport, een one-pager, een slide deck of iets om te delen, of klik je onder het
+gesprek op **rapport** of **slide deck**, dan maakt de assistent een stuk bij het gesprek, naast de
+chat. Je schaaft het bij via de chat (ook de vorm: "maak de grafiek groter") en deelt het met een
+link. Zie `docs/stukken.md`.
 
 ## Zoekstappen
 

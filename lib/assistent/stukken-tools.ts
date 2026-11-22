@@ -2,7 +2,7 @@ import { ToolFout, type ChatTool } from "./toegang";
 import { StukFout, nieuweInhoud, nieuweVersie, pasToe, samenvatting, type Stuk } from "../stukken/model";
 
 /**
- * De tools waarmee de assistent een stuk (rapport of one-pager) maakt en
+ * De tools waarmee de assistent een stuk (rapport of slide deck) maakt en
  * bijwerkt. Eén stuk per gesprek; het staat bij de collega die het gesprek
  * voert. Dit zijn de enige tools die iets opslaan, en alleen het stuk zelf:
  * in de bronnen leest de assistent alleen.
@@ -13,11 +13,24 @@ export interface StukOpslag {
   save(stuk: Stuk): Promise<void>;
 }
 
+const OPMAAK_SCHEMA = {
+  type: "object",
+  description:
+    "De vorm van het blok, los van de inhoud; alles optioneel. grootte: half (naast een ander half blok; in een deck delen twee halve blokken na elkaar één slide), heel (standaard) of groot (meer ruimte, grotere grafiek). achtergrond: wit, grijs, rood of zwart (in een deck: de slide; een conclusie is daar standaard rood). nadruk: de naam van de reeks (grafiek), de eerste cel van een rij (tabel) of het label van een kerngetal dat eruit moet springen. kernboodschap: de boodschap van het blok als korte stelling, bijvoorbeeld \"Nog 312 stoelen te koop\"; in een deck de titel van de slide, in een rapport een kop boven het blok.",
+  properties: {
+    grootte: { type: "string", enum: ["half", "heel", "groot"] },
+    achtergrond: { type: "string", enum: ["wit", "grijs", "rood", "zwart"] },
+    nadruk: { type: "string" },
+    kernboodschap: { type: "string" },
+  },
+};
+
 const BLOK_SCHEMA = {
   type: "object",
   description:
-    "Eén blok. Velden per type: kop {tekst}; tekst {tekst, met **vet** en regels die met \"- \" beginnen}; kerngetallen {items: [{label, waarde, toelichting?}] (1-6), bron}; tabel {titel?, kolommen (1-8), rijen (lijsten met evenveel cellen als kolommen, hooguit 40), bron}; grafiek {titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden (getallen, evenveel als labels)}] (1-4), eenheid?, bron}; conclusie {punten (1-6)}. bron is verplicht bij kerngetallen, tabel en grafiek: de bron en de periode, bijvoorbeeld \"Google Analytics psv.nl, 1 t/m 30 oktober 2026\".",
+    "Eén blok. Velden per type: kop {tekst}; tekst {tekst, met **vet** en regels die met \"- \" beginnen}; kerngetallen {items: [{label, waarde, toelichting?}] (1-6), bron}; tabel {titel?, kolommen (1-8), rijen (lijsten met evenveel cellen als kolommen, hooguit 40), bron}; grafiek {titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden (getallen, evenveel als labels)}] (1-4), eenheid?, bron}; conclusie {punten (1-6)}. bron is verplicht bij kerngetallen, tabel en grafiek: de bron en de periode, bijvoorbeeld \"Google Analytics psv.nl, 1 t/m 30 oktober 2026\". Elk blok kan opmaak hebben.",
   properties: {
+    opmaak: OPMAAK_SCHEMA,
     type: { type: "string", enum: ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie"] },
     tekst: { type: "string" },
     titel: { type: "string" },
@@ -105,11 +118,16 @@ export function stukTools({
       page: "/dashboard/assistent",
       geenBron: true,
       description:
-        "Maakt het stuk bij dit gesprek: een rapport of een one-pager, opgebouwd uit blokken. Is er al een stuk, dan vervangt dit de hele inhoud (de vorige versie blijft bewaard). Gebruik dit alleen als de collega om een rapport, one-pager of iets om te delen vraagt. Voor kleine aanpassingen: stuk_bijwerken.",
+        "Maakt het stuk bij dit gesprek: een rapport of een slide deck, opgebouwd uit blokken. Is er al een stuk, dan vervangt dit de hele inhoud (de vorige versie blijft bewaard). Gebruik dit alleen als de collega om een rapport, one-pager, presentatie, deck of iets om te delen vraagt. Voor kleine aanpassingen: stuk_bijwerken.",
       inputSchema: {
         type: "object",
         properties: {
-          soort: { type: "string", enum: ["rapport", "onepager"], description: "rapport: een langere pagina. onepager: hooguit 8 blokken op één pagina." },
+          soort: {
+            type: "string",
+            enum: ["rapport", "deck"],
+            description:
+              "rapport: een pagina; een one-pager is een kort rapport met halve blokken naast elkaar. deck: dezelfde blokken op slides (16:9); een kop wordt het hoofdstuk boven de slides erna, elk ander blok een slide.",
+          },
           titel: { type: "string" },
           ondertitel: { type: "string" },
           blokken: { type: "array", items: BLOK_SCHEMA },
@@ -140,7 +158,7 @@ export function stukTools({
       page: "/dashboard/assistent",
       geenBron: true,
       description:
-        'Past het stuk bij dit gesprek aan, zonder de rest opnieuw te maken. acties is een lijst van: {actie: "toevoegen", blok, na?: blok-id of "begin"}, {actie: "wijzigen", blok_id, blok} (vervangt dat blok), {actie: "verwijderen", blok_id}, {actie: "verplaatsen", blok_id, na: blok-id of "begin"}. Met titel, ondertitel of soort verander je die. Alles of niets: klopt één actie niet, dan verandert er niets.',
+        'Past het stuk bij dit gesprek aan, zonder de rest opnieuw te maken. acties is een lijst van: {actie: "toevoegen", blok, na?: blok-id of "begin"}, {actie: "wijzigen", blok_id, blok} (vervangt de inhoud; zonder opmaak blijft de opmaak staan), {actie: "opmaken", blok_id, opmaak} (alleen de vorm: grootte, achtergrond, nadruk, kernboodschap; null of "" haalt een veld weg), {actie: "verwijderen", blok_id}, {actie: "verplaatsen", blok_id, na: blok-id of "begin"}. Met titel, ondertitel of soort verander je die; soort "deck" zet hetzelfde stuk op slides. Alles of niets: klopt één actie niet, dan verandert er niets.',
       inputSchema: {
         type: "object",
         properties: {
@@ -149,17 +167,18 @@ export function stukTools({
             items: {
               type: "object",
               properties: {
-                actie: { type: "string", enum: ["toevoegen", "wijzigen", "verwijderen", "verplaatsen"] },
+                actie: { type: "string", enum: ["toevoegen", "wijzigen", "opmaken", "verwijderen", "verplaatsen"] },
                 blok_id: { type: "string" },
                 na: { type: "string" },
                 blok: BLOK_SCHEMA,
+                opmaak: OPMAAK_SCHEMA,
               },
               required: ["actie"],
             },
           },
           titel: { type: "string" },
           ondertitel: { type: "string" },
-          soort: { type: "string", enum: ["rapport", "onepager"] },
+          soort: { type: "string", enum: ["rapport", "deck"] },
         },
       },
       lees: alsObject,

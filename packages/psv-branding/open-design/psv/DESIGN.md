@@ -117,6 +117,30 @@ Spatiëring tussen letters: koppen `0` (`--tracking-display`), knoppen `0.03em`,
 - Beweging: overgangen 300ms (`--motion-base`) of 150ms (`--motion-fast`), altijd ease-out. Kleurwissel bij hover, geen schaal- of stuitereffecten.
 - Respecteer `prefers-reduced-motion`: zet overgangen en animaties dan uit op de elementen die bewegen.
 
+## Grafieken en data
+
+- **Eén reeks springt eruit.** De reeks waar het om gaat is PSV-rood (op een rood vlak: wit), de andere reeksen zijn neutraal in deze volgorde: `#09101d`, `#666666`, `#999999`. Zonder duidelijke hoofdreeks: rood, `#09101d`, goud `#bb9753`, `#999999`.
+- In een lijngrafiek is de uitgelichte lijn dikker (5px op een slide, 3,5px op een pagina) dan de rest (2–2,5px).
+- Op zwart: rood, wit, `#999999`, goud. Op rood: wit, zwart, `#fbc9ca`, `#333333`.
+- Y-as vanaf nul met ronde stappen (1, 2, 2,5 of 5 × 10ⁿ), getallen met een punt als duizendtal (`2.887`). Rasterlijnen licht en gestippeld, geen verticale lijnen.
+- Legenda in de volgorde van de reeksen, niet op alfabet.
+- In een tabel: de uitgelichte rij als rood vlak met witte, vette tekst; getallen rechts uitgelijnd met `tabular-nums`.
+- Onder elke grafiek, tabel of set kerngetallen een bronregel: "Bron: …" met bron en periode, 11–12px in `#666666`.
+
+## Slide decks
+
+Formaat 1280 × 720 (16:9). Marges 72px opzij, 52px boven; onderaan een voetregel van 36px met de titel links en het slidenummer (`02`) rechts in PSV Condensed.
+
+Opbouw:
+1. **Titelslide**: zwart vlak met rechts de rode schuine wig (`#e82026`, daarachter `#9c1006`), een rode tag, de titel in PSV Condensed 80px met regelafstand 0,9, de ondertitel 20px in `#eeeeee`.
+2. **In cijfers**: het belangrijkste kerngetal groot (120px) op een zwart tegel met rode bovenrand, de rest als tegels op `#f5f5f5` met zwarte bovenrand van 4px.
+3. **Conclusie** op een rood vlak: genummerde punten (`01`, `02`) in PSV Condensed, tekst 21–24px wit.
+4. **Eén boodschap per slide**. De titel is een stelling ("Nog 312 stoelen te koop"), geen onderwerp ("Aanbod per dag"). Daarboven het hoofdstuk klein in rood, daaronder het rode streepje van 48 × 4px.
+5. Twee halve blokken mogen naast elkaar op één slide, bijvoorbeeld een tabel met een zwart tekstvlak ernaast.
+6. **Bronnen** op een zwarte slide aan het eind.
+
+Hooguit 12 slides. Tabellen op een slide hooguit 12 rijen; bij meer wordt de tekst kleiner, dus liever inkorten.
+
 ## Toegankelijkheid
 
 Gecontroleerde contrasten (WCAG):

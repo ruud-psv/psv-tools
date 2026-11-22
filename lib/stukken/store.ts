@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { del, get, list, put } from "@vercel/blob";
 
-import type { Stuk, StukInhoud } from "./model";
+import { normaliseer, type Stuk, type StukInhoud } from "./model";
 
 /**
  * De opslag van stukken in Vercel Blob.
@@ -77,7 +77,8 @@ async function schrijf(pathname: string, data: unknown): Promise<void> {
 
 export async function getStuk(email: string, id: string): Promise<Stuk | null> {
   if (!isStukId(id)) return null;
-  return lees<Stuk>(stukPad(email, id));
+  const stuk = await lees<Stuk>(stukPad(email, id));
+  return stuk && normaliseer(stuk);
 }
 
 export async function saveStuk(stuk: Stuk): Promise<void> {
@@ -100,12 +101,14 @@ export async function listStukken(email: string): Promise<StukSamenvatting[]> {
   const stukken = await Promise.all(recent.map((b) => lees<Stuk>(b.pathname).catch(() => null)));
   return stukken
     .filter((s): s is Stuk => Boolean(s))
+    .map(normaliseer)
     .map((s) => ({ id: s.id, titel: s.titel, soort: s.soort, versie: s.versie, updatedAt: s.updatedAt, gedeeld: Boolean(s.deellink) }));
 }
 
 export async function getDeelRecord(id: string): Promise<DeelRecord | null> {
   if (!ID.test(id)) return null;
-  return lees<DeelRecord>(`${DELEN}${id}.json`);
+  const record = await lees<DeelRecord>(`${DELEN}${id}.json`);
+  return record && { ...record, stuk: normaliseer(record.stuk) };
 }
 
 export async function saveDeelRecord(record: DeelRecord): Promise<void> {

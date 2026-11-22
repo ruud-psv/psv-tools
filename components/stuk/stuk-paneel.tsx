@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { Check, Link2, Loader2, Pencil, Printer, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { CopyField } from "@/components/copy-field";
-import { StukWeergave, formatDag } from "@/components/stuk/stuk-weergave";
+import { formatDag } from "@/components/stuk/stuk-weergave";
+import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
 import { StukBewerker } from "@/components/stuk/stuk-bewerker";
 import { cn } from "@/lib/utils";
-import { STUK_SOORT_LABEL, type Stuk } from "@/lib/stukken/model";
+import { STUK_SOORTEN, STUK_SOORT_LABEL, type Stuk, type StukSoort } from "@/lib/stukken/model";
 
 /**
  * Het stuk naast de chat: het voorbeeld, zelf bewerken, een stap terug,
@@ -168,6 +168,27 @@ export function StukPaneel({
   useEffect(() => setDelen(Boolean(stuk.deellink)), [stuk.id, stuk.deellink]);
   useEffect(() => setBewerken(false), [stuk.id]);
 
+  /** Hetzelfde stuk als rapport of als deck: alleen de soort verandert, de blokken blijven. */
+  async function zetSoort(soort: StukSoort) {
+    if (soort === stuk.soort) return;
+    setFout(null);
+    setBezig(true);
+    try {
+      const res = await fetch(`/api/assistent/stukken/${stuk.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ basisVersie: stuk.versie, soort }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.stuk) onStuk(data.stuk as Stuk);
+      if (!res.ok) setFout(data.error ?? "Omzetten is mislukt.");
+    } catch {
+      setFout("Omzetten is mislukt. Probeer het opnieuw.");
+    } finally {
+      setBezig(false);
+    }
+  }
+
   async function terug() {
     setFout(null);
     setBezig(true);
@@ -183,7 +204,25 @@ export function StukPaneel({
   return (
     <section className={cn("flex min-h-0 flex-col bg-card", className)} aria-label="Stuk">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-        <Badge variant="secondary">{STUK_SOORT_LABEL[stuk.soort]}</Badge>
+        <div role="radiogroup" aria-label="Soort stuk" className="flex rounded-md border border-border p-0.5">
+          {STUK_SOORTEN.map((soort) => (
+            <button
+              key={soort}
+              type="button"
+              role="radio"
+              aria-checked={stuk.soort === soort}
+              disabled={bezig || uitgeschakeld}
+              onClick={() => zetSoort(soort)}
+              title={uitgeschakeld ? "Wacht tot de assistent klaar is" : `Bekijk als ${STUK_SOORT_LABEL[soort].toLowerCase()}`}
+              className={cn(
+                "rounded px-2 py-0.5 font-heading text-xs uppercase tracking-wide transition-colors disabled:opacity-50",
+                stuk.soort === soort ? "bg-psv-red-primary text-white" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {STUK_SOORT_LABEL[soort]}
+            </button>
+          ))}
+        </div>
         <span className="text-xs text-muted-foreground">Versie {stuk.versie}</span>
         <div className="ml-auto flex items-center gap-1">
           <Button
@@ -227,9 +266,9 @@ export function StukPaneel({
           <StukBewerker stuk={stuk} onStuk={onStuk} />
         ) : (
           <>
-            <StukWeergave stuk={stuk} peildatum={stuk.peildatum} />
+            <StukVoorbeeld stuk={stuk} peildatum={stuk.peildatum} />
             <p className="mt-6 text-center text-xs text-muted-foreground">
-              Aanpassen? Klik op Bewerken, of vraag het in de chat, bijvoorbeeld &quot;maak de titel korter&quot;.
+              Aanpassen? Klik op Bewerken, of vraag het in de chat, bijvoorbeeld &quot;maak de grafiek groter&quot; of &quot;zet de conclusie op zwart&quot;.
             </p>
           </>
         )}

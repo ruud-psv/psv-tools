@@ -1,13 +1,24 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Paintbrush, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { BlokWeergave, formatDag } from "@/components/stuk/stuk-weergave";
+import { RapportBlok, formatDag } from "@/components/stuk/stuk-weergave";
 import { cn } from "@/lib/utils";
-import { LIMIETEN, STUK_SOORT_LABEL, type Blok, type BlokInhoud, type BlokType, type Stuk, type StukSoort } from "@/lib/stukken/model";
+import {
+  LIMIETEN,
+  STUK_SOORT_LABEL,
+  nadrukKeuzes,
+  type Achtergrond,
+  type Blok,
+  type BlokInhoud,
+  type BlokType,
+  type Grootte,
+  type Stuk,
+  type StukSoort,
+} from "@/lib/stukken/model";
 import { NIEUW_BLOK_LABEL, leesGetal, nieuwBlok, toonGetal } from "@/lib/stukken/bewerken";
 
 /**
@@ -22,10 +33,96 @@ const VELD_LABEL = "font-heading text-[11px] uppercase tracking-wide text-muted-
 
 type Bewerking = { acties?: unknown[]; titel?: string; ondertitel?: string; soort?: StukSoort };
 
+/** De inhoud zonder id en opmaak: de opmaak blijft bij "wijzigen" staan en verander je met "opmaken". */
 function zonderId(blok: Blok): BlokInhoud {
-  const { id, ...inhoud } = blok;
+  const { id, opmaak, ...inhoud } = blok;
   void id;
+  void opmaak;
   return inhoud as BlokInhoud;
+}
+
+const GROOTTE_LABEL: Record<Grootte, string> = { half: "Half (naast elkaar)", heel: "Heel", groot: "Groot" };
+const ACHTERGROND_LABEL: Record<Achtergrond, string> = { wit: "Wit", grijs: "Grijs", rood: "Rood", zwart: "Zwart" };
+
+/** De vorm van een blok: grootte, achtergrond, nadruk en kernboodschap. */
+function OpmaakEditor({
+  blok,
+  soort,
+  bezig,
+  onOpslaan,
+  onAnnuleer,
+}: {
+  blok: Blok;
+  soort: StukSoort;
+  bezig: boolean;
+  onOpslaan: (opmaak: Record<string, string | null>) => void;
+  onAnnuleer: () => void;
+}) {
+  const [grootte, setGrootte] = useState(blok.opmaak?.grootte ?? "");
+  const [achtergrond, setAchtergrond] = useState(blok.opmaak?.achtergrond ?? "");
+  const [nadruk, setNadruk] = useState(blok.opmaak?.nadruk ?? "");
+  const [kernboodschap, setKernboodschap] = useState(blok.opmaak?.kernboodschap ?? "");
+  const keuzes = nadrukKeuzes(blok);
+  const deck = soort === "deck";
+  return (
+    <div className="space-y-3 rounded-md border border-psv-red-primary bg-card p-3">
+      <p className={VELD_LABEL}>Opmaak van dit blok</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block space-y-1">
+          <span className={VELD_LABEL}>Grootte</span>
+          <select value={grootte} onChange={(e) => setGrootte(e.target.value as Grootte)} className={cn(SELECT, "w-full")}>
+            <option value="">Standaard</option>
+            {(Object.keys(GROOTTE_LABEL) as Grootte[]).map((g) => (
+              <option key={g} value={g}>
+                {GROOTTE_LABEL[g]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block space-y-1">
+          <span className={VELD_LABEL}>{deck ? "Achtergrond van de slide" : "Achtergrond"}</span>
+          <select value={achtergrond} onChange={(e) => setAchtergrond(e.target.value as Achtergrond)} className={cn(SELECT, "w-full")}>
+            <option value="">Standaard</option>
+            {(Object.keys(ACHTERGROND_LABEL) as Achtergrond[]).map((a) => (
+              <option key={a} value={a}>
+                {ACHTERGROND_LABEL[a]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {keuzes.length > 0 && (
+          <label className="block space-y-1 sm:col-span-2">
+            <span className={VELD_LABEL}>Uitlichten</span>
+            <select value={nadruk} onChange={(e) => setNadruk(e.target.value)} className={cn(SELECT, "w-full")}>
+              <option value="">Niets</option>
+              {keuzes.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {blok.type !== "kop" && (
+          <label className="block space-y-1 sm:col-span-2">
+            <span className={VELD_LABEL}>{deck ? "Kernboodschap (titel van de slide)" : "Kernboodschap (kop boven het blok)"}</span>
+            <Input
+              value={kernboodschap}
+              maxLength={LIMIETEN.kernboodschap}
+              placeholder="Bijvoorbeeld: Nog 312 stoelen te koop"
+              onChange={(e) => setKernboodschap(e.target.value)}
+            />
+          </label>
+        )}
+      </div>
+      {deck && grootte === "half" && <p className="form-hint">Twee halve blokken na elkaar komen samen op één slide.</p>}
+      <Opslaan
+        bezig={bezig}
+        onAnnuleer={onAnnuleer}
+        onOpslaan={() => onOpslaan({ grootte: grootte || null, achtergrond: achtergrond || null, nadruk: nadruk || null, kernboodschap: kernboodschap.trim() || null })}
+      />
+    </div>
+  );
 }
 
 function IconKnop({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
@@ -373,6 +470,8 @@ function Toevoegen({ uit, onKies }: { uit: boolean; onKies: (type: BlokType) => 
 
 export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk) => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  /** Open de opmaak van dit blok in plaats van de inhoud. */
+  const [opmaakOpen, setOpmaakOpen] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [titel, setTitel] = useState(stuk.titel);
@@ -397,6 +496,7 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
       if (res.status === 409 && data.stuk) {
         onStuk(data.stuk);
         setOpen(null);
+        setOpmaakOpen(null);
         setFout(data.error);
         return null;
       }
@@ -432,7 +532,7 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
     bewaar({ acties: [{ actie: "verwijderen", blok_id: blok.id }] }).then(() => setOpen((o) => (o === blok.id ? null : o)));
   }
 
-  const druk = bezig || open !== null;
+  const druk = bezig || open !== null || opmaakOpen !== null;
 
   return (
     <article className="mx-auto w-full max-w-3xl">
@@ -478,7 +578,15 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
       <Toevoegen uit={druk} onKies={(type) => voegToe(type, "begin")} />
       {stuk.blokken.map((blok, i) => (
         <div key={blok.id}>
-          {open === blok.id ? (
+          {opmaakOpen === blok.id ? (
+            <OpmaakEditor
+              blok={blok}
+              soort={stuk.soort}
+              bezig={bezig}
+              onAnnuleer={() => setOpmaakOpen(null)}
+              onOpslaan={(opmaak) => bewaar({ acties: [{ actie: "opmaken", blok_id: blok.id, opmaak }] }).then((nieuw) => nieuw && setOpmaakOpen(null))}
+            />
+          ) : open === blok.id ? (
             <BlokEditor
               blok={blok}
               bezig={bezig}
@@ -493,6 +601,9 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
                 </IconKnop>
                 <IconKnop label="Omlaag" disabled={druk || i === stuk.blokken.length - 1} onClick={() => verplaats(i, 1)}>
                   <ArrowDown className="h-4 w-4" />
+                </IconKnop>
+                <IconKnop label="Opmaak" disabled={druk} onClick={() => setOpmaakOpen(blok.id)}>
+                  <Paintbrush className="h-4 w-4" />
                 </IconKnop>
                 <IconKnop label="Bewerken" disabled={druk} onClick={() => setOpen(blok.id)}>
                   <Pencil className="h-4 w-4" />
@@ -509,7 +620,7 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !druk && (e.preventDefault(), setOpen(blok.id))}
                 className={cn("rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring", !druk && "cursor-text")}
               >
-                <BlokWeergave blok={blok} />
+                <RapportBlok blok={blok} />
               </div>
             </div>
           )}
@@ -517,7 +628,8 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
         </div>
       ))}
       <p className="mt-4 text-xs text-muted-foreground">
-        Klik op een blok om het aan te passen. Elke wijziging wordt een nieuwe versie; met Vorige ga je terug. Cijfers die je zelf
+        Klik op een blok om het aan te passen, of op het penseel voor de vorm: grootte, achtergrond, wat eruit springt en de
+        kernboodschap. Elke wijziging wordt een nieuwe versie; met Vorige ga je terug. Cijfers die je zelf
         aanpast, worden niet tegen de bron gecontroleerd.
       </p>
     </article>

@@ -5,7 +5,7 @@ import { verifySession } from "@/lib/auth";
 import { getStuk } from "@/lib/stukken/store";
 import { AfdrukKnop } from "@/components/stuk/afdruk-knop";
 import { StukMelding } from "@/components/stuk/stuk-melding";
-import { StukWeergave } from "@/components/stuk/stuk-weergave";
+import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
 
 /**
  * Het stuk op een eigen pagina, zonder de rest van PSV Tools eromheen, om af
@@ -40,13 +40,13 @@ export default async function StukPage({ params }: { params: Promise<{ id: strin
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-8 print:p-0">
-      <div className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 print:hidden">
+      <div className="mx-auto mb-4 flex max-w-5xl items-center justify-between gap-3 print:hidden">
         <Link href="/dashboard/assistent" className="text-sm text-muted-foreground hover:text-foreground">
           ← Terug naar de assistent
         </Link>
         <AfdrukKnop />
       </div>
-      <StukWeergave stuk={stuk} peildatum={stuk.peildatum} />
+      <StukVoorbeeld stuk={stuk} peildatum={stuk.peildatum} />
     </main>
   );
 }

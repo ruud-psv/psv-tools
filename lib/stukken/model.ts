@@ -1,5 +1,5 @@
 /**
- * Stukken: een rapport of one-pager die de assistent maakt op basis van een
+ * Stukken: een rapport of slide deck dat de assistent maakt op basis van een
  * gesprek. Een stuk bestaat uit vaste blokken (geen vrije HTML), zodat het
  * altijd in de PSV-huisstijl staat, er op een gedeelde link geen code van het
  * model draait, en één blok kan worden aangepast zonder de rest.
@@ -9,12 +9,40 @@
  * `lib/assistent/stukken-tools.ts`. Zie `docs/stukken.md`.
  */
 
-export type StukSoort = "rapport" | "onepager";
+/**
+ * Een rapport is een pagina (ook als one-pager: dat is een kort rapport met
+ * halve blokken naast elkaar). Een deck zet dezelfde blokken op slides.
+ * Oude stukken met soort "onepager" worden bij het lezen een rapport.
+ */
+export type StukSoort = "rapport" | "deck";
 
 export const STUK_SOORT_LABEL: Record<StukSoort, string> = {
   rapport: "Rapport",
-  onepager: "One-pager",
+  deck: "Slide deck",
 };
+
+export const STUK_SOORTEN = Object.keys(STUK_SOORT_LABEL) as StukSoort[];
+
+/** Hoe breed een blok is: half (naast een ander half blok), heel, of groot (meer ruimte, grotere grafiek). */
+export type Grootte = "half" | "heel" | "groot";
+export const GROOTTES: Grootte[] = ["half", "heel", "groot"];
+
+/** De achtergrond van een blok (rapport) of slide (deck), alleen huisstijlkleuren. */
+export type Achtergrond = "wit" | "grijs" | "rood" | "zwart";
+export const ACHTERGRONDEN: Achtergrond[] = ["wit", "grijs", "rood", "zwart"];
+
+/**
+ * De vorm van een blok, los van de inhoud. Alles is optioneel; zonder opmaak
+ * kiest de weergave zelf.
+ */
+export interface Opmaak {
+  grootte?: Grootte;
+  achtergrond?: Achtergrond;
+  /** De reeks (grafiek), rij (tabel, op de eerste cel) of het kerngetal (op label) dat eruit springt. */
+  nadruk?: string;
+  /** Wat de lezer moet onthouden, als stelling: de titel van de slide, of een kop boven het blok. */
+  kernboodschap?: string;
+}
 
 export interface Kerngetal {
   label: string;
@@ -29,13 +57,14 @@ export interface Reeks {
 }
 
 /** De blokken. `bron` is verplicht bij alles met cijfers: waar komen ze vandaan. */
-export type BlokInhoud =
+export type BlokInhoud = (
   | { type: "kop"; tekst: string }
   | { type: "tekst"; tekst: string }
   | { type: "kerngetallen"; items: Kerngetal[]; bron: string }
   | { type: "tabel"; titel?: string; kolommen: string[]; rijen: string[][]; bron: string }
   | { type: "grafiek"; titel: string; soort: "lijn" | "staaf"; labels: string[]; reeksen: Reeks[]; eenheid?: string; bron: string }
-  | { type: "conclusie"; punten: string[] };
+  | { type: "conclusie"; punten: string[] }
+) & { opmaak?: Opmaak };
 
 export type BlokType = BlokInhoud["type"];
 export type Blok = BlokInhoud & { id: string };
@@ -77,8 +106,8 @@ export const LIMIETEN = {
   kop: 120,
   tekst: 4_000,
   bron: 200,
-  blokkenRapport: 40,
-  blokkenOnepager: 8,
+  blokken: 40,
+  kernboodschap: 120,
   kerngetallen: 6,
   kolommen: 8,
   rijen: 40,
@@ -121,8 +150,68 @@ function lijst(waarde: unknown, waar: string, min: number, max: number): unknown
 
 const BLOKTYPES: BlokType[] = ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie"];
 
+/** De namen waarop `nadruk` kan wijzen, per bloktype; leeg = geen nadruk mogelijk. */
+export function nadrukKeuzes(blok: BlokInhoud): string[] {
+  switch (blok.type) {
+    case "grafiek":
+      return blok.reeksen.map((r) => r.naam);
+    case "tabel":
+      return blok.rijen.map((r) => r[0]).filter(Boolean);
+    case "kerngetallen":
+      return blok.items.map((k) => k.label);
+    default:
+      return [];
+  }
+}
+
+function keuze<T extends string>(waarde: unknown, opties: T[], waar: string): T | undefined {
+  if (waarde === undefined || waarde === null || waarde === "") return undefined;
+  if (typeof waarde === "string" && (opties as string[]).includes(waarde)) return waarde as T;
+  throw new StukFout(`${waar} moet ${opties.map((o) => `"${o}"`).join(", ")} zijn.`);
+}
+
+/**
+ * Controleert de opmaak van een blok. `streng`: een nadruk die niet bestaat
+ * is een fout (wat het model of de collega aanlevert); anders valt hij weg
+ * (opmaak die bleef staan terwijl de inhoud veranderde).
+ */
+export function leesOpmaak(raw: unknown, blok: BlokInhoud, waar = "Opmaak", streng = true): Opmaak | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const o = object(raw, waar);
+  const grootte = keuze(o.grootte, GROOTTES, `${waar}: grootte`);
+  const achtergrond = keuze(o.achtergrond, ACHTERGRONDEN, `${waar}: achtergrond`);
+  const kernboodschap = tekst(o.kernboodschap, `${waar}: kernboodschap`, LIMIETEN.kernboodschap, false);
+  let nadruk = tekst(o.nadruk, `${waar}: nadruk`, LIMIETEN.cel, false);
+  if (nadruk) {
+    const keuzes = nadrukKeuzes(blok);
+    if (!keuzes.includes(nadruk)) {
+      if (streng) {
+        throw new StukFout(
+          keuzes.length
+            ? `${waar}: nadruk "${nadruk}" bestaat niet in dit blok. Kies uit: ${keuzes.join(", ")}.`
+            : `${waar}: een ${blok.type}-blok heeft geen nadruk.`
+        );
+      }
+      nadruk = undefined;
+    }
+  }
+  const opmaak: Opmaak = {
+    ...(grootte && { grootte }),
+    ...(achtergrond && { achtergrond }),
+    ...(nadruk && { nadruk }),
+    ...(kernboodschap && { kernboodschap }),
+  };
+  return Object.keys(opmaak).length ? opmaak : undefined;
+}
+
 /** Controleert één blok zoals het model het aanlevert, en maakt het schoon. */
 export function leesBlok(raw: unknown, waar = "Blok"): BlokInhoud {
+  const inhoud = leesInhoud(raw, waar);
+  const opmaak = leesOpmaak((raw as Record<string, unknown>).opmaak, inhoud, `${waar}: opmaak`);
+  return opmaak ? { ...inhoud, opmaak } : inhoud;
+}
+
+function leesInhoud(raw: unknown, waar: string): BlokInhoud {
   const b = object(raw, waar);
   const type = b.type as BlokType;
   if (!BLOKTYPES.includes(type)) throw new StukFout(`${waar}: onbekend type "${String(b.type)}". Kies uit ${BLOKTYPES.join(", ")}.`);
@@ -182,23 +271,25 @@ export function leesBlok(raw: unknown, waar = "Blok"): BlokInhoud {
   }
 }
 
-function maxBlokken(soort: StukSoort): number {
-  return soort === "onepager" ? LIMIETEN.blokkenOnepager : LIMIETEN.blokkenRapport;
-}
-
-function controleerAantal(soort: StukSoort, aantal: number) {
-  if (aantal > maxBlokken(soort)) {
-    throw new StukFout(
-      soort === "onepager"
-        ? `Een one-pager heeft hooguit ${LIMIETEN.blokkenOnepager} blokken (nu ${aantal}). Houd hem kort, of maak er een rapport van.`
-        : `Een rapport heeft hooguit ${LIMIETEN.blokkenRapport} blokken (nu ${aantal}).`
-    );
-  }
+function controleerAantal(aantal: number) {
+  if (aantal > LIMIETEN.blokken) throw new StukFout(`Een stuk heeft hooguit ${LIMIETEN.blokken} blokken (nu ${aantal}).`);
 }
 
 function leesSoort(waarde: unknown): StukSoort {
-  if (waarde === "rapport" || waarde === "onepager") return waarde;
-  throw new StukFout('De soort moet "rapport" of "onepager" zijn.');
+  if (waarde === "rapport" || waarde === "deck") return waarde;
+  // Een one-pager is een kort rapport (zo heette het eerder).
+  if (waarde === "onepager") return "rapport";
+  throw new StukFout('De soort moet "rapport" of "deck" zijn.');
+}
+
+/** Een opgeslagen stuk zoals het nu hoort: oude one-pagers worden een rapport. */
+export function normaliseer<T extends { soort: string; vorige?: { soort: string }[] }>(stuk: T): T {
+  const soort = (s: string) => (s === "deck" ? "deck" : "rapport");
+  return {
+    ...stuk,
+    soort: soort(stuk.soort),
+    ...(stuk.vorige && { vorige: stuk.vorige.map((v) => ({ ...v, soort: soort(v.soort) })) }),
+  };
 }
 
 /** Het volgende vrije blok-id: b1, b2, …, uniek binnen het stuk. */
@@ -213,8 +304,8 @@ function volgendId(blokken: Blok[], gebruikt: Set<string>): string {
 export function nieuweInhoud(invoer: unknown): StukInhoud {
   const raw = object(invoer, "Het stuk");
   const soort = leesSoort(raw.soort);
-  const blokkenRaw = lijst(raw.blokken, "blokken", 1, LIMIETEN.blokkenRapport);
-  controleerAantal(soort, blokkenRaw.length);
+  const blokkenRaw = lijst(raw.blokken, "blokken", 1, LIMIETEN.blokken);
+  controleerAantal(blokkenRaw.length);
   const ondertitel = tekst(raw.ondertitel, "De ondertitel", LIMIETEN.ondertitel, false);
   const blokken = blokkenRaw.map((b, i) => ({ ...leesBlok(b, `Blok ${i + 1}`), id: `b${i + 1}` }));
   return { soort, titel: tekst(raw.titel, "De titel", LIMIETEN.titel)!, ...(ondertitel && { ondertitel }), blokken };
@@ -224,7 +315,8 @@ export type Actie =
   | { actie: "toevoegen"; blok: unknown; na?: string }
   | { actie: "wijzigen"; blok_id: string; blok: unknown }
   | { actie: "verwijderen"; blok_id: string }
-  | { actie: "verplaatsen"; blok_id: string; na: string };
+  | { actie: "verplaatsen"; blok_id: string; na: string }
+  | { actie: "opmaken"; blok_id: string; opmaak: Partial<Record<keyof Opmaak, string | null>> };
 
 /**
  * Past bewerkingen toe op de inhoud, allemaal of geen: klopt er één niet,
@@ -259,7 +351,28 @@ export function pasToe(inhoud: StukInhoud, invoer: unknown): StukInhoud {
       }
       case "wijzigen": {
         const i = index(actie.blok_id, waar);
-        blokken[i] = { ...leesBlok(actie.blok, waar), id: blokken[i].id };
+        const nieuw: Blok = { ...leesBlok(actie.blok, waar), id: blokken[i].id };
+        // Zonder opmaak in het nieuwe blok blijft de vorige opmaak staan, voor zover die nog past.
+        const rawBlok = actie.blok as Record<string, unknown>;
+        if (rawBlok.opmaak === undefined && blokken[i].opmaak) {
+          const behouden = leesOpmaak(blokken[i].opmaak, nieuw, waar, false);
+          if (behouden) nieuw.opmaak = behouden;
+        }
+        blokken[i] = nieuw;
+        break;
+      }
+      case "opmaken": {
+        const i = index(actie.blok_id, waar);
+        const wijziging = object(actie.opmaak, `${waar}: opmaak`);
+        const samen: Record<string, unknown> = { ...blokken[i].opmaak };
+        for (const [sleutel, waarde] of Object.entries(wijziging)) {
+          if (waarde === null || waarde === "") delete samen[sleutel];
+          else samen[sleutel] = waarde;
+        }
+        const { opmaak: _oud, ...zonder } = blokken[i];
+        void _oud;
+        const opmaak = leesOpmaak(samen, blokken[i], `${waar}: opmaak`);
+        blokken[i] = opmaak ? { ...zonder, opmaak } : (zonder as Blok);
         break;
       }
       case "verwijderen":
@@ -271,13 +384,13 @@ export function pasToe(inhoud: StukInhoud, invoer: unknown): StukInhoud {
         break;
       }
       default:
-        throw new StukFout(`${waar}: kies toevoegen, wijzigen, verwijderen of verplaatsen.`);
+        throw new StukFout(`${waar}: kies toevoegen, wijzigen, opmaken, verwijderen of verplaatsen.`);
     }
   });
 
   const soort = raw.soort === undefined ? inhoud.soort : leesSoort(raw.soort);
   if (blokken.length === 0) throw new StukFout("Een stuk heeft minstens één blok.");
-  controleerAantal(soort, blokken.length);
+  controleerAantal(blokken.length);
   const titel = raw.titel === undefined ? inhoud.titel : tekst(raw.titel, "De titel", LIMIETEN.titel)!;
   const ondertitel =
     raw.ondertitel === undefined ? inhoud.ondertitel : tekst(raw.ondertitel, "De ondertitel", LIMIETEN.ondertitel, false);
@@ -330,7 +443,10 @@ export function samenvatting(stuk: Stuk): string {
           : b.type === "kerngetallen"
             ? b.items.map((k) => k.label).join(", ")
             : `${b.punten.length} punten`;
-    return `${b.id} ${b.type}${kern ? `: ${kern}` : ""}`;
+    const opmaak = b.opmaak
+      ? ` [${[b.opmaak.grootte, b.opmaak.achtergrond, b.opmaak.nadruk && `nadruk: ${b.opmaak.nadruk}`, b.opmaak.kernboodschap && `kernboodschap: ${b.opmaak.kernboodschap}`].filter(Boolean).join(", ")}]`
+      : "";
+    return `${b.id} ${b.type}${kern ? `: ${kern}` : ""}${opmaak}`;
   });
   return `${STUK_SOORT_LABEL[stuk.soort]} "${stuk.titel}", versie ${stuk.versie}, ${stuk.blokken.length} blokken:\n${blokken.join("\n")}`;
 }
@@ -360,4 +476,64 @@ export function handmatigBewerken(stuk: Stuk, invoer: unknown, nu: string): Stuk
     if (raw[sleutel] !== undefined) bewerking[sleutel] = raw[sleutel];
   }
   return nieuweVersie(stuk, pasToe(stuk, bewerking), stuk.peildatum, nu);
+}
+
+/* ---------- Slides (deck) ---------- */
+
+export interface Slide {
+  /** De laatste kop ervoor: het hoofdstuk, klein boven de titel. */
+  sectie?: string;
+  /** De kernboodschap, of de titel van het blok, of een standaard per type. */
+  titel?: string;
+  /** Eén blok, of twee halve naast elkaar. */
+  blokken: Blok[];
+  achtergrond: Achtergrond;
+  groot: boolean;
+}
+
+function standaardTitel(blok: Blok): string | undefined {
+  switch (blok.type) {
+    case "grafiek":
+      return blok.titel;
+    case "tabel":
+      return blok.titel;
+    case "kerngetallen":
+      return "In cijfers";
+    case "conclusie":
+      return "Conclusie";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Hoe de blokken op slides komen. Een kop wordt geen slide, maar het
+ * hoofdstuk boven de slides erna. Elk ander blok krijgt een eigen slide,
+ * behalve twee halve blokken na elkaar: die delen er een. De titelslide en de
+ * bronnen voegt de weergave toe.
+ */
+export function slidesVan(stuk: Pick<StukInhoud, "blokken">): Slide[] {
+  const slides: Slide[] = [];
+  let sectie: string | undefined;
+  const blokken = stuk.blokken;
+  for (let i = 0; i < blokken.length; i++) {
+    const blok = blokken[i];
+    if (blok.type === "kop") {
+      sectie = blok.opmaak?.kernboodschap ?? blok.tekst;
+      continue;
+    }
+    const volgende = blokken[i + 1];
+    const samen = blok.opmaak?.grootte === "half" && volgende && volgende.type !== "kop" && volgende.opmaak?.grootte === "half";
+    const opSlide = samen ? [blok, volgende] : [blok];
+    if (samen) i += 1;
+    const achtergrond = blok.opmaak?.achtergrond ?? (blok.type === "conclusie" ? "rood" : "wit");
+    slides.push({
+      ...(sectie && { sectie }),
+      titel: blok.opmaak?.kernboodschap ?? (samen ? undefined : standaardTitel(blok)),
+      blokken: opSlide,
+      achtergrond,
+      groot: blok.opmaak?.grootte === "groot",
+    });
+  }
+  return slides;
 }

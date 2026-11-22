@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, Check, ChevronRight, Database, FileText, History, Loader2, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, ChevronRight, Database, FileText, History, Loader2, MessageSquarePlus, Presentation, Sparkles, Trash2, X } from "lucide-react";
 import { StukPaneel } from "@/components/stuk/stuk-paneel";
-import { STUK_SOORT_LABEL, type Stuk } from "@/lib/stukken/model";
+import { STUK_SOORT_LABEL, type Stuk, type StukSoort } from "@/lib/stukken/model";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { pakEersteVraag, SUGGESTIES } from "@/lib/assistent-start";
@@ -27,6 +27,47 @@ interface Beurt {
   content: string;
   bronnen?: Bron[];
   stappen?: GesprekStap[];
+}
+
+/**
+ * De vragen achter de knoppen "Rapport maken" en "Slide deck maken". Is er al
+ * een stuk, dan zet de knop het om naar de andere soort.
+ */
+const MAAK_VRAAG: Record<StukSoort, { nieuw: string; omzetten: string }> = {
+  rapport: {
+    nieuw: "Maak een rapport van dit gesprek.",
+    omzetten: "Zet het stuk om naar een rapport. Zet tekst en conclusie waar het past naast elkaar.",
+  },
+  deck: {
+    nieuw: "Maak een slide deck van dit gesprek.",
+    omzetten: "Zet het stuk om naar een slide deck en geef de blokken met cijfers een kernboodschap.",
+  },
+};
+
+/** Iets maken op basis van het gesprek: een rapport of een slide deck. */
+function MaakKnoppen({ stuk, uit, onVraag }: { stuk: Stuk | null; uit: boolean; onVraag: (vraag: string) => void }) {
+  const soorten: { soort: StukSoort; icoon: typeof FileText }[] = [
+    { soort: "rapport", icoon: FileText },
+    { soort: "deck", icoon: Presentation },
+  ];
+  const te = soorten.filter(({ soort }) => soort !== stuk?.soort);
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground">{stuk ? "Het stuk als" : "Maak van dit gesprek een"}</span>
+      {te.map(({ soort, icoon: Icoon }) => (
+        <button
+          key={soort}
+          type="button"
+          disabled={uit}
+          onClick={() => onVraag(stuk ? MAAK_VRAAG[soort].omzetten : MAAK_VRAAG[soort].nieuw)}
+          className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground transition-colors hover:border-psv-red-primary disabled:opacity-40"
+        >
+          <Icoon className="h-3.5 w-3.5 text-psv-red-primary" />
+          {STUK_SOORT_LABEL[soort].toLowerCase()}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** Wat de assistent heeft opgezocht, met welke invoer: uitklapbaar onder het antwoord. */
@@ -124,7 +165,7 @@ function LegeStaat({ onKies }: { onKies: (vraag: string) => void }) {
 }
 
 export function AssistentChat() {
-  /** Het stuk bij dit gesprek (rapport of one-pager), als de assistent er een maakte. */
+  /** Het stuk bij dit gesprek (rapport of slide deck), als de assistent er een maakte. */
   const [stuk, setStuk] = useState<Stuk | null>(null);
   /** Op kleinere schermen: het stuk tonen in plaats van het gesprek. */
   const [toonStuk, setToonStuk] = useState(false);
@@ -501,6 +542,7 @@ export function AssistentChat() {
 
         <div className="border-t border-border bg-background px-4 py-3 sm:px-6">
           <form onSubmit={onSubmit} className="mx-auto max-w-3xl">
+            {heeftGesprek && !laden && <MaakKnoppen stuk={stuk} uit={bezig} onVraag={stel} />}
             {fout && (
               <p className="mb-2 rounded-md border-l-4 border-l-error bg-error-bg p-3 text-sm text-foreground">
                 <span className="font-medium">Er ging iets mis:</span> {fout}

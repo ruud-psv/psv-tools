@@ -464,14 +464,65 @@
   }
 }
 
-/* Stukken (rapport, one-pager) afdrukken of als PDF opslaan: met de kleuren van de huisstijl. */
+/* Een vlak achter een blok (rapport) of slide (deck). Op rood en zwart wordt alles wit,
+   ook de shadcn-kleuren die de blokken gebruiken (randen, gedempte tekst). */
+@layer components {
+  .stuk-vlak--grijs,
+  .stuk-vlak--rood,
+  .stuk-vlak--zwart {
+    padding: var(--space-5);
+  }
+  .stuk-vlak--grijs {
+    background: var(--color-gray-07);
+    --card: 0 0% 100%;
+  }
+  .stuk-vlak--rood,
+  .stuk-vlak--zwart {
+    color: var(--color-white);
+    --foreground: 0 0% 100%;
+    --card: 0 0% 100% / 0.1;
+    --muted: 0 0% 100% / 0.12;
+    --border: 0 0% 100% / 0.35;
+  }
+  .stuk-vlak--rood {
+    background: var(--color-red-primary);
+    --muted-foreground: 0 0% 100%;
+  }
+  .stuk-vlak--zwart {
+    background: var(--color-black);
+    --muted-foreground: 0 0% 80%;
+  }
+}
+
+/* Stukken afdrukken of als PDF opslaan: met de kleuren van de huisstijl. */
 @media print {
   @page {
     margin: 14mm;
+  }
+  /* Een deck: elke slide een eigen pagina van 1280 × 720, ongeschaald. */
+  @page deck {
+    size: 1280px 720px;
+    margin: 0;
   }
   html,
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+  .deck {
+    max-width: none;
+  }
+  .deck > * + * {
+    margin-top: 0 !important;
+  }
+  .deck-pagina {
+    page: deck;
+    width: 1280px !important;
+    height: 720px;
+    box-shadow: none;
+    break-after: page;
+  }
+  .deck-schaal {
+    transform: none !important;
   }
 }
