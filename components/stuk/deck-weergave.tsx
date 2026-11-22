@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
-import { bronnenVan, slidesVan, type Achtergrond, type Blok, type Slide, type StukInhoud } from "@/lib/stukken/model";
+import { AfbeeldingPlek, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
+import { bronnenVan, isLegeAfbeelding, slidesVan, type Achtergrond, type Blok, type Slide, type StukInhoud } from "@/lib/stukken/model";
 import { Bron, Grafiek, StukWeergave, formatDag, isDonker, vlakKlasse } from "@/components/stuk/stuk-weergave";
 
 /**
@@ -173,14 +174,45 @@ function SlideBlok({ blok, slide, alleen }: { blok: Blok; slide: Slide; alleen: 
       return <SlideConclusie blok={blok} toonTitel={!alleen && !slide.titel} />;
     case "tekst":
       return <div className={cn("max-w-[1000px] space-y-3 leading-relaxed", slide.groot ? "text-[26px]" : "text-[20px]")}>{formatAnswer(blok.tekst)}</div>;
+    case "afbeelding":
+      return blok.url ? (
+        <figure className="relative flex h-full min-h-0 flex-col">
+          {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+          <img src={blok.url} alt={blok.alt ?? blok.wens} className="min-h-0 w-full flex-1 object-cover" />
+          <VervangFoto doel={blok.id} />
+          {blok.bijschrift && <figcaption className="mt-2 text-sm text-muted-foreground">{blok.bijschrift}</figcaption>}
+        </figure>
+      ) : (
+        <AfbeeldingPlek doel={blok.id} wens={blok.wens} groot />
+      );
     case "kop":
       return null;
   }
 }
 
+/** Een foto alleen op een slide: over de hele slide, met de titel eroverheen op een donker verloop. */
+function FotoSlide({ blok, slide, nummer, titel }: { blok: Extract<Blok, { type: "afbeelding" }>; slide: Slide; nummer: number; titel: string }) {
+  return (
+    <div className="relative h-full overflow-hidden bg-psv-black text-white">
+      {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+      <img src={blok.url} alt={blok.alt ?? blok.wens} className="absolute inset-0 h-full w-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+      <VervangFoto doel={blok.id} className="right-[72px] top-[40px]" />
+      <div className="absolute bottom-[72px] left-[72px] max-w-[900px]">
+        {slide.sectie && <p className="mb-2 font-heading text-sm uppercase tracking-wide">{slide.sectie}</p>}
+        {slide.titel && <h2 className="font-heading text-[52px] uppercase leading-[1]">{slide.titel}</h2>}
+        {blok.bijschrift && <p className="mt-3 text-lg text-psv-gray-07">{blok.bijschrift}</p>}
+      </div>
+      <Voet links={titel} rechts={String(nummer).padStart(2, "0")} donker />
+    </div>
+  );
+}
+
 function InhoudSlide({ slide, nummer, titel }: { slide: Slide; nummer: number; titel: string }) {
   const donker = isDonker(slide.achtergrond);
   const alleen = slide.blokken.length === 1;
+  const enige = slide.blokken[0];
+  if (alleen && enige.type === "afbeelding" && enige.url) return <FotoSlide blok={enige} slide={slide} nummer={nummer} titel={titel} />;
   return (
     <div className={cn("relative flex h-full flex-col px-[72px] pb-[60px] pt-[52px]", slide.achtergrond === "wit" ? "bg-white" : vlakKlasse(slide.achtergrond))}>
       <Titel sectie={slide.sectie} titel={slide.titel} donker={donker} />
@@ -199,6 +231,16 @@ function InhoudSlide({ slide, nummer, titel }: { slide: Slide; nummer: number; t
 function TitelSlide({ stuk, peildatum }: { stuk: StukInhoud; peildatum: string }) {
   return (
     <div className="relative h-full overflow-hidden bg-psv-black text-white">
+      {stuk.titelbeeld?.url && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+          <img src={stuk.titelbeeld.url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
+          <VervangFoto doel="titel" className="left-[72px] right-auto top-[40px]" />
+        </>
+      )}
+      {stuk.titelbeeld?.wens && !stuk.titelbeeld.url && (
+        <AfbeeldingPlek doel="titel" wens={`Titelfoto: ${stuk.titelbeeld.wens}`} className="absolute left-[72px] top-[40px] !h-auto w-[420px] border-psv-gray-10 !p-4" />
+      )}
       <div className="absolute right-0 top-0 h-full w-[46%] bg-psv-red-primary [clip-path:polygon(38%_0,100%_0,100%_100%,0_100%)]" />
       <div className="absolute right-0 top-0 h-full w-[46%] bg-psv-red-dark [clip-path:polygon(72%_0,100%_0,100%_100%,44%_100%)]" />
       <div className="absolute bottom-[110px] left-[72px] max-w-[860px]">
@@ -245,7 +287,11 @@ export function DeckWeergave({ stuk, peildatum, voetnoot, className }: { stuk: S
     return () => observer.disconnect();
   }, []);
 
-  const slides = slidesVan(stuk);
+  const acties = useAfbeeldingActies();
+  // Buiten het voorbeeld geen slides met alleen een lege plek voor een foto.
+  const slides = slidesVan(stuk)
+    .map((slide) => (acties ? slide : { ...slide, blokken: slide.blokken.filter((b) => !isLegeAfbeelding(b)) }))
+    .filter((slide) => slide.blokken.length > 0);
   const bronnen = bronnenVan(stuk);
   return (
     <div ref={ref} className={cn("deck mx-auto w-full max-w-5xl space-y-4", className)}>

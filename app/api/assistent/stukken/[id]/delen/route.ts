@@ -3,6 +3,7 @@ import { requireEmail } from "@/lib/api-session";
 import { normalizeEmail } from "@/lib/access";
 import { todayInAmsterdam } from "@/lib/ringside/seat-state";
 import { leesDeelInvoer } from "@/lib/stukken/delen";
+import { inhoudVan } from "@/lib/stukken/model";
 import { deleteDeelRecord, eigenaarHash, getStuk, nieuwDeelId, saveDeelRecord, saveStuk } from "@/lib/stukken/store";
 
 /**
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(invoer.verlooptOp && { verlooptOp: invoer.verlooptOp }),
       gedeeldOp: nu,
       gedeeldDoor: normalizeEmail(auth.email),
-      stuk: { soort: stuk.soort, titel: stuk.titel, ondertitel: stuk.ondertitel, blokken: stuk.blokken, versie: stuk.versie, peildatum: stuk.peildatum },
+      stuk: { ...inhoudVan(stuk), versie: stuk.versie, peildatum: stuk.peildatum },
     });
     const bijgewerkt = {
       ...stuk,

@@ -15,6 +15,7 @@ export const NIEUW_BLOK_LABEL: Record<BlokType, string> = {
   conclusie: "Conclusie",
   tabel: "Tabel",
   grafiek: "Grafiek",
+  afbeelding: "Afbeelding",
 };
 
 /** Een nieuw blok om mee te beginnen; de collega vult het daarna in. */
@@ -32,6 +33,8 @@ export function nieuwBlok(type: BlokType): BlokInhoud {
       return { type, kolommen: ["Kolom 1", "Kolom 2"], rijen: [["", ""]], bron: HANDMATIGE_BRON };
     case "grafiek":
       return { type, titel: "Nieuwe grafiek", soort: "staaf", labels: ["A", "B"], reeksen: [{ naam: "Reeks 1", waarden: [0, 0] }], bron: HANDMATIGE_BRON };
+    case "afbeelding":
+      return { type, wens: "Beschrijf welke foto hier moet" };
   }
 }
 

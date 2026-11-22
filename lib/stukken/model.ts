@@ -64,7 +64,18 @@ export type BlokInhoud = (
   | { type: "tabel"; titel?: string; kolommen: string[]; rijen: string[][]; bron: string }
   | { type: "grafiek"; titel: string; soort: "lijn" | "staaf"; labels: string[]; reeksen: Reeks[]; eenheid?: string; bron: string }
   | { type: "conclusie"; punten: string[] }
+  | { type: "afbeelding"; wens: string; url?: string; alt?: string; bijschrift?: string }
 ) & { opmaak?: Opmaak };
+
+/**
+ * Een foto. De assistent kiest de plek en beschrijft wat erop moet (`wens`);
+ * de collega uploadt het beeld (`url`, alleen van onze eigen Bunny-CDN, map
+ * stukken/). Zonder url is het een lege plek die alleen in het voorbeeld staat.
+ */
+export interface Afbeelding {
+  wens?: string;
+  url?: string;
+}
 
 export type BlokType = BlokInhoud["type"];
 export type Blok = BlokInhoud & { id: string };
@@ -73,7 +84,20 @@ export interface StukInhoud {
   soort: StukSoort;
   titel: string;
   ondertitel?: string;
+  /** De foto achter de titel (titelslide van een deck, kop van een rapport). */
+  titelbeeld?: Afbeelding;
   blokken: Blok[];
+}
+
+/** Alleen de inhoud van een stuk: voor versies, de deellink en het model. */
+export function inhoudVan(stuk: StukInhoud): StukInhoud {
+  return {
+    soort: stuk.soort,
+    titel: stuk.titel,
+    ...(stuk.ondertitel && { ondertitel: stuk.ondertitel }),
+    ...(stuk.titelbeeld && { titelbeeld: stuk.titelbeeld }),
+    blokken: stuk.blokken,
+  };
 }
 
 export interface Deellink {
@@ -108,6 +132,9 @@ export const LIMIETEN = {
   bron: 200,
   blokken: 40,
   kernboodschap: 120,
+  wens: 200,
+  alt: 200,
+  url: 500,
   kerngetallen: 6,
   kolommen: 8,
   rijen: 40,
@@ -148,7 +175,39 @@ function lijst(waarde: unknown, waar: string, min: number, max: number): unknown
   return waarde;
 }
 
-const BLOKTYPES: BlokType[] = ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie"];
+const BLOKTYPES: BlokType[] = ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie", "afbeelding"];
+
+/** Waar geüploade foto's voor stukken staan; alleen die mogen in een stuk. */
+export const AFBEELDING_MAP = "stukken";
+
+function cdnBasis(): string | undefined {
+  return typeof process !== "undefined" ? process.env.BUNNY_CDN_URL?.replace(/\/+$/, "") : undefined;
+}
+
+/**
+ * Een foto-adres moet van onze eigen Bunny-CDN komen, uit de map voor
+ * stukken. Zo kan niemand (ook het model niet) een beeld van een andere site
+ * op een gedeelde link zetten.
+ */
+export function leesAfbeeldingUrl(waarde: unknown, waar: string): string | undefined {
+  const url = tekst(waarde, waar, LIMIETEN.url, false);
+  if (!url) return undefined;
+  const basis = cdnBasis();
+  if (!basis) throw new StukFout(`${waar}: foto's zijn niet ingesteld (BUNNY_CDN_URL ontbreekt).`);
+  const prefix = `${basis}/${AFBEELDING_MAP}/`;
+  if (!url.startsWith(prefix) || !/^[a-z0-9._-]+$/i.test(url.slice(prefix.length))) {
+    throw new StukFout(`${waar}: alleen een foto die in PSV Tools is geüpload kan in een stuk. Laat url leeg; de collega voegt de foto toe.`);
+  }
+  return url;
+}
+
+function leesTitelbeeld(waarde: unknown): Afbeelding | undefined {
+  if (waarde === undefined || waarde === null) return undefined;
+  const o = object(waarde, "Het titelbeeld");
+  const wens = tekst(o.wens, "Het titelbeeld: wens", LIMIETEN.wens, false);
+  const url = leesAfbeeldingUrl(o.url, "Het titelbeeld: url");
+  return wens || url ? { ...(wens && { wens }), ...(url && { url }) } : undefined;
+}
 
 /** De namen waarop `nadruk` kan wijzen, per bloktype; leeg = geen nadruk mogelijk. */
 export function nadrukKeuzes(blok: BlokInhoud): string[] {
@@ -268,6 +327,18 @@ function leesInhoud(raw: unknown, waar: string): BlokInhoud {
         type,
         punten: lijst(b.punten, `${waar} (conclusie): punten`, 1, LIMIETEN.punten).map((p, i) => tekst(p, `${waar} punt ${i + 1}`, LIMIETEN.punt)!),
       };
+    case "afbeelding": {
+      const url = leesAfbeeldingUrl(b.url, `${waar} (afbeelding): url`);
+      const alt = tekst(b.alt, `${waar} (afbeelding): alt`, LIMIETEN.alt, false);
+      const bijschrift = tekst(b.bijschrift, `${waar} (afbeelding): bijschrift`, LIMIETEN.punt, false);
+      return {
+        type,
+        wens: tekst(b.wens, `${waar} (afbeelding): wens`, LIMIETEN.wens)!,
+        ...(url && { url }),
+        ...(alt && { alt }),
+        ...(bijschrift && { bijschrift }),
+      };
+    }
   }
 }
 
@@ -308,7 +379,8 @@ export function nieuweInhoud(invoer: unknown): StukInhoud {
   controleerAantal(blokkenRaw.length);
   const ondertitel = tekst(raw.ondertitel, "De ondertitel", LIMIETEN.ondertitel, false);
   const blokken = blokkenRaw.map((b, i) => ({ ...leesBlok(b, `Blok ${i + 1}`), id: `b${i + 1}` }));
-  return { soort, titel: tekst(raw.titel, "De titel", LIMIETEN.titel)!, ...(ondertitel && { ondertitel }), blokken };
+  const titelbeeld = leesTitelbeeld(raw.titelbeeld);
+  return { soort, titel: tekst(raw.titel, "De titel", LIMIETEN.titel)!, ...(ondertitel && { ondertitel }), ...(titelbeeld && { titelbeeld }), blokken };
 }
 
 export type Actie =
@@ -394,19 +466,21 @@ export function pasToe(inhoud: StukInhoud, invoer: unknown): StukInhoud {
   const titel = raw.titel === undefined ? inhoud.titel : tekst(raw.titel, "De titel", LIMIETEN.titel)!;
   const ondertitel =
     raw.ondertitel === undefined ? inhoud.ondertitel : tekst(raw.ondertitel, "De ondertitel", LIMIETEN.ondertitel, false);
+  // Titelbeeld: weglaten laat het staan, null haalt het weg.
+  const titelbeeld = raw.titelbeeld === undefined ? inhoud.titelbeeld : leesTitelbeeld(raw.titelbeeld);
   blokken = blokken.map((b) => ({ ...b }));
-  return { soort, titel, ...(ondertitel && { ondertitel }), blokken };
+  return { soort, titel, ...(ondertitel && { ondertitel }), ...(titelbeeld && { titelbeeld }), blokken };
 }
 
 /** Een nieuwe versie: de huidige gaat naar `vorige`. */
 export function nieuweVersie(stuk: Stuk, inhoud: StukInhoud, peildatum: string, nu: string): Stuk {
-  const huidig = { soort: stuk.soort, titel: stuk.titel, ondertitel: stuk.ondertitel, blokken: stuk.blokken, versie: stuk.versie, peildatum: stuk.peildatum };
+  const huidig = { ...inhoudVan(stuk), versie: stuk.versie, peildatum: stuk.peildatum };
+  const { ondertitel: _o, titelbeeld: _t, ...rest } = stuk;
+  void _o;
+  void _t;
   return {
-    ...stuk,
-    soort: inhoud.soort,
-    titel: inhoud.titel,
-    ondertitel: inhoud.ondertitel,
-    blokken: inhoud.blokken,
+    ...rest,
+    ...inhoudVan(inhoud),
     versie: stuk.versie + 1,
     peildatum,
     vorige: [huidig, ...stuk.vorige].slice(0, LIMIETEN.vorigeVersies),
@@ -422,7 +496,7 @@ export function nieuweVersie(stuk: Stuk, inhoud: StukInhoud, peildatum: string, 
 export function vorigeVersie(stuk: Stuk, nu: string): Stuk {
   const [vorige, ...rest] = stuk.vorige;
   if (!vorige) throw new StukFout("Er is geen vorige versie.");
-  const inhoud: StukInhoud = { soort: vorige.soort, titel: vorige.titel, ondertitel: vorige.ondertitel, blokken: vorige.blokken };
+  const inhoud = inhoudVan(vorige);
   return { ...nieuweVersie(stuk, inhoud, vorige.peildatum, nu), vorige: rest };
 }
 
@@ -442,7 +516,9 @@ export function samenvatting(stuk: Stuk): string {
           ? b.titel ?? ""
           : b.type === "kerngetallen"
             ? b.items.map((k) => k.label).join(", ")
-            : `${b.punten.length} punten`;
+            : b.type === "afbeelding"
+              ? `${b.wens} (${b.url ? "foto toegevoegd" : "wacht op een foto van de collega"})`
+              : `${b.punten.length} punten`;
     const opmaak = b.opmaak
       ? ` [${[b.opmaak.grootte, b.opmaak.achtergrond, b.opmaak.nadruk && `nadruk: ${b.opmaak.nadruk}`, b.opmaak.kernboodschap && `kernboodschap: ${b.opmaak.kernboodschap}`].filter(Boolean).join(", ")}]`
       : "";
@@ -472,7 +548,7 @@ export function handmatigBewerken(stuk: Stuk, invoer: unknown, nu: string): Stuk
   const raw = (invoer && typeof invoer === "object" ? invoer : {}) as Record<string, unknown>;
   if (raw.basisVersie !== stuk.versie) throw new StukConflict(stuk);
   const bewerking: Record<string, unknown> = {};
-  for (const sleutel of ["acties", "titel", "ondertitel", "soort"]) {
+  for (const sleutel of ["acties", "titel", "ondertitel", "soort", "titelbeeld"]) {
     if (raw[sleutel] !== undefined) bewerking[sleutel] = raw[sleutel];
   }
   return nieuweVersie(stuk, pasToe(stuk, bewerking), stuk.peildatum, nu);
@@ -504,6 +580,11 @@ function standaardTitel(blok: Blok): string | undefined {
     default:
       return undefined;
   }
+}
+
+/** Een afbeelding zonder foto: alleen een lege plek in het voorbeeld, niet op een deellink of afdruk. */
+export function isLegeAfbeelding(blok: Blok): boolean {
+  return blok.type === "afbeelding" && !blok.url;
 }
 
 /**

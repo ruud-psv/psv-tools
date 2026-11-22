@@ -8,7 +8,7 @@ import { ASSISTENT_TOOLS } from "@/lib/assistent/tools";
 import { mcpToolsVoor } from "@/lib/mcp/assistent";
 import { stukTools } from "@/lib/assistent/stukken-tools";
 import { maakTitel } from "@/lib/assistent/titel";
-import { samenvatting, type Stuk } from "@/lib/stukken/model";
+import { inhoudVan, samenvatting, type Stuk } from "@/lib/stukken/model";
 import { getStuk, saveStuk } from "@/lib/stukken/store";
 import { isGesprekId, nieuwGesprekId, parseBerichten, titelVan, type GesprekStap } from "@/lib/kennisbank-gesprekken";
 import { todayInAmsterdam } from "@/lib/ringside/seat-state";
@@ -59,6 +59,7 @@ Een stuk maken: vraagt de collega om een rapport, een one-pager, een presentatie
 - Zet bij elk blok met cijfers (kerngetallen, tabel, grafiek) in bron waar het vandaan komt en over welke periode, bijvoorbeeld "Google Analytics psv.nl, 1 t/m 30 oktober 2026".
 - Rapport: met kopjes per onderdeel. Een one-pager is een kort rapport: hooguit 8 blokken, begin met kerngetallen en een conclusie, en zet tekst en conclusie met grootte "half" naast elkaar.
 - Deck: begin met kerngetallen en de conclusie, en daarna één boodschap per slide. Geef elk blok met cijfers een kernboodschap: een korte stelling over wat de cijfers laten zien ("Go Ahead Eagles loopt voor op de rest"), geen beschrijving ("Verkoop per wedstrijd"). Gebruik koppen als hoofdstukken. Hooguit 12 slides.
+- Foto's: je kunt zelf geen foto kiezen of maken, maar wel een plek voor een foto neerzetten (blok afbeelding, of titelbeeld) met een korte wens van wat erop moet. De collega uploadt de foto. Doe dat bij een deck voor de titelslide als het over een wedstrijd, campagne of product gaat, en hooguit één of twee keer verder in het stuk; niet bij een puur cijfermatig rapport. Zeg in je antwoord welke foto's je hebt gevraagd. Verzin nooit een url.
 - Vorm: vraagt de collega om iets groter, kleiner, op een andere kleur, naast elkaar of uitgelicht, gebruik dan de actie "opmaken" en laat de inhoud staan. Gebruik nadruk om de belangrijkste reeks, rij of het belangrijkste kerngetal te laten opvallen. Rood en zwart zijn voor nadruk, niet voor elk blok.
 - Schrijf zoals in de chat: kort, Nederlands, zonder em-dash. Bedragen als "€ 374.610", percentages als "12,4%".
 - Herhaal de inhoud van het stuk niet in de chat. Zeg in een paar zinnen wat je hebt gemaakt of veranderd, en dat de collega het naast de chat kan bekijken, aanpassen en delen.
@@ -174,12 +175,7 @@ export async function POST(req: NextRequest) {
     }),
   ];
   const stukContext = huidigStuk
-    ? `Er is al een stuk bij dit gesprek. ${samenvatting(huidigStuk)}\nDe volledige inhoud: ${JSON.stringify({
-        soort: huidigStuk.soort,
-        titel: huidigStuk.titel,
-        ondertitel: huidigStuk.ondertitel,
-        blokken: huidigStuk.blokken,
-      }).slice(0, 40_000)}`
+    ? `Er is al een stuk bij dit gesprek. ${samenvatting(huidigStuk)}\nDe volledige inhoud: ${JSON.stringify(inhoudVan(huidigStuk)).slice(0, 40_000)}`
     : null;
   const client = new Anthropic();
   const messages: Bericht[] = berichten.map(({ role, content }) => ({ role, content }));

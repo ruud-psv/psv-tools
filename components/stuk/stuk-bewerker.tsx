@@ -31,7 +31,7 @@ import { NIEUW_BLOK_LABEL, leesGetal, nieuwBlok, toonGetal } from "@/lib/stukken
 const SELECT = "h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const VELD_LABEL = "font-heading text-[11px] uppercase tracking-wide text-muted-foreground";
 
-type Bewerking = { acties?: unknown[]; titel?: string; ondertitel?: string; soort?: StukSoort };
+type Bewerking = { acties?: unknown[]; titel?: string; ondertitel?: string; soort?: StukSoort; titelbeeld?: { wens?: string; url?: string } | null };
 
 /** De inhoud zonder id en opmaak: de opmaak blijft bij "wijzigen" staan en verander je met "opmaken". */
 function zonderId(blok: Blok): BlokInhoud {
@@ -310,6 +310,37 @@ function BlokEditor({
       );
       break;
     }
+    case "afbeelding": {
+      const a = concept;
+      velden = (
+        <>
+          <label className="block space-y-1">
+            <span className={VELD_LABEL}>Wat moet erop</span>
+            <Input autoFocus value={a.wens} onChange={(e) => zet({ wens: e.target.value })} placeholder="Bijvoorbeeld: een vol Philips Stadion" />
+          </label>
+          <label className="block space-y-1">
+            <span className={VELD_LABEL}>Bijschrift (optioneel)</span>
+            <Input value={a.bijschrift ?? ""} onChange={(e) => zet({ bijschrift: e.target.value })} />
+          </label>
+          <label className="block space-y-1">
+            <span className={VELD_LABEL}>Beschrijving voor schermlezers (optioneel)</span>
+            <Input value={a.alt ?? ""} onChange={(e) => zet({ alt: e.target.value })} placeholder="Wat er op de foto te zien is" />
+          </label>
+          {a.url ? (
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- voorbeeld van de foto */}
+              <img src={a.url} alt="" className="h-16 w-28 object-cover" />
+              <Button type="button" size="sm" variant="ghost" onClick={() => zet({ url: undefined })}>
+                <X /> Foto weghalen
+              </Button>
+            </div>
+          ) : (
+            <p className="form-hint">De foto voeg je toe na het opslaan, met Foto toevoegen in het blok.</p>
+          )}
+        </>
+      );
+      break;
+    }
     case "grafiek": {
       const g = concept;
       velden = (
@@ -476,12 +507,20 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
   const [fout, setFout] = useState<string | null>(null);
   const [titel, setTitel] = useState(stuk.titel);
   const [ondertitel, setOndertitel] = useState(stuk.ondertitel ?? "");
+  const [titelfoto, setTitelfoto] = useState(stuk.titelbeeld?.wens ?? "");
 
   // Een nieuwe versie van buiten (de assistent, of terug): de velden bijwerken.
   useEffect(() => {
     setTitel(stuk.titel);
     setOndertitel(stuk.ondertitel ?? "");
-  }, [stuk.titel, stuk.ondertitel]);
+    setTitelfoto(stuk.titelbeeld?.wens ?? "");
+  }, [stuk.titel, stuk.ondertitel, stuk.titelbeeld?.wens]);
+
+  function bewaarTitelfoto(wens: string, fotoHouden = true) {
+    const schoon = wens.trim();
+    const url = fotoHouden ? stuk.titelbeeld?.url : undefined;
+    bewaar({ titelbeeld: schoon || url ? { ...(schoon && { wens: schoon }), ...(url && { url }) } : null });
+  }
 
   async function bewaar(bewerking: Bewerking): Promise<Stuk | null> {
     setFout(null);
@@ -570,6 +609,21 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
           onBlur={() => ondertitel.trim() !== (stuk.ondertitel ?? "") && bewaar({ ondertitel })}
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
         />
+        <div className="flex items-center gap-2">
+          <Input
+            value={titelfoto}
+            aria-label="Titelfoto"
+            placeholder="Titelfoto: wat moet erop (optioneel)"
+            onChange={(e) => setTitelfoto(e.target.value)}
+            onBlur={() => titelfoto.trim() !== (stuk.titelbeeld?.wens ?? "") && bewaarTitelfoto(titelfoto)}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+          {stuk.titelbeeld?.url && (
+            <Button type="button" size="sm" variant="ghost" disabled={bezig} onClick={() => bewaarTitelfoto(titelfoto, false)}>
+              <X /> Foto weg
+            </Button>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground">Peildatum {formatDag(stuk.peildatum)}</p>
       </header>
 

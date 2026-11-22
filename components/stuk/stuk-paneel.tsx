@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { CopyField } from "@/components/copy-field";
 import { formatDag } from "@/components/stuk/stuk-weergave";
 import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
+import { AfbeeldingProvider } from "@/components/stuk/afbeelding";
 import { StukBewerker } from "@/components/stuk/stuk-bewerker";
 import { cn } from "@/lib/utils";
-import { STUK_SOORTEN, STUK_SOORT_LABEL, type Stuk, type StukSoort } from "@/lib/stukken/model";
+import { STUK_SOORTEN, STUK_SOORT_LABEL, isLegeAfbeelding, type Stuk, type StukSoort } from "@/lib/stukken/model";
 
 /**
  * Het stuk naast de chat: het voorbeeld, zelf bewerken, een stap terug,
@@ -168,6 +169,31 @@ export function StukPaneel({
   useEffect(() => setDelen(Boolean(stuk.deellink)), [stuk.id, stuk.deellink]);
   useEffect(() => setBewerken(false), [stuk.id]);
 
+  const [uploadVoor, setUploadVoor] = useState<string | null>(null);
+
+  /** Een foto uploaden naar Bunny en in het stuk zetten (een nieuwe versie). */
+  async function upload(doel: string, bestand: File) {
+    setFout(null);
+    if (bestand.size > 4 * 1024 * 1024) return setFout("De foto is te groot. Hooguit 4 MB.");
+    setUploadVoor(doel);
+    try {
+      const form = new FormData();
+      form.append("bestand", bestand);
+      form.append("doel", doel);
+      form.append("basisVersie", String(stuk.versie));
+      const res = await fetch(`/api/assistent/stukken/${stuk.id}/afbeelding`, { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (data.stuk) onStuk(data.stuk as Stuk);
+      if (!res.ok) setFout(data.error ?? "De foto kon niet worden toegevoegd.");
+    } catch {
+      setFout("De foto kon niet worden toegevoegd. Probeer het opnieuw.");
+    } finally {
+      setUploadVoor(null);
+    }
+  }
+
+  const wachtOpFoto = stuk.blokken.filter(isLegeAfbeelding).length + (stuk.titelbeeld?.wens && !stuk.titelbeeld.url ? 1 : 0);
+
   /** Hetzelfde stuk als rapport of als deck: alleen de soort verandert, de blokken blijven. */
   async function zetSoort(soort: StukSoort) {
     if (soort === stuk.soort) return;
@@ -261,7 +287,14 @@ export function StukPaneel({
       </div>
       {fout && <p className="form-error px-4 pt-2">{fout}</p>}
       {delen && <Delen stuk={stuk} onStuk={onStuk} />}
+      <AfbeeldingProvider acties={{ upload, bezig: uploadVoor, uit: uitgeschakeld || bezig }}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+        {wachtOpFoto > 0 && (
+          <div className="alert alert--info mb-4 text-sm">
+            {wachtOpFoto === 1 ? "Er wacht 1 plek op een foto." : `Er wachten ${wachtOpFoto} plekken op een foto.`} Klik op Foto toevoegen.
+            Lege plekken staan niet op de deellink of de afdruk.
+          </div>
+        )}
         {bewerken ? (
           <StukBewerker stuk={stuk} onStuk={onStuk} />
         ) : (
@@ -273,6 +306,7 @@ export function StukPaneel({
           </>
         )}
       </div>
+      </AfbeeldingProvider>
     </section>
   );
 }

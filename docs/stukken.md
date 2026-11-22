@@ -53,6 +53,28 @@ elke slide een pagina van 1280 × 720 (`@page deck` in `app/globals.css`), dus "
 geeft een PDF die je kunt presenteren. De vormregels komen uit
 `packages/psv-branding/open-design/psv/DESIGN.md`.
 
+## Foto's
+
+De assistent kan zelf geen foto kiezen, maar wel een **plek** voor een foto neerzetten: een blok
+*afbeelding*, of een *titelbeeld* (achter de titelslide van een deck, boven een rapport), met een
+korte *wens* van wat erop moet ("Een vol Philips Stadion bij avond"). In het voorbeeld staat daar
+een lege plek met **Foto toevoegen**; boven het stuk staat hoeveel plekken nog op een foto wachten.
+
+- **Uploaden.** `POST /api/assistent/stukken/<id>/afbeelding` (`bestand`, `doel` = blok-id of
+  "titel", `basisVersie`). Alleen JPG, PNG en WebP, herkend aan de inhoud van het bestand, en
+  hooguit 4 MB (Vercel neemt geen verzoeken boven 4,5 MB aan). De foto gaat naar Bunny in de map
+  `stukken/` onder een willekeurige naam, en het stuk krijgt een nieuwe versie met het CDN-adres.
+  Met **Andere foto** vervang je hem; in de bewerker haal je hem weg.
+- **Alleen onze eigen CDN.** Een foto-adres in een stuk moet beginnen met `BUNNY_CDN_URL/stukken/`.
+  Zo kan niemand, ook het model niet, een beeld van een andere site op een gedeelde link zetten.
+- **Bunny-adressen zijn openbaar.** De naam is niet te raden, maar een foto in een stuk dat alleen
+  met collega's is gedeeld, is via de directe link toch te openen. Gebruik geen gevoelige beelden.
+- **Weergave.** Een foto alleen op een slide vult de hele slide, met de kernboodschap eroverheen op
+  een donker verloop. Als half blok staat hij naast een ander blok. Het titelbeeld ligt op 50% achter
+  de zwarte titelslide. Lege plekken staan alleen in het voorbeeld, niet op de deellink of afdruk.
+- **Later: FileFlow.** Met een koppeling naar FileFlow, de beeldbank van PSV, kan de assistent zelf
+  een paar foto's voorstellen bij de wens, zodat je alleen nog kiest.
+
 ## Zelf bewerken
 
 Klik in het paneel op **Bewerken** (tijdens een antwoord van de assistent kan dat niet):
@@ -110,6 +132,8 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 | Weergave van een rapport | `components/stuk/stuk-weergave.tsx` |
 | Weergave als slide deck | `components/stuk/deck-weergave.tsx` |
 | Verdeling van de y-as | `lib/stukken/as.ts` (met tests) |
+| Foto's: controle en upload naar Bunny | `lib/stukken/afbeelding.ts` (met tests), `app/api/assistent/stukken/[id]/afbeelding/route.ts` |
+| Foto toevoegen in het voorbeeld | `components/stuk/afbeelding.tsx` |
 | Het paneel naast de chat | `components/stuk/stuk-paneel.tsx` |
 | Zelf bewerken in het voorbeeld | `components/stuk/stuk-bewerker.tsx`, `lib/stukken/bewerken.ts` (met tests) |
 | De deellink en de afdrukpagina | `app/share/stuk/[id]/page.tsx`, `app/stuk/[id]/page.tsx` |
@@ -117,6 +141,7 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 ## Nog niet
 
 - Export naar PowerPoint (bewerkbaar). Een deck gaat nu als PDF.
+- Foto's voorstellen uit FileFlow, de beeldbank van PSV.
 - HTML-export van een deck, om in Open Design verder te ontwerpen.
 - Cijfers in een bestaand stuk verversen.
 - Na het inloggen terug naar de gedeelde link.

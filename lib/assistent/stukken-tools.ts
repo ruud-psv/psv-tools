@@ -28,10 +28,13 @@ const OPMAAK_SCHEMA = {
 const BLOK_SCHEMA = {
   type: "object",
   description:
-    "Eén blok. Velden per type: kop {tekst}; tekst {tekst, met **vet** en regels die met \"- \" beginnen}; kerngetallen {items: [{label, waarde, toelichting?}] (1-6), bron}; tabel {titel?, kolommen (1-8), rijen (lijsten met evenveel cellen als kolommen, hooguit 40), bron}; grafiek {titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden (getallen, evenveel als labels)}] (1-4), eenheid?, bron}; conclusie {punten (1-6)}. bron is verplicht bij kerngetallen, tabel en grafiek: de bron en de periode, bijvoorbeeld \"Google Analytics psv.nl, 1 t/m 30 oktober 2026\". Elk blok kan opmaak hebben.",
+    "Eén blok. Velden per type: kop {tekst}; tekst {tekst, met **vet** en regels die met \"- \" beginnen}; kerngetallen {items: [{label, waarde, toelichting?}] (1-6), bron}; tabel {titel?, kolommen (1-8), rijen (lijsten met evenveel cellen als kolommen, hooguit 40), bron}; grafiek {titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden (getallen, evenveel als labels)}] (1-4), eenheid?, bron}; conclusie {punten (1-6)}; afbeelding {wens: wat er op de foto moet, bijvoorbeeld \"Een vol Philips Stadion bij avond\", bijschrift?, alt?}: een lege plek waar de collega een foto in zet; geef nooit een url. bron is verplicht bij kerngetallen, tabel en grafiek: de bron en de periode, bijvoorbeeld \"Google Analytics psv.nl, 1 t/m 30 oktober 2026\". Elk blok kan opmaak hebben.",
   properties: {
     opmaak: OPMAAK_SCHEMA,
-    type: { type: "string", enum: ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie"] },
+    type: { type: "string", enum: ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie", "afbeelding"] },
+    wens: { type: "string" },
+    bijschrift: { type: "string" },
+    alt: { type: "string" },
     tekst: { type: "string" },
     titel: { type: "string" },
     items: {
@@ -59,6 +62,13 @@ const BLOK_SCHEMA = {
     bron: { type: "string" },
   },
   required: ["type"],
+};
+
+const TITELBEELD_SCHEMA = {
+  type: "object",
+  description:
+    "Een foto achter de titel (titelslide van een deck, boven een rapport). Geef alleen wens: wat erop moet; de collega uploadt de foto. Bij stuk_bijwerken haalt null hem weg.",
+  properties: { wens: { type: "string" } },
 };
 
 const DATA_TYPES = new Set(["kerngetallen", "tabel", "grafiek"]);
@@ -130,6 +140,7 @@ export function stukTools({
           },
           titel: { type: "string" },
           ondertitel: { type: "string" },
+          titelbeeld: TITELBEELD_SCHEMA,
           blokken: { type: "array", items: BLOK_SCHEMA },
         },
         required: ["soort", "titel", "blokken"],
@@ -178,6 +189,7 @@ export function stukTools({
           },
           titel: { type: "string" },
           ondertitel: { type: "string" },
+          titelbeeld: TITELBEELD_SCHEMA,
           soort: { type: "string", enum: ["rapport", "deck"] },
         },
       },

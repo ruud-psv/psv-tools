@@ -7,6 +7,8 @@ import {
   bronnenVan,
   leesBlok,
   nieuweInhoud,
+  inhoudVan,
+  isLegeAfbeelding,
   normaliseer,
   slidesVan,
   nieuweVersie,
@@ -273,4 +275,56 @@ test("zelf bewerken: dezelfde regels, op de versie die je voor je had", async ()
   );
   assert.throws(() => handmatigBewerken(nieuw, { basisVersie: 2, titel: "" }, ""), /titel ontbreekt/);
   assert.throws(() => handmatigBewerken(nieuw, {}, ""), StukConflict);
+});
+
+test("afbeelding: een lege plek met een wens; een url alleen van onze CDN, map stukken", () => {
+  const vorige = process.env.BUNNY_CDN_URL;
+  process.env.BUNNY_CDN_URL = "https://cdn.psv.example/";
+  try {
+    assert.deepEqual(leesBlok({ type: "afbeelding", wens: " Vol stadion " }), { type: "afbeelding", wens: "Vol stadion" });
+    assert.throws(() => leesBlok({ type: "afbeelding" }), /wens ontbreekt/);
+    const goed = "https://cdn.psv.example/stukken/0a1b2c.jpg";
+    assert.equal((leesBlok({ type: "afbeelding", wens: "x", url: goed }) as { url?: string }).url, goed);
+    for (const fout of [
+      "https://elders.example/stukken/a.jpg",
+      "https://cdn.psv.example/mail-builder/a.jpg",
+      "https://cdn.psv.example/stukken/../geheim.jpg",
+      "javascript:alert(1)",
+    ]) {
+      assert.throws(() => leesBlok({ type: "afbeelding", wens: "x", url: fout }), /alleen een foto die in PSV Tools is geüpload/, fout);
+    }
+    delete process.env.BUNNY_CDN_URL;
+    assert.throws(() => leesBlok({ type: "afbeelding", wens: "x", url: goed }), /niet ingesteld/);
+  } finally {
+    if (vorige === undefined) delete process.env.BUNNY_CDN_URL;
+    else process.env.BUNNY_CDN_URL = vorige;
+  }
+});
+
+test("titelbeeld: gaat mee in versies en kan weg", () => {
+  const s = { ...stuk(), ...nieuweInhoud({ ...invoer, titelbeeld: { wens: "Spelers vieren een doelpunt" } }) };
+  assert.deepEqual(s.titelbeeld, { wens: "Spelers vieren een doelpunt" });
+  const titelGewijzigd = pasToe(s, { titel: "Nieuw" });
+  assert.deepEqual(titelGewijzigd.titelbeeld, s.titelbeeld); // weglaten laat het staan
+  const zonder = nieuweVersie(s, pasToe(s, { titelbeeld: null }), "2026-11-19", "");
+  assert.equal(zonder.titelbeeld, undefined);
+  assert.equal(zonder.vorige[0].titelbeeld?.wens, "Spelers vieren een doelpunt");
+  assert.deepEqual(vorigeVersie(zonder, "").titelbeeld, { wens: "Spelers vieren een doelpunt" });
+  assert.deepEqual(Object.keys(inhoudVan(s)), ["soort", "titel", "ondertitel", "titelbeeld", "blokken"]);
+});
+
+test("slides: een afbeelding krijgt een eigen slide, of deelt er een als half blok", () => {
+  const inhoud = nieuweInhoud({
+    soort: "deck",
+    titel: "T",
+    blokken: [
+      { type: "afbeelding", wens: "Stadion", opmaak: { kernboodschap: "Uitverkocht" } },
+      { ...kerngetallen, opmaak: { grootte: "half" } },
+      { type: "afbeelding", wens: "Shirt", opmaak: { grootte: "half" } },
+    ],
+  });
+  const slides = slidesVan(inhoud);
+  assert.deepEqual(slides.map((s) => [s.titel ?? "", s.blokken.map((b) => b.id).join("+")]), [["Uitverkocht", "b1"], ["", "b2+b3"]]);
+  assert.ok(isLegeAfbeelding(inhoud.blokken[0]));
+  assert.ok(!isLegeAfbeelding(inhoud.blokken[1]));
 });

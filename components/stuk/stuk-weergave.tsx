@@ -5,7 +5,8 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { asVerdeling } from "@/lib/stukken/as";
-import { STUK_SOORT_LABEL, bronnenVan, type Achtergrond, type Blok, type StukInhoud } from "@/lib/stukken/model";
+import { AfbeeldingPlek, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
+import { STUK_SOORT_LABEL, bronnenVan, isLegeAfbeelding, type Achtergrond, type Blok, type StukInhoud } from "@/lib/stukken/model";
 
 /**
  * Een rapport in de PSV-huisstijl. Dezelfde weergave in het voorbeeld naast de
@@ -232,6 +233,17 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
       );
     case "grafiek":
       return <Grafiek blok={blok} achtergrond={vlak} hoogte={groot ? "h-96" : "h-64"} />;
+    case "afbeelding":
+      return blok.url ? (
+        <figure className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+          <img src={blok.url} alt={blok.alt ?? blok.wens} className={cn("w-full object-cover", groot ? "aspect-[3/2]" : "aspect-[16/9]")} />
+          <VervangFoto doel={blok.id} />
+          {blok.bijschrift && <figcaption className="mt-1.5 text-xs text-muted-foreground">{blok.bijschrift}</figcaption>}
+        </figure>
+      ) : (
+        <AfbeeldingPlek doel={blok.id} wens={blok.wens} />
+      );
     case "conclusie":
       return (
         <section className={cn("rounded-md p-4", vlak && vlak !== "wit" ? "" : "border-l-4 border-l-psv-red-primary bg-muted/50")}>
@@ -248,6 +260,9 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
 
 /** Een blok in het rapport: met de kernboodschap erboven en het vlak eromheen. */
 export function RapportBlok({ blok }: { blok: Blok }) {
+  const acties = useAfbeeldingActies();
+  // Een lege plek voor een foto staat alleen in het voorbeeld, niet op een deellink of afdruk.
+  if (isLegeAfbeelding(blok) && !acties) return null;
   const achtergrond = blok.opmaak?.achtergrond;
   const kernboodschap = blok.opmaak?.kernboodschap;
   return (
@@ -256,6 +271,20 @@ export function RapportBlok({ blok }: { blok: Blok }) {
         <p className="mb-3 font-heading text-lg uppercase leading-tight tracking-wide sm:text-xl">{kernboodschap}</p>
       )}
       <BlokWeergave blok={blok} />
+    </div>
+  );
+}
+
+/** De foto boven het rapport; zonder foto (maar met een wens) een lege plek in het voorbeeld. */
+function Titelbeeld({ stuk }: { stuk: StukInhoud }) {
+  const beeld = stuk.titelbeeld;
+  if (!beeld) return null;
+  if (!beeld.url) return beeld.wens ? <AfbeeldingPlek doel="titel" wens={`Titelfoto: ${beeld.wens}`} className="mb-4" /> : null;
+  return (
+    <div className="relative">
+      {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+      <img src={beeld.url} alt={beeld.wens ?? ""} className="aspect-[3/1] w-full object-cover" />
+      <VervangFoto doel="titel" />
     </div>
   );
 }
@@ -280,6 +309,7 @@ export function StukWeergave({
   const metHalf = stuk.blokken.some((b) => b.opmaak?.grootte === "half");
   return (
     <article className={cn("mx-auto w-full bg-background text-foreground", metHalf ? "max-w-4xl" : "max-w-3xl", className)}>
+      <Titelbeeld stuk={stuk} />
       <header className="border-t-8 border-psv-red-primary pb-5 pt-5">
         <p className="font-heading text-xs uppercase tracking-wider text-muted-foreground">PSV · {STUK_SOORT_LABEL[stuk.soort]}</p>
         <h1 className="mt-1 font-heading text-3xl uppercase leading-tight sm:text-4xl">{stuk.titel}</h1>
