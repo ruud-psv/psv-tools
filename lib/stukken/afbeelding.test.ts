@@ -22,5 +22,5 @@ test("controle: leeg, te groot of geen foto wordt geweigerd", () => {
   assert.throws(() => controleerAfbeelding(new TextEncoder().encode("%PDF-1.7")), /Alleen JPG, PNG of WebP/);
   const groot = new Uint8Array(MAX_AFBEELDING_BYTES + 1);
   groot.set(JPG);
-  assert.throws(() => controleerAfbeelding(groot), /te groot \(4,0 MB\)\. Hooguit 4 MB/);
+  assert.throws(() => controleerAfbeelding(groot), /te groot \(4 MB\)\. Hooguit 4 MB/);
 });

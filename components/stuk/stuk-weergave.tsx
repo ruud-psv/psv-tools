@@ -238,7 +238,7 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
         <figure className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
           <img src={blok.url} alt={blok.alt ?? blok.wens} className={cn("w-full object-cover", groot ? "aspect-[3/2]" : "aspect-[16/9]")} />
-          <VervangFoto doel={blok.id} />
+          <VervangFoto doel={blok.id} wens={blok.wens} />
           {blok.bijschrift && <figcaption className="mt-1.5 text-xs text-muted-foreground">{blok.bijschrift}</figcaption>}
         </figure>
       ) : (
@@ -284,7 +284,7 @@ function Titelbeeld({ stuk }: { stuk: StukInhoud }) {
     <div className="relative">
       {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
       <img src={beeld.url} alt={beeld.wens ?? ""} className="aspect-[3/1] w-full object-cover" />
-      <VervangFoto doel="titel" />
+      <VervangFoto doel="titel" wens={beeld?.wens ?? stuk.titelbeeld?.wens} />
     </div>
   );
 }

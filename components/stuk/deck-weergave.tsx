@@ -227,7 +227,7 @@ function SlideBlok({ blok, slide, alleen }: { blok: Blok; slide: Slide; alleen: 
         <figure className="relative flex h-full min-h-0 flex-col">
           {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
           <img src={blok.url} alt={blok.alt ?? blok.wens} className="min-h-0 w-full flex-1 object-cover" />
-          <VervangFoto doel={blok.id} />
+          <VervangFoto doel={blok.id} wens={blok.wens} />
           {blok.bijschrift && <figcaption className="mt-2 text-sm text-muted-foreground">{blok.bijschrift}</figcaption>}
         </figure>
       ) : (
@@ -271,7 +271,7 @@ function BeeldSlide({ slide, foto, tekst }: { slide: Slide; foto: Extract<Blok, 
         )}
       </div>
       {foto.url ? (
-        <VervangFoto doel={foto.id} className="right-[24px] top-[24px]" />
+        <VervangFoto doel={foto.id} wens={foto.wens} className="right-[24px] top-[24px]" />
       ) : (
         <AfbeeldingPlek doel={foto.id} wens={foto.wens} className="absolute bottom-[140px] right-[60px] top-[140px] w-[460px] !h-auto" />
       )}
@@ -289,7 +289,7 @@ function FotoSlide({ blok, slide }: { blok: Extract<Blok, { type: "afbeelding" }
     <div className="relative h-full overflow-hidden bg-psv-black text-white">
       {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
       <img src={blok.url} alt={blok.alt ?? blok.wens} className="absolute inset-0 h-full w-full object-cover" />
-      <VervangFoto doel={blok.id} className="right-[24px] top-[24px]" />
+      <VervangFoto doel={blok.id} wens={blok.wens} className="right-[24px] top-[24px]" />
       {slide.titel && <TitelBlok tekst={slide.titel} className="absolute left-[61px] top-[68px]" />}
       {blok.bijschrift && (
         <p className="absolute bottom-[40px] left-[61px] max-w-[800px] bg-psv-black/70 px-3 py-1 text-lg">{blok.bijschrift}</p>
@@ -351,7 +351,7 @@ function WelkomSlide({ stuk, peildatum }: { stuk: StukInhoud; peildatum: string 
           <img src={beeld!.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
           {/* "Speciaal" uit het template: links de rode schuine vorm over de foto. */}
           <div className="absolute inset-y-0 left-0 w-[52%] bg-psv-red-primary [clip-path:polygon(0_0,100%_0,58%_100%,0_100%)]" />
-          <VervangFoto doel="titel" className="right-[24px] top-[24px]" />
+          <VervangFoto doel="titel" wens={beeld?.wens ?? stuk.titelbeeld?.wens} className="right-[24px] top-[24px]" />
         </>
       ) : (
         <Patroon />

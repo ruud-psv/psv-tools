@@ -172,13 +172,24 @@ export function StukPaneel({
   const [uploadVoor, setUploadVoor] = useState<string | null>(null);
 
   /** Een foto uploaden naar Bunny en in het stuk zetten (een nieuwe versie). */
-  async function upload(doel: string, bestand: File) {
-    setFout(null);
+  function upload(doel: string, bestand: File) {
     if (bestand.size > 4 * 1024 * 1024) return setFout("De foto is te groot. Hooguit 4 MB.");
+    const form = new FormData();
+    form.append("bestand", bestand);
+    stuurFoto(doel, form);
+  }
+
+  /** Een foto uit FileFlow: de server haalt hem op, kopieert hem naar Bunny en zet hem in het stuk. */
+  function uitFileflow(doel: string, fileflowId: number) {
+    const form = new FormData();
+    form.append("fileflowId", String(fileflowId));
+    stuurFoto(doel, form);
+  }
+
+  async function stuurFoto(doel: string, form: FormData) {
+    setFout(null);
     setUploadVoor(doel);
     try {
-      const form = new FormData();
-      form.append("bestand", bestand);
       form.append("doel", doel);
       form.append("basisVersie", String(stuk.versie));
       const res = await fetch(`/api/assistent/stukken/${stuk.id}/afbeelding`, { method: "POST", body: form });
@@ -287,11 +298,11 @@ export function StukPaneel({
       </div>
       {fout && <p className="form-error px-4 pt-2">{fout}</p>}
       {delen && <Delen stuk={stuk} onStuk={onStuk} />}
-      <AfbeeldingProvider acties={{ upload, bezig: uploadVoor, uit: uitgeschakeld || bezig }}>
+      <AfbeeldingProvider acties={{ upload, uitFileflow, bezig: uploadVoor, uit: uitgeschakeld || bezig }}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
         {wachtOpFoto > 0 && (
           <div className="alert alert--info mb-4 text-sm">
-            {wachtOpFoto === 1 ? "Er wacht 1 plek op een foto." : `Er wachten ${wachtOpFoto} plekken op een foto.`} Klik op Foto toevoegen.
+            {wachtOpFoto === 1 ? "Er wacht 1 plek op een foto." : `Er wachten ${wachtOpFoto} plekken op een foto.`} Upload er een of zoek in FileFlow.
             Lege plekken staan niet op de deellink of de afdruk.
           </div>
         )}

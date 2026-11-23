@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useRef, type ReactNode } from "react";
-import { ImagePlus, Loader2, RefreshCw } from "lucide-react";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { ImagePlus, Images, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FileflowKiezer } from "@/components/stuk/fileflow-kiezer";
 
 /**
  * Foto's toevoegen in het voorbeeld van een stuk. Het paneel naast de chat
@@ -13,6 +14,8 @@ import { cn } from "@/lib/utils";
 export interface AfbeeldingActies {
   /** `doel` is een blok-id of "titel". */
   upload: (doel: string, bestand: File) => void;
+  /** Een foto uit FileFlow: de server haalt hem op en zet een kopie in het stuk. */
+  uitFileflow: (doel: string, fileflowId: number) => void;
   /** Het doel waarvoor nu een upload loopt. */
   bezig: string | null;
   uit?: boolean;
@@ -51,6 +54,40 @@ function Kiezer({ doel, children, className }: { doel: string; children: (open: 
   );
 }
 
+/** Knop die de FileFlow-kiezer opent, met de wens als eerste zoekterm. */
+function ZoekInFileflow({ doel, wens, className, klein = false }: { doel: string; wens?: string; className?: string; klein?: boolean }) {
+  const acties = useAfbeeldingActies();
+  const [open, setOpen] = useState(false);
+  if (!acties) return null;
+  const uit = Boolean(acties.uit) || acties.bezig === doel;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!uit) setOpen(true);
+        }}
+        disabled={uit}
+        className={cn("btn inline-flex items-center gap-2 disabled:opacity-60", klein ? "btn--white text-xs shadow-card" : "btn--secondary", className)}
+      >
+        <Images className={klein ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        {klein ? "FileFlow" : "Zoek in FileFlow"}
+      </button>
+      {open && (
+        <FileflowKiezer
+          wens={wens}
+          onSluit={() => setOpen(false)}
+          onKies={(beeld) => {
+            setOpen(false);
+            acties.uitFileflow(doel, beeld.id);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 /** Een lege plek voor een foto, met wat erop moet en een knop. Alleen in het voorbeeld. */
 export function AfbeeldingPlek({ doel, wens, groot = false, className }: { doel: string; wens?: string; groot?: boolean; className?: string }) {
   const acties = useAfbeeldingActies();
@@ -81,17 +118,29 @@ export function AfbeeldingPlek({ doel, wens, groot = false, className }: { doel:
           </button>
         )}
       </Kiezer>
+      <ZoekInFileflow doel={doel} wens={wens?.replace(/^Titelfoto: /, "")} className={groot ? "btn--medium text-lg" : undefined} />
       <p className={cn("text-psv-gray-10", groot ? "text-sm" : "text-xs")}>JPG, PNG of WebP, hooguit 4 MB</p>
     </div>
   );
 }
 
-/** Een kleine knop over een foto heen om hem te vervangen. Alleen in het voorbeeld. */
-export function VervangFoto({ doel, className }: { doel: string; className?: string }) {
+/** Kleine knoppen over een foto heen om hem te vervangen: uploaden of uit FileFlow. Alleen in het voorbeeld. */
+export function VervangFoto({ doel, wens, className }: { doel: string; wens?: string; className?: string }) {
   const acties = useAfbeeldingActies();
   if (!acties) return null;
   return (
-    <Kiezer doel={doel} className={cn("absolute right-2 top-2 z-10 print:hidden", className)}>
+    <span className={cn("absolute right-2 top-2 z-10 flex gap-1.5 print:hidden", className)}>
+      <ZoekInFileflow doel={doel} wens={wens} klein />
+      <VervangUpload doel={doel} />
+    </span>
+  );
+}
+
+function VervangUpload({ doel }: { doel: string }) {
+  const acties = useAfbeeldingActies();
+  if (!acties) return null;
+  return (
+    <Kiezer doel={doel}>
       {(open, bezig) => (
         <button
           type="button"
@@ -103,7 +152,7 @@ export function VervangFoto({ doel, className }: { doel: string; className?: str
           className="btn btn--white inline-flex items-center gap-1.5 text-xs shadow-card disabled:opacity-60"
         >
           {acties.bezig === doel ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Andere foto
+          Uploaden
         </button>
       )}
     </Kiezer>

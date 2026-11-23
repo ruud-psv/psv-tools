@@ -80,8 +80,22 @@ een lege plek met **Foto toevoegen**; boven het stuk staat hoeveel plekken nog o
 - **Weergave.** Een foto alleen op een slide vult de hele slide, met de kernboodschap eroverheen op
   een donker verloop. Als half blok staat hij naast een ander blok. Het titelbeeld ligt op 50% achter
   de zwarte titelslide. Lege plekken staan alleen in het voorbeeld, niet op de deellink of afdruk.
-- **Later: FileFlow.** Met een koppeling naar FileFlow, de beeldbank van PSV, kan de assistent zelf
-  een paar foto's voorstellen bij de wens, zodat je alleen nog kiest.
+- **Zoeken in FileFlow.** Naast **Foto toevoegen** staat **Zoek in FileFlow** (en bij een foto
+  **FileFlow** om hem te vervangen). Er opent een venster met een zoekveld waarin de wens van de
+  assistent al staat; je ziet meteen resultaten en past de zoekterm aan. De zoekfunctie van FileFlow
+  zoekt in naam, bestandsnaam, categorie, tags en eigen velden, met `a | b` (of), `"exacte zin"` en
+  `-woord` (uitsluiten). Verder: een categorie, **Alleen liggend** (voor slides) en **Meer foto's**
+  (40 per keer). Klik op een foto voor een groot voorbeeld met afmeting, datum, categorie, tags en
+  tot wanneer de foto gebruikt mag worden; **Gebruik deze foto** (of dubbelklik) zet hem in het stuk.
+  Een foto met verlopen rechten kun je niet kiezen.
+- **Hoe het werkt.** De server zoekt via de API van FileFlow (`lib/fileflow/client.ts`,
+  `/api/fileflow/zoeken` en `/api/fileflow/categorieen`), zodat het token nooit in de browser komt.
+  De thumbnails van FileFlow zijn tijdelijke links. Daarom haalt de server een gekozen foto zelf op
+  (de grote versie, anders het origineel, tot 20 MB), controleert hem zoals een upload en zet een
+  kopie in de Bunny-map `stukken/`. Zo werkt een deck ook nog als de link van FileFlow is verlopen.
+- **Instellingen.** `FILEFLOW_SECRET` is een API-token van FileFlow (Settings > Profile > API tokens,
+  begint met `ffpat_`; alleen lezen is genoeg). `FILEFLOW_SUBDOMAIN` is het account in FileFlow
+  (`https://<subdomein>.fileflow.com`), standaard `psv`.
 
 ## Zelf bewerken
 
@@ -142,6 +156,7 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 | Verdeling van de y-as | `lib/stukken/as.ts` (met tests) |
 | Foto's: controle en upload naar Bunny | `lib/stukken/afbeelding.ts` (met tests), `app/api/assistent/stukken/[id]/afbeelding/route.ts` |
 | Foto toevoegen in het voorbeeld | `components/stuk/afbeelding.tsx` |
+| Foto zoeken in FileFlow | `components/stuk/fileflow-kiezer.tsx`, `lib/fileflow/client.ts` (met tests), `app/api/fileflow/*` |
 | Het paneel naast de chat | `components/stuk/stuk-paneel.tsx` |
 | Zelf bewerken in het voorbeeld | `components/stuk/stuk-bewerker.tsx`, `lib/stukken/bewerken.ts` (met tests) |
 | De deellink en de afdrukpagina | `app/share/stuk/[id]/page.tsx`, `app/stuk/[id]/page.tsx` |
@@ -149,7 +164,7 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 ## Nog niet
 
 - Export naar PowerPoint (bewerkbaar). Een deck gaat nu als PDF.
-- Foto's voorstellen uit FileFlow, de beeldbank van PSV.
+- De assistent zelf laten zoeken in FileFlow en een paar foto's laten voorstellen.
 - HTML-export van een deck, om in Open Design verder te ontwerpen.
 - Cijfers in een bestaand stuk verversen.
 - Na het inloggen terug naar de gedeelde link.

@@ -36,11 +36,15 @@ export function beeldSoort(bytes: Uint8Array): BeeldSoort | null {
 
 export class AfbeeldingFout extends Error {}
 
+/** Een foto uit FileFlow haalt de server zelf op; daar geldt de grens van Vercel niet. */
+export const MAX_KOPIE_BYTES = 20 * 1024 * 1024;
+
 /** Controleert het bestand: grootte en soort. Gooit AfbeeldingFout met een melding voor de collega. */
-export function controleerAfbeelding(bytes: Uint8Array): BeeldSoort {
+export function controleerAfbeelding(bytes: Uint8Array, max = MAX_AFBEELDING_BYTES): BeeldSoort {
   if (bytes.length === 0) throw new AfbeeldingFout("Het bestand is leeg.");
-  if (bytes.length > MAX_AFBEELDING_BYTES) {
-    throw new AfbeeldingFout(`De foto is te groot (${(bytes.length / 1024 / 1024).toFixed(1).replace(".", ",")} MB). Hooguit 4 MB.`);
+  if (bytes.length > max) {
+    const mb = (n: number) => (n / 1024 / 1024).toFixed(1).replace(".", ",").replace(/,0$/, "");
+    throw new AfbeeldingFout(`De foto is te groot (${mb(bytes.length)} MB). Hooguit ${mb(max)} MB.`);
   }
   const soort = beeldSoort(bytes);
   if (!soort) throw new AfbeeldingFout("Alleen JPG, PNG of WebP.");
