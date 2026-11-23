@@ -44,7 +44,9 @@ export async function draaiProbe(
 export async function capabilitiesVoor(site: JwSite, sites: JwSite[], verzoek: Verzoeker, opslag: Opslag): Promise<SiteCapabilities> {
   const caps = await leesCapabilities(opslag);
   const oud = !caps.probedAt || Date.now() - Date.parse(caps.probedAt) > MAX_LEEFTIJD_MS;
-  if (caps.sites[site.id] && !oud) return caps.sites[site.id];
+  // Een uitkomst zonder plays is van een mislukte probe (zoals met een verkeerde sleutel): opnieuw.
+  const bruikbaar = caps.sites[site.id] && caps.sites[site.id].metrics.plays;
+  if (bruikbaar && !oud) return caps.sites[site.id];
   return (await draaiProbe(sites, verzoek, opslag)).caps.sites[site.id];
 }
 

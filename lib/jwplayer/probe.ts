@@ -9,6 +9,7 @@
  */
 
 import type { SiteCapabilities } from "../../config/jwplayer-capabilities";
+import { JwFout } from "./client";
 import { easternDatum, plusDagen } from "./periode";
 
 export { easternDatum, plusDagen };
@@ -109,7 +110,11 @@ export async function probeSite(
   });
 
   // Basis: alles samen (zoals gevraagd), daarna elke metric los, met de eerste operation die werkt.
-  await query("basis: alle metrics per eastern_date", perDag(BASIS_METRICS.map(som), { page_length: 31 }));
+  const eerste = await query("basis: alle metrics per eastern_date", perDag(BASIS_METRICS.map(som), { page_length: 31 }));
+  // Een geweigerde sleutel zegt niets over de licentie: dan stoppen, in plaats van "niets beschikbaar" vast te leggen.
+  if (eerste.check.status === 401 || eerste.check.status === 403) {
+    throw new JwFout(eerste.check.melding ?? "De sleutel werd geweigerd.", eerste.check.status);
+  }
   const metrics: Record<string, string | null> = {};
   for (const m of [...BASIS_METRICS, ...PREMIUM_METRICS, ...ENGAGEMENT_METRICS]) {
     metrics[m] = null;

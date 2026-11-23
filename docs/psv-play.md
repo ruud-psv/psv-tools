@@ -8,7 +8,7 @@ assistent is er een MCP-server: `/api/mcp/psv-play`.
 
 | Variabele | Nodig | Wat |
 |---|---|---|
-| `JWPLAYER_SECRET` | ja | API-sleutel van JW Player (v2, bearer). Staat al in Vercel. |
+| `JWPLAYER_SECRET` | ja | Het **v2 API secret** van JW Player (dashboard: Settings > API Credentials, onder API V2 Credentials). Niet het v1-secret van de property: daarop geeft de API `unauthorized`. |
 | `JWPLAYER_SITE_IDS` | nee | Properties met label, komma-gescheiden: `KhctZQO0:PSV Play,abcd1234:Ander`. Zonder deze variabele: PSV Play (`KhctZQO0`). `JWPLAYER_SITE_ID` (één id) mag ook. |
 | `MCP_PSVPLAY_TOKEN` | voor de MCP-server | Willekeurig token van minstens 32 tekens: het wachtwoord van `/api/mcp/psv-play`. |
 | `CRON_SECRET` | voor de cron en de backfill | Bestaat al. |

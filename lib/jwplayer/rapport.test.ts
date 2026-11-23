@@ -201,7 +201,7 @@ test("capabilities: zonder opgeslagen uitkomst draait de probe en wordt de uitko
   let verzoeken = 0;
   const cap = await capabilitiesVoor({ id: "abcd1234", label: "PSV Play" }, [{ id: "abcd1234", label: "PSV Play" }], async (v) => {
     verzoeken++;
-    return v.method === "GET" ? { status: 200, body: { media: [] } } : { status: 403, body: { errors: [{ code: "forbidden" }] } };
+    return v.method === "GET" ? { status: 200, body: { media: [] } } : { status: 400, body: { errors: [{ code: "invalid" }] } };
   }, opslag);
   assert.ok(verzoeken > 10);
   assert.equal(cap.metrics.plays, null);
@@ -235,4 +235,26 @@ test("snapshot: welke dagen, archief-rijen zonder unieke kijkers op te tellen, e
   assert.equal(run.gedaan.length, 7);
   assert.equal(run.over, 0);
   assert.ok(opslag.inhoud.has(paden.dag("abcd1234", "2026-11-16")));
+});
+
+test("capabilities: een geweigerde sleutel wordt een fout, niet een lege uitkomst", async () => {
+  vergeetCapabilities();
+  const opslag = geheugenOpslag();
+  const site = { id: "abcd1234", label: "PSV Play" };
+  await assert.rejects(
+    capabilitiesVoor(site, [site], async () => ({ status: 401, body: { errors: [{ code: "unauthorized", description: "invalid" }] } }), opslag),
+    (err: unknown) => err instanceof Error && "status" in err && (err as { status: number }).status === 401
+  );
+  assert.equal(opslag.inhoud.has(paden.capabilities), false);
+
+  // Een eerder opgeslagen mislukte uitkomst (zonder plays) wordt opnieuw getest.
+  await opslag.schrijf(paden.capabilities, JSON.stringify({ probedAt: new Date().toISOString(), sites: { abcd1234: volleCaps({ metrics: { plays: null } }) } }), "application/json");
+  vergeetCapabilities();
+  let opnieuw = 0;
+  const cap = await capabilitiesVoor(site, [site], async (v) => {
+    opnieuw++;
+    return v.method === "GET" ? { status: 200, body: { media: [] } } : { status: 200, body: { data: { rows: [] } } };
+  }, opslag);
+  assert.ok(opnieuw > 0);
+  assert.equal(cap.metrics.plays, "sum");
 });
