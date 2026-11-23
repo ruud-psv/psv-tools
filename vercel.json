@@ -13,6 +13,10 @@
       "schedule": "23 3 * * *"
     },
     {
+      "path": "/api/psv-play/snapshot",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/marnix/asana/automaat",
       "schedule": "*/5 * * * *"
     }

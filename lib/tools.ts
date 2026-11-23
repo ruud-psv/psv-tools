@@ -15,6 +15,7 @@ import {
   Mail,
   MailPlus,
   Megaphone,
+  MonitorPlay,
   MessagesSquare,
   Palette,
   Plug,
@@ -167,6 +168,14 @@ export const insightTools: ToolEntry[] = [
       "Sessies, registraties en conversies per interactieve campagne in Playable.",
     href: "/dashboard/landingspaginas",
     icon: LayoutTemplate,
+  },
+  {
+    name: "PSV Play",
+    title: "PSV Play-kijkcijfers bekijken",
+    description:
+      "Kijktijd, unieke kijkers, top-video's, live-uitzendingen en publiek van PSV Play via JW Player.",
+    href: "/dashboard/psv-play",
+    icon: MonitorPlay,
   },
   {
     name: "FANstore",

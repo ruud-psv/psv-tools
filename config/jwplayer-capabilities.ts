@@ -1,17 +1,22 @@
 /**
- * Wat de JW Player-API voor PSV Play kan, per property. Dit bestand wordt
- * geschreven door `scripts/jwplayer-probe.ts`; pas het niet met de hand aan.
- * UI en MCP-tools tonen alleen onderdelen die hier als beschikbaar staan.
+ * Wat de JW Player-API voor PSV Play kan, per property: de vorm van de
+ * uitkomst van de capability probe (`lib/jwplayer/probe.ts`).
  *
- * Nog niet geprobed: alles staat uit.
+ * De probe draait op de server, met het secret uit Vercel: automatisch bij de
+ * eerste vraag, elke maandag via de cron, of met de hand via
+ * `/api/psv-play/probe?opnieuw=1`. De uitkomst staat in Vercel Blob
+ * (`psv-play/capabilities.json`). UI en MCP-tools tonen alleen wat hier als
+ * beschikbaar staat; niets is hardgecodeerd op aannames over de licentie.
  */
 
 export interface SiteCapabilities {
   label: string;
-  /** Per metric (`plays`, `play_rate`, `25_percent_completes`, …): werkt hij? */
-  metrics: Record<string, boolean>;
-  /** Per dimensie (`eastern_date`, `tag`, `platform_id`, …): werkt hij? */
+  /** Per metric: de `operation` die werkt (meestal `sum`), of `null` als hij niet werkt. */
+  metrics: Record<string, string | null>;
+  /** Per dimensie (`eastern_date`, `media_id`, `tag`, `platform_id`, …): werkt hij? */
   dimensions: Record<string, boolean>;
+  /** Een query zonder dimensie (één totaal over de hele periode) werkt. Nodig voor unieke kijkers over een periode. */
+  totalsWithoutDimension: boolean;
   includeMetadata: boolean;
   ott: { available: boolean; hasData: boolean; loggedInUniqueViewers: boolean };
   live: { filter: boolean; hasData: boolean };
@@ -27,11 +32,9 @@ export interface SiteCapabilities {
 }
 
 export interface JwCapabilities {
+  /** Wanneer de probe draaide (ISO), of `null` als hij nog nooit draaide. */
   probedAt: string | null;
   sites: Record<string, SiteCapabilities>;
 }
 
-export const JWPLAYER_CAPABILITIES: JwCapabilities = {
-  probedAt: null,
-  sites: {},
-};
+export const GEEN_CAPABILITIES: JwCapabilities = { probedAt: null, sites: {} };

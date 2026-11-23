@@ -136,6 +136,20 @@ const INGEBOUWD = [
     } satisfies Omit<Draft, "url">,
     uitleg: "Maileon (mailings en resultaten), gehost in PSV Tools zelf, met de koppeling van DM Performance. Zet eerst MCP_MAILEON_TOKEN in Vercel.",
   },
+  {
+    pad: "/api/mcp/psv-play",
+    draft: {
+      id: "psvplay",
+      idTouched: true,
+      name: "PSV Play",
+      authType: "bearer",
+      envVar: "MCP_PSVPLAY_TOKEN",
+      header: "",
+      page: "/dashboard/psv-play",
+      enabled: true,
+    } satisfies Omit<Draft, "url">,
+    uitleg: "PSV Play (JW Player): kijkcijfers, top-video's, live en publiek, gehost in PSV Tools zelf. Zet eerst MCP_PSVPLAY_TOKEN in Vercel.",
+  },
 ];
 
 function draftAuth(d: Draft): McpAuth {

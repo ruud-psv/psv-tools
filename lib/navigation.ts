@@ -98,6 +98,7 @@ const SPECS: SectionSpec[] = [
           "/dashboard/paid-ads",
           "/dashboard/web-verkeer",
           "/dashboard/landingspaginas",
+          "/dashboard/psv-play",
           "/dashboard/database",
         ],
       },

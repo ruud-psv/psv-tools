@@ -255,6 +255,16 @@ mailing, met GET. Geen contacten, geen klikken per persoon: alleen totalen.
 4. Vraag in de assistent bijvoorbeeld: "Hoe deden de mailings van oktober het?" Alleen wie DM
    Performance mag zien, krijgt deze tools.
 
+## Ingebouwde server: PSV Play
+
+PSV Play (de video's in Mijn PSV+) draait op JW Player. PSV Tools host een server op
+`/api/mcp/psv-play`, met `JWPLAYER_SECRET`. Zeven tools, allemaal alleen lezen en zonder vrije
+query; zie `docs/psv-play.md`.
+
+1. Zet `MCP_PSVPLAY_TOKEN` (minstens 32 tekens) in Vercel en deploy opnieuw.
+2. Klik in Beheer > MCP Servers bij **Ingebouwd: PSV Play** op **Invullen**, en dan op **Opslaan**.
+3. Klik **Verbinding testen** en zet de tools aan. Alleen wie PSV Play mag zien, krijgt ze.
+
 ## Ingebouwde server: Google Analytics
 
 PSV Tools is zelf ook een MCP-server voor Google Analytics, op

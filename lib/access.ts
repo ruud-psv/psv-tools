@@ -77,6 +77,7 @@ const API_PAGES: Record<string, string[]> = {
   "/api/playable": ["/dashboard/landingspaginas"],
   "/api/playable-loader": ["/dashboard/playable-loader"],
   "/api/playable-insights": ["/dashboard/landingspaginas"],
+  "/api/psv-play": ["/dashboard/psv-play"],
   "/api/ringside": ["/dashboard/aangrenzende-stoelen", "/dashboard/ticketing-stadion"],
   "/api/submit": ["/dashboard/copy-generator", "/dashboard/huisstijl-checker"],
   "/api/ticketing-herdgang": ["/dashboard/ticketing-herdgang"],
