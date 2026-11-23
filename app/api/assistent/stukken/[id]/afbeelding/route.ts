@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const bewerking = slide
       ? {
           basisVersie,
-          acties: [{ actie: "slide_wijzigen", slide_id: slide.id, slide: { foto: { url, ...(!slide.foto?.alt && alt && { alt: alt.slice(0, 200) }) } } }],
+          acties: [{ actie: "slide_wijzigen", slide_id: slide.id, slide: { foto: { url, positie: null, ...(!slide.foto?.alt && alt && { alt: alt.slice(0, 200) }) } } }],
         }
       : blok
       ? {

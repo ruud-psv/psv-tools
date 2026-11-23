@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Loader2, Paintbrush, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Crop, Loader2, Paintbrush, Pencil, Plus, Trash2, X } from "lucide-react";
+import { UitsnedeKiezer } from "@/components/stuk/uitsnede-kiezer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +19,7 @@ import {
   type Grootte,
   type Stuk,
   type StukSoort,
+  type Uitsnede,
 } from "@/lib/stukken/model";
 import { NIEUW_BLOK_LABEL, leesGetal, nieuwBlok, toonGetal } from "@/lib/stukken/bewerken";
 
@@ -31,7 +33,7 @@ import { NIEUW_BLOK_LABEL, leesGetal, nieuwBlok, toonGetal } from "@/lib/stukken
 const SELECT = "h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const VELD_LABEL = "font-heading text-[11px] uppercase tracking-wide text-muted-foreground";
 
-type Bewerking = { acties?: unknown[]; titel?: string; ondertitel?: string; soort?: StukSoort; titelbeeld?: { wens?: string; url?: string } | null };
+type Bewerking = { acties?: unknown[]; titel?: string; ondertitel?: string; soort?: StukSoort; titelbeeld?: { wens?: string; url?: string; positie?: Uitsnede | null } | null };
 
 /** De inhoud zonder id en opmaak: de opmaak blijft bij "wijzigen" staan en verander je met "opmaken". */
 function zonderId(blok: Blok): BlokInhoud {
@@ -330,12 +332,18 @@ export function BlokEditor({
             <div className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element -- voorbeeld van de foto */}
               <img src={a.url} alt="" className="h-16 w-28 object-cover" />
-              <Button type="button" size="sm" variant="ghost" onClick={() => zet({ url: undefined })}>
+              <Button type="button" size="sm" variant="ghost" onClick={() => zet({ url: undefined, positie: undefined })}>
                 <X /> Foto weghalen
               </Button>
             </div>
           ) : (
             <p className="form-hint">De foto voeg je toe na het opslaan, met Foto toevoegen in het blok.</p>
+          )}
+          {a.url && (
+            <div className="space-y-1">
+              <span className={VELD_LABEL}>Uitsnede (gaat mee met Opslaan)</span>
+              <UitsnedeKiezer url={a.url} positie={a.positie} onChange={(positie) => zet({ positie })} verhouding={a.opmaak?.grootte === "groot" ? "3 / 2" : "16 / 9"} />
+            </div>
           )}
         </>
       );
@@ -508,6 +516,7 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
   const [titel, setTitel] = useState(stuk.titel);
   const [ondertitel, setOndertitel] = useState(stuk.ondertitel ?? "");
   const [titelfoto, setTitelfoto] = useState(stuk.titelbeeld?.wens ?? "");
+  const [titelUitsnede, setTitelUitsnede] = useState<Uitsnede | null>(null);
 
   // Een nieuwe versie van buiten (de assistent, of terug): de velden bijwerken.
   useEffect(() => {
@@ -519,7 +528,8 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
   function bewaarTitelfoto(wens: string, fotoHouden = true) {
     const schoon = wens.trim();
     const url = fotoHouden ? stuk.titelbeeld?.url : undefined;
-    bewaar({ titelbeeld: schoon || url ? { ...(schoon && { wens: schoon }), ...(url && { url }) } : null });
+    const positie = fotoHouden ? stuk.titelbeeld?.positie : undefined;
+    bewaar({ titelbeeld: schoon || url ? { ...(schoon && { wens: schoon }), ...(url && { url }), ...(positie && { positie }) } : null });
   }
 
   async function bewaar(bewerking: Bewerking): Promise<Stuk | null> {
@@ -619,11 +629,31 @@ export function StukBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
           {stuk.titelbeeld?.url && (
-            <Button type="button" size="sm" variant="ghost" disabled={bezig} onClick={() => bewaarTitelfoto(titelfoto, false)}>
-              <X /> Foto weg
-            </Button>
+            <>
+              <Button type="button" size="sm" variant={titelUitsnede ? "default" : "ghost"} disabled={bezig} onClick={() => setTitelUitsnede(titelUitsnede ? null : (stuk.titelbeeld?.positie ?? { x: 50, y: 50, zoom: 1 }))}>
+                <Crop /> Uitsnede
+              </Button>
+              <Button type="button" size="sm" variant="ghost" disabled={bezig} onClick={() => bewaarTitelfoto(titelfoto, false)}>
+                <X /> Foto weg
+              </Button>
+            </>
           )}
         </div>
+        {titelUitsnede && stuk.titelbeeld?.url && (
+          <UitsnedeKiezer
+            url={stuk.titelbeeld.url}
+            positie={titelUitsnede}
+            bezig={bezig}
+            verhouding="3 / 1"
+            onChange={setTitelUitsnede}
+            onAnnuleer={() => setTitelUitsnede(null)}
+            onOpslaan={() =>
+              bewaar({ titelbeeld: { ...stuk.titelbeeld, positie: titelUitsnede.x === 50 && titelUitsnede.y === 50 && titelUitsnede.zoom === 1 ? null : titelUitsnede } }).then(
+                (ok) => ok && setTitelUitsnede(null)
+              )
+            }
+          />
+        )}
         <p className="text-xs text-muted-foreground">Peildatum {formatDag(stuk.peildatum)}</p>
       </header>
 

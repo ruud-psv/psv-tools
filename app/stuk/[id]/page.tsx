@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { verifySession } from "@/lib/auth";
 import { getStuk } from "@/lib/stukken/store";
 import { AfdrukKnop } from "@/components/stuk/afdruk-knop";
+import { PresenteerKnop } from "@/components/stuk/presentatie";
 import { StukMelding } from "@/components/stuk/stuk-melding";
 import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
 
@@ -44,7 +45,10 @@ export default async function StukPage({ params }: { params: Promise<{ id: strin
         <Link href="/dashboard/assistent" className="text-sm text-muted-foreground hover:text-foreground">
           ← Terug naar de assistent
         </Link>
-        <AfdrukKnop />
+        <div className="flex gap-2">
+          <PresenteerKnop stuk={stuk} />
+          <AfdrukKnop />
+        </div>
       </div>
       <StukVoorbeeld stuk={stuk} peildatum={stuk.peildatum} />
     </main>

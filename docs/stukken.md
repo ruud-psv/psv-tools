@@ -76,6 +76,24 @@ kiest een layout uit het template en vult de velden van die layout (`lib/stukken
   slides uit hun blokken.
 - **Afdrukken** maakt van elke slide een pagina van 1280 × 720 (`@page deck` in `app/globals.css`),
   dus "Opslaan als PDF" geeft een PDF die je kunt presenteren.
+- **Presenteren.** De knop **Presenteren** (in het paneel, op de afdrukpagina en op de deellink) toont
+  het deck schermvullend, slide voor slide met zwart eromheen. Verder met →, spatie, Enter, Page Down
+  of een klik rechts; terug met ←, Page Up of een klik links; Home en End; Esc stopt. In de bewerker
+  start **Vanaf hier** bij de gekozen slide. Lege plekken voor foto's worden overgeslagen
+  (`components/stuk/presentatie.tsx`).
+- **Uitsnede van een foto.** Bij elke foto (op een slide, in een fotoblok en de titelfoto van een
+  rapport) kies je met **Uitsnede** het punt dat in beeld moet blijven (klik of sleep op de foto) en
+  hoe ver ingezoomd (100 tot 300%). Op een slide zie je het meteen in de grote slide; opgeslagen als
+  `positie: {x, y, zoom}` bij de foto. Een nieuwe foto begint weer in het midden
+  (`components/stuk/uitsnede-kiezer.tsx`).
+
+## Rapport in de stijl van het template
+
+Een rapport gebruikt dezelfde vormtaal als de slides: geen afgeronde hoeken; de kop als het rode
+PSV EINDHOVEN-vlak (of de titelfoto) met de titel wit op een zwart blok; koppen en kernboodschappen
+wit op een zwart blok; subkoppen (ondertitel, titels van grafieken en tabellen, Conclusie) in PSV Text
+Bold rood; kerngetallen als tegels met het label in rood en het uitgelichte getal op zwart; tabellen
+met een zwarte kopregel; de conclusie op het lichtgrijs van de schuine vorm.
 
 ## Foto's
 

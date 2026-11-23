@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Copy, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Crop, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,8 +9,10 @@ import { cn } from "@/lib/utils";
 import { Schaal, SlideInhoud, useSchaal } from "@/components/stuk/deck-weergave";
 import { AfbeeldingPlek, AfbeeldingProvider, VervangFoto } from "@/components/stuk/afbeelding";
 import { BlokEditor } from "@/components/stuk/stuk-bewerker";
+import { PresenteerKnop } from "@/components/stuk/presentatie";
+import { UitsnedeKiezer } from "@/components/stuk/uitsnede-kiezer";
 import { HANDMATIGE_BRON, nieuwBlok } from "@/lib/stukken/bewerken";
-import type { Blok, BlokInhoud, Stuk } from "@/lib/stukken/model";
+import type { Blok, BlokInhoud, Stuk, Uitsnede } from "@/lib/stukken/model";
 import {
   LAYOUTS,
   LAYOUT_LABEL,
@@ -122,13 +124,28 @@ function LayoutKiezer({ onKies, onSluit }: { onKies: (layout: SlideLayout) => vo
 }
 
 /** De velden van de gekozen slide. Tekstvelden worden opgeslagen als je het veld verlaat. */
-function SlideVeldenForm({ slide, bezig, bewaar }: { slide: DeckSlide; bezig: boolean; bewaar: (wijziging: Record<string, unknown>) => Promise<unknown> }) {
+function SlideVeldenForm({
+  slide,
+  bezig,
+  bewaar,
+  onVoorbeeldUitsnede,
+}: {
+  slide: DeckSlide;
+  bezig: boolean;
+  bewaar: (wijziging: Record<string, unknown>) => Promise<unknown>;
+  /** Tijdens het kiezen van een uitsnede: toon die al in de grote slide (undefined = weer de opgeslagen). */
+  onVoorbeeldUitsnede: (positie: Uitsnede | undefined) => void;
+}) {
   const velden = LAYOUT_VELDEN[slide.layout];
   const [concept, setConcept] = useState<SlideVelden>(slide);
   const [dataOpen, setDataOpen] = useState(false);
+  const [uitsnede, setUitsnede] = useState<Uitsnede | null>(null);
   useEffect(() => {
     setConcept(slide);
     setDataOpen(false);
+    setUitsnede(null);
+    onVoorbeeldUitsnede(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide]);
 
   const tekstVeld = (sleutel: "titel" | "subkop" | "naam", label: string, placeholder?: string) =>
@@ -190,12 +207,50 @@ function SlideVeldenForm({ slide, bezig, bewaar }: { slide: DeckSlide; bezig: bo
               <div className="relative h-9 flex-1">
                 <VervangFoto doel={`slide:${slide.id}`} wens={slide.foto.wens} className="!left-0 !right-auto !top-0" />
               </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={uitsnede ? "default" : "ghost"}
+                disabled={bezig}
+                onClick={() => {
+                  const start = slide.foto?.positie ?? { x: 50, y: 50, zoom: 1 };
+                  setUitsnede(uitsnede ? null : start);
+                  onVoorbeeldUitsnede(uitsnede ? undefined : start);
+                }}
+              >
+                <Crop /> Uitsnede
+              </Button>
               <Button type="button" size="sm" variant="ghost" disabled={bezig} onClick={() => bewaar({ foto: { url: null } })}>
                 <X /> Weghalen
               </Button>
             </div>
           ) : (
             <AfbeeldingPlek doel={`slide:${slide.id}`} wens={slide.foto?.wens} className="!min-h-0 !p-4" />
+          )}
+          {uitsnede && slide.foto?.url && (
+            <UitsnedeKiezer
+              url={slide.foto.url}
+              positie={uitsnede}
+              bezig={bezig}
+              verhouding={slide.layout === "foto" ? "16 / 9" : "4 / 5"}
+              onChange={(p) => {
+                setUitsnede(p);
+                onVoorbeeldUitsnede(p);
+              }}
+              onAnnuleer={() => {
+                setUitsnede(null);
+                onVoorbeeldUitsnede(undefined);
+              }}
+              onOpslaan={() => {
+                const p = uitsnede.x === 50 && uitsnede.y === 50 && uitsnede.zoom === 1 ? null : uitsnede;
+                bewaar({ foto: { positie: p } }).then((ok) => {
+                  if (ok) {
+                    setUitsnede(null);
+                    onVoorbeeldUitsnede(undefined);
+                  }
+                });
+              }}
+            />
           )}
           {velden.includes("fotoBreedte") && (
             <div className="space-y-1">
@@ -275,6 +330,7 @@ export function SlideBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stu
   const [toevoegen, setToevoegen] = useState(false);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+  const [voorbeeldUitsnede, setVoorbeeldUitsnede] = useState<Uitsnede | undefined>(undefined);
   const groot = useSchaal<HTMLDivElement>();
 
   const index = Math.max(0, slides.findIndex((s) => s.id === gekozen));
@@ -395,6 +451,7 @@ export function SlideBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stu
         </select>
         {bezig && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         <div className="ml-auto flex gap-1">
+          <PresenteerKnop stuk={stuk} start={index} label="Vanaf hier" />
           <Button type="button" variant="ghost" size="sm" disabled={bezig || index === 0} onClick={() => verplaats(-1)} title="Naar voren">
             <ArrowLeft />
           </Button>
@@ -411,10 +468,13 @@ export function SlideBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stu
       </div>
       <div ref={groot.ref}>
         <Schaal schaal={groot.schaal}>
-          <SlideInhoud slide={slide} toonLeeg={MET_FOTO.includes(slide.layout)} />
+          <SlideInhoud
+            slide={voorbeeldUitsnede && slide.foto ? { ...slide, foto: { ...slide.foto, positie: voorbeeldUitsnede } } : slide}
+            toonLeeg={MET_FOTO.includes(slide.layout)}
+          />
         </Schaal>
       </div>
-      <SlideVeldenForm slide={slide} bezig={bezig} bewaar={(w) => wijzig(w)} />
+      <SlideVeldenForm slide={slide} bezig={bezig} bewaar={(w) => wijzig(w)} onVoorbeeldUitsnede={setVoorbeeldUitsnede} />
       <p className="text-xs text-muted-foreground">
         Elke wijziging wordt een nieuwe versie; met Vorige ga je terug. Je kunt ook in de chat vragen om een slide aan te passen, bijvoorbeeld
         &quot;maak van slide 4 een quote&quot;.

@@ -11,6 +11,7 @@ import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
 import { AfbeeldingProvider } from "@/components/stuk/afbeelding";
 import { StukBewerker } from "@/components/stuk/stuk-bewerker";
 import { SlideBewerker } from "@/components/stuk/slide-bewerker";
+import { PresenteerKnop } from "@/components/stuk/presentatie";
 import { cn } from "@/lib/utils";
 import { STUK_SOORTEN, STUK_SOORT_LABEL, isLegeAfbeelding, type Stuk, type StukSoort } from "@/lib/stukken/model";
 import { wachtOpFoto as slideWachtOpFoto } from "@/lib/stukken/deck";
@@ -289,6 +290,7 @@ export function StukPaneel({
               <span className="hidden sm:inline">Vorige</span>
             </Button>
           )}
+          <PresenteerKnop stuk={stuk} />
           <Button type="button" variant="ghost" size="sm" asChild>
             <a href={`/stuk/${stuk.id}`} target="_blank" rel="noopener noreferrer" title="Afdrukken of opslaan als PDF">
               <Printer />

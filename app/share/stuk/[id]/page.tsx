@@ -5,6 +5,7 @@ import { todayInAmsterdam } from "@/lib/ringside/seat-state";
 import { deelToegang } from "@/lib/stukken/delen";
 import { getDeelRecord } from "@/lib/stukken/store";
 import { AfdrukKnop } from "@/components/stuk/afdruk-knop";
+import { PresenteerKnop } from "@/components/stuk/presentatie";
 import { StukMelding } from "@/components/stuk/stuk-melding";
 import { formatDag } from "@/components/stuk/stuk-weergave";
 import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
@@ -63,7 +64,10 @@ export default async function GedeeldStukPage({ params }: { params: Promise<{ id
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-8 print:p-0">
       <div className="mx-auto mb-4 flex max-w-5xl justify-end print:hidden">
-        <AfdrukKnop />
+        <div className="flex gap-2">
+          <PresenteerKnop stuk={record.stuk} />
+          <AfdrukKnop />
+        </div>
       </div>
       <StukVoorbeeld stuk={record.stuk} peildatum={record.stuk.peildatum} />
     </main>

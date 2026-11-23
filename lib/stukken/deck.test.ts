@@ -160,3 +160,25 @@ test("zelf bewerken: ook slides, met slides_opnieuw", () => {
   // Terug naar rapport heeft geen eigen blokken: dan uit de slides.
   assert.ok(naarBlokken(nieuw.slides!).length > 0);
 });
+
+test("uitsnede: focuspunt en zoom binnen de grenzen; het midden is geen uitsnede; zonder foto vervalt hij", async () => {
+  const { leesUitsnede } = await import("./model");
+  assert.deepEqual(leesUitsnede({ x: 30, y: 20.456, zoom: 1.5 }, "u"), { x: 30, y: 20.46, zoom: 1.5 });
+  assert.equal(leesUitsnede({ x: 50, y: 50, zoom: 1 }, "u"), undefined);
+  assert.equal(leesUitsnede({}, "u"), undefined);
+  assert.throws(() => leesUitsnede({ x: 120 }, "u"), /x moet tussen 0 en 100/);
+  assert.throws(() => leesUitsnede({ zoom: 5 }, "u"), /zoom moet tussen 1 en 3/);
+
+  process.env.BUNNY_CDN_URL = "https://cdn.psv.example";
+  try {
+    const met = leesSlide({ layout: "foto", foto: { url: "https://cdn.psv.example/stukken/a.jpg", positie: { x: 20, y: 30, zoom: 2 } } }, "s1");
+    assert.deepEqual(met.foto?.positie, { x: 20, y: 30, zoom: 2 });
+    // Alleen de uitsnede wijzigen laat de foto staan; een nieuwe foto met positie null begint weer in het midden.
+    assert.deepEqual(wijzigSlide(met, { foto: { positie: { x: 70, y: 40, zoom: 1.2 } } }, "x").foto, { url: "https://cdn.psv.example/stukken/a.jpg", positie: { x: 70, y: 40, zoom: 1.2 } });
+    assert.equal(wijzigSlide(met, { foto: { url: "https://cdn.psv.example/stukken/b.jpg", positie: null } }, "x").foto?.positie, undefined);
+    // Zonder foto heeft een uitsnede geen zin.
+    assert.equal(leesSlide({ layout: "beeld", foto: { wens: "x", positie: { x: 10, y: 10, zoom: 2 } } }, "s1").foto?.positie, undefined);
+  } finally {
+    delete process.env.BUNNY_CDN_URL;
+  }
+});

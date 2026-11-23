@@ -3,6 +3,7 @@
 import { createContext, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ImagePlus, Images, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Uitsnede } from "@/lib/stukken/model";
 import { FileflowKiezer } from "@/components/stuk/fileflow-kiezer";
 
 /**
@@ -22,6 +23,17 @@ export interface AfbeeldingActies {
 }
 
 const Context = createContext<AfbeeldingActies | null>(null);
+
+/**
+ * De stijl van een foto met zijn uitsnede: het focuspunt blijft in beeld
+ * (object-position) en de zoom schaalt vanuit dat punt. Voor een <img> met
+ * object-cover in een vak met overflow hidden.
+ */
+export function fotoStijl(positie?: Uitsnede): CSSProperties {
+  if (!positie) return {};
+  const punt = `${positie.x}% ${positie.y}%`;
+  return { objectPosition: punt, ...(positie.zoom > 1 && { transform: `scale(${positie.zoom})`, transformOrigin: punt }) };
+}
 
 /** Met `acties={null}`: geen knoppen (bijvoorbeeld in een kleine slide die zelf een knop is). */
 export function AfbeeldingProvider({ acties, children }: { acties: AfbeeldingActies | null; children: ReactNode }) {

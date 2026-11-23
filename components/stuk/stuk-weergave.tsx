@@ -5,8 +5,8 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { asVerdeling } from "@/lib/stukken/as";
-import { AfbeeldingPlek, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
-import { STUK_SOORT_LABEL, bronnenVan, isLegeAfbeelding, type Achtergrond, type Blok, type StukInhoud } from "@/lib/stukken/model";
+import { AfbeeldingPlek, VervangFoto, fotoStijl, useAfbeeldingActies } from "@/components/stuk/afbeelding";
+import { STUK_SOORT_LABEL, bronnenVan, isLegeAfbeelding, type Uitsnede, type Achtergrond, type Blok, type StukInhoud } from "@/lib/stukken/model";
 
 /**
  * Een rapport in de PSV-huisstijl. Dezelfde weergave in het voorbeeld naast de
@@ -145,6 +145,23 @@ export function Grafiek({
   );
 }
 
+/** Een kop zoals de titel op een slide: PSV Condensed, hoofdletters, wit op een zwart blok. */
+export function TitelBlok({ children, als = "h2", className, rood = false }: { children: ReactNode; als?: "h1" | "h2" | "h3"; className?: string; rood?: boolean }) {
+  const Kop = als;
+  return (
+    <Kop className={cn("font-heading uppercase leading-[1.15]", className)}>
+      <span className={cn("px-[0.18em] pb-[0.02em] pt-[0.08em] text-white [-webkit-box-decoration-break:clone] [box-decoration-break:clone]", rood ? "bg-[#e30713]" : "bg-black")}>
+        {children}
+      </span>
+    </Kop>
+  );
+}
+
+/** Subkop uit het template: PSV Text Bold, rood (op een donker vlak wit). */
+function Subkop({ children, donker = false, className }: { children: ReactNode; donker?: boolean; className?: string }) {
+  return <p className={cn("text-lg font-bold leading-tight sm:text-xl", donker ? "text-white" : "text-[#e30713]", className)}>{children}</p>;
+}
+
 function Kerngetallen({ blok, achtergrond, groot }: { blok: Extract<Blok, { type: "kerngetallen" }>; achtergrond?: Achtergrond; groot: boolean }) {
   const donker = isDonker(achtergrond);
   return (
@@ -156,21 +173,13 @@ function Kerngetallen({ blok, achtergrond, groot }: { blok: Extract<Blok, { type
             <div
               key={i}
               className={cn(
-                "break-inside-avoid rounded-md border p-4",
-                uitgelicht ? "col-span-2 border-transparent bg-psv-black text-white" : "border-border bg-card"
+                "break-inside-avoid p-4",
+                uitgelicht ? "col-span-2 bg-black text-white" : donker ? "bg-white/10" : "bg-[#F0F0F0]"
               )}
             >
-              <p className={cn("font-heading text-xs uppercase tracking-wide", uitgelicht ? "text-white" : "text-muted-foreground")}>{k.label}</p>
-              <p
-                className={cn(
-                  "mt-1 font-heading",
-                  uitgelicht ? "text-5xl text-white" : groot ? "text-4xl" : "text-2xl sm:text-3xl",
-                  !uitgelicht && (donker ? "text-white" : "text-psv-red-primary")
-                )}
-              >
-                {k.waarde}
-              </p>
-              {k.toelichting && <p className={cn("mt-1 text-xs", uitgelicht ? "text-psv-gray-08" : "text-muted-foreground")}>{k.toelichting}</p>}
+              <p className={cn("text-sm font-bold", uitgelicht || !donker ? "text-[#e30713]" : "text-white")}>{k.label}</p>
+              <p className={cn("mt-1 font-heading leading-none", uitgelicht ? "text-6xl" : groot ? "text-5xl" : "text-4xl")}>{k.waarde}</p>
+              {k.toelichting && <p className={cn("mt-1.5 text-xs", uitgelicht ? "text-psv-gray-08" : donker ? "text-white" : "text-muted-foreground")}>{k.toelichting}</p>}
             </div>
           );
         })}
@@ -180,27 +189,41 @@ function Kerngetallen({ blok, achtergrond, groot }: { blok: Extract<Blok, { type
   );
 }
 
+/** Een foto in een vak met rechte hoeken, met zijn uitsnede. */
+function Foto({ src, alt, positie, verhouding }: { src: string; alt: string; positie?: Uitsnede; verhouding: string }) {
+  return (
+    <div className={cn("relative w-full overflow-hidden bg-muted", verhouding)}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+      <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" style={fotoStijl(positie)} />
+    </div>
+  );
+}
+
 export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: Achtergrond }) {
   const groot = blok.opmaak?.grootte === "groot";
   const donker = isDonker(achtergrond ?? blok.opmaak?.achtergrond);
   const vlak = achtergrond ?? blok.opmaak?.achtergrond;
   switch (blok.type) {
     case "kop":
-      return <h2 className="font-heading text-xl uppercase tracking-wide">{blok.tekst}</h2>;
+      return (
+        <TitelBlok rood={vlak === "zwart"} className="text-2xl sm:text-3xl">
+          {blok.tekst}
+        </TitelBlok>
+      );
     case "tekst":
-      return <div className={cn("space-y-2 leading-relaxed", groot ? "text-base" : "text-sm")}>{formatAnswer(blok.tekst)}</div>;
+      return <div className={cn("space-y-2 leading-relaxed", groot ? "text-lg" : "text-base")}>{formatAnswer(blok.tekst)}</div>;
     case "kerngetallen":
       return <Kerngetallen blok={blok} achtergrond={vlak} groot={groot} />;
     case "tabel":
       return (
         <section>
-          {blok.titel && <h3 className="mb-2 font-heading text-sm uppercase tracking-wide">{blok.titel}</h3>}
+          {blok.titel && <Subkop donker={donker} className="mb-2 !text-base">{blok.titel}</Subkop>}
           <div className="overflow-x-auto">
-            <table className={cn("w-full", groot ? "text-base" : "text-sm")}>
+            <table className={cn("w-full", groot ? "text-base" : "text-sm", !donker && "bg-white")}>
               <thead>
-                <tr className="border-b border-border text-left">
+                <tr className="bg-black text-left text-white">
                   {blok.kolommen.map((k, i) => (
-                    <th key={i} className="py-2 pr-4 font-heading text-xs uppercase tracking-wide">
+                    <th key={i} className="px-3 py-2 font-heading text-xs uppercase tracking-wide">
                       {k}
                     </th>
                   ))}
@@ -213,12 +236,13 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
                     <tr
                       key={r}
                       className={cn(
-                        "border-b border-border last:border-0",
-                        uitgelicht && (donker ? "bg-psv-black font-bold text-white" : "bg-psv-red-primary font-bold text-white")
+                        "border-b",
+                        donker ? "border-white/25" : "border-[#e5e5e5]",
+                        uitgelicht && (donker ? "bg-black font-bold text-white" : "bg-[#e30713] font-bold text-white")
                       )}
                     >
                       {rij.map((cel, c) => (
-                        <td key={c} className={cn("py-2 pr-4", c === 0 && uitgelicht && "pl-2", c > 0 && /^[€\d\s.,%+-]+$/.test(cel) && "tabular-nums")}>
+                        <td key={c} className={cn("px-3 py-2", c > 0 && /^[€\d\s.,%+-]+$/.test(cel) && "text-right tabular-nums")}>
                           {cel}
                         </td>
                       ))}
@@ -232,12 +256,19 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
         </section>
       );
     case "grafiek":
-      return <Grafiek blok={blok} achtergrond={vlak} hoogte={groot ? "h-96" : "h-64"} />;
+      return (
+        <figure>
+          <Subkop donker={donker} className="mb-2 !text-base">
+            {blok.titel}
+            {blok.eenheid ? <span className={cn("font-normal", donker ? "text-white" : "text-muted-foreground")}>, in {blok.eenheid}</span> : null}
+          </Subkop>
+          <Grafiek blok={blok} achtergrond={vlak} hoogte={groot ? "h-96" : "h-64"} toonTitel={false} />
+        </figure>
+      );
     case "afbeelding":
       return blok.url ? (
         <figure className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-          <img src={blok.url} alt={blok.alt ?? blok.wens} className={cn("w-full object-cover", groot ? "aspect-[3/2]" : "aspect-[16/9]")} />
+          <Foto src={blok.url} alt={blok.alt ?? blok.wens} positie={blok.positie} verhouding={groot ? "aspect-[3/2]" : "aspect-[16/9]"} />
           <VervangFoto doel={blok.id} wens={blok.wens} />
           {blok.bijschrift && <figcaption className="mt-1.5 text-xs text-muted-foreground">{blok.bijschrift}</figcaption>}
         </figure>
@@ -246,11 +277,14 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
       );
     case "conclusie":
       return (
-        <section className={cn("rounded-md p-4", vlak && vlak !== "wit" ? "" : "border-l-4 border-l-psv-red-primary bg-muted/50")}>
-          <h3 className="font-heading text-sm uppercase tracking-wide">Conclusie</h3>
-          <ul className={cn("mt-2 list-disc space-y-1 pl-5 leading-relaxed", groot ? "text-base" : "text-sm")}>
+        <section className={cn(vlak && vlak !== "wit" ? "" : "bg-[#F0F0F0] p-5")}>
+          <Subkop donker={donker}>Conclusie</Subkop>
+          <ul className={cn("mt-3 space-y-2 leading-snug", groot ? "text-lg" : "text-base")}>
             {blok.punten.map((p, i) => (
-              <li key={i}>{p}</li>
+              <li key={i} className="relative pl-5">
+                <span className="absolute left-0">•</span>
+                {p}
+              </li>
             ))}
           </ul>
         </section>
@@ -268,24 +302,46 @@ export function RapportBlok({ blok }: { blok: Blok }) {
   return (
     <div className={cn("h-full", vlakKlasse(achtergrond))}>
       {kernboodschap && blok.type !== "kop" && (
-        <p className="mb-3 font-heading text-lg uppercase leading-tight tracking-wide sm:text-xl">{kernboodschap}</p>
+        <TitelBlok als="h3" rood={achtergrond === "zwart"} className="mb-4 text-xl sm:text-2xl">
+          {kernboodschap}
+        </TitelBlok>
       )}
       <BlokWeergave blok={blok} />
     </div>
   );
 }
 
-/** De foto boven het rapport; zonder foto (maar met een wens) een lege plek in het voorbeeld. */
-function Titelbeeld({ stuk }: { stuk: StukInhoud }) {
+/**
+ * De kop van het rapport, zoals de welkomstslide: het rode PSV EINDHOVEN-vlak
+ * (of de titelfoto) met de titel wit op het zwarte blok.
+ */
+function Kop({ stuk, peildatum }: { stuk: StukInhoud; peildatum: string }) {
   const beeld = stuk.titelbeeld;
-  if (!beeld) return null;
-  if (!beeld.url) return beeld.wens ? <AfbeeldingPlek doel="titel" wens={`Titelfoto: ${beeld.wens}`} className="mb-4" /> : null;
   return (
-    <div className="relative">
-      {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-      <img src={beeld.url} alt={beeld.wens ?? ""} className="aspect-[3/1] w-full object-cover" />
-      <VervangFoto doel="titel" wens={beeld?.wens ?? stuk.titelbeeld?.wens} />
-    </div>
+    <header className="mb-8">
+      <div className="relative flex min-h-[200px] items-end overflow-hidden bg-[#e30713] p-5 sm:min-h-[240px] sm:p-8">
+        {beeld?.url ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+            <img src={beeld.url} alt={beeld.wens ?? ""} className="absolute inset-0 h-full w-full object-cover" style={fotoStijl(beeld.positie)} />
+            <VervangFoto doel="titel" wens={beeld.wens} />
+          </>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- achtergrond uit het template, ook in de afdruk
+          <img src="/images/deck/welkom.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+        )}
+        <div className="relative">
+          <TitelBlok als="h1" className="text-3xl sm:text-5xl">
+            {stuk.titel}
+          </TitelBlok>
+        </div>
+      </div>
+      {beeld?.wens && !beeld.url && <AfbeeldingPlek doel="titel" wens={`Titelfoto: ${beeld.wens}`} className="mt-3" />}
+      {stuk.ondertitel && <Subkop className="mt-4">{stuk.ondertitel}</Subkop>}
+      <p className="mt-1 text-xs text-muted-foreground">
+        PSV · {STUK_SOORT_LABEL[stuk.soort]} · Peildatum {formatDag(peildatum)}
+      </p>
+    </header>
   );
 }
 
@@ -309,15 +365,9 @@ export function StukWeergave({
   const metHalf = stuk.blokken.some((b) => b.opmaak?.grootte === "half");
   return (
     <article className={cn("mx-auto w-full bg-background text-foreground", metHalf ? "max-w-4xl" : "max-w-3xl", className)}>
-      <Titelbeeld stuk={stuk} />
-      <header className="border-t-8 border-psv-red-primary pb-5 pt-5">
-        <p className="font-heading text-xs uppercase tracking-wider text-muted-foreground">PSV · {STUK_SOORT_LABEL[stuk.soort]}</p>
-        <h1 className="mt-1 font-heading text-3xl uppercase leading-tight sm:text-4xl">{stuk.titel}</h1>
-        {stuk.ondertitel && <p className="mt-2 text-base text-muted-foreground">{stuk.ondertitel}</p>}
-        <p className="mt-2 text-xs text-muted-foreground">Peildatum {formatDag(peildatum)}</p>
-      </header>
+      <Kop stuk={stuk} peildatum={peildatum} />
 
-      <div className="grid gap-x-5 gap-y-7 sm:grid-cols-2">
+      <div className="grid gap-x-6 gap-y-9 sm:grid-cols-2">
         {stuk.blokken.map((blok) => (
           <div key={blok.id} className={cn("min-w-0 break-inside-avoid", breedte(blok))}>
             <RapportBlok blok={blok} />
@@ -325,18 +375,23 @@ export function StukWeergave({
         ))}
       </div>
 
-      <footer className="mt-8 border-t border-border pt-4 text-xs text-muted-foreground">
+      <footer className="mt-10 border-t border-[#e5e5e5] pt-5 text-xs text-muted-foreground">
         {bronnen.length > 0 && (
           <>
-            <p className="font-heading uppercase tracking-wide">Bronnen</p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            <TitelBlok als="h3" className="mb-2 text-sm">
+              Bronnen
+            </TitelBlok>
+            <ul className="mt-1 space-y-0.5">
               {bronnen.map((b) => (
-                <li key={b}>{b}</li>
+                <li key={b} className="relative pl-4">
+                  <span className="absolute left-0">•</span>
+                  {b}
+                </li>
               ))}
             </ul>
           </>
         )}
-        <p className="mt-2">
+        <p className="mt-3">
           Peildatum {formatDag(peildatum)}. Gemaakt met de assistent van PSV Tools.
           {voetnoot}
         </p>

@@ -15,12 +15,14 @@ import {
   StukFout,
   leesAfbeeldingUrl,
   leesBlok,
+  leesUitsnede,
   lijst,
   nadrukKeuzes,
   object,
   tekst,
   type Blok,
   type BlokInhoud,
+  type Uitsnede,
 } from "./model";
 
 export const LAYOUTS = [
@@ -108,6 +110,8 @@ export interface Foto {
   /** Alleen van onze eigen Bunny-CDN (map stukken/). */
   url?: string;
   alt?: string;
+  /** De uitsnede: welk punt in beeld blijft en hoe ver ingezoomd. */
+  positie?: Uitsnede;
 }
 
 export interface SlideVelden {
@@ -146,7 +150,9 @@ function leesFoto(raw: unknown, waar: string): Foto | undefined {
   const wens = tekst(o.wens, `${waar}: wens`, LIMIETEN.wens, false);
   const url = leesAfbeeldingUrl(o.url, `${waar}: url`);
   const alt = tekst(o.alt, `${waar}: alt`, LIMIETEN.alt, false);
-  return wens || url ? { ...(wens && { wens }), ...(url && { url }), ...(alt && { alt }) } : undefined;
+  // Een uitsnede hoort bij een foto: zonder foto (of na een nieuwe) begint hij weer in het midden.
+  const positie = url ? leesUitsnede(o.positie, `${waar}: positie`) : undefined;
+  return wens || url ? { ...(wens && { wens }), ...(url && { url }), ...(alt && { alt }), ...(positie && { positie }) } : undefined;
 }
 
 function zonderType<T extends BlokInhoud>(blok: T): Omit<T, "type" | "opmaak"> {

@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { AfbeeldingPlek, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
+import { AfbeeldingPlek, VervangFoto, fotoStijl, useAfbeeldingActies } from "@/components/stuk/afbeelding";
 import { Bron, Grafiek, StukWeergave } from "@/components/stuk/stuk-weergave";
 import { bronnenVan, type Blok, type StukInhoud } from "@/lib/stukken/model";
 import { MET_FOTO, wachtOpFoto, type DeckSlide, type Foto } from "@/lib/stukken/deck";
@@ -146,7 +146,7 @@ function FotoVak({ foto, doel, links, breed, vorm, plek }: { foto?: Foto; doel: 
     <>
       <div className="absolute top-0 h-full" style={{ left: links, width: breed, clipPath: vorm ? clip(vorm) : undefined }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-        <img src={foto.url} alt={foto.alt ?? foto.wens ?? ""} className="h-full w-full object-cover" />
+        <img src={foto.url} alt={foto.alt ?? foto.wens ?? ""} className="h-full w-full object-cover" style={fotoStijl(foto.positie)} />
       </div>
       <VervangFoto doel={doel} wens={foto.wens} className="!right-auto" style={plek} />
     </>
@@ -280,7 +280,7 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
           {slide.foto?.url ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-              <img src={slide.foto.url} alt={slide.foto.alt ?? slide.foto.wens ?? ""} className="absolute inset-0 h-full w-full object-cover" />
+              <img src={slide.foto.url} alt={slide.foto.alt ?? slide.foto.wens ?? ""} className="absolute inset-0 h-full w-full object-cover" style={fotoStijl(slide.foto.positie)} />
               <VervangFoto doel={doel} wens={slide.foto.wens} className="right-[24px] top-[24px]" />
             </>
           ) : (

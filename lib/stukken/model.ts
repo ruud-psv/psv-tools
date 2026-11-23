@@ -77,7 +77,7 @@ export type BlokInhoud = (
   | { type: "tabel"; titel?: string; kolommen: string[]; rijen: string[][]; bron: string }
   | { type: "grafiek"; titel: string; soort: "lijn" | "staaf"; labels: string[]; reeksen: Reeks[]; eenheid?: string; bron: string }
   | { type: "conclusie"; punten: string[] }
-  | { type: "afbeelding"; wens: string; url?: string; alt?: string; bijschrift?: string }
+  | { type: "afbeelding"; wens: string; url?: string; alt?: string; bijschrift?: string; positie?: Uitsnede }
 ) & { opmaak?: Opmaak };
 
 /**
@@ -88,6 +88,32 @@ export type BlokInhoud = (
 export interface Afbeelding {
   wens?: string;
   url?: string;
+  positie?: Uitsnede;
+}
+
+/**
+ * Hoe een foto in zijn vak valt: het punt dat in beeld moet blijven (x, y in
+ * procenten van de foto, 50/50 is het midden) en hoe ver ingezoomd (1 = de
+ * hele foto, tot 3).
+ */
+export interface Uitsnede {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/** Controleert een uitsnede; null of niets = geen (het midden). */
+export function leesUitsnede(raw: unknown, waar: string): Uitsnede | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const o = object(raw, waar);
+  const getal = (v: unknown, min: number, max: number, standaard: number, naam: string) => {
+    if (v === undefined || v === null) return standaard;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) throw new StukFout(`${waar}: ${naam} moet tussen ${min} en ${max} liggen.`);
+    return Math.round(n * 100) / 100;
+  };
+  const u = { x: getal(o.x, 0, 100, 50, "x"), y: getal(o.y, 0, 100, 50, "y"), zoom: getal(o.zoom, 1, 3, 1, "zoom") };
+  return u.x === 50 && u.y === 50 && u.zoom === 1 ? undefined : u;
 }
 
 export type BlokType = BlokInhoud["type"];
@@ -223,7 +249,8 @@ function leesTitelbeeld(waarde: unknown): Afbeelding | undefined {
   const o = object(waarde, "Het titelbeeld");
   const wens = tekst(o.wens, "Het titelbeeld: wens", LIMIETEN.wens, false);
   const url = leesAfbeeldingUrl(o.url, "Het titelbeeld: url");
-  return wens || url ? { ...(wens && { wens }), ...(url && { url }) } : undefined;
+  const positie = url ? leesUitsnede(o.positie, "Het titelbeeld: positie") : undefined;
+  return wens || url ? { ...(wens && { wens }), ...(url && { url }), ...(positie && { positie }) } : undefined;
 }
 
 /** De namen waarop `nadruk` kan wijzen, per bloktype; leeg = geen nadruk mogelijk. */
@@ -348,12 +375,14 @@ function leesInhoud(raw: unknown, waar: string): BlokInhoud {
       const url = leesAfbeeldingUrl(b.url, `${waar} (afbeelding): url`);
       const alt = tekst(b.alt, `${waar} (afbeelding): alt`, LIMIETEN.alt, false);
       const bijschrift = tekst(b.bijschrift, `${waar} (afbeelding): bijschrift`, LIMIETEN.punt, false);
+      const positie = url ? leesUitsnede(b.positie, `${waar} (afbeelding): positie`) : undefined;
       return {
         type,
         wens: tekst(b.wens, `${waar} (afbeelding): wens`, LIMIETEN.wens)!,
         ...(url && { url }),
         ...(alt && { alt }),
         ...(bijschrift && { bijschrift }),
+        ...(positie && { positie }),
       };
     }
   }
