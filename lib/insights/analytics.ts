@@ -108,6 +108,7 @@ function buildContext(input: AnalyticsInsightInput): string {
 export async function analyzeAnalytics(input: AnalyticsInsightInput): Promise<AnalyticsInsightResult> {
   const context = buildContext(input);
   return runInsightAnalysis<AnalyticsInsightResult>({
+    plek: "inzichten-analytics",
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende web analytics data en retourneer je inzichten als JSON:\n\n${context}`,
   });

@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { modelVoor } from "@/lib/modellen/store";
 
 /**
  * De titel van een gesprek, zoals in Claude: een paar woorden over waar het
@@ -6,7 +7,6 @@ import type Anthropic from "@anthropic-ai/sdk";
  * maakt hem tegelijk met het eerste antwoord, dus de collega wacht er niet op.
  */
 
-export const TITEL_MODEL = "claude-haiku-5-5";
 const MAX_LENGTE = 60;
 
 const INSTRUCTIES = `Je geeft een gesprek in PSV Tools (de interne tool van het marketingteam van PSV) een titel voor de lijst met gesprekken.
@@ -47,7 +47,7 @@ export async function maakTitel(
     .join("\n\n");
   const antwoord = await client.messages.create(
     {
-      model: TITEL_MODEL,
+      model: (await modelVoor("assistent-titel")).model,
       max_tokens: 64,
       system: INSTRUCTIES,
       messages: [{ role: "user", content: `Het gesprek:\n\n${gesprek}` }],

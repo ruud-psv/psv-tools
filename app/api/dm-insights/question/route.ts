@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { modelVoor } from "@/lib/modellen/store";
 import { buildAnalysisContext } from "@/lib/dm-analysis";
 import type { MailingSummary, Totals } from "@/lib/dm-analysis";
 import { authorize } from "@/lib/auth";
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: (await modelVoor("dm-vraag")).model,
       max_tokens: 1024,
       system: systemPrompt,
       messages: body.messages.map((m) => ({ role: m.role, content: m.content })),

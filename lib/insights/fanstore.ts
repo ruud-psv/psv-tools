@@ -93,6 +93,7 @@ function buildContext(input: FanstoreInsightInput): string {
 export async function analyzeFanstore(input: FanstoreInsightInput): Promise<FanstoreInsightResult> {
   const context = buildContext(input);
   return runInsightAnalysis<FanstoreInsightResult>({
+    plek: "inzichten-fanstore",
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende Fanstore verkoopdata en retourneer je inzichten als JSON:\n\n${context}`,
   });

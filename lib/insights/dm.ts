@@ -56,6 +56,7 @@ REGELS:
 export async function analyzeDmMailings(input: DmInsightInput): Promise<DmInsightResult> {
   const context = buildAnalysisContext(input.mailings, input.totals, input.dateRange);
   return runInsightAnalysis<DmInsightResult>({
+    plek: "inzichten-dm",
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende DM performance data en retourneer je inzichten als JSON:\n\n${context}`,
   });

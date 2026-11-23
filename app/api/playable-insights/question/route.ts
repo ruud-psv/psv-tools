@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { modelVoor } from "@/lib/modellen/store";
 import { buildPlayableContext } from "@/lib/playable-analysis";
 import type { Campaign, PlayableTotals } from "@/lib/playable-analysis";
 import { authorize } from "@/lib/auth";
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: (await modelVoor("playable-vraag")).model,
       max_tokens: 1024,
       system: systemPrompt,
       messages: body.messages.map((m) => ({ role: m.role, content: m.content })),

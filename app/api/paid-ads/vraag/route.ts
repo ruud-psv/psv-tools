@@ -4,6 +4,8 @@ import { requireEmail } from "@/lib/api-session";
 import { buildPaidAdsContext } from "@/lib/paid-ads/analysis";
 import { METHODE_TEKST } from "@/lib/paid-ads/methode";
 import type { PaidAdsResponse } from "@/lib/paid-ads/types";
+import { fallbackVoor, outputConfigVoor, plek } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 /**
  * Vragen stellen over het Paid Ads dashboard, voor wie er niet dagelijks in
@@ -18,7 +20,6 @@ import type { PaidAdsResponse } from "@/lib/paid-ads/types";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const MODEL = "claude-opus-5-5";
 /** Genoeg voor een gesprek; oudere beurten vallen eraf. */
 const MAX_BERICHTEN = 20;
 const MAX_VRAAG = 2000;
@@ -97,16 +98,16 @@ export async function POST(req: NextRequest) {
       const stuur = (regel: Record<string, string>) => controller.enqueue(encoder.encode(`${JSON.stringify(regel)}\n`));
       let antwoord = "";
       try {
-        // `fallbacks` staat nog niet in de types van deze SDK-versie; de API
-        // kent hem wel. Bij een onterechte weigering beantwoordt een ander
-        // model de vraag.
-        const params: Anthropic.Beta.MessageCreateParamsStreaming & { fallbacks: "default" } = {
-          model: MODEL,
+        // Het model komt uit Beheer > Model garden. `fallbacks` staat nog niet in
+        // de types van deze SDK-versie; de API kent hem wel. Bij een onterechte
+        // weigering beantwoordt een ander model de vraag.
+        const actief = await modelVoor("paid-ads");
+        const params: Anthropic.Beta.MessageCreateParamsStreaming & { fallbacks?: "default" } = {
+          model: actief.model,
           max_tokens: 8000,
           stream: true,
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-          output_config: { effort: "medium" },
+          ...fallbackVoor(actief),
+          ...outputConfigVoor(actief, plek("paid-ads")),
           system: [
             { type: "text", text: INSTRUCTIES, cache_control: { type: "ephemeral" } },
             // De data blijft gelijk zolang het gesprek over dezelfde selectie gaat.

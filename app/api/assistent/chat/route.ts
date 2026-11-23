@@ -12,6 +12,8 @@ import { inhoudVan, samenvatting, type Stuk } from "@/lib/stukken/model";
 import { getStuk, saveStuk } from "@/lib/stukken/store";
 import { isGesprekId, nieuwGesprekId, parseBerichten, titelVan, type GesprekStap } from "@/lib/kennisbank-gesprekken";
 import { todayInAmsterdam } from "@/lib/ringside/seat-state";
+import { fallbackVoor, outputConfigVoor, plek } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 /**
  * De assistent van PSV Tools: één chat over de databronnen heen.
@@ -32,7 +34,6 @@ import { todayInAmsterdam } from "@/lib/ringside/seat-state";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const MODEL = "claude-opus-5-5";
 /** Zo vaak mag het model tools aanroepen voor één vraag; breed zoeken kost een paar rondes. */
 const MAX_RONDES = 12;
 
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest) {
     ? `Er is al een stuk bij dit gesprek. ${samenvatting(huidigStuk)}\nDe volledige inhoud: ${JSON.stringify(inhoudVan(huidigStuk)).slice(0, 40_000)}`
     : null;
   const client = new Anthropic();
+  const actief = await modelVoor("assistent");
   const messages: Bericht[] = berichten.map(({ role, content }) => ({ role, content }));
   // De titel van het gesprek, zoals in Claude: tegelijk met het antwoord, één keer per gesprek.
   // Ook voor oude gesprekken die nog de eerste vraag als titel hebben.
@@ -200,18 +202,17 @@ export async function POST(req: NextRequest) {
 
       try {
         for (let ronde = 0; ; ronde++) {
-          // `fallbacks` staat nog niet in de types van deze SDK-versie; de API
-          // kent hem wel. Bij een onterechte weigering beantwoordt een ander
-          // model de vraag.
-          const params: Anthropic.Beta.MessageCreateParamsStreaming & { fallbacks: "default" } = {
-            model: MODEL,
+          // Het model komt uit Beheer > Model garden. `fallbacks` staat nog niet in
+          // de types van deze SDK-versie; de API kent hem wel. Bij een onterechte
+          // weigering beantwoordt een ander model de vraag.
+          const params: Anthropic.Beta.MessageCreateParamsStreaming & { fallbacks?: "default" } = {
+            model: actief.model,
             max_tokens: 16000,
             stream: true,
-            betas: ["server-side-fallback-2026-07-01"],
-            fallbacks: "default",
-            // Gemiddeld (de standaard van dit model): op laag verkent het model te weinig
-            // en trekt het na één zoekactie al een conclusie.
-            output_config: { effort: "medium" },
+            ...fallbackVoor(actief),
+            // Gemiddeld: op laag verkent het model te weinig en trekt het na één
+            // zoekactie al een conclusie.
+            ...outputConfigVoor(actief, plek("assistent")),
             system: [
               // Vast deel eerst en gecachet (samen met de tools); de datum erna.
               { type: "text", text: INSTRUCTIES, cache_control: { type: "ephemeral" } },

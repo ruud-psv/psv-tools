@@ -115,6 +115,7 @@ export async function analyzeFandeskDay(
 ): Promise<FandeskInsightResult> {
   const context = buildDayContext(input);
   return runInsightAnalysis<FandeskInsightResult>({
+    plek: "inzichten-fandesk",
     systemPrompt: DAY_SYSTEM_PROMPT,
     userMessage: `Analyseer de support tickets van deze dag en retourneer je inzichten als JSON:\n\n${context}`,
     // Een drukke dag levert acht thema's plus proza op; 2048 is dan krap.
@@ -128,6 +129,7 @@ export async function analyzeFandeskPeriod(
 ): Promise<FandeskInsightResult> {
   const context = buildPeriodContext(input);
   return runInsightAnalysis<FandeskInsightResult>({
+    plek: "inzichten-fandesk",
     systemPrompt: PERIOD_SYSTEM_PROMPT,
     userMessage: `Vat de support tickets van deze periode samen en retourneer je inzichten als JSON:\n\n${context}`,
     maxTokens: 3072,

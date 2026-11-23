@@ -22,7 +22,7 @@ export const ACCESS_LEVELS: { value: AccessLevel; label: string; description: st
 /** Het niveau van iedereen die (nog) niet in de lijst staat. */
 export const DEFAULT_LEVEL: AccessLevel = "all-beta";
 
-/** De beheerpagina (tabbladen Gebruikers en MCP-servers); alleen voor admins. */
+/** De beheerpagina (tabbladen Gebruikers, MCP-servers en Model garden); alleen voor admins. */
 export const ADMIN_HREF = "/dashboard/beheer";
 
 export interface UserAccess {

@@ -152,6 +152,7 @@ function buildContext(input: CombinedInsightInput): string {
 export async function analyzeCombined(input: CombinedInsightInput): Promise<CombinedInsightResult> {
   const context = buildContext(input);
   return runInsightAnalysis<CombinedInsightResult>({
+    plek: "inzichten-rapport",
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende gecombineerde rapportagedata en retourneer je inzichten als JSON:\n\n${context}`,
   });

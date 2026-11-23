@@ -53,6 +53,7 @@ REGELS:
 export async function analyzePlayableCampaigns(input: PlayableInsightInput): Promise<PlayableInsightResult> {
   const context = buildPlayableContext(input.campaigns, input.totals);
   return runInsightAnalysis<PlayableInsightResult>({
+    plek: "inzichten-playable",
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende Playable campagne data en retourneer je inzichten als JSON:\n\n${context}`,
   });

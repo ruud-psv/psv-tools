@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { PlekId } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 export class InsightConfigError extends Error {}
 export class InsightAnalysisError extends Error {
@@ -14,6 +16,8 @@ export class InsightAnalysisError extends Error {
 const DEFAULT_MAX_TOKENS = 2048;
 
 export async function runInsightAnalysis<T>(args: {
+  /** De plek in Beheer > Model garden; bepaalt het model. */
+  plek: PlekId;
   systemPrompt: string;
   userMessage: string;
   /** Alleen meegeven wanneer de verwachte JSON niet in 2048 tokens past. */
@@ -24,7 +28,7 @@ export async function runInsightAnalysis<T>(args: {
 
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: (await modelVoor(args.plek)).model,
     max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: args.systemPrompt,
     messages: [{ role: "user", content: args.userMessage }],

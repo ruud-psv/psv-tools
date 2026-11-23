@@ -52,6 +52,7 @@ REGELS:
 export async function analyzeTicketEvents(input: TicketInsightInput): Promise<TicketInsightResult> {
   const context = buildAnalysisContext(input.events);
   return runInsightAnalysis<TicketInsightResult>({
+    plek: "inzichten-ticket",
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende ticket data en retourneer je inzichten als JSON:\n\n${context}`,
   });
