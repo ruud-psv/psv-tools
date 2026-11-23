@@ -57,3 +57,9 @@ test("probeSite: premiumvelden en OTT uit, de rest aan; rate-metric met een ande
   // De laatste afgesloten JW-dag is gisteren in Eastern.
   assert.equal((verzoeken[0].body as { end_date: string }).end_date, "2026-11-22");
 });
+
+test("leesSecret: haalt meegeplakte aanhalingstekens en Bearer weg", async () => {
+  const { leesSecret } = await import("./sites");
+  assert.equal(leesSecret({ JWPLAYER_SECRET: ' "Bearer abc123" ' }), "abc123");
+  assert.equal(leesSecret({ JWPLAYER_SECRET: "abc123" }), "abc123");
+});

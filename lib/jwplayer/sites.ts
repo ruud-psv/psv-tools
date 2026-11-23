@@ -40,7 +40,11 @@ export function leesSites(env: Record<string, string | undefined> = process.env)
 }
 
 export function leesSecret(env: Record<string, string | undefined> = process.env): string {
-  const secret = env.JWPLAYER_SECRET?.trim();
+  // Ook als iemand "Bearer …" of aanhalingstekens mee heeft geplakt.
+  const secret = env.JWPLAYER_SECRET?.trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
   if (!secret) throw new JwConfigError("JW Player-configuratie ontbreekt: JWPLAYER_SECRET.");
   return secret;
 }
