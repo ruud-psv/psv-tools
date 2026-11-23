@@ -40,7 +40,7 @@ const MAAK_VRAAG: Record<StukSoort, { nieuw: string; omzetten: string }> = {
   },
   deck: {
     nieuw: "Maak een slide deck van dit gesprek.",
-    omzetten: "Zet het stuk om naar een slide deck en geef de blokken met cijfers een kernboodschap.",
+    omzetten: "Zet het stuk om naar een slide deck in het PSV-template: met hoofdstukken, korte titels en beeld-, speciaal- of quoteslides waar het past.",
   },
 };
 

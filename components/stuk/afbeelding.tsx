@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ImagePlus, Images, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FileflowKiezer } from "@/components/stuk/fileflow-kiezer";
@@ -23,7 +23,8 @@ export interface AfbeeldingActies {
 
 const Context = createContext<AfbeeldingActies | null>(null);
 
-export function AfbeeldingProvider({ acties, children }: { acties: AfbeeldingActies; children: ReactNode }) {
+/** Met `acties={null}`: geen knoppen (bijvoorbeeld in een kleine slide die zelf een knop is). */
+export function AfbeeldingProvider({ acties, children }: { acties: AfbeeldingActies | null; children: ReactNode }) {
   return <Context.Provider value={acties}>{children}</Context.Provider>;
 }
 
@@ -89,11 +90,12 @@ function ZoekInFileflow({ doel, wens, className, klein = false }: { doel: string
 }
 
 /** Een lege plek voor een foto, met wat erop moet en een knop. Alleen in het voorbeeld. */
-export function AfbeeldingPlek({ doel, wens, groot = false, className }: { doel: string; wens?: string; groot?: boolean; className?: string }) {
+export function AfbeeldingPlek({ doel, wens, groot = false, className, style }: { doel: string; wens?: string; groot?: boolean; className?: string; style?: CSSProperties }) {
   const acties = useAfbeeldingActies();
   if (!acties) return null;
   return (
     <div
+      style={style}
       className={cn(
         "flex h-full flex-col items-center justify-center gap-3 border-2 border-dashed print:hidden border-psv-gray-09 bg-psv-gray-07 p-6 text-center text-psv-gray-11",
         groot ? "min-h-[240px]" : "min-h-[180px]",
@@ -125,11 +127,11 @@ export function AfbeeldingPlek({ doel, wens, groot = false, className }: { doel:
 }
 
 /** Kleine knoppen over een foto heen om hem te vervangen: uploaden of uit FileFlow. Alleen in het voorbeeld. */
-export function VervangFoto({ doel, wens, className }: { doel: string; wens?: string; className?: string }) {
+export function VervangFoto({ doel, wens, className, style }: { doel: string; wens?: string; className?: string; style?: CSSProperties }) {
   const acties = useAfbeeldingActies();
   if (!acties) return null;
   return (
-    <span className={cn("absolute right-2 top-2 z-10 flex gap-1.5 print:hidden", className)}>
+    <span className={cn("absolute right-2 top-2 z-10 flex gap-1.5 print:hidden", className)} style={style}>
       <ZoekInFileflow doel={doel} wens={wens} klein />
       <VervangUpload doel={doel} />
     </span>

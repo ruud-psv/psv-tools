@@ -38,8 +38,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!stuk) return NextResponse.json({ error: "Geen stuk bij dit gesprek." }, { status: 404 });
     // Eerst controleren, dan pas uploaden: geen foto's op Bunny voor een wijziging die toch niet doorgaat.
     if (stuk.versie !== basisVersie) throw new StukConflict(stuk);
-    const blok = doel === "titel" ? null : stuk.blokken.find((b): b is Extract<Blok, { type: "afbeelding" }> => b.id === doel && b.type === "afbeelding");
-    if (doel !== "titel" && !blok) return NextResponse.json({ error: "Dit blok bestaat niet (meer) of is geen afbeelding." }, { status: 400 });
+    // Het doel: "titel", "slide:<id>" (de foto van een slide) of het id van een afbeeldingsblok.
+    const slideId = doel.startsWith("slide:") ? doel.slice("slide:".length) : null;
+    const slide = slideId ? stuk.slides?.find((x) => x.id === slideId) : null;
+    if (slideId && !slide) return NextResponse.json({ error: "Deze slide bestaat niet (meer)." }, { status: 400 });
+    const blok = doel === "titel" || slideId ? null : stuk.blokken.find((b): b is Extract<Blok, { type: "afbeelding" }> => b.id === doel && b.type === "afbeelding");
+    if (doel !== "titel" && !slideId && !blok) return NextResponse.json({ error: "Dit blok bestaat niet (meer) of is geen afbeelding." }, { status: 400 });
 
     const { bytes, alt } = metBestand
       ? { bytes: new Uint8Array(await bestand.arrayBuffer()), alt: undefined }
@@ -47,7 +51,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const soort = controleerAfbeelding(bytes, metBestand ? MAX_AFBEELDING_BYTES : MAX_KOPIE_BYTES);
     const url = await uploadAfbeelding(bytes, soort);
 
-    const bewerking = blok
+    const bewerking = slide
+      ? {
+          basisVersie,
+          acties: [{ actie: "slide_wijzigen", slide_id: slide.id, slide: { foto: { url, ...(!slide.foto?.alt && alt && { alt: alt.slice(0, 200) }) } } }],
+        }
+      : blok
       ? {
           basisVersie,
           acties: [

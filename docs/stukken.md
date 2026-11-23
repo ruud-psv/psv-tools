@@ -37,29 +37,45 @@ deel je het met een link of druk je het af als PDF.
 
 ## Slide deck
 
-Een deck volgt het PowerPoint-template van PSV (seizoen 2026-2027), zoals beschreven in
-`packages/psv-branding/open-design/psv/DESIGN.md`. `slidesVan` in `lib/stukken/model.ts` bepaalt
-welk blok op welke slide komt; `components/stuk/deck-weergave.tsx` tekent ze:
+Een deck is een **lijst slides in het PowerPoint-template van PSV** (seizoen 2026-2027). Elke slide
+kiest een layout uit het template en vult de velden van die layout (`lib/stukken/deck.ts`):
 
-- **Welkom**: rood met het patroon "PSV EINDHOVEN", de titel in het zwarte blok. Met een titelfoto
-  wordt het de "Speciaal"-slide: foto over de hele slide met links de rode schuine vorm.
-- Een **kop** wordt een **hoofdstukslide**: rood met de donkerdere schuine band, het embleem en de
-  titel in het zwarte blok.
-- Elk ander blok krijgt een **inhoudslide**: wit met de grijze schuine vorm, de titel wit op een zwart
-  blok linksboven (kernboodschap, of de titel van de grafiek of tabel, "In cijfers", "Conclusie"),
-  het embleem rechtsonder, geen voetregel en geen paginanummer. Een lange titel wordt kleiner en mag
-  over twee regels.
-- **Twee halve blokken na elkaar** delen een slide: tekst smal links naast een grafiek of tabel
-  ("Grafiek" en "Tabel" uit het template), of tekst naast een foto in de schuine vorm ("Beeld").
-- Een **foto alleen** vult de hele slide ("Foto zoom"), met de kernboodschap in het zwarte blok.
-- Een **conclusie** staat standaard op rood; een slide op zwart krijgt een rood titelblok.
-- Aan het eind de **bronnen** en een **afsluiting** in rood met het embleem.
-- Het uitgelichte kerngetal staat groot op zwart; de uitgelichte rij in een tabel en de uitgelichte
-  reeks in een grafiek zijn rood, de andere reeksen neutraal.
+| Layout | Wat erop staat |
+|---|---|
+| Welkom | Rood met het PSV EINDHOVEN-patroon, de titel en een regel eronder |
+| Hoofdstuk | Rood met de donkere band met haakje en het embleem, de titel |
+| Tekst / Tekst (2 kolommen) | Titel, subkop (rood) en tekst of opsomming, met de grijze schuine vorm en het logo |
+| Beeld | Tekst links, foto rechts in de schuine vorm; de foto in 5 breedtes (Beeld 1 t/m 5) |
+| Speciaal | Foto groot met de rode schuine vorm, titel, tekst in een wit vak |
+| Quote | Een citaat in wit op rood, met een foto |
+| Foto zoom | Alleen een foto over de hele slide |
+| Grafiek / Tabel | Uitleg links, grafiek of tabel rechts |
+| Kerngetallen | De kerngetallen in tegels |
+| Rood / Zwart | Effen vlak met titel en tekst |
+| Afsluiting | Rood met het embleem |
 
-Op het scherm worden de slides geschaald naar de breedte van het paneel. **Afdrukken** maakt van
-elke slide een pagina van 1280 × 720 (`@page deck` in `app/globals.css`), dus "Opslaan als PDF"
-geeft een PDF die je kunt presenteren.
+- **Getrouw aan het template.** De achtergronden (welkom, hoofdstuk, afsluiting, de grijze schuine
+  vorm) en het logo zijn de afbeeldingen uit het template zelf (`public/images/deck/`). Alle maten
+  (titel op 61, 68 px; tekst op 73, 192 px; fotovakken en hun maskers van Beeld 1 t/m 5) zijn uit het
+  template gemeten, op 1280 × 720 (96 px per inch). De titel staat wit op een zwart blok op één regel
+  en wordt kleiner als hij niet past, net als de tekst ("tekst passend maken").
+- **De bronnen** van de cijfers komen automatisch op een slide vóór de afsluiting.
+- **Slides bewerken.** Met **Bewerken** zie je bovenaan alle slides klein; klik er een aan om hem groot
+  te zien met de velden van zijn layout: titel, subkop, tekst, foto (uploaden of FileFlow, en de
+  breedte bij Beeld), quote en naam, of de data van een grafiek, tabel of kerngetallen met wat eruit
+  springt. Wissel van layout met de keuzelijst; de velden blijven bewaard. Verder: naar voren, naar
+  achteren, dupliceren en verwijderen. **+ Slide** toont alle layouts uit het template met een
+  voorbeeld; de nieuwe slide komt na de gekozen slide.
+- **Via de chat.** De assistent maakt slides (`stuk_maken` met `slides`) en bewerkt ze
+  (`slide_toevoegen`, `slide_wijzigen`, `slide_verwijderen`, `slide_verplaatsen`); "maak van slide 4
+  een quote" werkt dus ook.
+- **Rapport en deck.** Zet je een rapport om naar een deck, dan maakt Tools de slides uit de blokken
+  (een kop wordt een hoofdstuk, tekst naast een grafiek of foto één slide, enzovoort). Zijn er al
+  slides, dan vraagt het paneel of je ze opnieuw wilt opbouwen of wilt houden. Andersom krijgt een
+  deck zonder rapport blokken uit de slides. Oude decks (van vóór de slides) krijgen bij het openen
+  slides uit hun blokken.
+- **Afdrukken** maakt van elke slide een pagina van 1280 × 720 (`@page deck` in `app/globals.css`),
+  dus "Opslaan als PDF" geeft een PDF die je kunt presenteren.
 
 ## Foto's
 
@@ -152,7 +168,9 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 | De tools van de assistent | `lib/assistent/stukken-tools.ts` (met tests) |
 | API's: stuk, lijst, vorige versie, delen | `app/api/assistent/stukken/*` |
 | Weergave van een rapport | `components/stuk/stuk-weergave.tsx` |
-| Weergave als slide deck | `components/stuk/deck-weergave.tsx` |
+| Slides: layouts, velden, controle, omzetten | `lib/stukken/deck.ts` (met tests) |
+| Weergave als slide deck (template) | `components/stuk/deck-weergave.tsx`, `public/images/deck/` |
+| Slides bewerken | `components/stuk/slide-bewerker.tsx` |
 | Verdeling van de y-as | `lib/stukken/as.ts` (met tests) |
 | Foto's: controle en upload naar Bunny | `lib/stukken/afbeelding.ts` (met tests), `app/api/assistent/stukken/[id]/afbeelding/route.ts` |
 | Foto toevoegen in het voorbeeld | `components/stuk/afbeelding.tsx` |

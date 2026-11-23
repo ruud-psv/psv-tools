@@ -14,6 +14,19 @@
  * halve blokken naast elkaar). Een deck zet dezelfde blokken op slides.
  * Oude stukken met soort "onepager" worden bij het lezen een rapport.
  */
+import {
+  DECK_LIMIETEN,
+  bronnenVanSlides,
+  leesSlide,
+  leesSlides,
+  naarBlokken,
+  slideSamenvatting,
+  vanBlokken,
+  volgendSlideId,
+  wijzigSlide,
+  type DeckSlide,
+} from "./deck";
+
 export type StukSoort = "rapport" | "deck";
 
 export const STUK_SOORT_LABEL: Record<StukSoort, string> = {
@@ -86,7 +99,10 @@ export interface StukInhoud {
   ondertitel?: string;
   /** De foto achter de titel (titelslide van een deck, kop van een rapport). */
   titelbeeld?: Afbeelding;
+  /** De blokken van het rapport. */
   blokken: Blok[];
+  /** De slides van het deck, in het PowerPoint-template (lib/stukken/deck.ts). */
+  slides?: DeckSlide[];
 }
 
 /** Alleen de inhoud van een stuk: voor versies, de deellink en het model. */
@@ -97,6 +113,7 @@ export function inhoudVan(stuk: StukInhoud): StukInhoud {
     ...(stuk.ondertitel && { ondertitel: stuk.ondertitel }),
     ...(stuk.titelbeeld && { titelbeeld: stuk.titelbeeld }),
     blokken: stuk.blokken,
+    ...(stuk.slides?.length && { slides: stuk.slides }),
   };
 }
 
@@ -151,12 +168,12 @@ export class StukFout extends Error {}
 
 /* ---------- Controle van wat het model aanlevert ---------- */
 
-function object(waarde: unknown, waar: string): Record<string, unknown> {
+export function object(waarde: unknown, waar: string): Record<string, unknown> {
   if (!waarde || typeof waarde !== "object" || Array.isArray(waarde)) throw new StukFout(`${waar} moet een object zijn.`);
   return waarde as Record<string, unknown>;
 }
 
-function tekst(waarde: unknown, waar: string, max: number, verplicht = true): string | undefined {
+export function tekst(waarde: unknown, waar: string, max: number, verplicht = true): string | undefined {
   if (waarde === undefined || waarde === null || waarde === "") {
     if (verplicht) throw new StukFout(`${waar} ontbreekt.`);
     return undefined;
@@ -168,7 +185,7 @@ function tekst(waarde: unknown, waar: string, max: number, verplicht = true): st
   return schoon || undefined;
 }
 
-function lijst(waarde: unknown, waar: string, min: number, max: number): unknown[] {
+export function lijst(waarde: unknown, waar: string, min: number, max: number): unknown[] {
   if (!Array.isArray(waarde)) throw new StukFout(`${waar} moet een lijst zijn.`);
   if (waarde.length < min) throw new StukFout(`${waar} moet minstens ${min} ${min === 1 ? "item" : "items"} hebben.`);
   if (waarde.length > max) throw new StukFout(`${waar} heeft er ${waarde.length}; hooguit ${max}.`);
@@ -353,14 +370,22 @@ function leesSoort(waarde: unknown): StukSoort {
   throw new StukFout('De soort moet "rapport" of "deck" zijn.');
 }
 
-/** Een opgeslagen stuk zoals het nu hoort: oude one-pagers worden een rapport. */
+/**
+ * Een opgeslagen stuk zoals het nu hoort: oude one-pagers worden een rapport,
+ * en een deck van vóór de slides krijgt slides uit zijn blokken.
+ */
 export function normaliseer<T extends { soort: string; vorige?: { soort: string }[] }>(stuk: T): T {
   const soort = (s: string) => (s === "deck" ? "deck" : "rapport");
-  return {
+  const metSlides = <U extends { soort: string }>(v: U): U => {
+    const x = v as unknown as Partial<StukInhoud>;
+    if (soort(v.soort) !== "deck" || x.slides?.length || !x.blokken?.length || !x.titel) return v;
+    return { ...v, slides: vanBlokken({ titel: x.titel, ondertitel: x.ondertitel, blokken: x.blokken }) };
+  };
+  return metSlides({
     ...stuk,
     soort: soort(stuk.soort),
-    ...(stuk.vorige && { vorige: stuk.vorige.map((v) => ({ ...v, soort: soort(v.soort) })) }),
-  };
+    ...(stuk.vorige && { vorige: stuk.vorige.map((v) => metSlides({ ...v, soort: soort(v.soort) })) }),
+  });
 }
 
 /** Het volgende vrije blok-id: b1, b2, …, uniek binnen het stuk. */
@@ -375,12 +400,16 @@ function volgendId(blokken: Blok[], gebruikt: Set<string>): string {
 export function nieuweInhoud(invoer: unknown): StukInhoud {
   const raw = object(invoer, "Het stuk");
   const soort = leesSoort(raw.soort);
-  const blokkenRaw = lijst(raw.blokken, "blokken", 1, LIMIETEN.blokken);
-  controleerAantal(blokkenRaw.length);
+  const titel = tekst(raw.titel, "De titel", LIMIETEN.titel)!;
   const ondertitel = tekst(raw.ondertitel, "De ondertitel", LIMIETEN.ondertitel, false);
-  const blokken = blokkenRaw.map((b, i) => ({ ...leesBlok(b, `Blok ${i + 1}`), id: `b${i + 1}` }));
   const titelbeeld = leesTitelbeeld(raw.titelbeeld);
-  return { soort, titel: tekst(raw.titel, "De titel", LIMIETEN.titel)!, ...(ondertitel && { ondertitel }), ...(titelbeeld && { titelbeeld }), blokken };
+  // Een deck kan direct uit slides bestaan; een rapport (of een deck zonder slides) uit blokken.
+  const metSlides = soort === "deck" && raw.slides !== undefined;
+  const blokkenRaw = metSlides && raw.blokken === undefined ? [] : lijst(raw.blokken, "blokken", 1, LIMIETEN.blokken);
+  controleerAantal(blokkenRaw.length);
+  const blokken = blokkenRaw.map((b, i) => ({ ...leesBlok(b, `Blok ${i + 1}`), id: `b${i + 1}` }));
+  const slides = metSlides ? leesSlides(raw.slides) : soort === "deck" ? vanBlokken({ titel, ondertitel, blokken }) : undefined;
+  return { soort, titel, ...(ondertitel && { ondertitel }), ...(titelbeeld && { titelbeeld }), blokken, ...(slides && { slides }) };
 }
 
 export type Actie =
@@ -388,7 +417,11 @@ export type Actie =
   | { actie: "wijzigen"; blok_id: string; blok: unknown }
   | { actie: "verwijderen"; blok_id: string }
   | { actie: "verplaatsen"; blok_id: string; na: string }
-  | { actie: "opmaken"; blok_id: string; opmaak: Partial<Record<keyof Opmaak, string | null>> };
+  | { actie: "opmaken"; blok_id: string; opmaak: Partial<Record<keyof Opmaak, string | null>> }
+  | { actie: "slide_toevoegen"; slide: unknown; na?: string }
+  | { actie: "slide_wijzigen"; slide_id: string; slide: unknown }
+  | { actie: "slide_verwijderen"; slide_id: string }
+  | { actie: "slide_verplaatsen"; slide_id: string; na: string };
 
 /**
  * Past bewerkingen toe op de inhoud, allemaal of geen: klopt er één niet,
@@ -397,6 +430,23 @@ export type Actie =
 export function pasToe(inhoud: StukInhoud, invoer: unknown): StukInhoud {
   const raw = object(invoer, "De bewerking");
   let blokken = [...inhoud.blokken];
+  let slides = [...(inhoud.slides ?? [])];
+  const slidePlek = (na: unknown, waar: string): number => {
+    if (na === undefined || na === null || na === "einde") {
+      // Standaard vóór de afsluiting, als die er is.
+      const laatste = slides.length - 1;
+      return laatste >= 0 && slides[laatste].layout === "afsluiting" ? laatste : slides.length;
+    }
+    if (na === "begin") return 0;
+    const i = slides.findIndex((x) => x.id === na);
+    if (i === -1) throw new StukFout(`${waar}: slide "${String(na)}" bestaat niet.`);
+    return i + 1;
+  };
+  const slideIndex = (id: unknown, waar: string): number => {
+    const i = slides.findIndex((x) => x.id === id);
+    if (i === -1) throw new StukFout(`${waar}: slide "${String(id)}" bestaat niet. Bestaande slides: ${slides.map((x) => x.id).join(", ") || "geen"}.`);
+    return i;
+  };
   const gebruikt = new Set(blokken.map((b) => b.id));
   const plek = (na: unknown, waar: string): number => {
     if (na === undefined || na === null || na === "einde") return blokken.length;
@@ -455,29 +505,61 @@ export function pasToe(inhoud: StukInhoud, invoer: unknown): StukInhoud {
         blokken.splice(plek(actie.na, waar), 0, blok);
         break;
       }
+      case "slide_toevoegen": {
+        const slide = leesSlide(actie.slide, volgendSlideId(slides), waar);
+        slides.splice(slidePlek(actie.na, waar), 0, slide);
+        break;
+      }
+      case "slide_wijzigen": {
+        const i = slideIndex(actie.slide_id, waar);
+        slides[i] = wijzigSlide(slides[i], actie.slide, waar);
+        break;
+      }
+      case "slide_verwijderen":
+        slides.splice(slideIndex(actie.slide_id, waar), 1);
+        break;
+      case "slide_verplaatsen": {
+        const [slide] = slides.splice(slideIndex(actie.slide_id, waar), 1);
+        slides.splice(actie.na === undefined || actie.na === null ? slides.length : slidePlek(actie.na, waar), 0, slide);
+        break;
+      }
       default:
-        throw new StukFout(`${waar}: kies toevoegen, wijzigen, opmaken, verwijderen of verplaatsen.`);
+        throw new StukFout(`${waar}: kies toevoegen, wijzigen, opmaken, verwijderen, verplaatsen, of slide_toevoegen, slide_wijzigen, slide_verwijderen, slide_verplaatsen.`);
     }
   });
 
   const soort = raw.soort === undefined ? inhoud.soort : leesSoort(raw.soort);
-  if (blokken.length === 0) throw new StukFout("Een stuk heeft minstens één blok.");
-  controleerAantal(blokken.length);
   const titel = raw.titel === undefined ? inhoud.titel : tekst(raw.titel, "De titel", LIMIETEN.titel)!;
   const ondertitel =
     raw.ondertitel === undefined ? inhoud.ondertitel : tekst(raw.ondertitel, "De ondertitel", LIMIETEN.ondertitel, false);
   // Titelbeeld: weglaten laat het staan, null haalt het weg.
   const titelbeeld = raw.titelbeeld === undefined ? inhoud.titelbeeld : leesTitelbeeld(raw.titelbeeld);
+
+  // Omzetten: een deck zonder slides krijgt ze uit het rapport (of opnieuw, met slides_opnieuw);
+  // een rapport zonder blokken krijgt ze uit de slides.
+  const hadSlides = (inhoud.slides?.length ?? 0) > 0;
+  if (soort === "deck" && ((!hadSlides && slides.length === 0) || raw.slides_opnieuw === true)) {
+    if (blokken.length === 0) throw new StukFout("Er is geen rapport om slides van te maken.");
+    slides = vanBlokken({ titel, ondertitel, blokken });
+  }
+  if (soort === "rapport" && blokken.length === 0 && slides.length > 0) {
+    blokken = naarBlokken(slides).map((b, i) => ({ ...b, id: `b${i + 1}` }));
+  }
+  if (soort === "rapport" && blokken.length === 0) throw new StukFout("Een rapport heeft minstens één blok.");
+  if (soort === "deck" && slides.length === 0) throw new StukFout("Een deck heeft minstens één slide.");
+  controleerAantal(blokken.length);
+  if (slides.length > DECK_LIMIETEN.slides) throw new StukFout(`Een deck heeft hooguit ${DECK_LIMIETEN.slides} slides (nu ${slides.length}).`);
   blokken = blokken.map((b) => ({ ...b }));
-  return { soort, titel, ...(ondertitel && { ondertitel }), ...(titelbeeld && { titelbeeld }), blokken };
+  return { soort, titel, ...(ondertitel && { ondertitel }), ...(titelbeeld && { titelbeeld }), blokken, ...(slides.length && { slides }) };
 }
 
 /** Een nieuwe versie: de huidige gaat naar `vorige`. */
 export function nieuweVersie(stuk: Stuk, inhoud: StukInhoud, peildatum: string, nu: string): Stuk {
   const huidig = { ...inhoudVan(stuk), versie: stuk.versie, peildatum: stuk.peildatum };
-  const { ondertitel: _o, titelbeeld: _t, ...rest } = stuk;
+  const { ondertitel: _o, titelbeeld: _t, slides: _s, ...rest } = stuk;
   void _o;
   void _t;
+  void _s;
   return {
     ...rest,
     ...inhoudVan(inhoud),
@@ -500,14 +582,18 @@ export function vorigeVersie(stuk: Stuk, nu: string): Stuk {
   return { ...nieuweVersie(stuk, inhoud, vorige.peildatum, nu), vorige: rest };
 }
 
-/** De bronnen onderaan het stuk: uniek, in volgorde van de blokken. */
-export function bronnenVan(stuk: Pick<StukInhoud, "blokken">): string[] {
+/** De bronnen onderaan het stuk: uniek, in volgorde van de blokken (of de slides van een deck). */
+export function bronnenVan(stuk: Pick<StukInhoud, "blokken"> & Partial<Pick<StukInhoud, "soort" | "slides">>): string[] {
+  if (stuk.soort === "deck" && stuk.slides?.length) return bronnenVanSlides(stuk.slides);
   const bronnen = stuk.blokken.flatMap((b) => ("bron" in b ? [b.bron] : []));
   return [...new Set(bronnen)];
 }
 
 /** Een korte samenvatting voor het model: welke blokken met welk id. */
 export function samenvatting(stuk: Stuk): string {
+  if (stuk.soort === "deck" && stuk.slides?.length) {
+    return `Slide deck "${stuk.titel}", versie ${stuk.versie}, ${stuk.slides.length} slides:\n${stuk.slides.map(slideSamenvatting).join("\n")}`;
+  }
   const blokken = stuk.blokken.map((b) => {
     const kern =
       b.type === "kop" || b.type === "tekst"
@@ -548,79 +634,13 @@ export function handmatigBewerken(stuk: Stuk, invoer: unknown, nu: string): Stuk
   const raw = (invoer && typeof invoer === "object" ? invoer : {}) as Record<string, unknown>;
   if (raw.basisVersie !== stuk.versie) throw new StukConflict(stuk);
   const bewerking: Record<string, unknown> = {};
-  for (const sleutel of ["acties", "titel", "ondertitel", "soort", "titelbeeld"]) {
+  for (const sleutel of ["acties", "titel", "ondertitel", "soort", "titelbeeld", "slides_opnieuw"]) {
     if (raw[sleutel] !== undefined) bewerking[sleutel] = raw[sleutel];
   }
   return nieuweVersie(stuk, pasToe(stuk, bewerking), stuk.peildatum, nu);
 }
 
-/* ---------- Slides (deck) ---------- */
-
-export interface Slide {
-  /** Een hoofdstukslide (uit een kop) of een slide met inhoud. */
-  soort: "hoofdstuk" | "inhoud";
-  /** Het hoofdstuk waar de slide onder valt (de laatste kop ervoor). */
-  sectie?: string;
-  /** De kernboodschap, of de titel van het blok, of een standaard per type. */
-  titel?: string;
-  /** Eén blok, of twee halve naast elkaar. */
-  blokken: Blok[];
-  achtergrond: Achtergrond;
-  groot: boolean;
-}
-
-function standaardTitel(blok: Blok): string | undefined {
-  switch (blok.type) {
-    case "grafiek":
-      return blok.titel;
-    case "tabel":
-      return blok.titel;
-    case "kerngetallen":
-      return "In cijfers";
-    case "conclusie":
-      return "Conclusie";
-    default:
-      return undefined;
-  }
-}
-
 /** Een afbeelding zonder foto: alleen een lege plek in het voorbeeld, niet op een deellink of afdruk. */
 export function isLegeAfbeelding(blok: Blok): boolean {
   return blok.type === "afbeelding" && !blok.url;
-}
-
-/**
- * Hoe de blokken op slides komen, volgens het PowerPoint-template van PSV.
- * Een kop wordt een hoofdstukslide (rood, met het embleem). Elk ander blok
- * krijgt een eigen slide, behalve twee halve blokken na elkaar: die delen er
- * een (tekst naast een grafiek, tabel of foto). De welkomstslide, de bronnen
- * en de afsluiting voegt de weergave toe.
- */
-export function slidesVan(stuk: Pick<StukInhoud, "blokken">): Slide[] {
-  const slides: Slide[] = [];
-  let sectie: string | undefined;
-  const blokken = stuk.blokken;
-  for (let i = 0; i < blokken.length; i++) {
-    const blok = blokken[i];
-    if (blok.type === "kop") {
-      sectie = blok.opmaak?.kernboodschap ?? blok.tekst;
-      slides.push({ soort: "hoofdstuk", titel: sectie, blokken: [blok], achtergrond: blok.opmaak?.achtergrond ?? "rood", groot: false });
-      continue;
-    }
-    const volgende = blokken[i + 1];
-    const samen = blok.opmaak?.grootte === "half" && volgende && volgende.type !== "kop" && volgende.opmaak?.grootte === "half";
-    const opSlide = samen ? [blok, volgende] : [blok];
-    if (samen) i += 1;
-    const achtergrond = blok.opmaak?.achtergrond ?? (blok.type === "conclusie" ? "rood" : "wit");
-    slides.push({
-      soort: "inhoud",
-      ...(sectie && { sectie }),
-      // Bij twee blokken samen: de kernboodschap van het eerste, anders die van het tweede.
-      titel: blok.opmaak?.kernboodschap ?? (samen ? volgende.opmaak?.kernboodschap : standaardTitel(blok)),
-      blokken: opSlide,
-      achtergrond,
-      groot: blok.opmaak?.grootte === "groot",
-    });
-  }
-  return slides;
 }

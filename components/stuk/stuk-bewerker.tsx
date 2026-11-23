@@ -167,7 +167,7 @@ function BronVeld({ waarde, onChange }: { waarde: string; onChange: (v: string) 
 }
 
 /** De invulvorm voor één blok, in plaats van het blok zelf. */
-function BlokEditor({
+export function BlokEditor({
   blok,
   bezig,
   onOpslaan,

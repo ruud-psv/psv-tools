@@ -10,8 +10,10 @@ import { formatDag } from "@/components/stuk/stuk-weergave";
 import { StukVoorbeeld } from "@/components/stuk/deck-weergave";
 import { AfbeeldingProvider } from "@/components/stuk/afbeelding";
 import { StukBewerker } from "@/components/stuk/stuk-bewerker";
+import { SlideBewerker } from "@/components/stuk/slide-bewerker";
 import { cn } from "@/lib/utils";
 import { STUK_SOORTEN, STUK_SOORT_LABEL, isLegeAfbeelding, type Stuk, type StukSoort } from "@/lib/stukken/model";
+import { wachtOpFoto as slideWachtOpFoto } from "@/lib/stukken/deck";
 
 /**
  * Het stuk naast de chat: het voorbeeld, zelf bewerken, een stap terug,
@@ -203,18 +205,26 @@ export function StukPaneel({
     }
   }
 
-  const wachtOpFoto = stuk.blokken.filter(isLegeAfbeelding).length + (stuk.titelbeeld?.wens && !stuk.titelbeeld.url ? 1 : 0);
+  const isDeck = stuk.soort === "deck" && Boolean(stuk.slides?.length);
+  const wachtOpFoto = isDeck
+    ? (stuk.slides ?? []).filter(slideWachtOpFoto).length
+    : stuk.blokken.filter(isLegeAfbeelding).length + (stuk.titelbeeld?.wens && !stuk.titelbeeld.url ? 1 : 0);
 
   /** Hetzelfde stuk als rapport of als deck: alleen de soort verandert, de blokken blijven. */
   async function zetSoort(soort: StukSoort) {
     if (soort === stuk.soort) return;
+    // Er zijn al slides én een rapport: opnieuw opbouwen of de bestaande slides houden?
+    const opnieuw =
+      soort === "deck" && Boolean(stuk.slides?.length) && stuk.blokken.length > 0
+        ? window.confirm("Er zijn al slides. Wil je ze opnieuw opbouwen uit het rapport? Kies Annuleren om de slides te houden zoals ze waren.")
+        : false;
     setFout(null);
     setBezig(true);
     try {
       const res = await fetch(`/api/assistent/stukken/${stuk.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ basisVersie: stuk.versie, soort }),
+        body: JSON.stringify({ basisVersie: stuk.versie, soort, ...(opnieuw && { slides_opnieuw: true }) }),
       });
       const data = await res.json().catch(() => ({}));
       if (data.stuk) onStuk(data.stuk as Stuk);
@@ -307,7 +317,7 @@ export function StukPaneel({
           </div>
         )}
         {bewerken ? (
-          <StukBewerker stuk={stuk} onStuk={onStuk} />
+          isDeck ? <SlideBewerker stuk={stuk} onStuk={onStuk} /> : <StukBewerker stuk={stuk} onStuk={onStuk} />
         ) : (
           <>
             <StukVoorbeeld stuk={stuk} peildatum={stuk.peildatum} />

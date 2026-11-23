@@ -71,12 +71,40 @@ const TITELBEELD_SCHEMA = {
   properties: { wens: { type: "string" } },
 };
 
+const SLIDE_SCHEMA = {
+  type: "object",
+  description:
+    'Eén slide in het PowerPoint-template van PSV. layout bepaalt de vorm en welke velden er staan: welkom {titel, subkop?} (opening); hoofdstuk {titel, subkop?} (begin van een onderdeel); tekst {titel, subkop?, tekst}; tekst-2 {titel, subkop?, tekst, tekst2}; beeld {titel, subkop?, tekst, foto, fotoBreedte 1-5} (tekst links, foto rechts; 1 smal, 5 bijna de hele slide); speciaal {titel, tekst?, foto} (foto groot met rode schuine vorm, tekst in een wit vak); quote {quote, naam?, foto?}; foto {foto} (alleen een foto); grafiek {titel, subkop?, tekst (2-3 punten uitleg), grafiek, nadruk?}; tabel {titel, subkop?, tekst, tabel, nadruk?}; cijfers {titel, kerngetallen, nadruk?}; rood / zwart {titel, tekst?}; afsluiting {}. titel staat wit op een zwart blok en moet op één regel passen: kort, een stelling. tekst: "- " voor een opsomming, **vet**. foto: {wens} met wat erop moet; de collega kiest de foto (geef nooit een url). grafiek, tabel en kerngetallen: dezelfde velden als bij de blokken, met bron.',
+  properties: {
+    layout: { type: "string", enum: ["welkom", "hoofdstuk", "tekst", "tekst-2", "beeld", "speciaal", "quote", "foto", "grafiek", "tabel", "cijfers", "rood", "zwart", "afsluiting"] },
+    titel: { type: "string" },
+    subkop: { type: "string" },
+    tekst: { type: "string" },
+    tekst2: { type: "string" },
+    foto: { type: "object", properties: { wens: { type: "string" } } },
+    fotoBreedte: { type: "integer", minimum: 1, maximum: 5 },
+    quote: { type: "string" },
+    naam: { type: "string" },
+    grafiek: { type: "object", description: "{titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden}], eenheid?, bron}" },
+    tabel: { type: "object", description: "{titel?, kolommen, rijen, bron}" },
+    kerngetallen: { type: "object", description: "{items: [{label, waarde, toelichting?}], bron}" },
+    nadruk: { type: "string" },
+  },
+  required: ["layout"],
+};
+
 const DATA_TYPES = new Set(["kerngetallen", "tabel", "grafiek"]);
 
 /** Komt er in deze bewerking nieuwe of gewijzigde data bij? Dan schuift de peildatum op. */
 function raaktData(invoer: unknown): boolean {
   const acties = (invoer as { acties?: unknown })?.acties;
-  return Array.isArray(acties) && acties.some((a) => DATA_TYPES.has((a as { blok?: { type?: string } })?.blok?.type ?? ""));
+  return (
+    Array.isArray(acties) &&
+    acties.some((a) => {
+      const x = a as { blok?: { type?: string }; slide?: Record<string, unknown> };
+      return DATA_TYPES.has(x?.blok?.type ?? "") || Boolean(x?.slide && (x.slide.grafiek || x.slide.tabel || x.slide.kerngetallen));
+    })
+  );
 }
 
 function alsObject(invoer: unknown): { invoer: Record<string, unknown> } | { fout: string } {
@@ -136,14 +164,15 @@ export function stukTools({
             type: "string",
             enum: ["rapport", "deck"],
             description:
-              "rapport: een pagina; een one-pager is een kort rapport met halve blokken naast elkaar. deck: dezelfde blokken op slides (16:9); een kop wordt het hoofdstuk boven de slides erna, elk ander blok een slide.",
+              "rapport: een pagina met blokken; een one-pager is een kort rapport met halve blokken naast elkaar. deck: slides in het PowerPoint-template van PSV; geef dan slides in plaats van blokken.",
           },
           titel: { type: "string" },
           ondertitel: { type: "string" },
           titelbeeld: TITELBEELD_SCHEMA,
-          blokken: { type: "array", items: BLOK_SCHEMA },
+          blokken: { type: "array", items: BLOK_SCHEMA, description: "Bij een rapport." },
+          slides: { type: "array", items: SLIDE_SCHEMA, description: "Bij een deck: de slides in volgorde, beginnend met welkom en eindigend met afsluiting." },
         },
-        required: ["soort", "titel", "blokken"],
+        required: ["soort", "titel"],
       },
       lees: alsObject,
       run: (invoer) =>
@@ -169,7 +198,7 @@ export function stukTools({
       page: "/dashboard/assistent",
       geenBron: true,
       description:
-        'Past het stuk bij dit gesprek aan, zonder de rest opnieuw te maken. acties is een lijst van: {actie: "toevoegen", blok, na?: blok-id of "begin"}, {actie: "wijzigen", blok_id, blok} (vervangt de inhoud; zonder opmaak blijft de opmaak staan), {actie: "opmaken", blok_id, opmaak} (alleen de vorm: grootte, achtergrond, nadruk, kernboodschap; null of "" haalt een veld weg), {actie: "verwijderen", blok_id}, {actie: "verplaatsen", blok_id, na: blok-id of "begin"}. Met titel, ondertitel of soort verander je die; soort "deck" zet hetzelfde stuk op slides. Alles of niets: klopt één actie niet, dan verandert er niets.',
+        'Past het stuk bij dit gesprek aan, zonder de rest opnieuw te maken. Bij een deck: {actie: "slide_toevoegen", slide, na?: slide-id of "begin"} (zonder na: vóór de afsluiting), {actie: "slide_wijzigen", slide_id, slide} (alleen de velden die je meegeeft veranderen; null haalt een veld weg; ook layout), {actie: "slide_verwijderen", slide_id}, {actie: "slide_verplaatsen", slide_id, na}. Bij een rapport: {actie: "toevoegen", blok, na?: blok-id of "begin"}, {actie: "wijzigen", blok_id, blok} (vervangt de inhoud; zonder opmaak blijft de opmaak staan), {actie: "opmaken", blok_id, opmaak} (alleen de vorm: grootte, achtergrond, nadruk, kernboodschap; null of "" haalt een veld weg), {actie: "verwijderen", blok_id}, {actie: "verplaatsen", blok_id, na: blok-id of "begin"}. Met titel, ondertitel of soort verander je die; soort "deck" zet hetzelfde stuk op slides. Alles of niets: klopt één actie niet, dan verandert er niets.',
       inputSchema: {
         type: "object",
         properties: {
@@ -178,8 +207,13 @@ export function stukTools({
             items: {
               type: "object",
               properties: {
-                actie: { type: "string", enum: ["toevoegen", "wijzigen", "opmaken", "verwijderen", "verplaatsen"] },
+                actie: {
+                  type: "string",
+                  enum: ["toevoegen", "wijzigen", "opmaken", "verwijderen", "verplaatsen", "slide_toevoegen", "slide_wijzigen", "slide_verwijderen", "slide_verplaatsen"],
+                },
                 blok_id: { type: "string" },
+                slide_id: { type: "string" },
+                slide: SLIDE_SCHEMA,
                 na: { type: "string" },
                 blok: BLOK_SCHEMA,
                 opmaak: OPMAAK_SCHEMA,
