@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowUp, Check, ChevronRight, Database, FileText, History, Loader2, MessageSquarePlus, Presentation, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Check, ChevronRight, Database, FileText, History, Loader2, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Presentation, Sparkles, Trash2, X } from "lucide-react";
 import { StukPaneel } from "@/components/stuk/stuk-paneel";
 import { STUK_SOORT_LABEL, type Stuk, type StukSoort } from "@/lib/stukken/model";
 import { formatAnswer } from "@/components/chat-opmaak";
@@ -182,6 +182,11 @@ export function AssistentChat() {
   const [bezig, setBezig] = useState(false);
   const [laden, setLaden] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+  /** Desktop: de gesprekkenlijst ingeklapt, zodat het stuk (en de slides) meer ruimte krijgt. */
+  const [ingeklapt, setIngeklapt] = useState(false);
+  /** Ingeklapt: de lijst zweeft erover zolang de muis op de strook links of op de lijst staat. */
+  const [zweeft, setZweeft] = useState(false);
+  const zweefTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -201,6 +206,36 @@ export function AssistentChat() {
       // De geschiedenis is bijzaak; de chat werkt ook zonder.
     }
   }, []);
+
+  // Ingeklapt of niet: per browser onthouden.
+  useEffect(() => {
+    try {
+      setIngeklapt(localStorage.getItem("assistent:gesprekken-ingeklapt") === "1");
+    } catch {
+      // Geen opslag (privévenster): gewoon uitgeklapt.
+    }
+  }, []);
+
+  function zetIngeklapt(waarde: boolean) {
+    setIngeklapt(waarde);
+    setZweeft(false);
+    try {
+      localStorage.setItem("assistent:gesprekken-ingeklapt", waarde ? "1" : "0");
+    } catch {
+      // Niet erg: dan alleen voor nu.
+    }
+  }
+
+  function toonZwevend() {
+    if (zweefTimer.current) clearTimeout(zweefTimer.current);
+    setZweeft(true);
+  }
+
+  /** Met een korte vertraging, zodat de lijst niet wegspringt als de muis even buiten de rand komt. */
+  function verbergZwevend() {
+    if (zweefTimer.current) clearTimeout(zweefTimer.current);
+    zweefTimer.current = setTimeout(() => setZweeft(false), 250);
+  }
 
   useEffect(() => {
     laadGesprekken();
@@ -338,6 +373,7 @@ export function AssistentChat() {
 
   async function openGesprek(id: string) {
     setToonGesprekken(false);
+    setZweeft(false);
     if (id === gesprekId && !bezig) return;
     stop();
     setLaden(true);
@@ -397,18 +433,35 @@ export function AssistentChat() {
   const eersteVraag = beurten.find((b) => b.role === "user")?.content.replace(/\s+/g, " ").trim();
   const kop = titel ?? (eersteVraag ? (eersteVraag.length > 60 ? `${eersteVraag.slice(0, 59)}…` : eersteVraag) : "Assistent");
 
-  /** Nieuw gesprek + eerdere gesprekken: in de kolom links (desktop) of over de chat heen (mobiel). */
-  const gesprekkenLijst = (
+  /**
+   * Nieuw gesprek + eerdere gesprekken: in de kolom links (desktop), zwevend
+   * over de chat als de kolom is ingeklapt, of over de chat heen (mobiel).
+   */
+  const gesprekkenLijst = (modus: "vast" | "zwevend" | "mobiel") => (
     <>
-        <div className="p-3">
+        <div className="flex gap-2 p-3">
           <button
             type="button"
-            onClick={nieuwGesprek}
-            className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-heading text-xs uppercase tracking-wide transition-colors hover:border-psv-red-primary"
+            onClick={() => {
+              nieuwGesprek();
+              setZweeft(false);
+            }}
+            className="flex flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-heading text-xs uppercase tracking-wide transition-colors hover:border-psv-red-primary"
           >
             <MessageSquarePlus className="h-4 w-4 text-psv-red-primary" />
             Nieuw gesprek
           </button>
+          {modus !== "mobiel" && (
+            <button
+              type="button"
+              onClick={() => zetIngeklapt(modus === "vast")}
+              aria-label={modus === "vast" ? "Gesprekken inklappen" : "Gesprekken vastzetten"}
+              title={modus === "vast" ? "Inklappen: meer ruimte voor het stuk" : "Vastzetten"}
+              className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:border-psv-red-primary hover:text-foreground"
+            >
+              {modus === "vast" ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            </button>
+          )}
         </div>
 
         <p className="px-5 pb-1 pt-3 font-heading text-xs uppercase tracking-wider text-muted-foreground">
@@ -454,10 +507,52 @@ export function AssistentChat() {
   );
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-border bg-background md:flex">
-        {gesprekkenLijst}
-      </aside>
+    <div className="relative flex h-full min-h-0">
+      {ingeklapt ? (
+        <>
+          {/* Ingeklapt: een smalle strook; met de muis erop (of de knop) zweeft de lijst eroverheen. */}
+          <div
+            className="hidden w-11 flex-shrink-0 flex-col items-center gap-2 border-r border-border bg-background py-3 md:flex"
+            onMouseEnter={toonZwevend}
+            onMouseLeave={verbergZwevend}
+          >
+            <button
+              type="button"
+              onClick={() => zetIngeklapt(false)}
+              onFocus={toonZwevend}
+              aria-label="Gesprekken tonen"
+              title="Gesprekken tonen"
+              className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={nieuwGesprek}
+              aria-label="Nieuw gesprek"
+              title="Nieuw gesprek"
+              className="rounded-md p-2 text-psv-red-primary transition-colors hover:bg-accent"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+            </button>
+            <History className="mt-1 h-4 w-4 text-muted-foreground" aria-hidden />
+          </div>
+          {zweeft && (
+            <aside
+              className="absolute inset-y-0 left-0 z-30 hidden w-72 animate-fade-up flex-col border-r border-border bg-background shadow-psv-lg md:flex"
+              onMouseEnter={toonZwevend}
+              onMouseLeave={verbergZwevend}
+              aria-label="Gesprekken"
+            >
+              {gesprekkenLijst("zwevend")}
+            </aside>
+          )}
+        </>
+      ) : (
+        <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-border bg-background md:flex">
+          {gesprekkenLijst("vast")}
+        </aside>
+      )}
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         {stuk && toonStuk && (
@@ -476,7 +571,7 @@ export function AssistentChat() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {gesprekkenLijst}
+            {gesprekkenLijst("mobiel")}
           </div>
         )}
         {/* Kop + (op kleinere schermen) de balk naar het stuk: blijven bovenaan staan. */}
@@ -591,7 +686,7 @@ export function AssistentChat() {
       </div>
 
       {stuk && (
-        <StukPaneel stuk={stuk} onStuk={setStuk} uitgeschakeld={bezig} className="hidden w-[46%] max-w-3xl flex-shrink-0 border-l border-border xl:flex" />
+        <StukPaneel stuk={stuk} onStuk={setStuk} uitgeschakeld={bezig} className={cn("hidden flex-shrink-0 border-l border-border xl:flex", ingeklapt ? "w-[62%]" : "w-[46%] max-w-3xl")} />
       )}
     </div>
   );

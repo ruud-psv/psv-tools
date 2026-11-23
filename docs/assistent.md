@@ -42,6 +42,14 @@ gekomen:
   alleen op campagnenamen gezocht en dus niet gevonden, terwijl de pagina's en producten er wel
   waren.
 
+## Gesprekken inklappen
+
+Op een groot scherm klap je de lijst met gesprekken in met het icoon naast **Nieuw gesprek**. Er
+blijft links een smalle strook over; ga je daar met de muis op staan, dan schuift de lijst eroverheen
+om te wisselen of een nieuw gesprek te beginnen, en hij verdwijnt weer als je weggaat. Ingeklapt
+krijgt het stuk naast de chat meer ruimte (62% in plaats van 46%), zodat slides beter te lezen zijn.
+Of de lijst is ingeklapt, onthoudt de browser.
+
 ## Titel van een gesprek
 
 Bovenaan de chat en in de lijst met gesprekken staat een titel over waar het gesprek over gaat,
