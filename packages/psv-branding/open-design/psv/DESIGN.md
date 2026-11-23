@@ -129,17 +129,46 @@ Spatiëring tussen letters: koppen `0` (`--tracking-display`), knoppen `0.03em`,
 
 ## Slide decks
 
-Formaat 1280 × 720 (16:9). Marges 72px opzij, 52px boven; onderaan een voetregel van 36px met de titel links en het slidenummer (`02`) rechts in PSV Condensed.
+Bron: het officiële PowerPoint-template van PSV, seizoen 2026-2027 (`POWERPOINT_PSV_26-27.pptx`). Maten in het template zijn in inch op 13,333 × 7,5 inch; hier omgerekend naar 1280 × 720 px (96 px per inch).
 
-Opbouw:
-1. **Titelslide**: zwart vlak met rechts de rode schuine wig (`#e82026`, daarachter `#9c1006`), een rode tag, de titel in PSV Condensed 80px met regelafstand 0,9, de ondertitel 20px in `#eeeeee`.
-2. **In cijfers**: het belangrijkste kerngetal groot (120px) op een zwart tegel met rode bovenrand, de rest als tegels op `#f5f5f5` met zwarte bovenrand van 4px.
-3. **Conclusie** op een rood vlak: genummerde punten (`01`, `02`) in PSV Condensed, tekst 21–24px wit.
-4. **Eén boodschap per slide**. De titel is een stelling ("Nog 312 stoelen te koop"), geen onderwerp ("Aanbod per dag"). Daarboven het hoofdstuk klein in rood, daaronder het rode streepje van 48 × 4px.
-5. Twee halve blokken mogen naast elkaar op één slide, bijvoorbeeld een tabel met een zwart tekstvlak ernaast.
-6. **Bronnen** op een zwarte slide aan het eind.
+### Basis
+- **Formaat** 16:9, 1280 × 720.
+- **Titel**: PSV Condensed Bold, 50 pt (67 px), hoofdletters, **wit op een zwart blok** dat precies om de tekst past (binnenmarge links en rechts 11 px, geen afronding). Linksboven op 61 px van links en 68 px van boven. Eén regel; is de titel te lang, maak hem korter.
+- **Subkop**: PSV Text Bold, 28 pt (37 px), PSV-rood, geen hoofdletters. Direct boven de tekst.
+- **Tekst**: PSV Text Regular, 20 pt (27 px), zwart, regelafstand 85%, 14 pt (19 px) ruimte na elke alinea. Opsommingen met een rond bolletje. Het tekstvak begint op 73 px van links en 192 px van boven.
+- **Achtergrond van een tekstslide**: wit, met rechts een grote lichtgrijze schuine vorm (`#F0F0F0`), de PSV-schuine streep die als een 1 of 7 oprijst. Klein PSV-logo (rond embleem) rechtsonder.
+- **Geen voetregel en geen paginanummer** in beeld. Het template heeft er wel plekken voor, maar laat ze leeg.
 
-Hooguit 12 slides. Tabellen op een slide hooguit 12 rijen; bij meer wordt de tekst kleiner, dus liever inkorten.
+### Soorten slides
+| Slide | Wanneer | Hoe |
+|---|---|---|
+| **Welkom** | Opening | Rood vlak met een patroon van "PSV EINDHOVEN" in grote schuine letters (rood op rood), titel in het zwarte blok in het midden. |
+| **Hoofdstuk** (aangepaste indeling) | Begin van een onderdeel | Rood vlak met links een donkerdere rode schuine band, groot PSV-embleem met twee sterren, titel in het zwarte blok rechts ernaast, daaronder datum of ondertitel klein in wit. |
+| **Tekst** | Uitleg, opsommingen | Titel, subkop, tekst; grijze schuine vorm rechts, logo rechtsonder. Ook in twee kolommen. |
+| **Beeld 1 t/m 5** | Tekst met een foto | Tekst links (smal, ±370 px breed), foto rechts in de PSV-schuine vorm. Hoe hoger het nummer, hoe breder de foto: van ±40% tot bijna de hele slide. |
+| **Speciaal** | Nadruk met beeld | Foto over de hele slide, links een rode schuine vorm met de titel en een wit tekstvak met de opsomming. |
+| **Quote** | Een citaat | Foto met de rode schuine vorm, de quote wit in **enkele aanhalingstekens** ('…'), de naam eronder klein. |
+| **Foto zoom** | Sfeer, een moment | Foto over de hele slide, zonder tekst. |
+| **Grafiek** / **Tabel** | Cijfers | Tekst links (±420 px breed: titel, subkop, conclusie in punten), grafiek of tabel rechts (±685 × 460 px) op de grijze schuine vorm. |
+| **Video** | Een film | Video over de hele slide, tekst links. |
+| **Rood** / **Zwart** / **Leeg** | Overgang, eigen opbouw | Effen vlak. |
+| **Afsluiting** | Einde | Rood met de donkerdere schuine band en het grote embleem in het midden. |
+| **Wacht-dia** | Voor de start | Rood met het zwarte en rode "PSV EINDHOVEN"-patroon over de hele slide. |
+
+### Opbouw van een deck
+1. Welkom (titel van het deck).
+2. Per onderdeel een hoofdstukslide, daarna de inhoud.
+3. **Eén boodschap per slide.** De titel zegt wat de lezer moet onthouden, kort genoeg voor één regel in het zwarte blok ("Nog 312 stoelen te koop", niet "Aanbod per dag").
+4. Cijfers op een grafiek- of tabelslide: links de uitleg in twee of drie punten, rechts de grafiek of tabel.
+5. Wissel tekstslides af met beeld: een beeldslide, quote of foto zoom houdt een deck levendig.
+6. Afsluiting met het embleem.
+
+### Beeld
+- Foto's van spelers, supporters en het stadion: echt, in actie, in PSV-tenue. Ze staan altijd in de PSV-schuine vorm of over de hele slide, nooit als los kader met een rand.
+- De schuine vorm loopt van rechtsboven naar linksonder, met een inkeping bovenaan zoals de 1 in "1913".
+
+### Kleur in het template
+Het kleurthema van het template heet "PSV 2020": rood `#ED1C24`, donkerrood `#B70E0C`, goud `#BB9753`, zwart, `#333333`, `#666666` en lichtgrijs `#E5E5E5`. Dit rood wijkt licht af van het rood in de design tokens (`#e82026`). Op het scherm is het verschil niet te zien; gebruik in code de tokens.
 
 ## Toegankelijkheid
 
@@ -164,10 +193,38 @@ Gecontroleerde contrasten (WCAG):
 
 ## Tekst en tone of voice
 
-- Schrijf in het Nederlands, kort en direct, met energie maar zonder schreeuwen. Volg Het Rood-Witte Boekje.
-- Hoofdletters komen uit de opmaak (PSV Condensed + `text-transform: uppercase`), niet uit de tekst zelf. Typ koppen dus gewoon met een hoofdletter aan het begin.
-- Knopteksten zijn een handeling: "Koop tickets", "Bekijk het programma", niet "Klik hier".
-- Gebruik de clubnaam als **PSV**, het stadion als **Philips Stadion**.
+Bron: Het Rood-Witte Boekje, de spellings- en schrijfwijzer van PSV (volledig in `packages/psv-branding/tekst/rood-witte-boekje.md`). De regels hieronder zijn de regels die het vaakst in een ontwerp terugkomen; bij twijfel geldt het boekje.
+
+**Toon.** Energiek, eigenzinnig en nuchter. Actief, direct, positief, in de tegenwoordige tijd. Spreek supporters aan met "je" en waar het kan met de voornaam; zakelijk (PSV Business) mag formeler. Elke zin heeft een functie: schrap woorden die niets toevoegen.
+
+**Spelling en namen**
+- Samenstellingen met PSV met een koppelteken: PSV-supporters, PSV-selectie. Maar PSV'er, en eigennamen zonder koppelteken: PSV FANstore, PSV Business, PSV Soccer School.
+- Eigennamen van submerken, evenementen, artikelen, afdelingen en functietitels met hoofdletters: PSV Business Golfdag, Phoxy Club Card, Partnerships & New Business.
+- Verwijs naar PSV met "het" en "zijn" (PSV presenteert zijn jaarverslag). PSV Vrouwen is enkelvoud.
+- **Philips Stadion** of "stadion", nooit "PSV-stadion". PSV Campus De Herdgang, daarna mag "De Herdgang" of "campus".
+- URL's: PSV in kapitalen, de rest klein: PSV.nl/tickets. Uitzonderingen: philipsstadion.nl, PSVFANstore.nl, psvmovement.nl.
+
+**Notatie**
+| Wat | Zo |
+|---|---|
+| Wedstrijd | PSV - FC Twente (kort streepje met spaties) |
+| Datum | 6 oktober 2026 of 06-10-2026 |
+| Tijd | 17.00 uur, 09.00 - 17.00 uur |
+| Seizoen | 2026-2027 of 26-27 |
+| Bedrag | € 15,- of € 7,50 |
+| Getallen | Tot en met twintig en ronde getallen uitschrijven, specifieke getallen in cijfers (467). Gemengd in één zin: alles in cijfers. |
+| Rangtelwoord | 1e, 50e |
+| Telefoon | +31 (0)40 2505 347 |
+
+**Leestekens**
+- **Nooit een em-dash (—).** In een lopende zin een gedachtestreepje (–).
+- Enkele aanhalingstekens ('…') in koppen en bij een quote op een slide; dubbele ("…") voor citaten in lopende tekst.
+- Een scheidingsteken in een kop tussen plaats en datum: 28-11-2026 | Philips Stadion.
+- Na een dubbele punt een kleine letter, behalve bij een citaat, een opsomming van hele zinnen of een eigennaam.
+
+**Hoofdletters in het ontwerp.** Hoofdletters komen uit de opmaak (PSV Condensed met `text-transform: uppercase`), niet uit de tekst. Typ een kop dus gewoon in zinsvorm met de eigennamen zoals ze horen; dan klopt hij ook waar hij niet in hoofdletters staat.
+
+**Knoppen** zijn een handeling: "Koop tickets", "Bekijk het programma", niet "Klik hier".
 
 ## Do's en don'ts
 
@@ -187,6 +244,8 @@ Gecontroleerde contrasten (WCAG):
 - Verlopen tussen rood en een andere kleur; glas-effecten; neon.
 - Het PSV-logo vervormen, inkleuren of op een drukke foto zonder ondergrond zetten.
 - Stockfoto's van generieke voetballers of een ander clubtenue.
+- Een em-dash (—) in tekst, "PSV-stadion", of PSV aanduiden met "haar".
+- In een deck: een titel over twee regels, een voetregel met paginanummer, of een foto in een kader met rand.
 
 ## Snelreferentie voor de agent
 
@@ -196,7 +255,8 @@ Gecontroleerde contrasten (WCAG):
 - Body: `font-family: var(--font-body); font-size: 16px; line-height: 1.5`.
 - Primaire knop: rood vlak, wit, PSV Condensed hoofdletters, `letter-spacing: .03em`, `border-radius: 0`, padding 17px 25px, skewed met `clip-path`.
 - Sectietitel: kop + rood streepje 48 × 4px eronder.
+- Slidetitel (deck): wit PSV Condensed 67px hoofdletters op een zwart blok, linksboven; subkop PSV Text Bold rood; grijze schuine vorm rechts.
 
 Voorbeeldopdrachten:
-- *"Maak een presentatie van de Paid Ads-resultaten: titelslide als zwarte hero met foto op 50% en een titel van 96px, daarna witte slides op `#eeeeee` met sectietitels met rood streepje, cijfers groot in PSV Condensed."*
+- *"Maak een presentatie van de Paid Ads-resultaten: welkomstslide in rood met het PSV EINDHOVEN-patroon, per kanaal een hoofdstukslide met het embleem, daarna grafiekslides met links drie punten en rechts de grafiek, titels als korte stelling in het zwarte blok."*
 - *"Maak een A4-one-pager voor de seizoenskaartverkoop: rode hero met donkerrode wig rechts, drie kaarten in een raster, één skewed knop 'Koop je seizoenskaart'."*
