@@ -74,7 +74,7 @@ const TITELBEELD_SCHEMA = {
 const SLIDE_SCHEMA = {
   type: "object",
   description:
-    'Eén slide in het PowerPoint-template van PSV. layout bepaalt de vorm en welke velden er staan: welkom {titel, subkop?} (opening); hoofdstuk {titel, subkop?} (begin van een onderdeel); tekst {titel, subkop?, tekst}; tekst-2 {titel, subkop?, tekst, tekst2}; beeld {titel, subkop?, tekst, foto, fotoBreedte 1-5} (tekst links, foto rechts; 1 smal, 5 bijna de hele slide); speciaal {titel, tekst?, foto} (foto groot met rode schuine vorm, tekst in een wit vak); quote {quote, naam?, foto?}; foto {foto} (alleen een foto); grafiek {titel, subkop?, tekst (2-3 punten uitleg), grafiek, nadruk?}; tabel {titel, subkop?, tekst, tabel, nadruk?}; cijfers {titel, kerngetallen, nadruk?}; rood / zwart {titel, tekst?}; afsluiting {}. titel staat wit op een zwart blok en moet op één regel passen: kort, een stelling. tekst: "- " voor een opsomming, **vet**. foto: {wens} met wat erop moet; de collega kiest de foto (geef nooit een url). grafiek, tabel en kerngetallen: dezelfde velden als bij de blokken, met bron.',
+    'Eén slide in het PowerPoint-template van PSV. layout bepaalt de vorm en welke velden er staan: welkom {titel, subkop?} (opening); hoofdstuk {titel, subkop?} (begin van een onderdeel); tekst {titel, subkop?, tekst, foto?}; tekst-2 {titel, subkop?, tekst, tekst2, foto?}; beeld {titel, subkop?, tekst, foto, vlak?} (tekst links, foto rechts); speciaal {titel, tekst?, foto} (foto groot met rode schuine vorm, tekst in een wit vak); quote {quote, naam?, foto?}; foto {foto} (alleen een foto); grafiek {titel, subkop?, tekst (2-3 punten uitleg), grafiek, nadruk?, foto?}; tabel {titel, subkop?, tekst, tabel, nadruk?, foto?}; cijfers {titel, kerngetallen, nadruk?, foto?}; rood / zwart {titel, tekst?}; afsluiting {}. titel staat wit op een zwart blok en moet op één regel passen: kort, een stelling. tekst: "- " voor een opsomming, **vet**. foto: {wens} met wat erop moet; de collega kiest de foto (geef nooit een url). Tekst, tekst-2, beeld, grafiek, tabel en cijfers hebben rechts de schuine vorm uit het template: met foto staat de foto erin, anders is hij grijs. vlak: waar die vorm begint, in px van 1280 (207 breed, 574 half, 939 smal; zonder: de plek uit het template). grafiek, tabel en kerngetallen: dezelfde velden als bij de blokken, met bron.',
   properties: {
     layout: { type: "string", enum: ["welkom", "hoofdstuk", "tekst", "tekst-2", "beeld", "speciaal", "quote", "foto", "grafiek", "tabel", "cijfers", "rood", "zwart", "afsluiting"] },
     titel: { type: "string" },
@@ -82,7 +82,7 @@ const SLIDE_SCHEMA = {
     tekst: { type: "string" },
     tekst2: { type: "string" },
     foto: { type: "object", properties: { wens: { type: "string" } } },
-    fotoBreedte: { type: "integer", minimum: 1, maximum: 5 },
+    vlak: { type: "integer", minimum: 100, maximum: 1150 },
     quote: { type: "string" },
     naam: { type: "string" },
     grafiek: { type: "object", description: "{titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden}], eenheid?, bron}" },

@@ -13,7 +13,7 @@ import { StukBewerker } from "@/components/stuk/stuk-bewerker";
 import { SlideBewerker } from "@/components/stuk/slide-bewerker";
 import { PresenteerKnop } from "@/components/stuk/presentatie";
 import { cn } from "@/lib/utils";
-import { STUK_SOORTEN, STUK_SOORT_LABEL, isLegeAfbeelding, type Stuk, type StukSoort } from "@/lib/stukken/model";
+import { STUK_SOORTEN, STUK_SOORT_LABEL, isLegeAfbeelding, type Stuk, type StukSoort, type Uitsnede } from "@/lib/stukken/model";
 import { wachtOpFoto as slideWachtOpFoto } from "@/lib/stukken/deck";
 
 /**
@@ -189,6 +189,44 @@ export function StukPaneel({
     stuurFoto(doel, form);
   }
 
+  /**
+   * De uitsnede van een foto na slepen of zoomen: een slide ("slide:<id>"), de
+   * titelfoto ("titel") of een fotoblok (blok-id).
+   */
+  async function positie(doel: string, p: Uitsnede | null) {
+    let bewerking: Record<string, unknown> | null = null;
+    if (doel.startsWith("slide:")) {
+      bewerking = { acties: [{ actie: "slide_wijzigen", slide_id: doel.slice(6), slide: { foto: { positie: p } } }] };
+    } else if (doel === "titel" && stuk.titelbeeld) {
+      bewerking = { titelbeeld: { ...stuk.titelbeeld, positie: p } };
+    } else {
+      const blok = stuk.blokken.find((b) => b.id === doel);
+      if (blok?.type === "afbeelding") {
+        const { id: _id, opmaak: _o, ...inhoud } = blok;
+        void _id;
+        void _o;
+        bewerking = { acties: [{ actie: "wijzigen", blok_id: blok.id, blok: { ...inhoud, positie: p } }] };
+      }
+    }
+    if (!bewerking) return;
+    setFout(null);
+    setUploadVoor(doel);
+    try {
+      const res = await fetch(`/api/assistent/stukken/${stuk.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ basisVersie: stuk.versie, ...bewerking }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.stuk) onStuk(data.stuk as Stuk);
+      if (!res.ok) setFout(data.error ?? "De uitsnede kon niet worden opgeslagen.");
+    } catch {
+      setFout("De uitsnede kon niet worden opgeslagen. Probeer het opnieuw.");
+    } finally {
+      setUploadVoor(null);
+    }
+  }
+
   async function stuurFoto(doel: string, form: FormData) {
     setFout(null);
     setUploadVoor(doel);
@@ -310,7 +348,7 @@ export function StukPaneel({
       </div>
       {fout && <p className="form-error px-4 pt-2">{fout}</p>}
       {delen && <Delen stuk={stuk} onStuk={onStuk} />}
-      <AfbeeldingProvider acties={{ upload, uitFileflow, bezig: uploadVoor, uit: uitgeschakeld || bezig }}>
+      <AfbeeldingProvider acties={{ upload, uitFileflow, positie, bezig: uploadVoor, uit: uitgeschakeld || bezig }}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
         {wachtOpFoto > 0 && (
           <div className="alert alert--info mb-4 text-sm">

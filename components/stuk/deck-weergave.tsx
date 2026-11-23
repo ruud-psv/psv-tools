@@ -2,10 +2,10 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { AfbeeldingPlek, VervangFoto, fotoStijl, useAfbeeldingActies } from "@/components/stuk/afbeelding";
+import { AfbeeldingPlek, SleepbareFoto, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
 import { Bron, Grafiek, StukWeergave } from "@/components/stuk/stuk-weergave";
 import { bronnenVan, type Blok, type StukInhoud } from "@/lib/stukken/model";
-import { MET_FOTO, wachtOpFoto, type DeckSlide, type Foto } from "@/lib/stukken/deck";
+import { BEELD_LINKS, MET_FOTO, vlakVan, wachtOpFoto, type DeckSlide, type Foto } from "@/lib/stukken/deck";
 
 /**
  * Een slide deck in het PowerPoint-template van PSV (seizoen 2026-2027).
@@ -21,16 +21,7 @@ const BREED = 1280;
 const HOOG = 720;
 const ROOD = "#e30713"; // het rode vlak van het template (Rood, Speciaal, Quote)
 
-/** Beeld 1 t/m 5: waar het fotovak begint, hoe breed het is, en de vorm (in % van het vak). */
-const BEELD: Record<1 | 2 | 3 | 4 | 5, { links: number; breed: number; vorm: [number, number][] }> = {
-  1: { links: 939, breed: 557, vorm: [[18.8, 0], [100, 0], [62.8, 100], [0, 100], [28.6, 23.1], [10.2, 23.1]] },
-  2: { links: 755, breed: 742, vorm: [[14.1, 0], [100, 0], [72.0, 100], [0, 100], [21.5, 23.1], [7.7, 23.1]] },
-  3: { links: 574, breed: 922, vorm: [[11.4, 0], [100, 0], [77.5, 100], [0, 100], [17.3, 23.1], [6.2, 23.1]] },
-  4: { links: 392, breed: 1104, vorm: [[9.5, 0], [100, 0], [81.2, 100], [0, 100], [14.4, 23.1], [5.2, 23.1]] },
-  5: { links: 207, breed: 1290, vorm: [[8.1, 0], [100, 0], [83.9, 100], [0, 100], [12.4, 23.1], [4.4, 23.1]] },
-};
 
-const clip = (vorm: [number, number][]) => `polygon(${vorm.map(([x, y]) => `${x}% ${y}%`).join(", ")})`;
 
 /* ---------- Bouwstenen ---------- */
 
@@ -130,25 +121,85 @@ function Logo() {
   return <img src="/images/deck/logo.png" alt="PSV" className="absolute" style={{ left: 1191, top: 643, width: 77, height: 77 }} />;
 }
 
-/** Een foto in een vak met de vorm uit het template; zonder foto een lege plek (alleen in het voorbeeld). */
-function FotoVak({ foto, doel, links, breed, vorm, plek }: { foto?: Foto; doel: string; links: number; breed: number; vorm?: [number, number][]; plek: CSSProperties }) {
-  if (!foto?.url) {
-    // Grijs in de vorm van het fotovak, met (alleen in het voorbeeld) de lege plek erin.
-    const vanaf = links + Math.round(breed * 0.22);
-    return (
-      <>
-        <div className="absolute top-0 h-full bg-[#d9d9d9]" style={{ left: links, width: breed, clipPath: vorm ? clip(vorm) : undefined }} />
-        <AfbeeldingPlek doel={doel} wens={foto?.wens} groot className="absolute !h-auto" style={{ left: vanaf, right: 40, top: 150, bottom: 150 }} />
-      </>
-    );
-  }
+/**
+ * De schuine vorm uit het template, vanaf `links` (de x van zijn linkeronderhoek)
+ * tot de rechterrand. Gemeten in het template: de schuine kant loopt 105 px naar
+ * rechts, het haakje zit op 166 px hoogte tussen 57 en 160 px. Dat is bij elke
+ * breedte gelijk (Beeld 1 t/m 5, de grijze vorm van Tekst), dus het vlak kan
+ * overal staan.
+ */
+const VORM = "polygon(105px 0, 100% 0, 100% 100%, 0 100%, 160px 166px, 57px 166px)";
+
+export interface Bewerk {
+  /** Het vlak verschuiven: tijdens het slepen (klaar=false) en bij loslaten (klaar=true). */
+  onVlak: (links: number, klaar: boolean) => void;
+}
+
+/** De greep om het vlak naar links of rechts te slepen (alleen in de bewerker). */
+function VlakGreep({ links, onVlak }: { links: number; onVlak: Bewerk["onVlak"] }) {
+  const start = useRef<{ px: number; links: number; schaal: number } | null>(null);
+  const laatste = useRef(links);
+  return (
+    <div
+      role="slider"
+      aria-label="Vlak verschuiven"
+      aria-valuenow={links}
+      aria-valuemin={100}
+      aria-valuemax={1150}
+      tabIndex={0}
+      title="Sleep om het vlak breder of smaller te maken"
+      className="absolute z-20 flex cursor-ew-resize touch-none items-center justify-center bg-white text-[#e30713] shadow-card print:hidden"
+      style={{ left: links + 12, top: 320, width: 44, height: 80, border: "3px solid #e30713" }}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        onVlak(Math.min(1150, Math.max(100, links + (e.key === "ArrowLeft" ? -20 : 20))), true);
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        const slide = e.currentTarget.parentElement!;
+        start.current = { px: e.clientX, links, schaal: slide.getBoundingClientRect().width / BREED };
+      }}
+      onPointerMove={(e) => {
+        const b = start.current;
+        if (!b) return;
+        laatste.current = Math.round(Math.min(1150, Math.max(100, b.links + (e.clientX - b.px) / b.schaal)));
+        onVlak(laatste.current, false);
+      }}
+      onPointerUp={() => {
+        if (start.current) onVlak(laatste.current, true);
+        start.current = null;
+      }}
+    >
+      <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+        <path d="M8 7l-5 5 5 5M16 7l5 5-5 5" />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Het vlak: de schuine vorm met een foto, of grijs. `leeg`: een foto hoort
+ * erbij (Beeld, Speciaal, Quote), dus in het voorbeeld een lege plek met
+ * knoppen. `bewerk`: in de bewerker ook knoppen om een foto toe te voegen in
+ * het grijze vlak, en de greep om het te verschuiven.
+ */
+function Vlak({ links, foto, doel, leeg, grijs = "#F0F0F0", bewerk }: { links: number; foto?: Foto; doel: string; leeg: boolean; grijs?: string; bewerk?: Bewerk }) {
+  const knoppen: CSSProperties = { left: Math.max(links + 180, BREED - 330), top: 24 };
   return (
     <>
-      <div className="absolute top-0 h-full" style={{ left: links, width: breed, clipPath: vorm ? clip(vorm) : undefined }}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-        <img src={foto.url} alt={foto.alt ?? foto.wens ?? ""} className="h-full w-full object-cover" style={fotoStijl(foto.positie)} />
+      <div className="absolute top-0 h-full overflow-hidden" style={{ left: links, width: BREED - links, clipPath: VORM, background: foto?.url ? undefined : grijs }}>
+        {foto?.url && <SleepbareFoto src={foto.url} alt={foto.alt ?? foto.wens ?? ""} positie={foto.positie} doel={doel} className="h-full w-full object-cover" />}
       </div>
-      <VervangFoto doel={doel} wens={foto.wens} className="!right-auto" style={plek} />
+      {foto?.url ? (
+        <VervangFoto doel={doel} wens={foto.wens} positie={foto.positie} zoom className="!right-auto" style={knoppen} />
+      ) : leeg ? (
+        <AfbeeldingPlek doel={doel} wens={foto?.wens} groot className="absolute !h-auto" style={{ left: Math.max(links + 200, 560), right: 40, top: 150, bottom: 150 }} />
+      ) : bewerk ? (
+        <VervangFoto doel={doel} wens={foto?.wens} className="!right-auto" style={knoppen} />
+      ) : null}
+      {bewerk && <VlakGreep links={links} onVlak={bewerk.onVlak} />}
     </>
   );
 }
@@ -248,10 +299,25 @@ const TITEL_PLEK: CSSProperties = { left: 61, top: 68 };
 const BODY: CSSProperties = { left: 73, top: 192, width: 1134, height: 457 };
 
 /** Eén slide van 1280 × 720 in de layout uit het template. */
-export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slide: DeckSlide; bronnen?: string[]; toonLeeg: boolean; schets?: boolean }) {
+export function SlideInhoud({
+  slide,
+  bronnen,
+  toonLeeg,
+  schets = false,
+  bewerk,
+}: {
+  slide: DeckSlide;
+  bronnen?: string[];
+  toonLeeg: boolean;
+  schets?: boolean;
+  /** In de bewerker: het vlak verschuiven en er een foto in zetten. */
+  bewerk?: Bewerk;
+}) {
   const doel = `slide:${slide.id}`;
   // Zonder foto: in het voorbeeld een lege plek, in een schets (kleine slides) een grijs vlak; op een deellink tekst over de hele breedte.
   const metFoto = Boolean(slide.foto?.url) || toonLeeg || schets;
+  const links = vlakVan(slide);
+  const vlak = <Vlak links={links} foto={slide.foto} doel={doel} leeg={false} bewerk={bewerk} />;
   switch (slide.layout) {
     case "welkom":
       return (
@@ -279,9 +345,8 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
         <div className="relative h-full overflow-hidden bg-black">
           {slide.foto?.url ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-              <img src={slide.foto.url} alt={slide.foto.alt ?? slide.foto.wens ?? ""} className="absolute inset-0 h-full w-full object-cover" style={fotoStijl(slide.foto.positie)} />
-              <VervangFoto doel={doel} wens={slide.foto.wens} className="right-[24px] top-[24px]" />
+              <SleepbareFoto src={slide.foto.url} alt={slide.foto.alt ?? slide.foto.wens ?? ""} positie={slide.foto.positie} doel={doel} className="absolute inset-0 h-full w-full object-cover" />
+              <VervangFoto doel={doel} wens={slide.foto.wens} positie={slide.foto.positie} zoom className="right-[24px] top-[24px]" />
             </>
           ) : (
             <>
@@ -291,20 +356,18 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
           )}
         </div>
       );
-    case "beeld": {
-      const b = BEELD[slide.fotoBreedte ?? 3];
+    case "beeld":
       return (
         <div className="relative h-full overflow-hidden bg-white">
-          {metFoto && <FotoVakMetPlek foto={slide.foto} doel={doel} b={b} />}
-          {slide.titel && <Titel tekst={slide.titel} style={TITEL_PLEK} max={Math.max(560, b.links + 60)} />}
-          <Tekstvak subkop={slide.subkop} tekst={slide.tekst} style={{ left: 73, top: 192, width: metFoto ? 370 : 1134, height: 457 }} />
+          {(metFoto || bewerk) && <Vlak links={links} foto={slide.foto} doel={doel} leeg={toonLeeg} grijs="#d9d9d9" bewerk={bewerk} />}
+          {slide.titel && <Titel tekst={slide.titel} style={TITEL_PLEK} max={Math.max(560, links + 60)} />}
+          <Tekstvak subkop={slide.subkop} tekst={slide.tekst} style={{ left: 73, top: 192, width: metFoto ? Math.min(370, Math.max(260, links - 40)) : 1134, height: 457 }} />
         </div>
       );
-    }
     case "speciaal":
       return (
         <div className="relative h-full overflow-hidden" style={{ background: ROOD }}>
-          {metFoto && <FotoVakMetPlek foto={slide.foto} doel={doel} b={BEELD[5]} />}
+          {metFoto && <Vlak links={BEELD_LINKS[5]} foto={slide.foto} doel={doel} leeg={toonLeeg} grijs="#d9d9d9" />}
           {slide.titel && <Titel tekst={slide.titel} style={{ left: 62, top: 68 }} max={840} />}
           {(slide.subkop || slide.tekst) && (
             <div className="absolute flex items-end" style={{ left: 62, top: 397, width: 537, height: 219 }}>
@@ -318,7 +381,7 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
     case "quote":
       return (
         <div className="relative h-full overflow-hidden" style={{ background: ROOD }}>
-          {metFoto && <FotoVakMetPlek foto={slide.foto} doel={doel} b={BEELD[5]} />}
+          {metFoto && <Vlak links={BEELD_LINKS[5]} foto={slide.foto} doel={doel} leeg={toonLeeg} grijs="#d9d9d9" />}
           <QuoteTekst quote={slide.quote ?? ""} naam={slide.naam} />
         </div>
       );
@@ -326,7 +389,7 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
     case "tabel":
       return (
         <div className="relative h-full overflow-hidden bg-white">
-          <Achtergrond src="/images/deck/vlak.png" />
+          {vlak}
           {slide.titel && <Titel tekst={slide.titel} style={TITEL_PLEK} />}
           <Tekstvak subkop={slide.subkop} tekst={slide.tekst} style={{ left: 73, top: 192, width: 423, height: 457 }} />
           {slide.layout === "grafiek" ? (
@@ -340,7 +403,7 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
     case "cijfers":
       return (
         <div className="relative h-full overflow-hidden bg-white">
-          <Achtergrond src="/images/deck/vlak.png" />
+          {vlak}
           {slide.titel && <Titel tekst={slide.titel} style={TITEL_PLEK} />}
           <DataCijfers slide={slide} style={{ left: 73, top: 192, width: 1100, height: 470 }} />
           <Logo />
@@ -359,9 +422,15 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
     default:
       return (
         <div className="relative h-full overflow-hidden bg-white">
-          <Achtergrond src="/images/deck/vlak.png" />
-          {slide.titel && <Titel tekst={slide.titel} style={TITEL_PLEK} />}
-          <Tekstvak subkop={slide.subkop} tekst={[slide.tekst, slide.layout === "tekst-2" ? slide.tekst2 : undefined].filter(Boolean).join("\n\n")} style={BODY} kolommen={slide.layout === "tekst-2" ? 2 : 1} />
+          {bronnen ? <Vlak links={388} doel={doel} leeg={false} /> : vlak}
+          {slide.titel && <Titel tekst={slide.titel} style={TITEL_PLEK} max={slide.foto?.url ? Math.max(560, links + 60) : undefined} />}
+          <Tekstvak
+            subkop={slide.subkop}
+            tekst={[slide.tekst, slide.layout === "tekst-2" ? slide.tekst2 : undefined].filter(Boolean).join("\n\n")}
+            // Met een foto in het vlak blijft de tekst ervoor; zonder mag hij erover, zoals in het template.
+            style={{ ...BODY, width: slide.foto?.url ? Math.min(1134, Math.max(300, links - 40)) : 1134 }}
+            kolommen={slide.layout === "tekst-2" ? 2 : 1}
+          />
           {bronnen && (
             <div className="absolute text-[18px] leading-snug" style={{ ...BODY, top: 192 }}>
               <ul className="space-y-2">
@@ -380,19 +449,6 @@ export function SlideInhoud({ slide, bronnen, toonLeeg, schets = false }: { slid
   }
 }
 
-function FotoVakMetPlek({ foto, doel, b }: { foto?: Foto; doel: string; b: (typeof BEELD)[1] }) {
-  const zichtbaar = Math.min(b.breed, BREED - b.links);
-  return (
-    <FotoVak
-      foto={foto}
-      doel={doel}
-      links={b.links}
-      breed={b.breed}
-      vorm={b.vorm}
-      plek={{ left: Math.max(b.links + zichtbaar - 260, b.links + 140), top: 24 }}
-    />
-  );
-}
 
 function TekstvakVrij({ subkop, tekst }: { subkop?: string; tekst?: string }) {
   return (

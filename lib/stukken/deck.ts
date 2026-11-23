@@ -83,15 +83,15 @@ export const LAYOUT_UITLEG: Record<SlideLayout, string> = {
 export const LAYOUT_VELDEN: Record<SlideLayout, (keyof SlideVelden)[]> = {
   welkom: ["titel", "subkop"],
   hoofdstuk: ["titel", "subkop"],
-  tekst: ["titel", "subkop", "tekst"],
-  "tekst-2": ["titel", "subkop", "tekst", "tekst2"],
-  beeld: ["titel", "subkop", "tekst", "foto", "fotoBreedte"],
+  tekst: ["titel", "subkop", "tekst", "foto", "vlak"],
+  "tekst-2": ["titel", "subkop", "tekst", "tekst2", "foto", "vlak"],
+  beeld: ["titel", "subkop", "tekst", "foto", "vlak"],
   speciaal: ["titel", "subkop", "tekst", "foto"],
   quote: ["quote", "naam", "foto"],
   foto: ["foto"],
-  grafiek: ["titel", "subkop", "tekst", "grafiek", "nadruk"],
-  tabel: ["titel", "subkop", "tekst", "tabel", "nadruk"],
-  cijfers: ["titel", "kerngetallen", "nadruk"],
+  grafiek: ["titel", "subkop", "tekst", "grafiek", "nadruk", "foto", "vlak"],
+  tabel: ["titel", "subkop", "tekst", "tabel", "nadruk", "foto", "vlak"],
+  cijfers: ["titel", "kerngetallen", "nadruk", "foto", "vlak"],
   rood: ["titel", "tekst"],
   zwart: ["titel", "tekst"],
   afsluiting: [],
@@ -126,6 +126,13 @@ export interface SlideVelden {
   foto?: Foto;
   /** Bij Beeld: hoe breed de foto is, 1 (smal) t/m 5 (bijna de hele slide), zoals Beeld 1 t/m 5. */
   fotoBreedte?: 1 | 2 | 3 | 4 | 5;
+  /**
+   * Waar de schuine vorm rechts begint: de x (in px van 1280) van zijn
+   * linkeronderhoek. Zonder: de plek uit het template (Tekst, Grafiek, Tabel,
+   * Kerngetallen 388; Beeld volgens fotoBreedte). In de vorm staat de foto,
+   * of anders het grijze vlak.
+   */
+  vlak?: number;
   quote?: string;
   naam?: string;
   grafiek?: Grafiek;
@@ -191,6 +198,7 @@ export function leesSlide(raw: unknown, id: string, waar = "Slide", streng = tru
     ...opt("tekst2", tekst(s.tekst2, `${waar}: tekst2`, DECK_LIMIETEN.tekst, false)),
     ...opt("foto", leesFoto(s.foto, `${waar}: foto`)),
     ...opt("fotoBreedte", fotoBreedte as DeckSlide["fotoBreedte"]),
+    ...opt("vlak", leesVlak(s.vlak, waar)),
     ...opt("quote", tekst(s.quote, `${waar}: quote`, DECK_LIMIETEN.quote, false)),
     ...opt("naam", tekst(s.naam, `${waar}: naam`, DECK_LIMIETEN.naam, false)),
     ...opt("grafiek", leesData("grafiek", s.grafiek, `${waar}: grafiek`)),
@@ -212,6 +220,27 @@ export function leesSlide(raw: unknown, id: string, waar = "Slide", streng = tru
     }
   }
   return slide;
+}
+
+/** De plek van het vlak: een geheel getal tussen 100 en 1150 (anders past de vorm niet op de slide). */
+function leesVlak(raw: unknown, waar: string): number | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 100 || n > 1150) throw new StukFout(`${waar}: vlak moet tussen 100 en 1150 liggen.`);
+  return Math.round(n);
+}
+
+/** De vaste plekken van Beeld 1 t/m 5 in het template (de linkeronderhoek van het fotovak). */
+export const BEELD_LINKS: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 939, 2: 755, 3: 574, 4: 392, 5: 207 };
+
+/** Layouts met de schuine vorm rechts. */
+export const MET_VLAK: SlideLayout[] = ["tekst", "tekst-2", "beeld", "grafiek", "tabel", "cijfers"];
+
+/** Waar het vlak van een slide begint (de x van de linkeronderhoek). */
+export function vlakVan(slide: Pick<DeckSlide, "layout" | "vlak" | "fotoBreedte">): number {
+  if (slide.vlak !== undefined) return slide.vlak;
+  if (slide.layout === "beeld") return BEELD_LINKS[slide.fotoBreedte ?? 3];
+  return 388;
 }
 
 function opt<K extends keyof SlideVelden>(sleutel: K, waarde: SlideVelden[K] | undefined): Partial<SlideVelden> {

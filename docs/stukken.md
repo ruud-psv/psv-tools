@@ -59,6 +59,15 @@ kiest een layout uit het template en vult de velden van die layout (`lib/stukken
   (titel op 61, 68 px; tekst op 73, 192 px; fotovakken en hun maskers van Beeld 1 t/m 5) zijn uit het
   template gemeten, op 1280 × 720 (96 px per inch). De titel staat wit op een zwart blok op één regel
   en wordt kleiner als hij niet past, net als de tekst ("tekst passend maken").
+- **Het vlak rechts.** Tekst, Tekst (2 kolommen), Beeld, Grafiek, Tabel en Kerngetallen hebben rechts
+  de schuine vorm uit het template. In de bewerker sleep je die met de rode greep naar links of
+  rechts (of kies een plek als Beeld 1 t/m 5, of "Zoals het template"); opgeslagen als `vlak`, de x
+  van de linkeronderhoek in px van 1280. In het vlak kan een foto (FileFlow of uploaden, knoppen
+  rechtsboven in het vlak); zonder foto is het grijs. De vorm (schuine kant 105 px, haakje op 166 px
+  tussen 57 en 160 px) is bij elke breedte gelijk, gemeten in het template.
+- **Foto's verslepen.** In het voorbeeld (paneel en bewerker, deck en rapport) versleep je een foto om
+  te bepalen welk deel in beeld staat; met − en + zoom je in. Bij loslaten wordt het opgeslagen als
+  uitsnede. Op een deellink, afdruk of presentatie zijn foto's gewoon foto's.
 - **De bronnen** van de cijfers komen automatisch op een slide vóór de afsluiting.
 - **Slides bewerken.** Met **Bewerken** zie je bovenaan alle slides klein; klik er een aan om hem groot
   te zien met de velden van zijn layout: titel, subkop, tekst, foto (uploaden of FileFlow, en de
@@ -89,7 +98,7 @@ kiest een layout uit het template en vult de velden van die layout (`lib/stukken
 
 ## Rapport in de stijl van het template
 
-Een rapport gebruikt dezelfde vormtaal als de slides: geen afgeronde hoeken; de kop als het rode
+In het voorbeeld kies je de titelfoto direct in de kop (FileFlow of uploaden). Een rapport gebruikt dezelfde vormtaal als de slides: geen afgeronde hoeken; de kop als het rode
 PSV EINDHOVEN-vlak (of de titelfoto) met de titel wit op een zwart blok; koppen en kernboodschappen
 wit op een zwart blok; subkoppen (ondertitel, titels van grafieken en tabellen, Conclusie) in PSV Text
 Bold rood; kerngetallen als tegels met het label in rood en het uitgelichte getal op zwart; tabellen

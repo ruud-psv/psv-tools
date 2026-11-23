@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ImagePlus, Images, Loader2, RefreshCw } from "lucide-react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ImagePlus, Images, Loader2, Minus, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Uitsnede } from "@/lib/stukken/model";
 import { FileflowKiezer } from "@/components/stuk/fileflow-kiezer";
@@ -17,6 +17,8 @@ export interface AfbeeldingActies {
   upload: (doel: string, bestand: File) => void;
   /** Een foto uit FileFlow: de server haalt hem op en zet een kopie in het stuk. */
   uitFileflow: (doel: string, fileflowId: number) => void;
+  /** De uitsnede van een foto opslaan (na slepen of zoomen); zonder: niet te verslepen. */
+  positie?: (doel: string, positie: Uitsnede | null) => void;
   /** Het doel waarvoor nu een upload loopt. */
   bezig: string | null;
   uit?: boolean;
@@ -139,11 +141,27 @@ export function AfbeeldingPlek({ doel, wens, groot = false, className, style }: 
 }
 
 /** Kleine knoppen over een foto heen om hem te vervangen: uploaden of uit FileFlow. Alleen in het voorbeeld. */
-export function VervangFoto({ doel, wens, className, style }: { doel: string; wens?: string; className?: string; style?: CSSProperties }) {
+export function VervangFoto({
+  doel,
+  wens,
+  className,
+  style,
+  positie,
+  zoom = false,
+}: {
+  doel: string;
+  wens?: string;
+  className?: string;
+  style?: CSSProperties;
+  positie?: Uitsnede;
+  /** Ook − en + voor de zoom (als er een foto is). */
+  zoom?: boolean;
+}) {
   const acties = useAfbeeldingActies();
   if (!acties) return null;
   return (
     <span className={cn("absolute right-2 top-2 z-10 flex gap-1.5 print:hidden", className)} style={style}>
+      {zoom && <Zoom doel={doel} positie={positie} />}
       <ZoekInFileflow doel={doel} wens={wens} klein />
       <VervangUpload doel={doel} />
     </span>
@@ -170,5 +188,82 @@ function VervangUpload({ doel }: { doel: string }) {
         </button>
       )}
     </Kiezer>
+  );
+}
+
+
+const MIDDEN: Uitsnede = { x: 50, y: 50, zoom: 1 };
+const isMidden = (p: Uitsnede) => p.x === 50 && p.y === 50 && p.zoom === 1;
+
+/**
+ * Een foto die je in het voorbeeld kunt verslepen: slepen verschuift welk deel
+ * in beeld staat (de uitsnede), loslaten slaat het op. Buiten het voorbeeld
+ * (deellink, afdruk, presentatie) een gewone foto.
+ */
+export function SleepbareFoto({ src, alt, positie, doel, className }: { src: string; alt: string; positie?: Uitsnede; doel: string; className?: string }) {
+  const acties = useAfbeeldingActies();
+  const [live, setLive] = useState<Uitsnede>(positie ?? MIDDEN);
+  const start = useRef<{ x: number; y: number; px: number; py: number; w: number; h: number; bewogen: boolean } | null>(null);
+  useEffect(() => setLive(positie ?? MIDDEN), [positie]);
+  const kan = Boolean(acties?.positie) && !acties?.uit;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk
+    <img
+      src={src}
+      alt={alt}
+      draggable={false}
+      className={cn(className, kan && "cursor-move touch-none")}
+      style={fotoStijl(live)}
+      title={kan ? "Sleep om te bepalen welk deel in beeld staat" : undefined}
+      onClick={(e) => kan && e.stopPropagation()}
+      onPointerDown={(e) => {
+        if (!kan) return;
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        const r = e.currentTarget.getBoundingClientRect();
+        start.current = { x: live.x, y: live.y, px: e.clientX, py: e.clientY, w: r.width, h: r.height, bewogen: false };
+      }}
+      onPointerMove={(e) => {
+        const b = start.current;
+        if (!b) return;
+        const dx = e.clientX - b.px;
+        const dy = e.clientY - b.py;
+        if (Math.abs(dx) + Math.abs(dy) > 3) b.bewogen = true;
+        // Naar rechts slepen schuift de foto naar rechts: het focuspunt gaat naar links.
+        const k = 150 / live.zoom;
+        setLive((l) => ({
+          ...l,
+          x: Math.round(Math.min(100, Math.max(0, b.x - (dx / b.w) * k))),
+          y: Math.round(Math.min(100, Math.max(0, b.y - (dy / b.h) * k))),
+        }));
+      }}
+      onPointerUp={() => {
+        const b = start.current;
+        start.current = null;
+        if (b?.bewogen && acties?.positie) acties.positie(doel, isMidden(live) ? null : live);
+      }}
+    />
+  );
+}
+
+/** − en + om in te zoomen op een foto in het voorbeeld. */
+function Zoom({ doel, positie }: { doel: string; positie?: Uitsnede }) {
+  const acties = useAfbeeldingActies();
+  if (!acties?.positie) return null;
+  const p = positie ?? MIDDEN;
+  const zet = (zoom: number) => {
+    const nieuw = { ...p, zoom: Math.round(Math.min(3, Math.max(1, zoom)) * 100) / 100 };
+    acties.positie!(doel, isMidden(nieuw) ? null : nieuw);
+  };
+  const knop = "btn btn--white inline-flex items-center px-2 text-xs shadow-card disabled:opacity-40";
+  return (
+    <>
+      <button type="button" className={knop} title="Uitzoomen" disabled={p.zoom <= 1 || acties.uit} onClick={(e) => (e.stopPropagation(), zet(p.zoom - 0.2))}>
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <button type="button" className={knop} title="Inzoomen" disabled={p.zoom >= 3 || acties.uit} onClick={(e) => (e.stopPropagation(), zet(p.zoom + 0.2))}>
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </>
   );
 }

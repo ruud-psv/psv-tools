@@ -5,7 +5,7 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { asVerdeling } from "@/lib/stukken/as";
-import { AfbeeldingPlek, VervangFoto, fotoStijl, useAfbeeldingActies } from "@/components/stuk/afbeelding";
+import { AfbeeldingPlek, SleepbareFoto, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
 import { STUK_SOORT_LABEL, bronnenVan, isLegeAfbeelding, type Uitsnede, type Achtergrond, type Blok, type StukInhoud } from "@/lib/stukken/model";
 
 /**
@@ -189,12 +189,11 @@ function Kerngetallen({ blok, achtergrond, groot }: { blok: Extract<Blok, { type
   );
 }
 
-/** Een foto in een vak met rechte hoeken, met zijn uitsnede. */
-function Foto({ src, alt, positie, verhouding }: { src: string; alt: string; positie?: Uitsnede; verhouding: string }) {
+/** Een foto in een vak met rechte hoeken, met zijn uitsnede; in het voorbeeld te verslepen. */
+function Foto({ src, alt, positie, verhouding, doel }: { src: string; alt: string; positie?: Uitsnede; verhouding: string; doel: string }) {
   return (
     <div className={cn("relative w-full overflow-hidden bg-muted", verhouding)}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-      <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" style={fotoStijl(positie)} />
+      <SleepbareFoto src={src} alt={alt} positie={positie} doel={doel} className="absolute inset-0 h-full w-full object-cover" />
     </div>
   );
 }
@@ -268,8 +267,8 @@ export function BlokWeergave({ blok, achtergrond }: { blok: Blok; achtergrond?: 
     case "afbeelding":
       return blok.url ? (
         <figure className="relative">
-          <Foto src={blok.url} alt={blok.alt ?? blok.wens} positie={blok.positie} verhouding={groot ? "aspect-[3/2]" : "aspect-[16/9]"} />
-          <VervangFoto doel={blok.id} wens={blok.wens} />
+          <Foto src={blok.url} alt={blok.alt ?? blok.wens} positie={blok.positie} verhouding={groot ? "aspect-[3/2]" : "aspect-[16/9]"} doel={blok.id} />
+          <VervangFoto doel={blok.id} wens={blok.wens} positie={blok.positie} zoom />
           {blok.bijschrift && <figcaption className="mt-1.5 text-xs text-muted-foreground">{blok.bijschrift}</figcaption>}
         </figure>
       ) : (
@@ -322,13 +321,16 @@ function Kop({ stuk, peildatum }: { stuk: StukInhoud; peildatum: string }) {
       <div className="relative flex min-h-[200px] items-end overflow-hidden bg-[#e30713] p-5 sm:min-h-[240px] sm:p-8">
         {beeld?.url ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-            <img src={beeld.url} alt={beeld.wens ?? ""} className="absolute inset-0 h-full w-full object-cover" style={fotoStijl(beeld.positie)} />
-            <VervangFoto doel="titel" wens={beeld.wens} />
+            <SleepbareFoto src={beeld.url} alt={beeld.wens ?? ""} positie={beeld.positie} doel="titel" className="absolute inset-0 h-full w-full object-cover" />
+            <VervangFoto doel="titel" wens={beeld.wens} positie={beeld.positie} zoom />
           </>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- achtergrond uit het template, ook in de afdruk
-          <img src="/images/deck/welkom.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- achtergrond uit het template, ook in de afdruk */}
+            <img src="/images/deck/welkom.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+            {/* In het voorbeeld: direct een titelfoto kiezen. */}
+            <VervangFoto doel="titel" wens={beeld?.wens} />
+          </>
         )}
         <div className="relative">
           <TitelBlok als="h1" className="text-3xl sm:text-5xl">

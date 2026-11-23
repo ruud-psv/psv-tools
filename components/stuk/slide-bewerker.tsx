@@ -18,7 +18,10 @@ import {
   LAYOUT_LABEL,
   LAYOUT_UITLEG,
   LAYOUT_VELDEN,
+  BEELD_LINKS,
   MET_FOTO,
+  MET_VLAK,
+  vlakVan,
   nadrukKeuzesVan,
   wachtOpFoto,
   type DeckSlide,
@@ -55,7 +58,7 @@ function nieuweSlide(layout: SlideLayout): Record<string, unknown> {
     case "tekst-2":
       return { layout, titel: "Titel", tekst: "- Eerste punt", tekst2: "- Tweede kolom" };
     case "beeld":
-      return { layout, titel: "Titel", subkop: "Subkop", tekst: "- Eerste punt\n- Tweede punt", fotoBreedte: 3, foto: { wens: "Beschrijf welke foto hier moet" } };
+      return { layout, titel: "Titel", subkop: "Subkop", tekst: "- Eerste punt\n- Tweede punt", vlak: BEELD_LINKS[3], foto: { wens: "Beschrijf welke foto hier moet" } };
     case "speciaal":
       return { layout, titel: "Titel", tekst: "- Eerste punt", foto: { wens: "Beschrijf welke foto hier moet" } };
     case "quote":
@@ -252,24 +255,41 @@ function SlideVeldenForm({
               }}
             />
           )}
-          {velden.includes("fotoBreedte") && (
+          {velden.includes("vlak") && (
             <div className="space-y-1">
-              <span className={VELD_LABEL}>Breedte van de foto (Beeld 1 t/m 5)</span>
-              <div className="flex gap-1">
-                {([1, 2, 3, 4, 5] as const).map((n) => (
+              <span className={VELD_LABEL}>Plek van het vlak (of sleep de rode greep in de slide)</span>
+              <div className="flex flex-wrap gap-1">
+                {([
+                  ["Smal", BEELD_LINKS[1]],
+                  ["", BEELD_LINKS[2]],
+                  ["", BEELD_LINKS[3]],
+                  ["", BEELD_LINKS[4]],
+                  ["Breed", BEELD_LINKS[5]],
+                ] as const).map(([label, waarde], i) => (
                   <button
-                    key={n}
+                    key={waarde}
                     type="button"
                     disabled={bezig}
-                    onClick={() => bewaar({ fotoBreedte: n })}
+                    onClick={() => bewaar({ vlak: waarde })}
+                    title={`Zoals Beeld ${i + 1} in het template`}
                     className={cn(
-                      "h-8 w-10 rounded-md border font-heading text-sm transition-colors",
-                      (slide.fotoBreedte ?? 3) === n ? "border-psv-red-primary bg-psv-red-primary text-white" : "border-border hover:border-psv-red-primary"
+                      "h-8 min-w-10 rounded-md border px-2 font-heading text-sm transition-colors",
+                      vlakVan(slide) === waarde ? "border-psv-red-primary bg-psv-red-primary text-white" : "border-border hover:border-psv-red-primary"
                     )}
                   >
-                    {n}
+                    {label || i + 1}
                   </button>
                 ))}
+                {slide.layout !== "beeld" && (
+                  <button
+                    type="button"
+                    disabled={bezig || slide.vlak === undefined}
+                    onClick={() => bewaar({ vlak: null })}
+                    className="h-8 rounded-md border border-border px-2 text-xs hover:border-psv-red-primary disabled:opacity-40"
+                  >
+                    Zoals het template
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -331,6 +351,8 @@ export function SlideBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stu
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [voorbeeldUitsnede, setVoorbeeldUitsnede] = useState<Uitsnede | undefined>(undefined);
+  /** Tijdens het slepen van het vlak: de plek in de grote slide, tot hij is opgeslagen. */
+  const [voorbeeldVlak, setVoorbeeldVlak] = useState<number | undefined>(undefined);
   const groot = useSchaal<HTMLDivElement>();
 
   const index = Math.max(0, slides.findIndex((s) => s.id === gekozen));
@@ -469,8 +491,22 @@ export function SlideBewerker({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stu
       <div ref={groot.ref}>
         <Schaal schaal={groot.schaal}>
           <SlideInhoud
-            slide={voorbeeldUitsnede && slide.foto ? { ...slide, foto: { ...slide.foto, positie: voorbeeldUitsnede } } : slide}
+            slide={{
+              ...slide,
+              ...(voorbeeldUitsnede && slide.foto && { foto: { ...slide.foto, positie: voorbeeldUitsnede } }),
+              ...(voorbeeldVlak !== undefined && { vlak: voorbeeldVlak }),
+            }}
             toonLeeg={MET_FOTO.includes(slide.layout)}
+            bewerk={
+              MET_VLAK.includes(slide.layout)
+                ? {
+                    onVlak: (links, klaar) => {
+                      setVoorbeeldVlak(links);
+                      if (klaar) wijzig({ vlak: links }).finally(() => setVoorbeeldVlak(undefined));
+                    },
+                  }
+                : undefined
+            }
           />
         </Schaal>
       </div>

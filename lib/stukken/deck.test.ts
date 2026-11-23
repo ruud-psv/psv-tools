@@ -182,3 +182,15 @@ test("uitsnede: focuspunt en zoom binnen de grenzen; het midden is geen uitsnede
     delete process.env.BUNNY_CDN_URL;
   }
 });
+
+test("vlak: de schuine vorm schuift; standaard de plek uit het template, bij Beeld volgens fotoBreedte", async () => {
+  const { vlakVan, BEELD_LINKS } = await import("./deck");
+  assert.equal(vlakVan({ layout: "tekst" }), 388);
+  assert.equal(vlakVan({ layout: "beeld" }), BEELD_LINKS[3]);
+  assert.equal(vlakVan({ layout: "beeld", fotoBreedte: 1 }), 939);
+  assert.equal(vlakVan({ layout: "grafiek", vlak: 700 }), 700);
+  assert.equal(leesSlide({ layout: "tekst", vlak: 512.6 }, "s1").vlak, 513);
+  assert.throws(() => leesSlide({ layout: "tekst", vlak: 1250 }, "s1"), /vlak moet tussen 100 en 1150/);
+  const s = leesSlide({ layout: "tekst", titel: "x", vlak: 600 }, "s1");
+  assert.equal(wijzigSlide(s, { vlak: null }, "x").vlak, undefined); // terug naar het template
+});
