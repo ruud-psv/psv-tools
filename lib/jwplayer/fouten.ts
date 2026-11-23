@@ -7,7 +7,10 @@ export function foutAntwoord(err: unknown): { status: number; melding: string } 
   if (err instanceof PeriodeFout) return { status: 400, melding: err.message };
   if (err instanceof JwConfigError) return { status: 503, melding: err.message };
   if (err instanceof JwFout) {
-    if (err.status === 401 || err.status === 403) {
+    if (/less than or equal to \d+ day/i.test(err.message)) {
+      return { status: 400, melding: `JW Player staat dit onderdeel alleen toe over een kortere periode: ${err.message}` };
+    }
+    if (err.status === 401 || (err.status === 403 && !/advanced|range|date/i.test(err.message))) {
       return { status: 502, melding: `JW Player weigerde de sleutel (${err.status}): controleer JWPLAYER_SECRET in Vercel. ${err.message}` };
     }
     return { status: 502, melding: `JW Player gaf een fout (${err.status}): ${err.message}` };

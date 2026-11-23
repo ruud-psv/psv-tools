@@ -145,6 +145,10 @@ draaien kan altijd: bestaande dagen worden overgeslagen.
   optelbaar over dagen, video's of groepen. PSV Tools haalt ze over een periode
   altijd met één query over die hele periode op. Is de periode langer dan één
   query toelaat, dan staat er "–".
+- **Grens van 92 dagen**: JW staat query's met uitgebreidere velden ("advanced
+  query objects") alleen toe over hooguit 92 dagen. Over een langere periode
+  (zoals het seizoen) haalt PSV Tools die in stukken op en telt de optelbare
+  cijfers op; unieke kijkers kunnen dan niet en staan als "–".
 - **Percentage-completes** (25/50/75%) en de afhaakcurve bestaan alleen voor
   video's langer dan 30 seconden.
 - **Licentie**: premium-dimensies en -metrics (zoals platform, land, tag en de

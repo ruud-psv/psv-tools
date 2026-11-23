@@ -1,7 +1,7 @@
 import type { SiteCapabilities } from "../../config/jwplayer-capabilities";
 import type { TagPrefix } from "../../config/psvplay-taxonomy";
 import { heeftDimensie, heeftMetric, metrics, onderdeel } from "./capabilities";
-import type { Filter, JwApi, Rij } from "./client";
+import { JwFout, type Filter, type JwApi, type Rij } from "./client";
 import { plat, type MediaIndex, type Video } from "./media";
 import {
   TIJDZONE_NOTITIE,
@@ -92,28 +92,55 @@ export async function vraag(ctx: Ctx, p: Periode, dims: string[], velden: readon
     }
   }
 
-  const max = ctx.cap.maxRangeDays ?? 31;
-  const stukken = aantalDagen(apiPeriode) <= max ? [apiPeriode] : splitsPeriode(apiPeriode, max);
-  const gesplitst = stukken.length > 1 || archiefDeel.length > 0;
-  const metricsVoorStuk = gesplitst ? ms.filter((m) => ADDITIEVE.has(m.field)) : ms;
-  if (!metricsVoorStuk.length) return [];
+  const vorm = `${ctx.site.id}|${dims.join(",")}|${ms.map((m) => m.field).join(",")}|${filter ? "f" : ""}`;
+  let max = Math.min(ctx.cap.maxRangeDays ?? 31, geavanceerdeGrens.get(vorm) ?? Infinity);
 
-  const delen = await Promise.all(
-    stukken.map((s) =>
-      ctx.api.queryAnalytics(ctx.site.id, { start_date: s.van, end_date: s.tot, dimensions: dims, metrics: metricsVoorStuk, ...(filter ? { filter } : {}) })
-    )
-  );
-  if (!gesplitst) return delen[0];
+  for (let poging = 0; ; poging++) {
+    const stukken = aantalDagen(apiPeriode) <= max ? [apiPeriode] : splitsPeriode(apiPeriode, max);
+    const gesplitst = stukken.length > 1 || archiefDeel.length > 0;
+    const metricsVoorStuk = gesplitst ? ms.filter((m) => ADDITIEVE.has(m.field)) : ms;
+    if (!metricsVoorStuk.length) return [];
 
-  // Samenvoegen op de dimensies; additieve metrics optellen, de rest wordt null.
-  const samen = new Map<string, Rij>();
-  for (const rij of [...archiefDeel, ...delen.flat()]) {
-    const k = sleutel(rij, dims);
-    const doel = samen.get(k) ?? Object.fromEntries(dims.map((d) => [d, rij[d] ?? null]));
-    for (const m of ms) doel[m.field] = ADDITIEVE.has(m.field) ? getal(doel[m.field]) + getal(rij[m.field]) : null;
-    samen.set(k, doel);
+    let delen: Rij[][];
+    try {
+      delen = await Promise.all(
+        stukken.map((s) =>
+          ctx.api.queryAnalytics(ctx.site.id, { start_date: s.van, end_date: s.tot, dimensions: dims, metrics: metricsVoorStuk, ...(filter ? { filter } : {}) })
+        )
+      );
+    } catch (err) {
+      // JW: "Advanced query objects available for date ranges spanning over less than or equal to 92 day(s)."
+      const grens = poging === 0 ? bereikGrens(err) : null;
+      if (grens === null || grens >= max) throw err;
+      geavanceerdeGrens.set(vorm, grens);
+      max = grens;
+      continue;
+    }
+    if (!gesplitst) return delen[0];
+
+    // Samenvoegen op de dimensies; additieve metrics optellen, de rest wordt null.
+    const samen = new Map<string, Rij>();
+    for (const rij of [...archiefDeel, ...delen.flat()]) {
+      const k = sleutel(rij, dims);
+      const doel = samen.get(k) ?? Object.fromEntries(dims.map((d) => [d, rij[d] ?? null]));
+      for (const m of ms) doel[m.field] = ADDITIEVE.has(m.field) ? getal(doel[m.field]) + getal(rij[m.field]) : null;
+      samen.set(k, doel);
+    }
+    return [...samen.values()];
   }
-  return [...samen.values()];
+}
+
+/**
+ * Sommige query's ("advanced query objects", zoals bepaalde dimensies en
+ * metrics) mogen bij JW over een korter bereik dan een gewone query. JW zegt
+ * de grens in de foutmelding; die onthouden we per soort query.
+ */
+const geavanceerdeGrens = new Map<string, number>();
+
+export function bereikGrens(err: unknown): number | null {
+  if (!(err instanceof JwFout) || (err.status !== 400 && err.status !== 403)) return null;
+  const m = /less than or equal to (\d+) day/i.exec(err.message);
+  return m ? Number(m[1]) : null;
 }
 
 /* ---------- KPI's ---------- */
@@ -199,7 +226,12 @@ export async function dagreeks(ctx: Ctx, p: Periode, filter?: Filter[]): Promise
 export async function overzicht(ctx: Ctx, keuze: PeriodeKeuze) {
   const [nu, vorig, perDag] = await Promise.all([kpis(ctx, keuze.periode), kpis(ctx, keuze.vorige), dagreeks(ctx, keuze.periode)]);
   const extra: string[] = [];
-  if (nu.unieke_kijkers === null) extra.push(onderdeelUitleg(ctx.cap, "uniekPeriode") ?? "Unieke kijkers over deze periode zijn niet in één query op te halen.");
+  if (nu.unieke_kijkers === null) {
+    extra.push(
+      onderdeelUitleg(ctx.cap, "uniekPeriode") ??
+        "Unieke kijkers over deze periode geeft JW niet in één query (de periode is te lang voor JW); ze worden bewust niet uit kortere periodes opgeteld."
+    );
+  }
   return {
     site: ctx.site.label,
     ...periodeInfo(keuze),

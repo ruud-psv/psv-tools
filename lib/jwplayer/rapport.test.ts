@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { leegCache, queryCache, ttlVoor, KORT_MS } from "./cache";
 import { capabilitiesVoor, leesCapabilities, onderdeel, vergeetCapabilities } from "./capabilities";
-import type { AnalyticsQuery, Rij } from "./client";
+import { JwFout, type AnalyticsQuery, type Rij } from "./client";
 import { vergeetMedia } from "./media";
 import { media, nepApi, nepCtx, volleCaps } from "./nep";
 import { kiesPeriode } from "./periode";
@@ -257,4 +257,30 @@ test("capabilities: een geweigerde sleutel wordt een fout, niet een lege uitkoms
   }, opslag);
   assert.ok(opnieuw > 0);
   assert.equal(cap.metrics.plays, "sum");
+});
+
+test("JW-grens voor advanced query's (92 dagen): opnieuw in stukken, en die grens onthouden", async () => {
+  const fout = () => new JwFout("Advanced query objects available for date ranges spanning over less than or equal to 92 day(s).", 403);
+  const { api, vragen } = nepApi((q) => {
+    const dagen = (Date.parse(q.end_date) - Date.parse(q.start_date)) / 86_400_000 + 1;
+    if (q.dimensions?.includes("media_id") && dagen > 92) throw fout();
+    return [{ media_id: "aaaaaaa1", plays: 10, time_watched: 100, unique_viewers: 5 }];
+  });
+  const ctx = nepCtx(api, volleCaps({ maxRangeDays: 1827 }));
+  const p = { van: "2026-07-01", tot: "2026-11-22" };
+  const rijen = await vraag(ctx, p, ["media_id"], ["plays", "unique_viewers"]);
+  assert.deepEqual(rijen, [{ media_id: "aaaaaaa1", plays: 20, unique_viewers: null }]);
+  assert.equal(vragen.length, 3, "één mislukte vraag, daarna twee stukken");
+  await vraag(ctx, p, ["media_id"], ["plays", "unique_viewers"]);
+  assert.equal(vragen.length, 5, "de grens is onthouden: meteen in stukken");
+  // Een gewone query zonder media_id blijft één vraag over de hele periode.
+  await vraag(ctx, p, [], ["plays"]);
+  assert.equal(vragen.length, 6);
+});
+
+test("foutmelding bij de JW-bereikgrens zegt niet dat de sleutel fout is", async () => {
+  const { foutAntwoord } = await import("./fouten");
+  const m = foutAntwoord(new JwFout("Advanced query objects available for date ranges spanning over less than or equal to 92 day(s).", 403)).melding;
+  assert.doesNotMatch(m, /sleutel/);
+  assert.match(foutAntwoord(new JwFout("unauthorized: invalid", 401)).melding, /sleutel/);
 });
