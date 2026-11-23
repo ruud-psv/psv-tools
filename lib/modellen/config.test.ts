@@ -10,6 +10,7 @@ import {
   outputConfigVoor,
   plek,
   standaardKenmerken,
+  tekstUit,
   type ModelKeuze,
 } from "./config";
 
@@ -56,8 +57,8 @@ test("outputConfigVoor en fallbackVoor: wat de plek en het model samen toestaan"
   assert.deepEqual(outputConfigVoor(actief, assistent), { output_config: { effort: "medium" } });
   assert.deepEqual(fallbackVoor(actief), { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
   // Een plek zonder effort stuurt er geen mee, ook niet bij een model dat hem kent.
-  const titel = plek("assistent-titel");
-  assert.deepEqual(outputConfigVoor(actiefModel(titel), titel), {});
+  const zonder = { ...plek("assistent-titel"), inspanning: undefined };
+  assert.deepEqual(outputConfigVoor(actiefModel(zonder), zonder), {});
 });
 
 test("kenmerkenUitCapabilities: de Models API wint, anders de terugval", () => {
@@ -72,4 +73,20 @@ test("modelNaam: leesbare naam uit het id", () => {
   assert.equal(modelNaam("claude-opus-5"), "Claude Opus 5");
   assert.equal(modelNaam("claude-haiku-4-5-20251001"), "Claude Haiku 4.5");
   assert.equal(modelNaam("iets-anders"), "iets-anders");
+});
+
+test("tekstUit: alleen de tekstblokken, ook als er een denkblok voor staat", () => {
+  assert.equal(
+    tekstUit([
+      { type: "thinking", text: undefined },
+      { type: "text", text: "Hallo " },
+      { type: "text", text: "wereld" },
+    ]),
+    "Hallo wereld"
+  );
+  assert.equal(tekstUit([]), "");
+});
+
+test("plekken met een JSON-antwoord draaien op een model dat effort kent", () => {
+  for (const p of MODEL_PLEKKEN.filter((p) => p.json)) assert.equal(standaardKenmerken(p.standaard).effort, true, p.id);
 });

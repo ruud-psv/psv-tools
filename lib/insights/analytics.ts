@@ -1,4 +1,4 @@
-import { runInsightAnalysis } from "./runner";
+import { insightSchema, runInsightAnalysis, uitgelicht } from "./runner";
 
 export interface AnalyticsSiteData {
   label: string;
@@ -105,10 +105,14 @@ function buildContext(input: AnalyticsInsightInput): string {
   return lines.join("\n");
 }
 
+/** De vorm van het antwoord; de API dwingt hem af. */
+const SCHEMA = insightSchema({ bestPerformer: uitgelicht("site", "metric", "why"), attentionNeeded: uitgelicht("site", "metric", "action") });
+
 export async function analyzeAnalytics(input: AnalyticsInsightInput): Promise<AnalyticsInsightResult> {
   const context = buildContext(input);
   return runInsightAnalysis<AnalyticsInsightResult>({
     plek: "inzichten-analytics",
+    schema: SCHEMA,
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende web analytics data en retourneer je inzichten als JSON:\n\n${context}`,
   });

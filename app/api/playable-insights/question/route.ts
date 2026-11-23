@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { GEWEIGERD, outputConfigVoor, plek, tekstUit } from "@/lib/modellen/config";
 import { modelVoor } from "@/lib/modellen/store";
 import { buildPlayableContext } from "@/lib/playable-analysis";
 import type { Campaign, PlayableTotals } from "@/lib/playable-analysis";
@@ -53,14 +54,18 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic({ apiKey });
 
   try {
+    const actief = await modelVoor("playable-vraag");
     const message = await client.messages.create({
-      model: (await modelVoor("playable-vraag")).model,
-      max_tokens: 1024,
+      model: actief.model,
+      // Ruim: bij nieuwere modellen telt het denkwerk mee in deze limiet.
+      max_tokens: 4000,
+      ...outputConfigVoor(actief, plek("playable-vraag")),
       system: systemPrompt,
       messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
-    const answer = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    const tekst = tekstUit(message.content).trim();
+    const answer = tekst || ((message.stop_reason as string) === "refusal" ? GEWEIGERD : "");
     return NextResponse.json({ answer });
   } catch (error) {
     return NextResponse.json(

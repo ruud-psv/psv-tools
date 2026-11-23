@@ -49,6 +49,7 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     beschrijving: "Een korte titel voor elk nieuw gesprek in de assistent.",
     href: "/dashboard/assistent",
     standaard: "claude-haiku-5-5",
+    inspanning: "low",
   },
   {
     id: "kennisbank",
@@ -83,7 +84,8 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "Vragen stellen",
     beschrijving: "Vragen over de mailings in DM Performance.",
     href: "/dashboard/dm-performance",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-sonnet-5-5",
+    inspanning: "low",
   },
   {
     id: "playable-vraag",
@@ -91,7 +93,8 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "Vragen stellen",
     beschrijving: "Vragen over de Playable-campagnes.",
     href: "/dashboard/landingspaginas",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-sonnet-5-5",
+    inspanning: "low",
   },
   {
     id: "playable-loader",
@@ -109,7 +112,9 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "AI-analyses",
     beschrijving: "De automatische analyse van mailings (ook in gedeelde rapporten).",
     href: "/dashboard/dm-performance",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-haiku-5-5",
+    inspanning: "low",
+    json: true,
   },
   {
     id: "inzichten-playable",
@@ -117,7 +122,9 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "AI-analyses",
     beschrijving: "De automatische analyse van landingspagina-campagnes.",
     href: "/dashboard/landingspaginas",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-haiku-5-5",
+    inspanning: "low",
+    json: true,
   },
   {
     id: "inzichten-analytics",
@@ -125,14 +132,18 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "AI-analyses",
     beschrijving: "De automatische analyse van Google Analytics.",
     href: "/dashboard/web-verkeer",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-haiku-5-5",
+    inspanning: "low",
+    json: true,
   },
   {
     id: "inzichten-ticket",
     naam: "Ticket-analyse",
     groep: "AI-analyses",
     beschrijving: "De analyse van ticketverkoop in gedeelde rapporten.",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-haiku-5-5",
+    inspanning: "low",
+    json: true,
   },
   {
     id: "inzichten-fanstore",
@@ -140,7 +151,9 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "AI-analyses",
     beschrijving: "De analyse van de Fanstore in gedeelde rapporten.",
     href: "/dashboard/fanstore",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-haiku-5-5",
+    inspanning: "low",
+    json: true,
   },
   {
     id: "inzichten-rapport",
@@ -148,7 +161,9 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "AI-analyses",
     beschrijving: "De gecombineerde analyse in de rapportage-generator en gedeelde rapporten.",
     href: "/dashboard/rapportage-generator",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-sonnet-5-5",
+    inspanning: "medium",
+    json: true,
   },
   {
     id: "inzichten-fandesk",
@@ -156,7 +171,9 @@ export const MODEL_PLEKKEN: ModelPlek[] = [
     groep: "AI-analyses",
     beschrijving: "De dag- en periodesamenvattingen van Fandesk-tickets.",
     href: "/dashboard/fandesk",
-    standaard: "claude-haiku-4-5-20251001",
+    standaard: "claude-sonnet-5-5",
+    inspanning: "medium",
+    json: true,
   },
 ];
 
@@ -242,6 +259,18 @@ export function modelNaam(id: string): string {
   const familie = m[1].charAt(0).toUpperCase() + m[1].slice(1);
   return `Claude ${familie} ${m[2]}${m[3] ? `.${m[3]}` : ""}`;
 }
+
+/**
+ * De tekst van een antwoord: alle tekstblokken achter elkaar. Nieuwere modellen
+ * beginnen met een denkblok, dus `content[0]` is niet altijd de tekst.
+ */
+export function tekstUit(content: readonly { type: string; text?: string }[]): string {
+  return content.map((blok) => (blok.type === "text" && blok.text ? blok.text : "")).join("");
+}
+
+/** Wat een plek toont als het model een vraag weigert en er geen tekst kwam. */
+export const GEWEIGERD =
+  "Deze vraag kan ik niet beantwoorden. Probeer hem anders te formuleren, of stel een andere vraag.";
 
 /** Een model dat de API-sleutel kan aanroepen, zoals het beheer het toont. */
 export interface BeschikbaarModel {

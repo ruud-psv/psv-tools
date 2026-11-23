@@ -1,4 +1,4 @@
-import { runInsightAnalysis } from "./runner";
+import { insightSchema, runInsightAnalysis } from "./runner";
 
 /* Compacte samenvattingen per bron — de deelpagina stuurt deze mee zodat één
  * gecombineerde analyse over alle inzichten tegelijk gemaakt kan worden. */
@@ -149,10 +149,14 @@ function buildContext(input: CombinedInsightInput): string {
   return lines.join("\n");
 }
 
+/** De vorm van het antwoord; de API dwingt hem af. */
+const SCHEMA = insightSchema();
+
 export async function analyzeCombined(input: CombinedInsightInput): Promise<CombinedInsightResult> {
   const context = buildContext(input);
   return runInsightAnalysis<CombinedInsightResult>({
     plek: "inzichten-rapport",
+    schema: SCHEMA,
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende gecombineerde rapportagedata en retourneer je inzichten als JSON:\n\n${context}`,
   });

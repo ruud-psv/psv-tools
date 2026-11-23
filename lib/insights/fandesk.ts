@@ -5,7 +5,7 @@ import {
   type FandeskTheme,
 } from "@/lib/fandesk-analysis";
 import type { FandeskTicket } from "@/lib/fandesk";
-import { runInsightAnalysis } from "./runner";
+import { insightSchema, object, runInsightAnalysis } from "./runner";
 
 export interface FandeskDayInsightInput {
   day: string;
@@ -110,16 +110,32 @@ ${SHARED_RULES}
 - recommendations: maximaal 4, minimaal 1. Denk structureel: wat kan er op de site, in de FAQ of in de communicatie beter, zodat deze vragen niet meer gesteld worden.`;
 
 /** Dagsamenvatting: de prozatekst, de thema's en eventuele heads-ups. */
+/** De vorm van het antwoord; de API dwingt hem af. */
+const SCHEMA = insightSchema({
+  themes: {
+    type: "array",
+    items: object({ label: { type: "string" }, count: { type: "integer" }, example: { type: "string" } }),
+  },
+  alerts: {
+    type: "array",
+    items: object({
+      label: { type: "string" },
+      count: { type: "integer" },
+      evidence: { type: "string" },
+      advice: { type: "string" },
+    }),
+  },
+});
+
 export async function analyzeFandeskDay(
   input: FandeskDayInsightInput
 ): Promise<FandeskInsightResult> {
   const context = buildDayContext(input);
   return runInsightAnalysis<FandeskInsightResult>({
     plek: "inzichten-fandesk",
+    schema: SCHEMA,
     systemPrompt: DAY_SYSTEM_PROMPT,
     userMessage: `Analyseer de support tickets van deze dag en retourneer je inzichten als JSON:\n\n${context}`,
-    // Een drukke dag levert acht thema's plus proza op; 2048 is dan krap.
-    maxTokens: 3072,
   });
 }
 
@@ -130,8 +146,8 @@ export async function analyzeFandeskPeriod(
   const context = buildPeriodContext(input);
   return runInsightAnalysis<FandeskInsightResult>({
     plek: "inzichten-fandesk",
+    schema: SCHEMA,
     systemPrompt: PERIOD_SYSTEM_PROMPT,
     userMessage: `Vat de support tickets van deze periode samen en retourneer je inzichten als JSON:\n\n${context}`,
-    maxTokens: 3072,
   });
 }
