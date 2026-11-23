@@ -37,21 +37,29 @@ deel je het met een link of druk je het af als PDF.
 
 ## Slide deck
 
-`slidesVan` in `lib/stukken/model.ts` bepaalt welk blok op welke slide komt:
+Een deck volgt het PowerPoint-template van PSV (seizoen 2026-2027), zoals beschreven in
+`packages/psv-branding/open-design/psv/DESIGN.md`. `slidesVan` in `lib/stukken/model.ts` bepaalt
+welk blok op welke slide komt; `components/stuk/deck-weergave.tsx` tekent ze:
 
-- Eerst een titelslide (zwart met de rode schuine wig), aan het eind een slide met de bronnen.
-- Een **kop** wordt geen slide, maar het hoofdstuk (klein, rood) boven de slides erna.
-- Elk ander blok krijgt een eigen slide, met de kernboodschap als titel. Zonder kernboodschap: de
-  titel van de grafiek of tabel, "In cijfers" of "Conclusie".
-- **Twee halve blokken na elkaar** delen één slide; een kop ertussen breekt het paar.
-- Een **conclusie** staat standaard op rood; de rest op wit, tenzij de opmaak iets anders zegt.
+- **Welkom**: rood met het patroon "PSV EINDHOVEN", de titel in het zwarte blok. Met een titelfoto
+  wordt het de "Speciaal"-slide: foto over de hele slide met links de rode schuine vorm.
+- Een **kop** wordt een **hoofdstukslide**: rood met de donkerdere schuine band, het embleem en de
+  titel in het zwarte blok.
+- Elk ander blok krijgt een **inhoudslide**: wit met de grijze schuine vorm, de titel wit op een zwart
+  blok linksboven (kernboodschap, of de titel van de grafiek of tabel, "In cijfers", "Conclusie"),
+  het embleem rechtsonder, geen voetregel en geen paginanummer. Een lange titel wordt kleiner en mag
+  over twee regels.
+- **Twee halve blokken na elkaar** delen een slide: tekst smal links naast een grafiek of tabel
+  ("Grafiek" en "Tabel" uit het template), of tekst naast een foto in de schuine vorm ("Beeld").
+- Een **foto alleen** vult de hele slide ("Foto zoom"), met de kernboodschap in het zwarte blok.
+- Een **conclusie** staat standaard op rood; een slide op zwart krijgt een rood titelblok.
+- Aan het eind de **bronnen** en een **afsluiting** in rood met het embleem.
 - Het uitgelichte kerngetal staat groot op zwart; de uitgelichte rij in een tabel en de uitgelichte
   reeks in een grafiek zijn rood, de andere reeksen neutraal.
 
 Op het scherm worden de slides geschaald naar de breedte van het paneel. **Afdrukken** maakt van
 elke slide een pagina van 1280 × 720 (`@page deck` in `app/globals.css`), dus "Opslaan als PDF"
-geeft een PDF die je kunt presenteren. De vormregels komen uit
-`packages/psv-branding/open-design/psv/DESIGN.md`.
+geeft een PDF die je kunt presenteren.
 
 ## Foto's
 

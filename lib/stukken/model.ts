@@ -557,7 +557,9 @@ export function handmatigBewerken(stuk: Stuk, invoer: unknown, nu: string): Stuk
 /* ---------- Slides (deck) ---------- */
 
 export interface Slide {
-  /** De laatste kop ervoor: het hoofdstuk, klein boven de titel. */
+  /** Een hoofdstukslide (uit een kop) of een slide met inhoud. */
+  soort: "hoofdstuk" | "inhoud";
+  /** Het hoofdstuk waar de slide onder valt (de laatste kop ervoor). */
   sectie?: string;
   /** De kernboodschap, of de titel van het blok, of een standaard per type. */
   titel?: string;
@@ -588,10 +590,11 @@ export function isLegeAfbeelding(blok: Blok): boolean {
 }
 
 /**
- * Hoe de blokken op slides komen. Een kop wordt geen slide, maar het
- * hoofdstuk boven de slides erna. Elk ander blok krijgt een eigen slide,
- * behalve twee halve blokken na elkaar: die delen er een. De titelslide en de
- * bronnen voegt de weergave toe.
+ * Hoe de blokken op slides komen, volgens het PowerPoint-template van PSV.
+ * Een kop wordt een hoofdstukslide (rood, met het embleem). Elk ander blok
+ * krijgt een eigen slide, behalve twee halve blokken na elkaar: die delen er
+ * een (tekst naast een grafiek, tabel of foto). De welkomstslide, de bronnen
+ * en de afsluiting voegt de weergave toe.
  */
 export function slidesVan(stuk: Pick<StukInhoud, "blokken">): Slide[] {
   const slides: Slide[] = [];
@@ -601,6 +604,7 @@ export function slidesVan(stuk: Pick<StukInhoud, "blokken">): Slide[] {
     const blok = blokken[i];
     if (blok.type === "kop") {
       sectie = blok.opmaak?.kernboodschap ?? blok.tekst;
+      slides.push({ soort: "hoofdstuk", titel: sectie, blokken: [blok], achtergrond: blok.opmaak?.achtergrond ?? "rood", groot: false });
       continue;
     }
     const volgende = blokken[i + 1];
@@ -609,8 +613,10 @@ export function slidesVan(stuk: Pick<StukInhoud, "blokken">): Slide[] {
     if (samen) i += 1;
     const achtergrond = blok.opmaak?.achtergrond ?? (blok.type === "conclusie" ? "rood" : "wit");
     slides.push({
+      soort: "inhoud",
       ...(sectie && { sectie }),
-      titel: blok.opmaak?.kernboodschap ?? (samen ? undefined : standaardTitel(blok)),
+      // Bij twee blokken samen: de kernboodschap van het eerste, anders die van het tweede.
+      titel: blok.opmaak?.kernboodschap ?? (samen ? volgende.opmaak?.kernboodschap : standaardTitel(blok)),
       blokken: opSlide,
       achtergrond,
       groot: blok.opmaak?.grootte === "groot",

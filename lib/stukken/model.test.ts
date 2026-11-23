@@ -151,7 +151,7 @@ test("opmaken: alleen de vorm verandert; null haalt een veld weg; wijzigen laat 
   assert.deepEqual(d.blokken[0].opmaak, { grootte: "groot" });
 });
 
-test("slides: een kop wordt het hoofdstuk, twee halve blokken delen een slide", () => {
+test("slides: een kop wordt een hoofdstukslide, twee halve blokken delen een slide", () => {
   const inhoud = nieuweInhoud({
     soort: "deck",
     titel: "T",
@@ -169,7 +169,7 @@ test("slides: een kop wordt het hoofdstuk, twee halve blokken delen een slide", 
   });
   const slides = slidesVan(inhoud);
   assert.deepEqual(
-    slides.map((s) => [s.sectie ?? "", s.titel ?? "", s.blokken.map((b) => b.id).join("+"), s.achtergrond, s.groot]),
+    slides.filter((s) => s.soort === "inhoud").map((s) => [s.sectie ?? "", s.titel ?? "", s.blokken.map((b) => b.id).join("+"), s.achtergrond, s.groot]),
     [
       ["", "In cijfers", "b1", "wit", false],
       ["", "Conclusie", "b2", "rood", false], // een conclusie is standaard rood
@@ -179,6 +179,14 @@ test("slides: een kop wordt het hoofdstuk, twee halve blokken delen een slide", 
       ["Aanbod", "Vakken", "b9", "wit", false], // een kop ertussen breekt het paar
     ]
   );
+  assert.deepEqual(
+    slides.filter((s) => s.soort === "hoofdstuk").map((s) => [s.titel, s.blokken[0].id, s.achtergrond]),
+    [
+      ["Verkoop", "b3", "rood"],
+      ["Aanbod", "b8", "rood"],
+    ]
+  );
+  assert.deepEqual(slides.map((s) => s.soort[0]).join(""), "iihiiihi");
 });
 
 test("bewerken: toevoegen, wijzigen, verwijderen en verplaatsen", () => {
@@ -311,6 +319,18 @@ test("titelbeeld: gaat mee in versies en kan weg", () => {
   assert.equal(zonder.vorige[0].titelbeeld?.wens, "Spelers vieren een doelpunt");
   assert.deepEqual(vorigeVersie(zonder, "").titelbeeld, { wens: "Spelers vieren een doelpunt" });
   assert.deepEqual(Object.keys(inhoudVan(s)), ["soort", "titel", "ondertitel", "titelbeeld", "blokken"]);
+});
+
+test("slides: bij twee halve blokken telt de kernboodschap van het tweede als het eerste er geen heeft", () => {
+  const inhoud = nieuweInhoud({
+    soort: "deck",
+    titel: "T",
+    blokken: [
+      { type: "tekst", tekst: "x", opmaak: { grootte: "half" } },
+      { ...grafiek, opmaak: { grootte: "half", kernboodschap: "Nog 312 stoelen te koop" } },
+    ],
+  });
+  assert.equal(slidesVan(inhoud)[0].titel, "Nog 312 stoelen te koop");
 });
 
 test("slides: een afbeelding krijgt een eigen slide, of deelt er een als half blok", () => {

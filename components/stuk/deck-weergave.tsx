@@ -1,22 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { AfbeeldingPlek, VervangFoto, useAfbeeldingActies } from "@/components/stuk/afbeelding";
 import { bronnenVan, isLegeAfbeelding, slidesVan, type Achtergrond, type Blok, type Slide, type StukInhoud } from "@/lib/stukken/model";
-import { Bron, Grafiek, StukWeergave, formatDag, isDonker, vlakKlasse } from "@/components/stuk/stuk-weergave";
+import { Bron, Grafiek, StukWeergave, formatDag, isDonker } from "@/components/stuk/stuk-weergave";
 
 /**
- * Een stuk als slide deck: dezelfde blokken, op slides van 1280 × 720. Welk
- * blok op welke slide komt, staat in `slidesVan` (lib/stukken/model.ts). Op het
- * scherm worden de slides geschaald naar de breedte; bij afdrukken is elke
+ * Een stuk als slide deck, in de vorm van het PowerPoint-template van PSV
+ * (seizoen 2026-2027): titels wit op een zwart blok, de grijze schuine vorm,
+ * het embleem rechtsonder, geen voetregel. Welk blok op welke slide komt,
+ * staat in `slidesVan` (lib/stukken/model.ts); de vormregels in
+ * packages/psv-branding/open-design/psv/DESIGN.md.
+ *
+ * Slides zijn 1280 × 720 (het template is 13,333 × 7,5 inch: 96 px per inch).
+ * Op het scherm worden ze geschaald naar de breedte; bij afdrukken is elke
  * slide een pagina van 1280 × 720 (`@page deck` in globals.css).
- * De vormregels staan in packages/psv-branding/open-design/psv/DESIGN.md.
  */
 
 const BREED = 1280;
 const HOOG = 720;
+
+/**
+ * De PSV-schuine vorm uit het template (de "1" uit 1913), gemeten in het
+ * template: bovenaan op 38,8% van de breedte, onderaan op 30,3%, met de
+ * inkeping op 23% van de hoogte.
+ */
+const SCHUIN = "polygon(38.8% 0, 100% 0, 100% 100%, 30.3% 100%, 42.76% 23.06%, 34.97% 23.06%)";
+
+/** Dezelfde vorm als masker voor een foto: begint links onderaan het vlak en loopt tot de rechterrand. */
+function fotoVorm(): string {
+  const px = (pct: number) => `${Math.round((pct / 100) * BREED)}px`;
+  return `polygon(${px(8.5)} 0, 100% 0, 100% 100%, 0 100%, ${px(12.46)} 23.06%, ${px(4.67)} 23.06%)`;
+}
 
 /** Schaalt een vaste slide naar de breedte van de kolom. */
 function Schaal({ children, schaal }: { children: ReactNode; schaal: number }) {
@@ -29,58 +46,79 @@ function Schaal({ children, schaal }: { children: ReactNode; schaal: number }) {
   );
 }
 
-function Voet({ links, rechts, donker }: { links: string; rechts: string; donker: boolean }) {
+function Embleem({ className, style }: { className?: string; style?: CSSProperties }) {
+  // eslint-disable-next-line @next/next/no-img-element -- het embleem, ook in de afdruk
+  return <img src="/images/psv-embleem.svg" alt="PSV" className={className} style={style} />;
+}
+
+/**
+ * De titel: PSV Condensed in hoofdletters, wit op een zwart blok dat om de
+ * tekst past. In het template 50 pt (67 px) op één regel; een langere titel
+ * wordt kleiner en mag over twee regels, met het blok per regel.
+ */
+function TitelBlok({ tekst, rood = false, className, groot = 67 }: { tekst: string; rood?: boolean; className?: string; groot?: number }) {
+  const grootte = tekst.length <= 22 ? groot : tekst.length <= 34 ? Math.round(groot * 0.78) : Math.round(groot * 0.62);
   return (
-    <div
-      className={cn(
-        "absolute inset-x-0 bottom-0 flex h-9 items-center justify-between border-t px-[72px] text-xs",
-        donker ? "border-white/25 text-white" : "border-psv-gray-07 text-muted-foreground"
-      )}
-    >
-      <span className="truncate">{links}</span>
-      <span className={cn("font-heading text-sm", donker ? "text-white" : "text-foreground")}>{rechts}</span>
+    <h2 className={cn("max-w-[1100px] font-heading uppercase", className)} style={{ fontSize: grootte, lineHeight: 1.22 }}>
+      <span
+        className={cn("px-[11px] text-white [-webkit-box-decoration-break:clone] [box-decoration-break:clone]", rood ? "bg-psv-red-primary" : "bg-psv-black")}
+      >
+        {tekst}
+      </span>
+    </h2>
+  );
+}
+
+/** Rood vlak met links de donkerdere schuine band, zoals de hoofdstuk- en afsluitslide. */
+function RoodVlak({ children }: { children?: ReactNode }) {
+  return (
+    <div className="relative h-full overflow-hidden bg-psv-red-primary text-white">
+      <div className="absolute inset-y-0 left-0 w-[34%] bg-psv-red-secondary [clip-path:polygon(0_0,100%_0,62%_100%,0_100%)]" />
+      {children}
     </div>
   );
 }
 
-function Titel({ sectie, titel, donker }: { sectie?: string; titel?: string; donker: boolean }) {
-  if (!sectie && !titel) return null;
+/** Het patroon van de welkomstslide: rijen "PSV EINDHOVEN" in grote schuine letters, rood op rood. */
+function Patroon() {
+  const regel = "PSV EINDHOVEN PSV EINDHOVEN PSV EINDHOVEN ";
   return (
-    <header className="mb-6 flex-shrink-0">
-      {sectie && (
-        <p className={cn("mb-2 font-heading text-sm uppercase tracking-wide", donker ? "text-white" : "text-psv-red-primary")}>{sectie}</p>
-      )}
-      {titel && (
-        <h2 className="max-w-[1000px] font-heading text-[36px] uppercase leading-[1.1]">
-          {titel}
-          <span className={cn("mt-3 block h-1 w-12", donker ? "bg-white" : "bg-psv-red-primary")} />
-        </h2>
-      )}
-    </header>
+    <div aria-hidden className="absolute inset-0 overflow-hidden">
+      {Array.from({ length: 7 }, (_, i) => (
+        <p
+          key={i}
+          className="whitespace-nowrap font-heading text-[118px] uppercase leading-[0.86] text-black/[0.07]"
+          style={{ transform: `translateX(${-((i * 230) % 690)}px) skewX(-12deg)` }}
+        >
+          {regel}
+        </p>
+      ))}
+    </div>
   );
 }
 
-function SlideKerngetallen({ blok, achtergrond, half }: { blok: Extract<Blok, { type: "kerngetallen" }>; achtergrond: Achtergrond; half: boolean }) {
+/* ---------- Inhoud ---------- */
+
+function SlideKerngetallen({ blok, achtergrond, smal }: { blok: Extract<Blok, { type: "kerngetallen" }>; achtergrond: Achtergrond; smal: boolean }) {
   const donker = isDonker(achtergrond);
   const uitgelicht = blok.items.find((k) => k.label === blok.opmaak?.nadruk);
   const rest = blok.items.filter((k) => k !== uitgelicht);
-  const tegel = "flex flex-col border-t-4 px-5 py-4";
   return (
     <div className="flex h-full flex-col">
-      <div className={cn("grid min-h-0 flex-1 gap-5", uitgelicht && !half ? "grid-cols-[1fr_1.5fr]" : "grid-cols-1")}>
+      <div className={cn("grid min-h-0 flex-1 gap-5", uitgelicht && !smal ? "grid-cols-[1fr_1.5fr]" : "grid-cols-1")}>
         {uitgelicht && (
-          <div className={cn(tegel, "justify-end border-psv-red-primary bg-psv-black p-6 text-white")}>
-            <span className="font-heading text-sm uppercase tracking-wide">{uitgelicht.label}</span>
+          <div className="flex flex-col justify-end bg-psv-black p-6 text-white">
+            <span className="text-[22px] font-bold text-psv-red-primary">{uitgelicht.label}</span>
             <span className="my-1 font-heading text-[120px] leading-none">{uitgelicht.waarde}</span>
-            {uitgelicht.toelichting && <span className="text-base text-psv-gray-08">{uitgelicht.toelichting}</span>}
+            {uitgelicht.toelichting && <span className="text-lg text-psv-gray-08">{uitgelicht.toelichting}</span>}
           </div>
         )}
-        <div className={cn("grid content-start gap-4", rest.length > 4 || (!uitgelicht && rest.length > 2 && !half) ? "grid-cols-3" : "grid-cols-2", uitgelicht && !half && "grid-cols-2")}>
+        <div className={cn("grid content-start gap-4", !smal && !uitgelicht && rest.length > 2 ? "grid-cols-3" : "grid-cols-2")}>
           {rest.map((k, i) => (
-            <div key={i} className={cn(tegel, donker ? "border-white bg-white/10" : "border-psv-black bg-psv-offWhite")}>
-              <span className={cn("font-heading text-sm uppercase tracking-wide", donker ? "text-white" : "text-psv-gray-11")}>{k.label}</span>
+            <div key={i} className={cn("flex flex-col px-5 py-4", donker ? "bg-white/10" : "bg-white shadow-card")}>
+              <span className={cn("text-lg font-bold", donker ? "text-white" : "text-psv-red-primary")}>{k.label}</span>
               <span className="my-1 font-heading text-[52px] leading-none">{k.waarde}</span>
-              {k.toelichting && <span className={cn("text-sm", donker ? "text-white" : "text-muted-foreground")}>{k.toelichting}</span>}
+              {k.toelichting && <span className={cn("text-sm", donker ? "text-white" : "text-psv-gray-10")}>{k.toelichting}</span>}
             </div>
           ))}
         </div>
@@ -92,13 +130,13 @@ function SlideKerngetallen({ blok, achtergrond, half }: { blok: Extract<Blok, { 
 
 function SlideTabel({ blok, achtergrond, toonTitel }: { blok: Extract<Blok, { type: "tabel" }>; achtergrond: Achtergrond; toonTitel: boolean }) {
   const donker = isDonker(achtergrond);
-  const veel = blok.rijen.length > 10;
-  const heelVeel = blok.rijen.length > 16;
+  const veel = blok.rijen.length > 9;
+  const heelVeel = blok.rijen.length > 14;
   const getalKolom = blok.kolommen.map((_, c) => c > 0 && blok.rijen.every((r) => /^[€\d\s.,%+-]*$/.test(r[c] ?? "")));
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {toonTitel && blok.titel && <h3 className="mb-2 font-heading text-lg uppercase tracking-wide">{blok.titel}</h3>}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      {toonTitel && blok.titel && <Subkop>{blok.titel}</Subkop>}
+      <div className={cn("min-h-0 flex-1 overflow-hidden", !donker && "bg-white p-3 shadow-card")}>
         <table className={cn("w-full", heelVeel ? "text-[13px]" : veel ? "text-[15px]" : "text-lg")}>
           <thead>
             <tr className={cn("border-b-2 text-left", donker ? "border-white" : "border-psv-black")}>
@@ -137,43 +175,53 @@ function SlideTabel({ blok, achtergrond, toonTitel }: { blok: Extract<Blok, { ty
   );
 }
 
-function SlideConclusie({ blok, toonTitel }: { blok: Extract<Blok, { type: "conclusie" }>; toonTitel: boolean }) {
+/** Subkop uit het template: PSV Text Bold, rood. */
+function Subkop({ children, donker = false }: { children: ReactNode; donker?: boolean }) {
+  return <p className={cn("mb-3 text-[28px] font-bold leading-tight", donker ? "text-white" : "text-psv-red-primary")}>{children}</p>;
+}
+
+function SlideConclusie({ blok, donker, toonTitel }: { blok: Extract<Blok, { type: "conclusie" }>; donker: boolean; toonTitel: boolean }) {
   return (
     <div>
-      {toonTitel && <h3 className="mb-3 font-heading text-lg uppercase tracking-wide">Conclusie</h3>}
-      <ol className="grid max-w-[1080px] gap-5">
+      {toonTitel && <Subkop donker={donker}>Conclusie</Subkop>}
+      <ul className={cn("max-w-[1050px] list-disc space-y-[19px] pl-7", blok.punten.length > 4 ? "text-[22px]" : "text-[26px]")}>
         {blok.punten.map((p, i) => (
-          <li key={i} className={cn("grid grid-cols-[64px_1fr] leading-snug", blok.punten.length > 4 ? "text-[21px]" : "text-[24px]")}>
-            <span className="font-heading text-[32px] leading-none">{String(i + 1).padStart(2, "0")}</span>
-            <span>{p}</span>
+          <li key={i} className="leading-[1.2]">
+            {p}
           </li>
         ))}
-      </ol>
+      </ul>
     </div>
   );
 }
 
 function SlideBlok({ blok, slide, alleen }: { blok: Blok; slide: Slide; alleen: boolean }) {
+  const donker = isDonker(slide.achtergrond);
   // Staat de titel van het blok al als titel op de slide, dan niet nog een keer.
   const eigenTitel = !alleen || (slide.titel !== undefined && slide.titel !== ("titel" in blok ? blok.titel : undefined));
   switch (blok.type) {
     case "kerngetallen":
-      return <SlideKerngetallen blok={blok} achtergrond={slide.achtergrond} half={!alleen} />;
+      return <SlideKerngetallen blok={blok} achtergrond={slide.achtergrond} smal={!alleen} />;
     case "tabel":
       return <SlideTabel blok={blok} achtergrond={slide.achtergrond} toonTitel={eigenTitel} />;
     case "grafiek":
       return (
-        <div className="flex h-full min-h-0 flex-col">
-          {eigenTitel && <p className="mb-2 text-base text-muted-foreground">{blok.titel}{blok.eenheid ? `, in ${blok.eenheid}` : ""}</p>}
+        <div className={cn("flex h-full min-h-0 flex-col", !donker && "bg-white p-4 shadow-card")}>
+          {eigenTitel && (
+            <p className={cn("mb-2 text-xl font-bold", donker ? "text-white" : "text-psv-red-primary")}>
+              {blok.titel}
+              {blok.eenheid ? <span className="font-normal text-muted-foreground">, in {blok.eenheid}</span> : null}
+            </p>
+          )}
           <div className="min-h-0 flex-1">
             <Grafiek blok={blok} achtergrond={slide.achtergrond} hoogte="h-full" toonTitel={false} deck />
           </div>
         </div>
       );
     case "conclusie":
-      return <SlideConclusie blok={blok} toonTitel={!alleen && !slide.titel} />;
+      return <SlideConclusie blok={blok} donker={donker} toonTitel={!alleen && !slide.titel} />;
     case "tekst":
-      return <div className={cn("max-w-[1000px] space-y-3 leading-relaxed", slide.groot ? "text-[26px]" : "text-[20px]")}>{formatAnswer(blok.tekst)}</div>;
+      return <div className={cn("max-w-[1000px] space-y-[19px] leading-[1.25]", slide.groot ? "text-[30px]" : "text-[26px]")}>{formatAnswer(blok.tekst)}</div>;
     case "afbeelding":
       return blok.url ? (
         <figure className="relative flex h-full min-h-0 flex-col">
@@ -190,86 +238,160 @@ function SlideBlok({ blok, slide, alleen }: { blok: Blok; slide: Slide; alleen: 
   }
 }
 
-/** Een foto alleen op een slide: over de hele slide, met de titel eroverheen op een donker verloop. */
-function FotoSlide({ blok, slide, nummer, titel }: { blok: Extract<Blok, { type: "afbeelding" }>; slide: Slide; nummer: number; titel: string }) {
+/** Het vlak van een inhoudslide: wit met de grijze schuine vorm, of effen grijs, rood of zwart. */
+function Vlak({ achtergrond, children }: { achtergrond: Achtergrond; children: ReactNode }) {
+  const donker = isDonker(achtergrond);
+  return (
+    <div
+      className={cn(
+        "relative h-full overflow-hidden",
+        achtergrond === "rood" ? "stuk-vlak--rood !p-0" : achtergrond === "zwart" ? "stuk-vlak--zwart !p-0" : achtergrond === "grijs" ? "bg-[#F0F0F0]" : "bg-white"
+      )}
+    >
+      {achtergrond === "wit" && <div className="absolute inset-0 bg-[#F0F0F0]" style={{ clipPath: SCHUIN }} />}
+      {children}
+      {!donker && <Embleem className="absolute bottom-[14px] right-[18px] w-[38px]" />}
+    </div>
+  );
+}
+
+/** Tekst links, foto rechts in de schuine vorm: "Beeld" uit het template. */
+function BeeldSlide({ slide, foto, tekst }: { slide: Slide; foto: Extract<Blok, { type: "afbeelding" }>; tekst: Blok }) {
+  const links = 560;
+  return (
+    <div className="relative h-full overflow-hidden bg-white">
+      <div className="absolute inset-y-0 right-0" style={{ left: links, clipPath: fotoVorm() }}>
+        {foto.url ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
+            <img src={foto.url} alt={foto.alt ?? foto.wens} className="h-full w-full object-cover" />
+          </>
+        ) : (
+          <div className="h-full w-full bg-[#F0F0F0]" />
+        )}
+      </div>
+      {foto.url ? (
+        <VervangFoto doel={foto.id} className="right-[24px] top-[24px]" />
+      ) : (
+        <AfbeeldingPlek doel={foto.id} wens={foto.wens} className="absolute bottom-[140px] right-[60px] top-[140px] w-[460px] !h-auto" />
+      )}
+      {slide.titel && <TitelBlok tekst={slide.titel} className="absolute left-[61px] top-[68px] max-w-[700px]" />}
+      <div className="absolute bottom-[40px] left-[73px] top-[192px] w-[440px] overflow-hidden">
+        <SlideBlok blok={tekst} slide={slide} alleen={false} />
+      </div>
+    </div>
+  );
+}
+
+/** Een foto alleen: over de hele slide ("Foto zoom"), met de titel in het zwarte blok als die er is. */
+function FotoSlide({ blok, slide }: { blok: Extract<Blok, { type: "afbeelding" }>; slide: Slide }) {
   return (
     <div className="relative h-full overflow-hidden bg-psv-black text-white">
       {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
       <img src={blok.url} alt={blok.alt ?? blok.wens} className="absolute inset-0 h-full w-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-      <VervangFoto doel={blok.id} className="right-[72px] top-[40px]" />
-      <div className="absolute bottom-[72px] left-[72px] max-w-[900px]">
-        {slide.sectie && <p className="mb-2 font-heading text-sm uppercase tracking-wide">{slide.sectie}</p>}
-        {slide.titel && <h2 className="font-heading text-[52px] uppercase leading-[1]">{slide.titel}</h2>}
-        {blok.bijschrift && <p className="mt-3 text-lg text-psv-gray-07">{blok.bijschrift}</p>}
-      </div>
-      <Voet links={titel} rechts={String(nummer).padStart(2, "0")} donker />
+      <VervangFoto doel={blok.id} className="right-[24px] top-[24px]" />
+      {slide.titel && <TitelBlok tekst={slide.titel} className="absolute left-[61px] top-[68px]" />}
+      {blok.bijschrift && (
+        <p className="absolute bottom-[40px] left-[61px] max-w-[800px] bg-psv-black/70 px-3 py-1 text-lg">{blok.bijschrift}</p>
+      )}
     </div>
   );
 }
 
-function InhoudSlide({ slide, nummer, titel }: { slide: Slide; nummer: number; titel: string }) {
+const TEKSTACHTIG = new Set(["tekst", "conclusie", "kerngetallen"]);
+
+function InhoudSlide({ slide }: { slide: Slide }) {
   const donker = isDonker(slide.achtergrond);
-  const alleen = slide.blokken.length === 1;
-  const enige = slide.blokken[0];
-  if (alleen && enige.type === "afbeelding" && enige.url) return <FotoSlide blok={enige} slide={slide} nummer={nummer} titel={titel} />;
+  const [eerste, tweede] = slide.blokken;
+  if (!tweede && eerste.type === "afbeelding" && eerste.url) return <FotoSlide blok={eerste} slide={slide} />;
+  if (tweede) {
+    const foto = [eerste, tweede].find((b): b is Extract<Blok, { type: "afbeelding" }> => b.type === "afbeelding");
+    const ander = foto && [eerste, tweede].find((b) => b !== foto);
+    if (foto && ander && ander.type !== "afbeelding") return <BeeldSlide slide={slide} foto={foto} tekst={ander} />;
+  }
+  // Tekst naast een grafiek of tabel: tekst smal links, zoals "Grafiek" en "Tabel" in het template.
+  const kolommen = tweede
+    ? TEKSTACHTIG.has(eerste.type) && !TEKSTACHTIG.has(tweede.type)
+      ? "grid-cols-[420px_1fr]"
+      : !TEKSTACHTIG.has(eerste.type) && TEKSTACHTIG.has(tweede.type)
+        ? "grid-cols-[1fr_420px]"
+        : "grid-cols-2"
+    : "";
   return (
-    <div className={cn("relative flex h-full flex-col px-[72px] pb-[60px] pt-[52px]", slide.achtergrond === "wit" ? "bg-white" : vlakKlasse(slide.achtergrond))}>
-      <Titel sectie={slide.sectie} titel={slide.titel} donker={donker} />
-      <div className={cn("min-h-0 flex-1", !alleen && "grid grid-cols-2 gap-10")}>
+    <Vlak achtergrond={slide.achtergrond}>
+      {slide.titel && <TitelBlok tekst={slide.titel} rood={slide.achtergrond === "zwart"} className="absolute left-[61px] top-[68px]" />}
+      <div className={cn("absolute bottom-[56px] left-[73px] right-[73px] top-[192px]", donker && "text-white", tweede && `grid gap-10 ${kolommen}`)}>
         {slide.blokken.map((blok) => (
-          <div key={blok.id} className="h-full min-h-0 min-w-0">
-            <SlideBlok blok={blok} slide={slide} alleen={alleen} />
+          <div key={blok.id} className="relative h-full min-h-0 min-w-0">
+            <SlideBlok blok={blok} slide={slide} alleen={!tweede} />
           </div>
         ))}
       </div>
-      <Voet links={titel} rechts={String(nummer).padStart(2, "0")} donker={donker} />
-    </div>
+    </Vlak>
   );
 }
 
-function TitelSlide({ stuk, peildatum }: { stuk: StukInhoud; peildatum: string }) {
+function HoofdstukSlide({ titel }: { titel: string }) {
   return (
-    <div className="relative h-full overflow-hidden bg-psv-black text-white">
-      {stuk.titelbeeld?.url && (
+    <RoodVlak>
+      <Embleem className="absolute left-[150px] top-1/2 w-[300px] -translate-y-1/2" />
+      <TitelBlok tekst={titel} className="absolute left-[594px] top-1/2 max-w-[640px] -translate-y-1/2" />
+    </RoodVlak>
+  );
+}
+
+function WelkomSlide({ stuk, peildatum }: { stuk: StukInhoud; peildatum: string }) {
+  const beeld = stuk.titelbeeld;
+  const metFoto = Boolean(beeld?.url);
+  return (
+    <div className="relative h-full overflow-hidden bg-psv-red-primary text-white">
+      {metFoto ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element -- een foto van onze CDN, ook in de afdruk */}
-          <img src={stuk.titelbeeld.url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
-          <VervangFoto doel="titel" className="left-[72px] right-auto top-[40px]" />
+          <img src={beeld!.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          {/* "Speciaal" uit het template: links de rode schuine vorm over de foto. */}
+          <div className="absolute inset-y-0 left-0 w-[52%] bg-psv-red-primary [clip-path:polygon(0_0,100%_0,58%_100%,0_100%)]" />
+          <VervangFoto doel="titel" className="right-[24px] top-[24px]" />
         </>
+      ) : (
+        <Patroon />
       )}
-      {stuk.titelbeeld?.wens && !stuk.titelbeeld.url && (
-        <AfbeeldingPlek doel="titel" wens={`Titelfoto: ${stuk.titelbeeld.wens}`} className="absolute left-[72px] top-[40px] !h-auto w-[420px] border-psv-gray-10 !p-4" />
+      {beeld?.wens && !beeld.url && (
+        <AfbeeldingPlek doel="titel" wens={`Titelfoto: ${beeld.wens}`} className="absolute left-[40px] top-[40px] !h-auto w-[400px] !p-4" />
       )}
-      <div className="absolute right-0 top-0 h-full w-[46%] bg-psv-red-primary [clip-path:polygon(38%_0,100%_0,100%_100%,0_100%)]" />
-      <div className="absolute right-0 top-0 h-full w-[46%] bg-psv-red-dark [clip-path:polygon(72%_0,100%_0,100%_100%,44%_100%)]" />
-      <div className="absolute bottom-[110px] left-[72px] max-w-[860px]">
-        <span className="tag mb-5">PSV</span>
-        <h1 className="mb-6 font-heading text-[80px] uppercase leading-[0.9]">{stuk.titel}</h1>
-        {stuk.ondertitel && <p className="max-w-[640px] text-xl leading-normal text-psv-gray-07">{stuk.ondertitel}</p>}
+      <div className={cn("absolute", metFoto ? "left-[61px] top-1/2 max-w-[600px] -translate-y-1/2" : "inset-x-[120px] top-1/2 -translate-y-1/2 text-center")}>
+        <TitelBlok tekst={stuk.titel} groot={80} className={metFoto ? "" : "mx-auto"} />
+        {stuk.ondertitel && <p className="mt-6 text-[22px] leading-snug">{stuk.ondertitel}</p>}
+        <p className="mt-3 text-base">Peildatum {formatDag(peildatum)}</p>
       </div>
-      <Voet links="Gemaakt met de assistent van PSV Tools" rechts={`Peildatum ${formatDag(peildatum)}`} donker />
     </div>
   );
 }
 
-function BronnenSlide({ bronnen, peildatum, nummer, titel, voetnoot }: { bronnen: string[]; peildatum: string; nummer: number; titel: string; voetnoot?: ReactNode }) {
+function BronnenSlide({ bronnen, peildatum, voetnoot }: { bronnen: string[]; peildatum: string; voetnoot?: ReactNode }) {
   return (
-    <div className="relative h-full bg-psv-black px-[72px] pt-[52px] text-white">
-      <Titel titel="Bronnen" donker />
-      <ul className="max-w-[1000px]">
-        {bronnen.map((b) => (
-          <li key={b} className="border-b border-psv-gray-11 py-3 text-base leading-snug">
-            {b}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-8 text-psv-gray-08">
-        Peildatum {formatDag(peildatum)}. Gemaakt met de assistent van PSV Tools.
-        {voetnoot}
-      </p>
-      <Voet links={titel} rechts={String(nummer).padStart(2, "0")} donker />
-    </div>
+    <Vlak achtergrond="wit">
+      <TitelBlok tekst="Bronnen" className="absolute left-[61px] top-[68px]" />
+      <div className="absolute left-[73px] right-[73px] top-[192px] max-w-[760px]">
+        <ul className="list-disc space-y-3 pl-6 text-lg leading-snug">
+          {bronnen.map((b) => (
+            <li key={b}>{b}</li>
+          ))}
+        </ul>
+        <p className="mt-8 text-base text-psv-gray-10">
+          Peildatum {formatDag(peildatum)}. Gemaakt met de assistent van PSV Tools.
+          {voetnoot}
+        </p>
+      </div>
+    </Vlak>
+  );
+}
+
+function AfsluitSlide() {
+  return (
+    <RoodVlak>
+      <Embleem className="absolute left-1/2 top-1/2 w-[300px] -translate-x-1/2 -translate-y-1/2" />
+    </RoodVlak>
   );
 }
 
@@ -296,18 +418,21 @@ export function DeckWeergave({ stuk, peildatum, voetnoot, className }: { stuk: S
   return (
     <div ref={ref} className={cn("deck mx-auto w-full max-w-5xl space-y-4", className)}>
       <Schaal schaal={schaal}>
-        <TitelSlide stuk={stuk} peildatum={peildatum} />
+        <WelkomSlide stuk={stuk} peildatum={peildatum} />
       </Schaal>
-      {slides.map((slide, i) => (
+      {slides.map((slide) => (
         <Schaal key={slide.blokken.map((b) => b.id).join("-")} schaal={schaal}>
-          <InhoudSlide slide={slide} nummer={i + 2} titel={stuk.titel} />
+          {slide.soort === "hoofdstuk" ? <HoofdstukSlide titel={slide.titel ?? ""} /> : <InhoudSlide slide={slide} />}
         </Schaal>
       ))}
       {bronnen.length > 0 && (
         <Schaal schaal={schaal}>
-          <BronnenSlide bronnen={bronnen} peildatum={peildatum} nummer={slides.length + 2} titel={stuk.titel} voetnoot={voetnoot} />
+          <BronnenSlide bronnen={bronnen} peildatum={peildatum} voetnoot={voetnoot} />
         </Schaal>
       )}
+      <Schaal schaal={schaal}>
+        <AfsluitSlide />
+      </Schaal>
     </div>
   );
 }
