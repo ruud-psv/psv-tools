@@ -37,7 +37,7 @@ export function beeldSoort(bytes: Uint8Array): BeeldSoort | null {
 export class AfbeeldingFout extends Error {}
 
 /** Een foto uit FileFlow haalt de server zelf op; daar geldt de grens van Vercel niet. */
-export const MAX_KOPIE_BYTES = 20 * 1024 * 1024;
+export const MAX_KOPIE_BYTES = 60 * 1024 * 1024;
 
 /** Controleert het bestand: grootte en soort. Gooit AfbeeldingFout met een melding voor de collega. */
 export function controleerAfbeelding(bytes: Uint8Array, max = MAX_AFBEELDING_BYTES): BeeldSoort {

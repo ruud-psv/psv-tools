@@ -134,8 +134,12 @@ een lege plek met **Foto toevoegen**; boven het stuk staat hoeveel plekken nog o
 - **Hoe het werkt.** De server zoekt via de API van FileFlow (`lib/fileflow/client.ts`,
   `/api/fileflow/zoeken` en `/api/fileflow/categorieen`), zodat het token nooit in de browser komt.
   De thumbnails van FileFlow zijn tijdelijke links. Daarom haalt de server een gekozen foto zelf op
-  (de grote versie, anders het origineel, tot 20 MB), controleert hem zoals een upload en zet een
-  kopie in de Bunny-map `stukken/`. Zo werkt een deck ook nog als de link van FileFlow is verlopen.
+  (het origineel, tot 60 MB; daarboven de grote versie van FileFlow), controleert hem zoals een
+  upload en zet een kopie in de Bunny-map `stukken/`. Zo werkt een deck ook nog als de link van
+  FileFlow is verlopen.
+- **Kwaliteit.** Elke foto (uit FileFlow of geüpload) wordt rechtop gezet (EXIF) en verkleind tot
+  hooguit 2560 px aan de langste kant, JPEG kwaliteit 88 (met doorzichtigheid PNG), met sharp
+  (`lib/stukken/verkleinen.ts`). Scherp genoeg om schermvullend te presenteren op een 4K-scherm.
 - **Instellingen.** `FILEFLOW_SECRET` is een API-token van FileFlow (Settings > Profile > API tokens,
   begint met `ffpat_`; alleen lezen is genoeg). `FILEFLOW_SUBDOMAIN` is het account in FileFlow
   (`https://<subdomein>.fileflow.com`), standaard `psv`.

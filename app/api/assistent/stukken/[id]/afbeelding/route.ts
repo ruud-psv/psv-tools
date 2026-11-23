@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { AfbeeldingFout, MAX_AFBEELDING_BYTES, MAX_KOPIE_BYTES, controleerAfbeelding, uploadAfbeelding } from "@/lib/stukken/afbeelding";
 import { FileflowFout, haalBeeldOp } from "@/lib/fileflow/client";
+import { verkleinVoorStuk } from "@/lib/stukken/verkleinen";
 import { StukConflict, StukFout, handmatigBewerken, type Blok } from "@/lib/stukken/model";
 import { getStuk, saveStuk } from "@/lib/stukken/store";
 
@@ -15,6 +16,8 @@ import { getStuk, saveStuk } from "@/lib/stukken/store";
  */
 
 export const dynamic = "force-dynamic";
+// Een origineel uit FileFlow ophalen en verkleinen kan even duren.
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = requireEmail(req);
@@ -48,8 +51,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { bytes, alt } = metBestand
       ? { bytes: new Uint8Array(await bestand.arrayBuffer()), alt: undefined }
       : await haalBeeldOp(fileflowId).then(({ bytes, item }) => ({ bytes, alt: item.name?.trim() || undefined }));
-    const soort = controleerAfbeelding(bytes, metBestand ? MAX_AFBEELDING_BYTES : MAX_KOPIE_BYTES);
-    const url = await uploadAfbeelding(bytes, soort);
+    controleerAfbeelding(bytes, metBestand ? MAX_AFBEELDING_BYTES : MAX_KOPIE_BYTES);
+    // Rechtop en hooguit 2560 px: scherp genoeg om schermvullend te presenteren.
+    const klaar = await verkleinVoorStuk(bytes);
+    const url = await uploadAfbeelding(klaar.bytes, klaar.soort);
 
     const bewerking = slide
       ? {

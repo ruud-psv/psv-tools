@@ -98,14 +98,15 @@ test("fouten: geen token, verkeerd token, te veel verzoeken", async () => {
 });
 
 test("foto ophalen: de grote versie, niet als de rechten verlopen zijn", async () => {
-  assert.equal(bronVanItem(item), "https://cdn.fileflow.com/l.jpg");
-  assert.equal(bronVanItem({ ...item, thumbs: {} }), item.url);
+  assert.equal(bronVanItem(item), item.url); // het origineel, voor de kwaliteit
+  assert.equal(bronVanItem({ ...item, filesize: 90 * 1024 * 1024 }), "https://cdn.fileflow.com/l.jpg"); // te groot: de grote versie
+  assert.equal(bronVanItem({ ...item, url: null }), "https://cdn.fileflow.com/l.jpg");
   assert.equal(bronVanItem({ ...item, media_kind: "video" }), null);
 
   zetFetch((url) => (url.includes("/api/v1/items/12847") ? Response.json({ item }) : new Response(new Uint8Array([0xff, 0xd8, 0xff]))));
   const { bytes } = await haalBeeldOp(12847);
   assert.deepEqual([...bytes], [0xff, 0xd8, 0xff]);
-  assert.equal(verzoeken[1].url, "https://cdn.fileflow.com/l.jpg");
+  assert.equal(verzoeken[1].url, item.url);
   assert.equal(verzoeken[1].headers.Authorization, undefined); // het token gaat niet naar de CDN
 
   zetFetch(() => Response.json({ item: { ...item, expires_at: "2020-01-01T00:00:00Z" } }));

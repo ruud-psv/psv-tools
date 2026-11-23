@@ -154,13 +154,19 @@ export async function categorieen(): Promise<Categorie[]> {
     });
 }
 
+/** Tot deze grootte halen we het origineel op; daarboven de grote versie. */
+export const MAX_ORIGINEEL_BYTES = 60 * 1024 * 1024;
+
 /**
- * Het adres om een gekozen foto op te halen: de grote versie (genoeg voor een
- * slide van 1280 × 720 en voor afdrukken), anders het origineel.
+ * Het adres om een gekozen foto op te halen: het origineel, zodat de foto
+ * scherp blijft (de server verkleint hem daarna zelf tot 2560 px, zie
+ * lib/stukken/verkleinen.ts). Alleen bij een heel groot origineel, of als er
+ * geen is, de grote versie van FileFlow.
  */
 export function bronVanItem(item: FileflowItem): string | null {
   if (item.media_kind && item.media_kind !== "image") return null;
-  return item.thumbs?.large || item.url || null;
+  const origineelKan = item.url && (!item.filesize || item.filesize <= MAX_ORIGINEEL_BYTES);
+  return (origineelKan ? item.url : item.thumbs?.large || item.url) || null;
 }
 
 /** Haalt één foto op als bytes, voor de kopie in onze eigen Bunny-map. */
