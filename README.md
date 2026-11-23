@@ -12,7 +12,8 @@ Alles staat in [`docs/psv-play.md`](docs/psv-play.md); kort:
   bestaande `CRON_SECRET` en `BLOB_READ_WRITE_TOKEN`.
 - **Capability probe**: draait op Vercel bij de eerste vraag, elke maandag, en met de hand via
   `/api/psv-play/probe?opnieuw=1`. De uitkomst staat in Blob en bepaalt wat de pagina en de tools
-  tonen. Bij oplevering nog niet gedraaid: de eerste uitkomst volgt na de deploy.
+  tonen. Uitkomst (23 november 2026): alles beschikbaar, ook de premium-dimensies en de
+  afhaakcurve, behalve de OTT-bron (PSV Play is geen JW App). Data vanaf 8 april 2025.
 - **Tags voor de redactie**: `type:` (persconferentie, oefenwedstrijd, docu, interview,
   behind-the-scenes, samenvatting), `team:` (psv1, vrouwen, jong, jeugd) en `seizoen:` (zoals
   `2026-27`). Zonder `type:` valt een video onder Ongecategoriseerd.

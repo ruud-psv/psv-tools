@@ -43,8 +43,25 @@ Lokaal kan het ook, met `JWPLAYER_SECRET` in `.env.local`:
 node --experimental-strip-types --no-warnings --import ./scripts/test-hooks.mjs scripts/jwplayer-probe.ts
 ```
 
-**Uitkomst**: nog niet bekend. De probe draait voor het eerst bij de eerste
-vraag na de deploy. Zet de uitkomst daarna hier.
+**Uitkomst** (23 november 2026, property `KhctZQO0`):
+
+| Onderdeel | Uitkomst |
+|---|---|
+| Basis-metrics (`plays`, `time_watched`, `unique_viewers`, `completes`, `complete_rate`) | Beschikbaar |
+| Premium-metrics (`play_rate`, `plays_per_viewer`, `content_score`) | Beschikbaar |
+| Percentage-completes (25/50/75%) | Beschikbaar |
+| Dimensies `tag`, `platform_id`, `video_duration`, `browser`, `city`, `media_id`, `device_id`, `country_code`, `player_playback_mode` | Allemaal beschikbaar |
+| `include_metadata=1` | Beschikbaar |
+| OTT-bron (`?source=ott`) en `logged_in_unique_viewers` | Niet beschikbaar: JW kent voor deze property alleen `default`. PSV Play is dus geen JW App; ingelogde kijkers zijn niet uit JW te halen. |
+| Live-filter (`player_playback_mode` LIVE/DVR) | Beschikbaar, met data |
+| Sorteren | Alleen `ASCENDING`/`DESCENDING` in hoofdletters |
+| Datumbereik per query | Een gewone query: minstens 1827 dagen. Query's met uitgebreidere velden: hooguit 92 dagen (zie Bekende beperkingen). |
+| Oudste dag met data | 8 april 2025 |
+| Management API | Beschikbaar: titel, tags, beschrijving, publicatiedatum, duur, `custom_params` (`portrait`, `restriction`, `theme`) en meer. |
+
+Opvallend: `platform_id` gaf over 30 dagen maar één waarde. Vermoedelijk kijkt
+alles via de webspeler, en zegt de verdeling over device (5 waarden) meer dan
+die over platform.
 
 ## Tags voor de redactie
 
