@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Beeld, Categorie } from "@/lib/fileflow/client";
+import type { Beeld, Categorie, Volgorde } from "@/lib/fileflow/client";
 
 /**
  * Een foto kiezen uit FileFlow, de beeldbank van PSV. De zoekfunctie van
@@ -45,6 +45,7 @@ export function FileflowKiezer({
   const [zoekterm, setZoekterm] = useState(wens ?? "");
   const [categorie, setCategorie] = useState<number | "">("");
   const [liggend, setLiggend] = useState(false);
+  const [volgorde, setVolgorde] = useState<Volgorde>("relevant");
   const [categorieen, setCategorieen] = useState<Categorie[]>([]);
   const [resultaat, setResultaat] = useState<Resultaat | null>(null);
   const [laden, setLaden] = useState(false);
@@ -54,13 +55,13 @@ export function FileflowKiezer({
   const invoer = useRef<HTMLInputElement>(null);
   const verzoek = useRef(0);
 
-  const zoek = useCallback(async (term: string, cat: number | "", offset = 0) => {
+  const zoek = useCallback(async (term: string, cat: number | "", vg: Volgorde, offset = 0) => {
     const nummer = ++verzoek.current;
     if (offset === 0) setLaden(true);
     else setMeerLaden(true);
     setFout(null);
     try {
-      const params = new URLSearchParams({ q: term, offset: String(offset) });
+      const params = new URLSearchParams({ q: term, offset: String(offset), volgorde: vg });
       if (cat) params.set("categorie", String(cat));
       const res = await fetch(`/api/fileflow/zoeken?${params}`);
       const data = await res.json().catch(() => ({}));
@@ -82,9 +83,9 @@ export function FileflowKiezer({
 
   // Zoeken terwijl je typt, met een korte pauze.
   useEffect(() => {
-    const t = setTimeout(() => zoek(zoekterm, categorie), 350);
+    const t = setTimeout(() => zoek(zoekterm, categorie, volgorde), 350);
     return () => clearTimeout(t);
-  }, [zoekterm, categorie, zoek]);
+  }, [zoekterm, categorie, volgorde, zoek]);
 
   useEffect(() => {
     fetch("/api/fileflow/categorieen")
@@ -142,6 +143,16 @@ export function FileflowKiezer({
                 </option>
               ))}
             </select>
+            <select
+              value={volgorde}
+              onChange={(e) => setVolgorde(e.target.value as Volgorde)}
+              aria-label="Volgorde"
+              className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="relevant">Meest relevant</option>
+              <option value="nieuw">Nieuwste eerst</option>
+              <option value="oud">Oudste eerst</option>
+            </select>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input type="checkbox" checked={liggend} onChange={(e) => setLiggend(e.target.checked)} className="h-4 w-4 accent-primary" />
               Alleen liggend
@@ -184,6 +195,7 @@ export function FileflowKiezer({
                       <img src={b.thumb} alt={b.naam} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]" />
                       <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-2 pb-1 pt-4 text-left text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
                         {b.naam}
+                        {b.datum && <span className="block text-[10px] text-white/80">{formatDag(b.datum)}</span>}
                       </span>
                       {gekozen?.id === b.id && (
                         <span className="absolute right-1.5 top-1.5 rounded-full bg-psv-red-primary p-1 text-white">
@@ -195,7 +207,7 @@ export function FileflowKiezer({
                 </div>
                 {resultaat?.volgende !== null && resultaat?.volgende !== undefined && (
                   <div className="mt-4 flex justify-center">
-                    <Button type="button" variant="outline" size="sm" disabled={meerLaden} onClick={() => zoek(zoekterm, categorie, resultaat.volgende!)}>
+                    <Button type="button" variant="outline" size="sm" disabled={meerLaden} onClick={() => zoek(zoekterm, categorie, volgorde, resultaat.volgende!)}>
                       {meerLaden && <Loader2 className="animate-spin" />}
                       Meer foto&apos;s
                     </Button>

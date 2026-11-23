@@ -82,6 +82,15 @@ test("zoeken: account-subdomein, token in de header, alleen afbeeldingen, met pa
   assert.equal(leeg.searchParams.get("q"), null);
 });
 
+test("zoeken: volgorde op de datum van de foto, nieuw naar oud of oud naar nieuw", async () => {
+  zetFetch(() => Response.json({ items: [], meta: { total: 0 } }));
+  await zoekBeelden({ q: "stadion", volgorde: "nieuw" });
+  await zoekBeelden({ q: "stadion", volgorde: "oud" });
+  await zoekBeelden({ q: "stadion" });
+  const sort = verzoeken.map((v) => new URL(v.url).searchParams.get("sort"));
+  assert.deepEqual(sort, ["created+desc", "created+asc", null]);
+});
+
 test("zoeken: de laatste pagina heeft geen volgende", async () => {
   zetFetch(() => Response.json({ items: [item], meta: { total: 41 } }));
   assert.equal((await zoekBeelden({ q: "x", offset: 40 })).volgende, null);

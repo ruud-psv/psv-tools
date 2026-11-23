@@ -125,7 +125,20 @@ export const PAGINA = 40;
  * syntaxis van FileFlow: woorden samen (EN), `a | b` (OF), "exacte zin",
  * -uitsluiten. Alleen afbeeldingen, niet gearchiveerd.
  */
-export async function zoekBeelden({ q, offset = 0, categorie }: { q?: string; offset?: number; categorie?: number }): Promise<{ beelden: Beeld[]; totaal: number; volgende: number | null }> {
+/** De volgorde van de resultaten: de zoekfunctie, of op de datum waarop de foto is gemaakt. */
+export type Volgorde = "relevant" | "nieuw" | "oud";
+
+export async function zoekBeelden({
+  q,
+  offset = 0,
+  categorie,
+  volgorde = "relevant",
+}: {
+  q?: string;
+  offset?: number;
+  categorie?: number;
+  volgorde?: Volgorde;
+}): Promise<{ beelden: Beeld[]; totaal: number; volgende: number | null }> {
   const params = new URLSearchParams();
   if (q?.trim()) params.set("q", q.trim().slice(0, 200));
   params.append("media_type[]", "images");
@@ -133,8 +146,11 @@ export async function zoekBeelden({ q, offset = 0, categorie }: { q?: string; of
   params.set("offset", String(Math.max(0, Math.floor(offset))));
   params.set("size", String(PAGINA));
   if (categorie !== undefined && Number.isInteger(categorie) && categorie > 0) params.set("category_id", String(categorie));
-  // Zonder zoekterm: de nieuwste eerst. Met een zoekterm de volgorde van FileFlow.
-  if (!q?.trim()) params.set("sort", "uploaded+desc");
+  // Op datum: "created" is in FileFlow de datum waarop de foto is gemaakt (niet geüpload).
+  // Anders met een zoekterm de volgorde van de zoekfunctie, zonder de nieuwste uploads eerst.
+  if (volgorde === "nieuw") params.set("sort", "created+desc");
+  else if (volgorde === "oud") params.set("sort", "created+asc");
+  else if (!q?.trim()) params.set("sort", "uploaded+desc");
   const data = await vraag<{ items?: FileflowItem[]; meta?: { total?: number } }>("/items", params);
   const items = Array.isArray(data.items) ? data.items : [];
   const totaal = typeof data.meta?.total === "number" ? data.meta.total : items.length;

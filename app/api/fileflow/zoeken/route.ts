@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
-import { FileflowFout, zoekBeelden } from "@/lib/fileflow/client";
+import { FileflowFout, zoekBeelden, type Volgorde } from "@/lib/fileflow/client";
 
 /**
  * Zoeken in FileFlow, de beeldbank van PSV, voor een foto in een stuk. Via de
  * server, zodat het token (FILEFLOW_SECRET) nooit in de browser komt.
- * `?q=…&offset=…&categorie=…`
+ * `?q=…&offset=…&categorie=…&volgorde=relevant|nieuw|oud`
  */
 
 export const dynamic = "force-dynamic";
@@ -15,10 +15,12 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return auth.error;
   const p = req.nextUrl.searchParams;
   const categorie = Number(p.get("categorie"));
+  const volgorde: Volgorde = p.get("volgorde") === "nieuw" ? "nieuw" : p.get("volgorde") === "oud" ? "oud" : "relevant";
   try {
     const resultaat = await zoekBeelden({
       q: p.get("q") ?? undefined,
       offset: Number(p.get("offset")) || 0,
+      volgorde,
       ...(Number.isInteger(categorie) && categorie > 0 && { categorie }),
     });
     return NextResponse.json(resultaat);

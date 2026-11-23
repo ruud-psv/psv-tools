@@ -127,7 +127,8 @@ een lege plek met **Foto toevoegen**; boven het stuk staat hoeveel plekken nog o
   **FileFlow** om hem te vervangen). Er opent een venster met een zoekveld waarin de wens van de
   assistent al staat; je ziet meteen resultaten en past de zoekterm aan. De zoekfunctie van FileFlow
   zoekt in naam, bestandsnaam, categorie, tags en eigen velden, met `a | b` (of), `"exacte zin"` en
-  `-woord` (uitsluiten). Verder: een categorie, **Alleen liggend** (voor slides) en **Meer foto's**
+  `-woord` (uitsluiten). Verder: een categorie, de volgorde (**Meest relevant**, **Nieuwste eerst**, **Oudste eerst**, op
+  de datum waarop de foto is gemaakt), **Alleen liggend** (voor slides) en **Meer foto's**
   (40 per keer). Klik op een foto voor een groot voorbeeld met afmeting, datum, categorie, tags en
   tot wanneer de foto gebruikt mag worden; **Gebruik deze foto** (of dubbelklik) zet hem in het stuk.
   Een foto met verlopen rechten kun je niet kiezen.
