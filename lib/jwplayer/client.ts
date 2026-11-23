@@ -7,8 +7,8 @@ import { JW_API } from "./sites";
  * Schrijven naar JW doet deze client nooit.
  *
  * - **Rate limit**: JW staat 60 verzoeken per minuut per token toe. De client
- *   houdt per token een venster van een minuut bij en wacht als het vol is.
- *   Bij een 429 wacht hij (`Retry-After`, anders 1, 2, 4, 8, 16 s) en probeert
+ *   houdt per token een venster van een minuut bij (met marge: 50) en wacht als het vol is.
+ *   Bij een 429 wacht hij (`Retry-After`, anders 2, 4, 8, 16, 32, 60 s) en probeert
  *   hij het opnieuw.
  * - **Paginering**: alle pagina's worden opgehaald (analytics met
  *   `page_length` 100, het maximum; media met 500 per pagina).
@@ -19,11 +19,12 @@ import { JW_API } from "./sites";
  * foutmelding, log of cache-sleutel (die gebruikt een hash).
  */
 
-export const MAX_PER_MINUUT = 60;
+/** JW staat 60 per minuut toe; met wat marge, omdat de pagina, de tools en de cron dezelfde sleutel delen. */
+export const MAX_PER_MINUUT = 50;
 export const ANALYTICS_PAGINA = 100;
 const MEDIA_PAGINA = 500;
 const MAX_PAGINAS = 200;
-const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 16_000];
+const BACKOFF_MS = [2_000, 4_000, 8_000, 16_000, 32_000, 60_000];
 
 export type Bron = "default" | "ott";
 

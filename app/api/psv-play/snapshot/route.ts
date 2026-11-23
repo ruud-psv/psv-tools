@@ -27,8 +27,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const BUDGET_MS = 240_000;
-const DEFAULT_CHAIN = 50;
-const MAX_CHAIN = 200;
+// Ruim genoeg voor de hele historie: zo'n 15 dagen per run.
+const DEFAULT_CHAIN = 150;
+const MAX_CHAIN = 300;
 
 export async function GET(req: NextRequest) {
   if (!isCronOrSession(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

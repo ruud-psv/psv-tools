@@ -116,9 +116,11 @@ mag zien, krijgt de tools.
   elke dag opnieuw geschreven, en gaten van de laatste week gevuld. Opslag:
   `psv-play/<site>/dagen/<JJJJ-MM-DD>.json.gz`. Dagen die de API zelf niet meer
   geeft, komen uit deze snapshots.
-- **Rate limit**: 60 verzoeken per minuut per token. De client wacht als het
-  venster vol is en probeert het bij een 429 opnieuw na 1, 2, 4, 8 en 16
-  seconden (of na `Retry-After`).
+- **Rate limit**: JW staat 60 verzoeken per minuut per token toe; de client
+  houdt 50 aan, omdat pagina, tools en cron dezelfde sleutel delen. Bij een 429
+  probeert hij het opnieuw na 2, 4, 8, 16, 32 en 60 seconden (of na
+  `Retry-After`). Een dag die in de backfill toch mislukt, pakt de volgende run
+  opnieuw op.
 
 ### Backfill
 

@@ -63,10 +63,10 @@ test("429: exponential backoff (of Retry-After) en daarna gewoon verder", async 
   const api = jwApi({ secret: "s" }, { fetch: f, ...klok });
   const rijen = await api.queryAnalytics("abcd1234", Q);
   assert.equal(rijen.length, 1);
-  assert.deepEqual(klok.geslapen, [3_000, 2_000, 4_000]);
+  assert.deepEqual(klok.geslapen, [3_000, 4_000, 8_000]);
 });
 
-test("429 blijft: na vijf pogingen een JwFout, zonder het secret in de melding", async () => {
+test("429 blijft: na zes pogingen een JwFout, zonder het secret in de melding", async () => {
   resetThrottle();
   const klok = nepKlok();
   const { f, verzoeken } = nepFetch(() => ({ status: 429, body: { errors: [{ code: "rate_limited", description: "Too many" }] } }));
@@ -77,14 +77,14 @@ test("429 blijft: na vijf pogingen een JwFout, zonder het secret in de melding",
     assert.doesNotMatch(err.message, /supergeheim/);
     return true;
   });
-  assert.equal(verzoeken.length, 6);
-  assert.deepEqual(klok.geslapen, [1_000, 2_000, 4_000, 8_000, 16_000]);
+  assert.equal(verzoeken.length, 7);
+  assert.deepEqual(klok.geslapen, [2_000, 4_000, 8_000, 16_000, 32_000, 60_000]);
 });
 
-test("throttle: hooguit 60 verzoeken per minuut per token", async () => {
+test("throttle: hooguit 50 verzoeken per minuut per token (marge onder de 60 van JW)", async () => {
   resetThrottle();
   const klok = nepKlok();
-  for (let i = 0; i < 60; i++) await wachtOpPlek("t", klok.nu, klok.slaap);
+  for (let i = 0; i < 50; i++) await wachtOpPlek("t", klok.nu, klok.slaap);
   assert.equal(klok.geslapen.length, 0);
   await wachtOpPlek("t", klok.nu, klok.slaap);
   assert.equal(klok.geslapen.length, 1);
