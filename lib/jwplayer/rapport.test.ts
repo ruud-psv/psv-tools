@@ -7,7 +7,7 @@ import { JwFout, type AnalyticsQuery, type Rij } from "./client";
 import { vergeetMedia } from "./media";
 import { media, nepApi, nepCtx, volleCaps } from "./nep";
 import { kiesPeriode } from "./periode";
-import { content, kpis, live, overzicht, publiek, vraag, zoekMedia } from "./rapport";
+import { content, kpis, live, opVolgorde, overzicht, publiek, vraag, zoekMedia } from "./rapport";
 import { archiefRijen, maakSnapshot, snapshotRun, teDoen, type DagSnapshot } from "./snapshot";
 import { geheugenOpslag, paden } from "./store";
 
@@ -81,7 +81,9 @@ test("capability-fallback: metrics die niet werken gaan niet mee, onderdelen gev
   const p = (await publiek(nepCtx(nepApi(() => []).api, zonder), k30())) as Record<string, unknown>;
   assert.equal(p.platform, null);
   assert.equal(p.land, null);
-  assert.ok((p.niet_beschikbaar as string[]).length === 3);
+  assert.equal((p.niet_beschikbaar as string[]).length, 5);
+  assert.equal(p.browser, null);
+  assert.equal(p.videoduur, null);
   const l = (await live(nepCtx(nepApi(() => []).api, zonder), k30())) as { beschikbaar: boolean; uitleg: string };
   assert.equal(l.beschikbaar, false);
   assert.match(l.uitleg, /Enterprise/);
@@ -283,4 +285,21 @@ test("foutmelding bij de JW-bereikgrens zegt niet dat de sleutel fout is", async
   const m = foutAntwoord(new JwFout("Advanced query objects available for date ranges spanning over less than or equal to 92 day(s).", 403)).melding;
   assert.doesNotMatch(m, /sleutel/);
   assert.match(foutAntwoord(new JwFout("unauthorized: invalid", 401)).melding, /sleutel/);
+});
+
+test("publiek: browser en videoduur, videoduur op volgorde van de groepen", async () => {
+  const { api } = nepApi((q) => {
+    const d = q.dimensions?.[0];
+    if (d === "video_duration") return [["10-30 min", 50], ["< 1 min", 300], ["1-10 min", 200], ["30+ min", 20]].map(([w, p]) => ({ video_duration: w, plays: p, time_watched: 1 }));
+    if (d === "browser") return Array.from({ length: 12 }, (_, i) => ({ browser: `B${i}`, plays: 100 - i, time_watched: 1 }));
+    if (d === "platform_id") return [{ platform_id: "web", plays: 500, time_watched: 1 }];
+    return [];
+  });
+  const p = (await publiek(nepCtx(api), k30())) as { browser: { label: string }[]; videoduur: { label: string }[]; notes: string[] };
+  assert.equal(p.browser.length, 10);
+  assert.deepEqual(p.videoduur.map((v) => v.label), ["< 1 min", "1-10 min", "10-30 min", "30+ min"]);
+  assert.ok(p.notes.some((n) => n.includes("één platform (Web)")));
+  // Zonder getal in elk label: gewoon op plays.
+  const r = [{ waarde: "kort", label: "kort", plays: 1, kijktijd_uren: 0, aandeel_plays_pct: null }, { waarde: "1 min", label: "1 min", plays: 2, kijktijd_uren: 0, aandeel_plays_pct: null }];
+  assert.deepEqual(opVolgorde(r), r);
 });

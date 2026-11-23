@@ -78,7 +78,7 @@ export function metrics(cap: SiteCapabilities, fields: readonly string[]): { ope
   return fields.map((f) => metric(cap, f)).filter((m): m is { operation: string; field: string } => m !== null);
 }
 
-export type Onderdeel = "content" | "afhaakcurve" | "live" | "platform" | "device" | "land" | "uniekPeriode" | "media";
+export type Onderdeel = "content" | "afhaakcurve" | "live" | "platform" | "device" | "land" | "browser" | "videoduur" | "uniekPeriode" | "media";
 
 /** Kan dit onderdeel? Zo niet: een korte uitleg voor de plek waar het had gestaan. */
 export function onderdeel(cap: SiteCapabilities | null | undefined, wat: Onderdeel): { ok: true } | { ok: false; uitleg: string } {
@@ -99,6 +99,10 @@ export function onderdeel(cap: SiteCapabilities | null | undefined, wat: Onderde
       return heeftDimensie(cap, "platform_id") ? { ok: true } : nee(`Platform (web, iOS, Android, tvOS): ${ENTERPRISE}.`);
     case "device":
       return heeftDimensie(cap, "device_id") ? { ok: true } : nee(`Device: ${ENTERPRISE}.`);
+    case "browser":
+      return heeftDimensie(cap, "browser") ? { ok: true } : nee(`Browser: ${ENTERPRISE}.`);
+    case "videoduur":
+      return heeftDimensie(cap, "video_duration") ? { ok: true } : nee(`Videoduur: ${ENTERPRISE}.`);
     case "land":
       return heeftDimensie(cap, "country_code") ? { ok: true } : nee(`Land: ${ENTERPRISE}.`);
     case "uniekPeriode":

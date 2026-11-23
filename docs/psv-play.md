@@ -92,7 +92,9 @@ nieuwe waarde (zoals `type:podcast`) telt meteen mee; zet hem in
 - **Live**: per uitzending de live-plays (playback mode LIVE of DVR), unieke
   kijkers, kijktijd en de nakijk-plays in de zeven dagen erna, plus een
   vergelijking per type.
-- **Publiek**: device, platform en land (top 10, Nederland en buitenland totaal).
+- **Publiek**: device, platform, browser (top 10), videoduur (de lengte van de
+  bekeken video's, in de groepen van JW) en land (top 10, Nederland en
+  buitenland totaal). Is er maar één platform, dan staat dat erbij.
 - Met meerdere properties een propertykiezer.
 
 ## MCP-tools
@@ -110,7 +112,7 @@ er is geen vrije query-tool en niets schrijft naar JW. Invoer: `preset`
 | `psvplay_media_detail` | Eén video: kerncijfers, afhaakcurve, verloop per dag en het gemiddelde van hetzelfde type. |
 | `psvplay_compare_periods` | Twee periodes naast elkaar, totaal of per type. |
 | `psvplay_live_events` | Live-uitzendingen met live- en nakijkcijfers. |
-| `psvplay_audience` | Device, platform en land. |
+| `psvplay_audience` | Device, platform, browser, videoduur en land. |
 | `psvplay_search_media` | Video's zoeken op titel of tag (Management API), ook op publicatiedatum. |
 
 **Aanzetten in de assistent**: zet `MCP_PSVPLAY_TOKEN` in Vercel en deploy.

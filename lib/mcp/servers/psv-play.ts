@@ -42,7 +42,7 @@ const LIVE = `Live-uitzendingen van PSV Play in een periode (plays in playback m
 
 ${KANTTEKENINGEN}`;
 
-const AUDIENCE = `Het publiek van PSV Play in een periode: verdeling van de plays over device, platform (web, iOS, Android, tvOS, …) en land (top 10, het aandeel Nederland en buitenland totaal). Onderdelen die de JW-licentie niet geeft, staan als null met een uitleg in niet_beschikbaar.
+const AUDIENCE = `Het publiek van PSV Play in een periode: verdeling van de plays over device, platform (web, iOS, Android, tvOS, …), browser (top 10), videoduur (de lengte van de video's in de groepen van JW) en land (top 10, het aandeel Nederland en buitenland totaal). Onderdelen die de JW-licentie niet geeft, staan als null met een uitleg in niet_beschikbaar.
 
 ${TIJDZONE_NOTITIE}`;
 

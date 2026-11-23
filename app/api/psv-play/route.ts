@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     const ctx = await omgeving.ctx(q.get("site"));
 
     if (wat === "meta") {
-      const onderdelen = (["content", "afhaakcurve", "live", "platform", "device", "land", "uniekPeriode", "media"] as const).map((o) => [o, onderdeel(ctx.cap, o)]);
+      const onderdelen = (["content", "afhaakcurve", "live", "platform", "device", "land", "browser", "videoduur", "uniekPeriode", "media"] as const).map((o) => [o, onderdeel(ctx.cap, o)]);
       return NextResponse.json(
         {
           sites: omgeving.sites,

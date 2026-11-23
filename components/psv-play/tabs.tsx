@@ -406,6 +406,8 @@ export function PubliekTab({ data, onderdelen }: { data: PubliekData; onderdelen
   const d = data as Record<string, unknown>;
   const device = d.device as Verdeling[] | null;
   const platform = d.platform as Verdeling[] | null;
+  const browser = d.browser as Verdeling[] | null;
+  const videoduur = d.videoduur as Verdeling[] | null;
   const land = d.land as {
     top10: Verdeling[];
     nederland_pct: number | null;
@@ -415,11 +417,25 @@ export function PubliekTab({ data, onderdelen }: { data: PubliekData; onderdelen
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard title="Platform" hint="aandeel in de plays">
-        {platform ? platform.length ? <VerdelingLijst rijen={platform} /> : <EmptySection /> : <EmptySection>{uitleg("platform")}</EmptySection>}
-      </SectionCard>
       <SectionCard title="Device" hint="aandeel in de plays">
         {device ? device.length ? <VerdelingLijst rijen={device} /> : <EmptySection /> : <EmptySection>{uitleg("device")}</EmptySection>}
+      </SectionCard>
+      <SectionCard title="Platform" hint="aandeel in de plays">
+        {platform ? platform.length ? <VerdelingLijst rijen={platform} /> : <EmptySection /> : <EmptySection>{uitleg("platform")}</EmptySection>}
+        {platform?.length === 1 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Alle plays kwamen via één platform. Device en browser laten beter zien waarop er gekeken wordt.
+          </p>
+        )}
+      </SectionCard>
+      <SectionCard title="Browser" hint="top 10 op plays">
+        {browser ? browser.length ? <VerdelingLijst rijen={browser} /> : <EmptySection /> : <EmptySection>{uitleg("browser")}</EmptySection>}
+      </SectionCard>
+      <SectionCard title="Videoduur" hint="lengte van de video, in de groepen van JW">
+        {videoduur ? videoduur.length ? <VerdelingLijst rijen={videoduur} /> : <EmptySection /> : <EmptySection>{uitleg("videoduur")}</EmptySection>}
+        {videoduur && videoduur.length > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">Hoe lang de bekeken video&apos;s zijn, niet hoe lang er gekeken is.</p>
+        )}
       </SectionCard>
       <SectionCard title="Land" hint="top 10 op plays" className="xl:col-span-2">
         {land ? (

@@ -10,7 +10,7 @@ import type { Ctx } from "./rapport";
 
 export function volleCaps(over: Partial<SiteCapabilities> = {}): SiteCapabilities {
   const m = ["plays", "time_watched", "unique_viewers", "completes", "complete_rate", "25_percent_completes", "50_percent_completes", "75_percent_completes"];
-  const d = ["eastern_date", "media_id", "tag", "platform_id", "device_id", "country_code", "player_playback_mode"];
+  const d = ["eastern_date", "media_id", "tag", "platform_id", "device_id", "country_code", "player_playback_mode", "browser", "video_duration"];
   return {
     label: "PSV Play",
     metrics: Object.fromEntries(m.map((x) => [x, "sum"])),

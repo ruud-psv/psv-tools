@@ -688,6 +688,19 @@ async function verdeling(ctx: Ctx, p: Periode, dim: string, label: (w: string) =
     .sort((a, b) => b.plays - a.plays);
 }
 
+/** Groepen als "0-1 min" of "10+ min" op hun eerste getal, als elk label er een heeft; anders op plays. */
+export function opVolgorde(rijen: Verdeling[]): Verdeling[] {
+  const getalVan = (w: string) => {
+    const m = /\d+(?:[.,]\d+)?/.exec(w);
+    if (!m) return null;
+    const n = Number(m[0].replace(",", "."));
+    // "< 1 min" hoort vóór "1-10 min".
+    return /^\s*(<|≤|minder|less|under)/i.test(w) ? n - 0.5 : n;
+  };
+  if (!rijen.every((r) => getalVan(r.waarde) !== null)) return rijen;
+  return [...rijen].sort((a, b) => getalVan(a.waarde)! - getalVan(b.waarde)!);
+}
+
 export async function publiek(ctx: Ctx, keuze: PeriodeKeuze) {
   const p = keuze.periode;
   const uit: Record<string, unknown> = { site: ctx.site.label, ...periodeInfo(keuze) };
@@ -721,7 +734,21 @@ export async function publiek(ctx: Ctx, keuze: PeriodeKeuze) {
     uit.land = null;
     extra.push(land.uitleg);
   }
-  uit.notes = notities(["Verdelingen zijn op plays; JW bepaalt land op basis van het IP-adres."]);
+  const browser = onderdeel(ctx.cap, "browser");
+  uit.browser = browser.ok ? (await verdeling(ctx, p, "browser", (w) => w)).slice(0, 10) : null;
+  if (!browser.ok) extra.push(browser.uitleg);
+
+  const vd = onderdeel(ctx.cap, "videoduur");
+  uit.videoduur = vd.ok ? opVolgorde(await verdeling(ctx, p, "video_duration", (w) => w)) : null;
+  if (!vd.ok) extra.push(vd.uitleg);
+
+  const platformen = uit.platform as Verdeling[] | null;
+  const enkelPlatform = platformen?.length === 1;
+  uit.notes = notities([
+    "Verdelingen zijn op plays; JW bepaalt land op basis van het IP-adres.",
+    ...(enkelPlatform ? [`Alle plays kwamen via één platform (${platformen![0].label}); de verdeling over device en browser zegt hier meer.`] : []),
+    "Videoduur is de lengte van de video in de groepen die JW zelf maakt, niet hoe lang er gekeken is.",
+  ]);
   if (extra.length) uit.niet_beschikbaar = extra;
   return uit;
 }
