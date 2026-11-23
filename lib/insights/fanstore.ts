@@ -1,4 +1,4 @@
-import { runInsightAnalysis } from "./runner";
+import { insightSchema, runInsightAnalysis, uitgelicht } from "./runner";
 
 export interface FanstoreInsightInput {
   from: string;
@@ -90,9 +90,14 @@ function buildContext(input: FanstoreInsightInput): string {
   return lines.join("\n");
 }
 
+/** De vorm van het antwoord; de API dwingt hem af. */
+const SCHEMA = insightSchema({ topProduct: uitgelicht("name", "metric", "why"), attentionNeeded: uitgelicht("name", "metric", "action") });
+
 export async function analyzeFanstore(input: FanstoreInsightInput): Promise<FanstoreInsightResult> {
   const context = buildContext(input);
   return runInsightAnalysis<FanstoreInsightResult>({
+    plek: "inzichten-fanstore",
+    schema: SCHEMA,
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende Fanstore verkoopdata en retourneer je inzichten als JSON:\n\n${context}`,
   });

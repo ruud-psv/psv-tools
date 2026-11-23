@@ -3,6 +3,8 @@ import { FRAMEWORK_CSS } from "./kit";
 import { KIT_ACHTERGRONDEN, KIT_COMPONENTEN, KIT_REGELS, KIT_VALKUILEN } from "./skill";
 import { PageSourceError, preparePage, zonderKit, type PageSource } from "./bundle";
 import { selectieTekst, type Selectie } from "./selectie";
+import { effortVoor, plek } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 export { zonderKit };
 
@@ -18,8 +20,8 @@ export { zonderKit };
  * opnieuw, op de ongewijzigde code.
  */
 
-/** Opus: het gaat om precieze wijzigingen in grote bestanden die live gaan. */
-export const MODEL = "claude-opus-5-5";
+// Het model komt uit Beheer > Model garden (standaard Opus: het gaat om precieze
+// wijzigingen in grote bestanden die live gaan).
 const MAX_POGINGEN = 3;
 const MAX_TOKENS = 16_000;
 
@@ -175,7 +177,7 @@ export async function vraagAanpassing(args: {
   bron: PageSource;
   selectie?: Selectie | null;
   client?: Anthropic;
-}): Promise<AssistentAntwoord & { gebruik: { input: number; output: number; cacheRead: number } }> {
+}): Promise<AssistentAntwoord & { model: string; gebruik: { input: number; output: number; cacheRead: number } }> {
   const { berichten } = args;
   const laatste = berichten[berichten.length - 1];
   if (!laatste || laatste.rol !== "gebruiker" || !laatste.tekst.trim()) {
@@ -183,6 +185,7 @@ export async function vraagAanpassing(args: {
   }
 
   const client = args.client ?? new Anthropic();
+  const actief = await modelVoor("playable-loader");
   const bron = zonderKit(args.bron);
 
   // Eerdere beurten als gewone tekst; de code staat alleen in de laatste,
@@ -198,12 +201,12 @@ export async function vraagAanpassing(args: {
   for (let poging = 1; poging <= MAX_POGINGEN; poging++) {
     const message = await client.messages
       .stream({
-        model: MODEL,
+        model: actief.model,
         max_tokens: MAX_TOKENS,
         system: [{ type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } }],
         messages,
         output_config: {
-          effort: "medium",
+          ...effortVoor(actief, plek("playable-loader")),
           format: { type: "json_schema", schema: ANTWOORD_SCHEMA as unknown as Record<string, unknown> },
         },
       })
@@ -225,7 +228,7 @@ export async function vraagAanpassing(args: {
     if (!gelezen) throw new AssistentError("Claude gaf een antwoord dat PSV Tools niet kon lezen. Probeer het opnieuw.");
 
     if (gelezen.wijzigingen.length === 0) {
-      return { antwoord: gelezen.antwoord, bron: null, wijzigingen: [], gebruik };
+      return { antwoord: gelezen.antwoord, bron: null, wijzigingen: [], model: actief.model, gebruik };
     }
 
     const resultaat = pasToe(bron, gelezen.wijzigingen);
@@ -239,7 +242,7 @@ export async function vraagAanpassing(args: {
       }
     }
     if (fouten.length === 0) {
-      return { antwoord: gelezen.antwoord, bron: resultaat.bron, wijzigingen: gelezen.wijzigingen, gebruik };
+      return { antwoord: gelezen.antwoord, bron: resultaat.bron, wijzigingen: gelezen.wijzigingen, model: actief.model, gebruik };
     }
 
     // Het antwoord letterlijk terug, met de denkblokken erin: het gesprek

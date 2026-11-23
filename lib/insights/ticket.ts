@@ -1,5 +1,5 @@
 import { buildAnalysisContext, type TicketEvent } from "@/lib/ticket-analysis";
-import { runInsightAnalysis } from "./runner";
+import { insightSchema, runInsightAnalysis, uitgelicht } from "./runner";
 
 export interface TicketInsightInput {
   events: TicketEvent[];
@@ -49,9 +49,14 @@ REGELS:
 - Noem concrete eventnamen, datums en percentages
 - Strip datum-prefixen uit eventnamen indien aanwezig`;
 
+/** De vorm van het antwoord; de API dwingt hem af. */
+const SCHEMA = insightSchema({ highestDemand: uitgelicht("name", "metric", "action"), mostAvailable: uitgelicht("name", "metric", "action") });
+
 export async function analyzeTicketEvents(input: TicketInsightInput): Promise<TicketInsightResult> {
   const context = buildAnalysisContext(input.events);
   return runInsightAnalysis<TicketInsightResult>({
+    plek: "inzichten-ticket",
+    schema: SCHEMA,
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende ticket data en retourneer je inzichten als JSON:\n\n${context}`,
   });

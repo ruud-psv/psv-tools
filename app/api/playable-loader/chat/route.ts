@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
-import { AssistentError, MODEL, vraagAanpassing, type Bericht } from "@/lib/playable-loader/assistent";
+import { AssistentError, vraagAanpassing, type Bericht } from "@/lib/playable-loader/assistent";
 import { MAX_FIELD_CHARS, parseCampaignId } from "@/lib/playable-loader/bundle";
 import { leesSelectie } from "@/lib/playable-loader/selectie";
 
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   try {
     const resultaat = await vraagAanpassing({ berichten, bron, selectie });
     console.info(
-      `[playable-loader/chat] ${session.email}, campagne ${campaignId ?? "?"}, ${MODEL}: ` +
+      `[playable-loader/chat] ${session.email}, campagne ${campaignId ?? "?"}, ${resultaat.model}: ` +
         `${resultaat.wijzigingen.length} wijzigingen${selectie ? " (aangewezen)" : ""}, tokens in ${resultaat.gebruik.input} ` +
         `(cache ${resultaat.gebruik.cacheRead}), uit ${resultaat.gebruik.output}`
     );

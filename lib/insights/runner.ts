@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { effortVoor, plek, tekstUit, type PlekId } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 export class InsightConfigError extends Error {}
 export class InsightAnalysisError extends Error {
@@ -11,37 +13,88 @@ export class InsightAnalysisError extends Error {
   }
 }
 
-const DEFAULT_MAX_TOKENS = 2048;
+/**
+ * Ruim: nieuwere modellen denken eerst, en dat denkwerk telt mee in deze
+ * limiet. Het antwoord zelf is een paar duizend tokens.
+ */
+const DEFAULT_MAX_TOKENS = 8000;
+
+type Schema = Record<string, unknown>;
+
+const TEKST: Schema = { type: "string" };
+
+/** Een object waarin elk veld verplicht is en er niets bij mag. */
+export function object(velden: Record<string, Schema>): Schema {
+  return { type: "object", properties: velden, required: Object.keys(velden), additionalProperties: false };
+}
+
+/** Een uitgelicht item (topPerformer en dergelijke): tekstvelden, of null. */
+export function uitgelicht(...velden: string[]): Schema {
+  return { anyOf: [object(Object.fromEntries(velden.map((v) => [v, TEKST]))), { type: "null" }] };
+}
+
+/** De vorm die elke analyse deelt, plus de velden die alleen deze analyse heeft. */
+export function insightSchema(extra: Record<string, Schema> = {}): Schema {
+  return object({
+    summary: TEKST,
+    highlights: {
+      type: "array",
+      items: object({
+        type: { type: "string", enum: ["trend", "anomaly", "achievement", "warning", "opportunity"] },
+        text: TEKST,
+      }),
+    },
+    recommendations: { type: "array", items: TEKST },
+    ...extra,
+  });
+}
 
 export async function runInsightAnalysis<T>(args: {
+  /** De plek in Beheer > Model garden; bepaalt het model. */
+  plek: PlekId;
   systemPrompt: string;
   userMessage: string;
-  /** Alleen meegeven wanneer de verwachte JSON niet in 2048 tokens past. */
+  /** De vorm van het antwoord; de API dwingt hem af (structured outputs). */
+  schema: Schema;
   maxTokens?: number;
 }): Promise<T> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new InsightConfigError("ANTHROPIC_API_KEY ontbreekt.");
 
   const client = new Anthropic({ apiKey });
+  const actief = await modelVoor(args.plek);
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: actief.model,
     max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: args.systemPrompt,
     messages: [{ role: "user", content: args.userMessage }],
+    output_config: {
+      ...effortVoor(actief, plek(args.plek)),
+      format: { type: "json_schema", schema: args.schema },
+    },
   });
 
-  const responseText = message.content[0].type === "text" ? message.content[0].text : "";
-  const jsonMatch =
-    responseText.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-    responseText.match(/(\{[\s\S]*\})/);
-  if (!jsonMatch) throw new InsightAnalysisError("Analyse retourneerde geen geldige JSON.");
+  if ((message.stop_reason as string) === "refusal") {
+    throw new InsightAnalysisError("Het model weigerde deze analyse.");
+  }
+  if (message.stop_reason === "max_tokens") {
+    throw new InsightAnalysisError("De analyse werd afgekapt; probeer het opnieuw.");
+  }
 
+  const responseText = tekstUit(message.content);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonMatch[1].trim());
+    parsed = JSON.parse(responseText);
   } catch {
-    throw new InsightAnalysisError("Analyse retourneerde geen geldige JSON.");
+    // Terugval voor het geval er toch tekst omheen staat.
+    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
+    try {
+      parsed = jsonMatch ? JSON.parse(jsonMatch[1].trim()) : undefined;
+    } catch {
+      parsed = undefined;
+    }
   }
+  if (!parsed || typeof parsed !== "object") throw new InsightAnalysisError("Analyse retourneerde geen geldige JSON.");
 
   return normalizeArrays(parsed) as T;
 }

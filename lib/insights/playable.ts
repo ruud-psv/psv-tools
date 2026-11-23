@@ -1,6 +1,6 @@
 import { buildPlayableContext } from "@/lib/playable-analysis";
 import type { Campaign, PlayableTotals } from "@/lib/playable-analysis";
-import { runInsightAnalysis } from "./runner";
+import { insightSchema, runInsightAnalysis, uitgelicht } from "./runner";
 
 export interface PlayableInsightInput {
   campaigns: Campaign[];
@@ -50,9 +50,14 @@ REGELS:
 - Wees specifiek: noem campagnenamen en percentages waar relevant
 - Geen vage algemeenheden tenzij de data daar specifiek aanleiding toe geeft`;
 
+/** De vorm van het antwoord; de API dwingt hem af. */
+const SCHEMA = insightSchema({ topPerformer: uitgelicht("name", "metric", "why"), bottomPerformer: uitgelicht("name", "metric", "suggestion") });
+
 export async function analyzePlayableCampaigns(input: PlayableInsightInput): Promise<PlayableInsightResult> {
   const context = buildPlayableContext(input.campaigns, input.totals);
   return runInsightAnalysis<PlayableInsightResult>({
+    plek: "inzichten-playable",
+    schema: SCHEMA,
     systemPrompt: SYSTEM_PROMPT,
     userMessage: `Analyseer de volgende Playable campagne data en retourneer je inzichten als JSON:\n\n${context}`,
   });

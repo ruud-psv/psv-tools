@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { outputConfigVoor, plek } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 import { buildKennisbankContext } from "@/lib/kennisbank";
 import { requireEmail } from "@/lib/api-session";
 import {
@@ -59,11 +61,12 @@ export async function POST(req: NextRequest) {
 
   const gesprekId = isGesprekId(body.gesprekId) ? body.gesprekId : nieuwGesprekId();
   const client = new Anthropic();
+  const actief = await modelVoor("kennisbank");
 
   const stream = client.messages.stream({
-    model: "claude-haiku-5-5",
+    model: actief.model,
     max_tokens: 16000,
-    output_config: { effort: "low" },
+    ...outputConfigVoor(actief, plek("kennisbank")),
     system: [
       {
         type: "text",

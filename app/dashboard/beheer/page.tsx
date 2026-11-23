@@ -7,7 +7,7 @@ export const metadata = {
 // Alleen admins komen hier: de middleware stuurt de rest terug naar het dashboard.
 export default async function BeheerPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams;
-  const initialTab: BeheerTab = tab === "mcp" ? "mcp" : "gebruikers";
+  const initialTab: BeheerTab = tab === "mcp" || tab === "modellen" ? tab : "gebruikers";
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl">
@@ -15,7 +15,7 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         <h1 className="text-3xl tracking-tight">Beheer</h1>
         <p className="mt-1 text-muted-foreground">
           Bepaal per collega welke pagina&apos;s zichtbaar zijn, en welke MCP-servers de assistent mag
-          gebruiken.
+          gebruiken en welk AI-model elke plek gebruikt.
         </p>
       </div>
 

@@ -4,6 +4,8 @@ import { requireEmail } from "@/lib/api-session";
 import { readMatchSales } from "@/lib/ringside/store";
 import { matchContext, overviewContext } from "@/lib/ticketing-stadion/context";
 import { EVENT_ID, loadStadionMatch, loadStadionOverview, pickSalesSeries } from "@/lib/ticketing-stadion/load";
+import { fallbackVoor, outputConfigVoor, plek } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 /**
  * De chat van Ticketing Stadion: vragen over de data die op de pagina staat.
@@ -17,7 +19,6 @@ import { EVENT_ID, loadStadionMatch, loadStadionOverview, pickSalesSeries } from
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const MODEL = "claude-opus-5-5";
 const MAX_MESSAGES = 20;
 const MAX_LENGTH = 2000;
 
@@ -79,14 +80,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "De data kon niet worden geladen." }, { status: 500 });
   }
 
-  // `fallbacks` staat nog niet in de types van deze SDK-versie; de API kent hem
-  // wel. Bij een onterechte weigering beantwoordt een ander model de vraag.
-  const params: Anthropic.Beta.MessageCreateParamsNonStreaming & { fallbacks: "default" } = {
-    model: MODEL,
+  // Het model komt uit Beheer > Model garden. `fallbacks` staat nog niet in de
+  // types van deze SDK-versie; de API kent hem wel. Bij een onterechte weigering
+  // beantwoordt een ander model de vraag.
+  const actief = await modelVoor("ticketing-stadion");
+  const params: Anthropic.Beta.MessageCreateParamsNonStreaming & { fallbacks?: "default" } = {
+    model: actief.model,
     max_tokens: 4000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "low" },
+    ...fallbackVoor(actief),
+    ...outputConfigVoor(actief, plek("ticketing-stadion")),
     system: [
       { type: "text", text: INSTRUCTIONS },
       // De data blijft gelijk zolang de pagina openstaat: gecachet, zodat

@@ -1,4 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { outputConfigVoor, plek, tekstUit } from "@/lib/modellen/config";
+import { modelVoor } from "@/lib/modellen/store";
 
 /**
  * De titel van een gesprek, zoals in Claude: een paar woorden over waar het
@@ -6,7 +8,6 @@ import type Anthropic from "@anthropic-ai/sdk";
  * maakt hem tegelijk met het eerste antwoord, dus de collega wacht er niet op.
  */
 
-export const TITEL_MODEL = "claude-haiku-5-5";
 const MAX_LENGTE = 60;
 
 const INSTRUCTIES = `Je geeft een gesprek in PSV Tools (de interne tool van het marketingteam van PSV) een titel voor de lijst met gesprekken.
@@ -45,15 +46,19 @@ export async function maakTitel(
     .slice(0, 4)
     .map((b) => `${b.role === "user" ? "Collega" : "Assistent"}: ${b.content.slice(0, 1500)}`)
     .join("\n\n");
+  const actief = await modelVoor("assistent-titel");
   const antwoord = await client.messages.create(
     {
-      model: TITEL_MODEL,
-      max_tokens: 64,
+      model: actief.model,
+      // De titel zelf is een paar woorden, maar bij nieuwere modellen telt het
+      // denkwerk mee in deze limiet; met 64 bleef er vaak niets over.
+      max_tokens: 1024,
+      ...outputConfigVoor(actief, plek("assistent-titel")),
       system: INSTRUCTIES,
       messages: [{ role: "user", content: `Het gesprek:\n\n${gesprek}` }],
     },
     { signal }
   );
-  const tekst = antwoord.content.map((blok) => (blok.type === "text" ? blok.text : "")).join("");
+  const tekst = tekstUit(antwoord.content);
   return schoneTitel(tekst);
 }
