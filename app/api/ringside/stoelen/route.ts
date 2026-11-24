@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
 import { isRingsideConfigured } from "@/lib/ringside/auth";
 import { runLockedSeatIngest } from "@/lib/ringside/seat-ingest";
-import { isSeatIngestLocked, readSeatState, type SeatIngestState } from "@/lib/ringside/seat-store";
+import { isSeatIngestLocked, readSeatState, seatIngestProgress } from "@/lib/ringside/seat-store";
+import { isPaused } from "@/lib/beheer/cron-control";
 
 /**
  * Houdt de stoelstatus van komende wedstrijden bij (zie `lib/ringside/seat-ingest.ts`).
@@ -87,23 +88,6 @@ async function startNextRun(req: NextRequest, remaining: number): Promise<boolea
   }
 }
 
-/** De voortgang per ronde, in de volgorde waarin de cron ze afwerkt. */
-function progress(state: SeatIngestState) {
-  const phase = (read: number, complete: boolean) => ({ read, complete });
-  const phases = {
-    stoelen: phase(state.manifestsRead, state.manifestsComplete),
-    verkoop: phase(state.salesRead, state.salesComplete),
-    capaciteit: phase(state.capacityRead, state.capacityComplete),
-    reserveringen: phase(state.reservationRead, state.reservationComplete),
-    resaleAankopen: phase(state.venueResaleRead, state.venueResaleComplete),
-    doorverkocht: phase(state.resoldRead, state.resoldComplete),
-    statusPerTicket: phase(state.detailsRead, state.detailsComplete),
-    vrijePlaatsen: phase(state.gaRead, state.gaComplete),
-  };
-  const busyWith = Object.entries(phases).find(([, p]) => !p.complete)?.[0] ?? null;
-  return { done: busyWith === null, busyWith, phases };
-}
-
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -113,7 +97,7 @@ export async function GET(req: NextRequest) {
     const state = await readSeatState();
     return NextResponse.json(
       {
-        ...progress(state),
+        ...seatIngestProgress(state),
         running: isSeatIngestLocked(state),
         runningUntil: state.runningUntil,
         caughtUpAt: state.caughtUpAt,
@@ -131,6 +115,14 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const budget = Math.min(Math.max(Number(searchParams.get("seconds")) || DEFAULT_BUDGET_SECONDS, 10), 280);
   const startedAt = Date.now();
+
+  // Gepauzeerd in Beheer > Crons: geen nieuwe run, ook niet van de cron.
+  if (await isPaused("ringside-stoelen")) {
+    return NextResponse.json(
+      { skipped: true, paused: true, reason: "Gepauzeerd in Beheer > Crons. Hervat hem daar." },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
+  }
 
   const outcome = await runLockedSeatIngest(budget * 1000, searchParams.get("force") === "1");
   if (!outcome.ran) {
@@ -163,7 +155,11 @@ export async function GET(req: NextRequest) {
   // Doorpakken zolang er vooruitgang is, ook na een fout in één van de stromen:
   // die krijgt in de volgende run een nieuwe kans. Een run die niets las, stopt
   // de ketting, zodat een blijvende fout niet eindeloos herhaald wordt.
-  const chained = !done && chainRemaining > 0 && progressed ? await startNextRun(req, chainRemaining - 1) : false;
+  // Opnieuw kijken: de pauze kan tijdens deze run gezet zijn.
+  const chained =
+    !done && chainRemaining > 0 && progressed && !(await isPaused("ringside-stoelen"))
+      ? await startNextRun(req, chainRemaining - 1)
+      : false;
 
   return NextResponse.json(
     {

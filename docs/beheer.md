@@ -335,3 +335,25 @@ verder, want die leest dezelfde omgevingsvariabele.
 | `geeft geen toegang tot <site> (property ...)` | Het service-account mist rechten op die property. Voeg het e-mailadres uit de melding in Google Analytics toe met de rol **Lezer** (Beheer > Toegangsbeheer voor property), of corrigeer het property-id in de genoemde `GA_PROPERTY_*`. Web Verkeer gebruikt hetzelfde account: die site ontbreekt daar dan ook. |
 | `zet de Google Analytics Data API aan` | Zet de Data API aan in het Google Cloud-project van het service-account. |
 | `Input validation error` bij Proberen | De invoer klopt niet met het schema, bijvoorbeeld een lege lijst `metrics`. Voorbeelden staan in de beschrijving van de tool. |
+
+## Crons
+
+Tabblad op `/dashboard/beheer?tab=crons` (`components/cron-beheer.tsx`, API
+`app/api/beheer/crons/route.ts`), alleen voor admins. Ververst zichzelf elke 15 seconden.
+
+- **Ringside: verkoop per dag** (`/api/ringside/ingest`) en **Ringside: stoelstatus**
+  (`/api/ringside/stoelen`): wat ze nu doen (doorloop, bijhouden of een extra ronde), of er een
+  run bezig is, de laatste fout en de rondes. Met knoppen:
+  - **Stoppen** zet een pauze in `beheer/cron-pauze.json` (`lib/beheer/cron-control.ts`). Een
+    gepauzeerde cron start geen run (ook niet van de schedule in `vercel.json`) en zet zijn
+    ketting niet voort; een run die bezig is maakt zijn werk af en slaat op. De pauze staat
+    bewust niet in de toestand van de cron: een lopende run schrijft die aan het eind terug en
+    zou een pauze dan overschrijven. Ook de inhaalslag van "Maak lijst" respecteert de pauze.
+  - **Hervatten** / **Nu draaien** haalt de pauze weg en start een run met een ketting van 400;
+    die gaat verder waar hij was.
+  - **Opnieuw beginnen** (alleen de verkoop) start een nieuwe doorloop (`?restart=1`). Kan
+    alleen als er geen run bezig is: stop hem eerst.
+- **Overige crons** (wachtlijst, PSV Play, Asana-automaat): alleen het schema.
+
+Status zonder te starten kan ook via de routes zelf: `/api/ringside/ingest?status=1` en
+`/api/ringside/stoelen?status=1`.

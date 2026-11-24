@@ -4,6 +4,7 @@ import { isRingsideConfigured } from "@/lib/ringside/auth";
 import { runSalesIngest, type SalesIngestResult } from "@/lib/ringside/sales-ingest";
 import { summarizeResaleProbe } from "@/lib/ringside/sales-series";
 import { isLocked, readState, writeState } from "@/lib/ringside/store";
+import { isPaused } from "@/lib/beheer/cron-control";
 
 /**
  * Leest de verkoop per dag in uit Ringside (zie `lib/ringside/sales-ingest.ts`).
@@ -118,6 +119,14 @@ export async function GET(req: NextRequest) {
   const deadline = startedAt + budget * 1000;
   const noStore = { "Cache-Control": "no-store, max-age=0" };
 
+  // Gepauzeerd in Beheer > Crons: geen nieuwe run, ook niet van de cron.
+  if (await isPaused("ringside-verkoop")) {
+    return NextResponse.json(
+      { skipped: true, paused: true, reason: "Gepauzeerd in Beheer > Crons. Hervat hem daar." },
+      { headers: noStore }
+    );
+  }
+
   const state = await readState();
   if (isLocked(state) && searchParams.get("force") !== "1") {
     return NextResponse.json(
@@ -162,7 +171,9 @@ export async function GET(req: NextRequest) {
   const chainRemaining = Number.isFinite(requestedChain)
     ? Math.min(Math.max(requestedChain, 0), MAX_CHAIN)
     : DEFAULT_CHAIN;
-  const chainNext = !done && chainRemaining > 0 && progressed && !state.lastError;
+  // Opnieuw kijken: de pauze kan tijdens deze run gezet zijn.
+  const chainNext =
+    !done && chainRemaining > 0 && progressed && !state.lastError && !(await isPaused("ringside-verkoop"));
   const chained = chainNext ? await startNextRun(req, chainRemaining - 1) : false;
 
   return NextResponse.json(

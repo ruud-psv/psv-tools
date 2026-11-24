@@ -344,3 +344,32 @@ export async function archiveEventSeats(events: EventSeatState[]): Promise<Set<s
   }
   return failed;
 }
+
+/** Leesbare namen van de rondes uit `seatIngestProgress()`, voor Beheer > Crons. */
+export const SEAT_PHASE_LABELS: Record<string, string> = {
+  stoelen: "Stoelen",
+  verkoop: "Verkoop",
+  capaciteit: "Capaciteit",
+  reserveringen: "Reserveringen",
+  resaleAankopen: "Resale-aankopen",
+  doorverkocht: "Doorverkocht",
+  statusPerTicket: "Status per ticket",
+  vrijePlaatsen: "Vrije plaatsen (vak MM)",
+};
+
+/** De voortgang per ronde, in de volgorde waarin de cron ze afwerkt. */
+export function seatIngestProgress(state: SeatIngestState) {
+  const phase = (read: number, complete: boolean) => ({ read, complete });
+  const phases = {
+    stoelen: phase(state.manifestsRead, state.manifestsComplete),
+    verkoop: phase(state.salesRead, state.salesComplete),
+    capaciteit: phase(state.capacityRead, state.capacityComplete),
+    reserveringen: phase(state.reservationRead, state.reservationComplete),
+    resaleAankopen: phase(state.venueResaleRead, state.venueResaleComplete),
+    doorverkocht: phase(state.resoldRead, state.resoldComplete),
+    statusPerTicket: phase(state.detailsRead, state.detailsComplete),
+    vrijePlaatsen: phase(state.gaRead, state.gaComplete),
+  };
+  const busyWith = Object.entries(phases).find(([, p]) => !p.complete)?.[0] ?? null;
+  return { done: busyWith === null, busyWith, phases };
+}

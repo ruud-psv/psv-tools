@@ -12,6 +12,7 @@
  * weg wat er uit die stroom lag.
  */
 
+import { isPaused } from "../beheer/cron-control";
 import { readFeed, type FeedResult } from "./feed";
 import { readKnownProducts } from "./store";
 import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
@@ -400,6 +401,8 @@ export async function catchUpSeatIngest(
   budgetMs: number
 ): Promise<{ catchUp: CatchUp; state: SeatIngestState | null }> {
   try {
+    // Gepauzeerd in Beheer > Crons: dan ook geen inhaalslag.
+    if (await isPaused("ringside-stoelen")) return { catchUp: "overgeslagen", state: await readSeatState() };
     const outcome = await runLockedSeatIngest(budgetMs);
     if (!outcome.ran) return { catchUp: "overgeslagen", state: outcome.state };
     return { catchUp: outcome.error ? "mislukt" : "bijgewerkt", state: outcome.state };

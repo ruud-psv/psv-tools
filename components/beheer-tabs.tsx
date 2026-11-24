@@ -2,21 +2,22 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Plug, Sprout, Users } from "lucide-react";
+import { Plug, Sprout, Timer, Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserManagement } from "@/components/user-management";
 import { McpBeheer } from "@/components/mcp-beheer";
 import { ModelGarden } from "@/components/model-garden";
+import { CronBeheer } from "@/components/cron-beheer";
 
-export type BeheerTab = "gebruikers" | "mcp" | "modellen";
+export type BeheerTab = "gebruikers" | "mcp" | "modellen" | "crons";
 
 function leesBeheerTab(tab?: string): BeheerTab {
-  return tab === "mcp" || tab === "modellen" ? tab : "gebruikers";
+  return tab === "mcp" || tab === "modellen" || tab === "crons" ? tab : "gebruikers";
 }
 
 /**
  * De tabbladen van Beheer. Het gekozen tabblad staat in de URL (`?tab=mcp`),
- * (of `?tab=modellen`), zodat je naar een tabblad kunt linken en verversen je op dezelfde plek laat.
+ * (of `?tab=modellen`, `?tab=crons`), zodat je naar een tabblad kunt linken en verversen je op dezelfde plek laat.
  */
 export function BeheerTabs({ initialTab }: { initialTab: BeheerTab }) {
   const [tab, setTab] = useState<BeheerTab>(initialTab);
@@ -44,6 +45,10 @@ export function BeheerTabs({ initialTab }: { initialTab: BeheerTab }) {
           <Sprout className="h-4 w-4" />
           Model garden
         </TabsTrigger>
+        <TabsTrigger value="crons" className="gap-2 font-heading uppercase tracking-wide">
+          <Timer className="h-4 w-4" />
+          Crons
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="gebruikers">
         <UserManagement />
@@ -53,6 +58,9 @@ export function BeheerTabs({ initialTab }: { initialTab: BeheerTab }) {
       </TabsContent>
       <TabsContent value="modellen">
         <ModelGarden />
+      </TabsContent>
+      <TabsContent value="crons">
+        <CronBeheer />
       </TabsContent>
     </Tabs>
   );
