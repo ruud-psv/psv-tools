@@ -50,11 +50,25 @@ export interface StadionMatch {
   areas: AreaOccupancy[];
   /** Parkeren en andere vakken buiten de plattegrond: apart, niet in `total`. */
   otherTotal: Occupancy;
+  /**
+   * Diezelfde vakken los, met hun naam in Ringside. Zo is te zien wat er buiten
+   * de plattegrond valt (een vak dat in Ringside anders heet dan op de
+   * plattegrond, zoals mogelijk het uitvak). Ontbreekt in oudere samenvattingen.
+   */
+  otherAreas?: AreaOccupancy[];
 }
 
 export function summarizeMatch(event: EventSeatState): StadionMatch {
-  const { total, areas, otherTotal } = occupancyByArea(event, isStadiumStand);
-  return { eventId: event.eventId, name: event.name, eventDate: event.eventDate, total, areas, otherTotal };
+  const { total, areas, otherTotal, other } = occupancyByArea(event, isStadiumStand);
+  return {
+    eventId: event.eventId,
+    name: event.name,
+    eventDate: event.eventDate,
+    total,
+    areas,
+    otherTotal,
+    otherAreas: other,
+  };
 }
 
 /* ---------- Vrije plaatsen ---------- */
