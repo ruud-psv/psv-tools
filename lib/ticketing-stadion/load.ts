@@ -25,6 +25,7 @@ import {
   compareMatch,
   daysUntil,
   freeSeatsFromMaps,
+  gaRows,
   isHomeMatchSales,
   isStadiumStand,
   salesPace,
@@ -122,6 +123,8 @@ export async function loadStadionMatch(eventId: string) {
     match: { ...match, daysOut },
     seatMaps,
     freeGroups,
+    /** Vakken met vrije plaatsen en hun inventaris in Ringside; zie `gaRows()`. */
+    gaRows: gaRows(event),
     sales: own ? { perOffset: own.perOffset, total: own.total, season: own.season } : null,
     supply: supplySeries(supplyDays, match.eventDate),
     pace: own ? salesPace(own.perOffset, daysOut) : null,
@@ -130,6 +133,7 @@ export async function loadStadionMatch(eventId: string) {
     seats: {
       capacityComplete: seatState.capacityComplete,
       reservationComplete: seatState.reservationComplete,
+      gaComplete: seatState.gaComplete,
       caughtUpAt: seatState.caughtUpAt,
     },
     salesStatus: { complete: salesState.salesComplete, updatedAt: salesState.updatedAt || null },

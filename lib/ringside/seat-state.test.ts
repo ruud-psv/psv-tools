@@ -338,3 +338,36 @@ test("ronde voor de details vult alleen bekende tickets aan", () => {
   assert.equal(applySalesDetails(events, sale("onbekend", { resale_status: "Posted" })), null);
   assert.deepEqual(events.get(EVENT)!.details, { s1: ["Sale", "Posted"] });
 });
+
+test("vrije plaatsen: inventaris wordt bewaard, opgeschoond en bijgewerkt", async () => {
+  const { applyManifestGa, sanitizeInventory } = await import("./seat-state");
+  const events = new Map();
+  const base = {
+    manifest_id: "MM-1",
+    event_id: "EV-1",
+    event_date: "2099-01-01T17:45:00",
+    product_type: "Event",
+    area: "MM",
+    row: "",
+    seat: "",
+    is_ga: true,
+    is_counted_as_available: false,
+    capacity: 600,
+  };
+  applyManifestRow(events, { ...base, ga_locks: '[{"lock_type":"Uitvak","quantity":400,"client_id":"x"}]' }, "2026-01-01");
+  assert.deepEqual(events.get("ev-1").ga["mm-1"], { ga_locks: [{ lock_type: "Uitvak", quantity: 400 }] });
+
+  // De extra ronde vult aan, en geeft alleen een event terug als er iets veranderde.
+  assert.equal(applyManifestGa(events, { ...base, ga_allocations: { available: 200 } }), "ev-1");
+  assert.deepEqual(events.get("ev-1").ga["mm-1"], { ga_allocations: { available: 200 } });
+  assert.equal(applyManifestGa(events, { ...base, ga_allocations: { available: 200 } }), null);
+
+  // Genummerde stoelen krijgen geen inventaris.
+  assert.equal(applyManifestGa(events, { ...base, is_ga: false, ga_locks: [{ quantity: 1 }] }), null);
+
+  // Niets over personen: ids en vrije tekst gaan eruit, getallen blijven.
+  assert.deepEqual(
+    sanitizeInventory({ note: "Jan Jansen", hold_id: "6f1c2a8e-1111-2222-3333-444455556666", owner_name: "Jan", count: "12", status: "Held" }),
+    { note: "«tekst»", hold_id: "«id»", count: "12", status: "Held" }
+  );
+});

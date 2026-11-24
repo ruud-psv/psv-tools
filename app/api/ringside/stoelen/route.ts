@@ -98,6 +98,7 @@ function progress(state: SeatIngestState) {
     resaleAankopen: phase(state.venueResaleRead, state.venueResaleComplete),
     doorverkocht: phase(state.resoldRead, state.resoldComplete),
     statusPerTicket: phase(state.detailsRead, state.detailsComplete),
+    vrijePlaatsen: phase(state.gaRead, state.gaComplete),
   };
   const busyWith = Object.entries(phases).find(([, p]) => !p.complete)?.[0] ?? null;
   return { done: busyWith === null, busyWith, phases };
@@ -151,7 +152,8 @@ export async function GET(req: NextRequest) {
     state.reservationComplete &&
     state.venueResaleComplete &&
     state.resoldComplete &&
-    state.detailsComplete;
+    state.detailsComplete &&
+    state.gaComplete;
 
   // `chain=0` zet de ketting uit; niet op falsy testen, anders valt juist die
   // stand terug op de standaard.
@@ -177,6 +179,7 @@ export async function GET(req: NextRequest) {
         venueResaleRead: result?.venueResaleRead ?? 0,
         resoldRead: result?.resoldRead ?? 0,
         detailsRead: result?.detailsRead ?? 0,
+        gaRead: result?.gaRead ?? 0,
         eventsChanged: result?.eventsChanged ?? 0,
         resets: result?.resets ?? [],
       },
@@ -195,6 +198,8 @@ export async function GET(req: NextRequest) {
         resoldComplete: state.resoldComplete,
         detailsRead: state.detailsRead,
         detailsComplete: state.detailsComplete,
+        gaRead: state.gaRead,
+        gaComplete: state.gaComplete,
         events: result?.events ?? null,
         runs: state.runs,
       },

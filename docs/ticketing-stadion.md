@@ -329,3 +329,24 @@ onthouden (`localStorage`), dus niet gedeeld met collega's.
 ondertekende token (`createSeasonShareToken()`) legt het seizoen en de uitgezette wedstrijden
 vast; die zijn voor de ontvanger niet te zien. De link toont de cijfers van het moment van
 openen en verloopt niet. Het overzicht gaat over verkochte tickets, niet over het aanbod.
+
+## Vrije plaatsen in een zitvak (vak MM)
+
+Vak MM hoort normaal bij het uitvak. Wordt het uitvak gehalveerd, dan verkoopt PSV MM aan
+eigen fans, als vrije plaatsen. In Ringside is MM één rij met `is_ga = true` en de
+capaciteit van het hele vak (600), en `is_counted_as_available = false`. Toch verkoopt de
+ticketshop er 200 van (PSV - Go Ahead Eagles, 28-11-2026: 17 verkocht, 183 beschikbaar).
+Hoeveel er werkelijk te koop is, staat dus niet in de vlag maar vermoedelijk in de
+inventarisvelden van die rij: `ga_locks`, `ga_allocations`, `locks` en `allocations`
+(`jsonb`, niet gedocumenteerd).
+
+De stoelstatus bewaart die velden daarom bij elke rij met vrije plaatsen, opgeschoond
+(`sanitizeInventory()` in `lib/ringside/seat-state.ts`: getallen en de structuur blijven,
+klantsleutels, ids en vrije tekst niet). Voor wat er al bekend was, leest een eenmalige
+extra ronde door `/v1/manifests` ze in (`applyManifestGa()`, fase `vrijePlaatsen` in
+`/api/ringside/stoelen`). De wedstrijd-API geeft ze terug onder `gaRows`
+(`gaRows()` in `lib/ticketing-stadion/summary.ts`).
+
+Nog te doen zodra die velden zichtbaar zijn: het aanbod van zo'n rij uit de inventaris
+halen in plaats van uit `is_counted_as_available`, zodat capaciteit, verkocht en vrij
+gelijk lopen met de ticketshop.

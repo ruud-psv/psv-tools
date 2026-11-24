@@ -84,6 +84,13 @@ export interface SeatIngestState {
   detailsComplete: boolean;
   detailsRead: number;
   /**
+   * En een derde ronde door `/v1/manifests`, voor de inventarisvelden van de
+   * rijen met vrije plaatsen (`ga_locks` en verwant). Zie `applyManifestGa()`.
+   */
+  gaCursor: string | null;
+  gaComplete: boolean;
+  gaRead: number;
+  /**
    * Wanneer beide stromen voor het laatst tot het eind gelezen zijn. Zo actueel
    * is de stoelstatus: Ringside zelf loopt meestal minder dan een minuut achter.
    */
@@ -117,6 +124,9 @@ export const EMPTY_SEAT_STATE: SeatIngestState = {
   detailsCursor: null,
   detailsComplete: false,
   detailsRead: 0,
+  gaCursor: null,
+  gaComplete: false,
+  gaRead: 0,
 };
 
 export interface SeatIndexEntry {

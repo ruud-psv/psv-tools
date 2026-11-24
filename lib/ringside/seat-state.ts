@@ -21,6 +21,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { isIdentityColumn } from "./privacy";
 import { seatKey, toSeatNumber, type SeatInfo, type TicketInfo } from "../aangrenzende-stoelen/neighbors";
 
 /**
@@ -96,7 +97,29 @@ export interface EventSeatState {
    * `Sale` zonder resale-status; zie `ticketDetails()`.
    */
   details?: Record<string, DetailTuple>;
+  /**
+   * Bij rijen met vrije plaatsen (`is_ga`): wat Ringside over de inventaris
+   * meldt, op `manifest_id`. Zo'n rij is één regel met de capaciteit van het
+   * hele vak, en `is_counted_as_available` zegt daar niet hoeveel er werkelijk
+   * te koop is. Vak MM bijvoorbeeld (normaal deel van het uitvak) staat als 600
+   * plaatsen "niet te koop", terwijl de ticketshop er 200 van verkoopt. Zie
+   * `gaInventory()`. Ontbreekt in bestanden van vóór deze velden.
+   */
+  ga?: Record<string, GaInventory>;
 }
+
+/**
+ * De inventarisvelden van een rij met vrije plaatsen, opgeschoond met
+ * `sanitizeInventory()`. Alleen de velden die Ringside vulde.
+ */
+export interface GaInventory {
+  ga_locks?: unknown;
+  ga_allocations?: unknown;
+  locks?: unknown;
+  allocations?: unknown;
+}
+
+const INVENTORY_FIELDS = ["ga_locks", "ga_allocations", "locks", "allocations"] as const;
 
 /** `[sale_type, resale_status]` zoals Ringside ze levert. */
 export type DetailTuple = [saleType: string, resaleStatus: string];
@@ -124,6 +147,10 @@ export interface ManifestFeedRow {
   is_counted_as_available?: unknown;
   capacity?: unknown;
   is_excluded_from_reported_capacity?: unknown;
+  locks?: unknown;
+  ga_locks?: unknown;
+  allocations?: unknown;
+  ga_allocations?: unknown;
 }
 
 /** De velden uit `/v1/sales` die hier nodig zijn. */
@@ -298,6 +325,7 @@ export function applyManifestRow(events: EventStates, row: ManifestFeedRow, cuto
     for (const event of events.values()) {
       if (event.seats[manifestId]) {
         delete event.seats[manifestId];
+        if (event.ga) delete event.ga[manifestId];
         return event.eventId;
       }
     }
@@ -327,7 +355,95 @@ export function applyManifestRow(events: EventStates, row: ManifestFeedRow, cuto
   const capacity = capacityOf(row);
   if (capacity !== 1) tuple.push(capacity);
   event.seats[manifestId] = tuple;
+  setGaInventory(event, manifestId, row);
   return eventId;
+}
+
+/** Strings die een id zijn: uuid's en lange getallen. */
+const ID_LIKE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{6,})$/i;
+/** Sleutels die naar een klant of eigenaar wijzen: die vallen helemaal weg. */
+const PERSON_KEY = /(?:^|_)(?:client|customer|owner|holder|guid|user|account|buyer)(?:$|_)/i;
+/** Sleutels waarvan de tekst een soort of status is, geen naam van iemand. */
+const ENUM_KEY = /(?:type|status|reason|kind|category|code|state|mode|level)$/i;
+
+/**
+ * Maakt een inventarisveld (`jsonb`) veilig om te bewaren.
+ *
+ * De vorm is nog niet bekend: Ringside documenteert hem niet en de probe
+ * maskeert hem. Daarom blijft de structuur staan, met alle getallen en
+ * ja/nee-waarden, maar zonder iets dat over een persoon kan gaan: sleutels die
+ * naar een klant wijzen vallen weg, ids worden `«id»` en vrije tekst wordt
+ * `«tekst»`. Alleen tekst onder een sleutel als `lock_type` of `status` blijft
+ * staan, en alleen als hij kort is.
+ */
+export function sanitizeInventory(value: unknown, key = ""): unknown {
+  if (typeof value === "string" && !key) {
+    // Ringside levert `jsonb` soms als tekst.
+    try {
+      return sanitizeInventory(JSON.parse(value), "");
+    } catch {
+      return "«tekst»";
+    }
+  }
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    if (ID_LIKE.test(value.trim())) return "«id»";
+    if (/^-?\d+(\.\d+)?$/.test(value.trim())) return value.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(value.trim())) return value.trim();
+    return ENUM_KEY.test(key) && value.length <= 40 ? value : "«tekst»";
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeInventory(item, key || "item"));
+  if (typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [inner, item] of Object.entries(value as Record<string, unknown>)) {
+      if (isIdentityColumn(inner) || PERSON_KEY.test(inner)) continue;
+      result[inner] = sanitizeInventory(item, inner);
+    }
+    return result;
+  }
+  return null;
+}
+
+/** De opgeschoonde inventarisvelden van een rij met vrije plaatsen, of `null`. */
+export function gaInventory(row: ManifestFeedRow): GaInventory | null {
+  if (!isTrue(row.is_ga)) return null;
+  const inventory: GaInventory = {};
+  for (const field of INVENTORY_FIELDS) {
+    const value = row[field];
+    if (value === undefined || value === null || value === "") continue;
+    inventory[field] = sanitizeInventory(value);
+  }
+  return Object.keys(inventory).length ? inventory : null;
+}
+
+/** Zet de inventaris van een rij; geeft `true` als er iets veranderde. */
+function setGaInventory(event: EventSeatState, manifestId: string, row: ManifestFeedRow): boolean {
+  const next = gaInventory(row);
+  const current = event.ga?.[manifestId];
+  if (!next) {
+    if (!current) return false;
+    delete event.ga![manifestId];
+    return true;
+  }
+  if (current && JSON.stringify(current) === JSON.stringify(next)) return false;
+  (event.ga ??= {})[manifestId] = next;
+  return true;
+}
+
+/**
+ * Vult de inventaris aan bij een rij met vrije plaatsen die al bekend is.
+ *
+ * Voor de eenmalige derde ronde door `/v1/manifests`: die velden werden eerst
+ * niet bewaard. Raakt verder niets. Geeft het event-id terug als er iets
+ * veranderde.
+ */
+export function applyManifestGa(events: EventStates, row: ManifestFeedRow): string | null {
+  const manifestId = id(row.manifest_id);
+  if (!manifestId || isDelete(row) || !isTrue(row.is_ga)) return null;
+  const eventId = id(row.event_id);
+  const event = eventId ? events.get(eventId) : undefined;
+  if (!event?.seats[manifestId]) return null;
+  return setGaInventory(event, manifestId, row) ? event.eventId : null;
 }
 
 function capacityOf(row: ManifestFeedRow): number {

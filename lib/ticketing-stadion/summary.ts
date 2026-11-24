@@ -16,7 +16,7 @@ import { normalizeArea, type SeatRef } from "../aangrenzende-stoelen/neighbors";
 import { SEAT_CODE, type SeatMaps } from "../aangrenzende-stoelen/seat-map";
 import { STADIUM_AREAS } from "../aangrenzende-stoelen/stadium";
 import { seasonOf } from "../ringside/daily-sales";
-import type { EventSeatState } from "../ringside/seat-state";
+import { SEAT_EXCLUDED, SEAT_GA, SEAT_SELLABLE, seatCapacity, type EventSeatState, type GaInventory } from "../ringside/seat-state";
 import type { EventSales, OffsetCounts } from "../ringside/store";
 import { occupancyByArea, type AreaOccupancy, type Occupancy } from "../ticketing-herdgang/occupancy";
 
@@ -46,6 +46,49 @@ export interface StadionMatch {
 export function summarizeMatch(event: EventSeatState): StadionMatch {
   const { total, areas, otherTotal } = occupancyByArea(event, isStadiumStand);
   return { eventId: event.eventId, name: event.name, eventDate: event.eventDate, total, areas, otherTotal };
+}
+
+/* ---------- Vrije plaatsen ---------- */
+
+/** Eén rij met vrije plaatsen op de plattegrond, met wat Ringside over de inventaris meldt. */
+export interface GaRow {
+  area: string;
+  manifestId: string;
+  capacity: number;
+  /** `is_counted_as_available`. */
+  sellable: boolean;
+  /** `is_excluded_from_reported_capacity`. */
+  excluded: boolean;
+  /** Geldige tickets die naar deze rij wijzen, reserveringen inbegrepen. */
+  tickets: number;
+  /** `null` zolang de cron de inventaris nog niet gelezen heeft. */
+  inventory: GaInventory | null;
+}
+
+/**
+ * De rijen met vrije plaatsen van een wedstrijd (zoals vak MM), om te zien
+ * hoeveel Ringside er werkelijk te koop heeft. Alleen vakken op de plattegrond.
+ */
+export function gaRows(event: EventSeatState): GaRow[] {
+  const ticketsPerRow = new Map<string, number>();
+  for (const [manifestId] of Object.values(event.tickets)) {
+    if (manifestId) ticketsPerRow.set(manifestId, (ticketsPerRow.get(manifestId) ?? 0) + 1);
+  }
+  const rows: GaRow[] = [];
+  for (const [manifestId, seat] of Object.entries(event.seats)) {
+    const [area, , , flags] = seat;
+    if (!(flags & SEAT_GA) || !isStadiumStand(area)) continue;
+    rows.push({
+      area: normalizeArea(area),
+      manifestId,
+      capacity: seatCapacity(seat),
+      sellable: Boolean(flags & SEAT_SELLABLE),
+      excluded: Boolean(flags & SEAT_EXCLUDED),
+      tickets: ticketsPerRow.get(manifestId) ?? 0,
+      inventory: event.ga?.[manifestId] ?? null,
+    });
+  }
+  return rows.sort((a, b) => a.area.localeCompare(b.area, "nl", { numeric: true }));
 }
 
 /* ---------- Data ---------- */
