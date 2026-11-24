@@ -16,6 +16,7 @@ import { isLocked, readState, writeState } from "@/lib/ringside/store";
  *   tot de nieuwe compleet is.
  * - `?chain=50` maakt de ketting langer, `?chain=0` zet hem uit.
  * - `?force=1` negeert het slot van een run die vastligt.
+ * - `?status=1` start niets en toont alleen de voortgang, ook als er een run loopt.
  */
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,28 @@ async function startNextRun(req: NextRequest, remaining: number): Promise<boolea
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Alleen kijken: start niets, ook niet als er een run loopt.
+  if (new URL(req.url).searchParams.get("status") === "1") {
+    const state = await readState();
+    return NextResponse.json(
+      {
+        running: isLocked(state),
+        runningUntil: state.runningUntil,
+        // `backfill`: er loopt een volledige doorloop; `live`: bijhouden.
+        mode: state.mode,
+        // Of de pagina's cijfers hebben: een complete doorloop staat klaar.
+        live: state.salesComplete,
+        salesRowsRead: state.rowsRead,
+        salesDateSeen: state.salesDateSeen,
+        runs: state.runs,
+        updatedAt: state.updatedAt || null,
+        caughtUpAt: state.caughtUpAt,
+        lastError: state.lastError,
+        check: { outOfOrder: state.check.outOfOrder, unknownProduct: state.check.unknownProduct },
+      },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   }
   if (!isRingsideConfigured()) {
     return NextResponse.json({ error: "Ringside is niet geconfigureerd." }, { status: 503 });
