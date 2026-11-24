@@ -1,4 +1,4 @@
-import { Headset, ListOrdered, LogIn, Megaphone, ShoppingBag, Sparkles, Ticket, type LucideIcon } from "lucide-react";
+import { FolderOpen, Headset, ListOrdered, LogIn, Megaphone, ShoppingBag, Sparkles, Ticket, type LucideIcon } from "lucide-react";
 import { betaTools, insightTools, knowledgeTools, makeTools } from "@/lib/tools";
 
 /**
@@ -49,7 +49,7 @@ const SPECS: SectionSpec[] = [
     name: "Assistent",
     icon: Sparkles,
     groups: [
-      { hrefs: ["/dashboard/assistent", "/dashboard/huisstijl-checker", "/dashboard/kennisbank"] },
+      { hrefs: ["/dashboard/assistent", "/dashboard/assistent/documenten", "/dashboard/huisstijl-checker", "/dashboard/kennisbank"] },
     ],
   },
   {
@@ -138,6 +138,14 @@ export const ALL_LINKS: Map<string, NavLink> = new Map(
  * Ze verschijnen voor wie de pagina in `accessHref` mag zien.
  */
 const EXTRA_LINKS: NavLink[] = [
+  {
+    // De stukken uit de assistent, en wat collega's met je deelden.
+    name: "Mijn documenten",
+    href: "/dashboard/assistent/documenten",
+    icon: FolderOpen,
+    beta: false,
+    accessHref: "/dashboard/assistent",
+  },
   {
     name: "Instroom",
     href: "/dashboard/ticketing-stadion/instroom",

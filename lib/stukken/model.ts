@@ -14,6 +14,7 @@
  * halve blokken naast elkaar). Een deck zet dezelfde blokken op slides.
  * Oude stukken met soort "onepager" worden bij het lezen een rapport.
  */
+import type { GedeeldMet } from "./collegas";
 import {
   DECK_LIMIETEN,
   bronnenVanSlides,
@@ -163,6 +164,8 @@ export interface Stuk extends StukInhoud {
   /** Eerdere versies, nieuwste eerst; om terug te gaan. */
   vorige: (StukInhoud & { versie: number; peildatum: string })[];
   deellink?: Deellink;
+  /** Collega's die het stuk mogen lezen, in de nieuwste versie (lib/stukken/collegas.ts). */
+  gedeeldMet?: GedeeldMet[];
   createdAt: string;
   updatedAt: string;
 }

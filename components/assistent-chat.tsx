@@ -245,8 +245,16 @@ export function AssistentChat() {
   // Kom je van het dashboard met een vraag, dan start het gesprek meteen.
   // In een timeout: React draait effecten in ontwikkeling twee keer, en de
   // opruiming hierboven breekt een lopend verzoek af.
+  // Vanuit Mijn documenten (`?gesprek=<id>`) opent het gesprek met zijn stuk.
   useEffect(() => {
     const t = setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const gesprek = params.get("gesprek");
+      if (gesprek && /^[a-f0-9]{32}$/.test(gesprek)) {
+        window.history.replaceState(null, "", window.location.pathname);
+        openGesprek(gesprek);
+        return;
+      }
       const vraag = pakEersteVraag();
       if (vraag) stel(vraag);
     }, 0);

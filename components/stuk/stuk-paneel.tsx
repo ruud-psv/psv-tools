@@ -12,6 +12,7 @@ import { AfbeeldingProvider } from "@/components/stuk/afbeelding";
 import { StukBewerker } from "@/components/stuk/stuk-bewerker";
 import { SlideBewerker } from "@/components/stuk/slide-bewerker";
 import { PresenteerKnop } from "@/components/stuk/presentatie";
+import { DelenMetCollegas } from "@/components/stuk/delen-met-collegas";
 import { cn } from "@/lib/utils";
 import { STUK_SOORTEN, STUK_SOORT_LABEL, isLegeAfbeelding, type Stuk, type StukSoort, type Uitsnede } from "@/lib/stukken/model";
 import { wachtOpFoto as slideWachtOpFoto } from "@/lib/stukken/deck";
@@ -77,6 +78,12 @@ function Delen({ stuk, onStuk }: { stuk: Stuk; onStuk: (stuk: Stuk) => void }) {
 
   return (
     <div className="space-y-3 border-b border-border bg-muted/30 px-4 py-3 text-sm">
+      <DelenMetCollegas
+        stukId={stuk.id}
+        gedeeldMet={stuk.gedeeldMet ?? []}
+        onWijziging={(gedeeldMet) => onStuk({ ...stuk, gedeeldMet })}
+      />
+      <p className="label border-t border-border pt-3 text-xs">Of deel een link</p>
       {link && (
         <div className="space-y-2">
           <CopyField label={link.publiek ? `Openbaar tot en met ${formatDag(link.verlooptOp ?? "")}` : "Alleen voor collega's"} value={url} />
@@ -163,13 +170,14 @@ export function StukPaneel({
   uitgeschakeld?: boolean;
   className?: string;
 }) {
-  const [delen, setDelen] = useState(Boolean(stuk.deellink));
+  const [delen, setDelen] = useState(Boolean(stuk.deellink || stuk.gedeeldMet?.length));
   const [bewerken, setBewerken] = useState(false);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
 
   // Ander gesprek, ander stuk: het deelvak opnieuw bepalen.
-  useEffect(() => setDelen(Boolean(stuk.deellink)), [stuk.id, stuk.deellink]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setDelen(Boolean(stuk.deellink || stuk.gedeeldMet?.length)), [stuk.id, stuk.deellink]);
   useEffect(() => setBewerken(false), [stuk.id]);
 
   const [uploadVoor, setUploadVoor] = useState<string | null>(null);

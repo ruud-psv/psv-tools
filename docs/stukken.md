@@ -28,7 +28,8 @@ deel je het met een link of druk je het af als PDF.
   verplaatsen, en de titel of soort aanpassen). Alles of niets: klopt één bewerking niet, dan verandert er
   niets en krijgt het model te horen waarom. Bij elke vraag krijgt het model het huidige stuk mee,
   zodat het weet welke blokken er zijn.
-- **Terugvinden.** In de lijst met gesprekken staat een icoon bij gesprekken met een stuk.
+- **Terugvinden.** In de lijst met gesprekken staat een icoon bij gesprekken met een stuk, en alle
+  stukken staan onder **Assistent > Mijn documenten**.
 - **Versies.** Elke wijziging is een nieuwe versie. Met **Vorige** ga je een stap terug, zoals
   ongedaan maken; de laatste 20 versies blijven bewaard.
 - **Cijfers alleen uit het gesprek.** De instructies verbieden het model getallen te gebruiken die
@@ -184,11 +185,44 @@ Klik in het paneel op **Bewerken** (tijdens een antwoord van de assistent kan da
 - De titel van een stuk staat niet in de metadata van de deelpagina, zodat een linkvoorbeeld in
   Teams of Slack hem niet toont.
 
+## Mijn documenten
+
+Onder **Assistent > Mijn documenten** (`/dashboard/assistent/documenten`) staan al je stukken op een
+rij, zonder dat je het gesprek erbij hoeft te zoeken. Zoeken op titel en filteren op rapport of
+slide deck kan bovenaan. Per document:
+
+- **In chat** opent het gesprek met het stuk ernaast, om verder te werken (`/dashboard/assistent?gesprek=<id>`).
+- **Bekijken** opent het los (`/stuk/<id>`): presenteren, afdrukken of opslaan als PDF.
+- **Delen** deelt het met collega's op naam (zie hieronder). Een badge toont of er een deellink is en
+  met hoeveel collega's het gedeeld is.
+
+Het tabblad **Gedeeld met mij** toont wat collega's met jou deelden, met wie het deelde en wanneer.
+
+## Delen met collega's
+
+Naast de deellink kun je een stuk delen met een collega op naam, in het paneel naast de chat (onder
+**Delen**) of in Mijn documenten. Typ een naam of e-mailadres en kies de collega.
+
+- **Altijd de nieuwste versie.** Anders dan de deellink (een momentopname) ziet de collega het stuk
+  zoals het nu is, op `/stuk/<id>?van=<hash eigenaar>`.
+- **Alleen lezen.** De collega kan bekijken, presenteren en afdrukken; bewerken blijft bij de maker.
+- **Wie je kunt kiezen.** Iedereen die al eens in PSV Tools heeft ingelogd (met naam, bijgehouden bij
+  het inloggen in `gebruikersbeheer/register.json`, `lib/gebruikers-register.ts`) en wie in het
+  gebruikersbeheer staat. Een collega die nog nooit inlogde, kies je met zijn volledige e-mailadres;
+  hij ziet het stuk zodra hij inlogt. Hooguit 50 collega's per stuk.
+- **Stoppen** met het kruisje achter de naam; de collega ziet het stuk dan meteen niet meer. Verwijder
+  je het gesprek, dan verdwijnt het ook bij de collega's.
+- **Rechten.** Mijn documenten valt onder het recht op de Assistent. Een gedeeld stuk openen op
+  `/stuk/...` kan iedere ingelogde collega met wie het gedeeld is, ook zonder recht op de Assistent.
+- **Opslag.** In het stuk staat `gedeeldMet` (e-mail, naam, datum). Per ontvanger staat een
+  verwijzing in `stukken-met-mij/<hash ontvanger>/<hash eigenaar>.<id>.json`; bij het lezen wordt in
+  het stuk gecontroleerd of de collega er nog in staat. Regels: `lib/stukken/collegas.ts` (met tests).
+
 ## Afdrukken
 
 **Afdrukken** opent het stuk op `/stuk/<id>`, zonder de rest van PSV Tools eromheen. Kies daar
 **Afdrukken of PDF** en in het afdrukvenster eventueel "Opslaan als PDF". Alleen de maker kan deze
-pagina openen. De gedeelde link heeft dezelfde knop.
+pagina openen, en collega's met wie het stuk gedeeld is (met `?van=`). De gedeelde link heeft dezelfde knop.
 
 ## Bestanden
 
@@ -210,6 +244,8 @@ pagina openen. De gedeelde link heeft dezelfde knop.
 | Het paneel naast de chat | `components/stuk/stuk-paneel.tsx` |
 | Zelf bewerken in het voorbeeld | `components/stuk/stuk-bewerker.tsx`, `lib/stukken/bewerken.ts` (met tests) |
 | De deellink en de afdrukpagina | `app/share/stuk/[id]/page.tsx`, `app/stuk/[id]/page.tsx` |
+| Mijn documenten | `app/dashboard/assistent/documenten/page.tsx`, `components/mijn-documenten.tsx`, `app/api/assistent/documenten/route.ts` |
+| Delen met collega's | `lib/stukken/collegas.ts` (met tests), `components/stuk/delen-met-collegas.tsx`, `app/api/assistent/stukken/[id]/collegas/route.ts`, `app/api/assistent/collegas/route.ts`, `lib/gebruikers-register.ts` |
 
 ## Nog niet
 
