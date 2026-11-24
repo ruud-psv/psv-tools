@@ -74,6 +74,7 @@ export interface FlexAreaStatus {
   locked: number | null;
   sold: number;
   reserved: number;
+  /** Vrij, inclusief wat nog niet vrijgegeven is (open telt het hele vak). */
   free: number;
 }
 
@@ -144,10 +145,16 @@ export function summarizeMatch(event: EventSeatState): StadionMatch {
   const result = occupancyByArea(event, isStadiumStand);
   const flexRow = result.areas.find((area) => area.area === FLEX_AREA);
   const flexArea = flexAreaStatus(event, flexRow);
-  // Dicht hoort MM bij het uitvak en telt het niet mee; open telt het hele vak.
-  const areas = result.areas.map((area) =>
-    area.area === FLEX_AREA && flexArea.state === "dicht" ? { ...area, capacity: 0 } : area
-  );
+  // Dicht hoort MM bij het uitvak en telt het niet mee. Open telt het hele vak,
+  // ook als vrij: de tranche is een commerciële keuze, de plaatsen zijn er voor
+  // PSV-fans. Wat nog niet vrijgegeven is, staat apart in `flexArea.locked`.
+  const areas = result.areas.map((area): AreaOccupancy => {
+    if (area.area !== FLEX_AREA) return area;
+    if (flexArea.state === "dicht") return { ...area, capacity: 0 };
+    return { ...area, sellable: area.capacity, free: Math.max(area.capacity - area.sold - area.reserved, 0) };
+  });
+  const flexRowAfter = areas.find((area) => area.area === FLEX_AREA);
+  if (flexRowAfter && flexArea.state === "open") flexArea.free = flexRowAfter.free;
   return {
     eventId: event.eventId,
     name: event.name,

@@ -392,8 +392,8 @@ Zo rekent Ticketing ook (bevestigd november 2026), en zo telt `summarizeMatch()`
 - **Vak MM** telt helemaal mee (600) als het open is, en niet als het dicht is (alles
   vastgehouden voor het uitvak). Hoeveel er tegelijk te koop staat, is een commerciële keuze:
   Ticketing geeft MM in tranches vrij, zodat de goedkope plaatsen niet als eerste weggaan. De
-  tranche (capaciteit min `ga_locks`) bepaalt alleen wat nu vrij te koop is; de rest telt als
-  "niet te koop". `flexArea` zegt of MM open of dicht is; de pagina's tonen het label "Vak MM
+  tranche (capaciteit min `ga_locks`) is dus niet bepalend: open telt het hele vak mee als
+  capaciteit én als vrij (600 min de tickets). Wat nog niet vrijgegeven is, staat er apart bij. `flexArea` zegt of MM open of dicht is; de pagina's tonen het label "Vak MM
   open" bij de wedstrijd (overzicht en wedstrijdpagina) en een regel met de details.
 
 Voorbeeld PSV - Go Ahead Eagles (24-11-2026): 31.418 (alle vakken) − 416 (rolstoelvakken) =

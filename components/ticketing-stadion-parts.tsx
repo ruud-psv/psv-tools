@@ -100,17 +100,17 @@ export function FlexAreaStatusLine({ flex, wheelchair }: { flex: FlexAreaStatus 
       <span className="font-heading uppercase tracking-wide">Vak MM</span>
       {flex.state === "open" ? (
         <>
-          <span className="tag tag--gold">Open</span>
+          <span className="font-heading uppercase tracking-wide text-primary">Open</span>
           <span className="text-muted-foreground">
             Telt mee met {number.format(flex.capacity)} plaatsen · {number.format(flex.sold)} verkocht ·{" "}
-            {number.format(flex.free)} nu te koop
+            {number.format(flex.free)} vrij
+            {flex.locked ? `, waarvan ${number.format(flex.locked)} nog niet vrijgegeven` : ""}
             {flex.reserved ? ` · ${number.format(flex.reserved)} gereserveerd` : ""}
-            {flex.locked ? ` · ${number.format(flex.locked)} nog niet vrijgegeven` : ""}
           </span>
         </>
       ) : flex.state === "dicht" ? (
         <>
-          <span className="tag tag--black">Dicht</span>
+          <span className="font-heading uppercase tracking-wide">Dicht</span>
           <span className="text-muted-foreground">
             Hoort bij het uitvak ({number.format(flex.capacity)} plaatsen); telt niet mee in de capaciteit.
           </span>

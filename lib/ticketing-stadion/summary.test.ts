@@ -127,11 +127,12 @@ test("rolstoelvakken tellen niet mee; vak MM alleen voor het deel dat open is", 
     ga: { mm: { ga_locks: { Backoffice: 400 } } },
   };
   const open = summarizeMatch(event);
-  assert.deepEqual(open.flexArea, { state: "open", capacity: 600, open: 200, locked: 400, sold: 1, reserved: 0, free: 199 });
+  // Vrij is het hele vak min de tickets: ook de 400 die nog niet vrijgegeven zijn.
+  assert.deepEqual(open.flexArea, { state: "open", capacity: 600, open: 200, locked: 400, sold: 1, reserved: 0, free: 599 });
   // A (2) + heel MM (600), want MM is open; de tranche van 200 bepaalt alleen wat vrij is. RSA niet.
   assert.equal(open.total.capacity, 602);
   assert.equal(open.total.sold, 2);
-  assert.equal(open.total.free, 1 + 199);
+  assert.equal(open.total.free, 1 + 599);
   assert.equal(open.wheelchairTotal?.capacity, 1);
   assert.equal(open.wheelchairTotal?.sold, 1);
   assert.equal(open.areas.find((area) => area.area === "MM")?.capacity, 600);

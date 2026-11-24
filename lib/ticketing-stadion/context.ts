@@ -70,7 +70,7 @@ export function matchContext(
   if (flex) {
     lines.push(
       flex.state === "open"
-        ? `Vak MM (normaal deel van het uitvak): OPEN, telt mee met ${flex.capacity} plaatsen; ${flex.sold} verkocht, ${flex.free} nu te koop${flex.locked ? `, ${flex.locked} nog niet vrijgegeven (Ticketing geeft MM in tranches vrij)` : ""}.`
+        ? `Vak MM (normaal deel van het uitvak): OPEN, telt mee met ${flex.capacity} plaatsen; ${flex.sold} verkocht, ${flex.free} vrij${flex.locked ? `, waarvan ${flex.locked} nog niet vrijgegeven (Ticketing geeft MM in tranches vrij)` : ""}.`
         : flex.state === "dicht"
           ? `Vak MM: DICHT, hoort bij het uitvak (${flex.capacity} plaatsen) en telt niet mee in de capaciteit.`
           : "Vak MM staat niet in de stoelenkaart van deze wedstrijd."
