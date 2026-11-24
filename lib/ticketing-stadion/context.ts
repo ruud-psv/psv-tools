@@ -62,7 +62,20 @@ export function matchContext(
   const lines: string[] = [];
 
   lines.push(`WEDSTRIJD: ${match.name ?? "onbekend"}, ${match.eventDate ?? "datum onbekend"} (${match.daysOut} dagen tot de aftrap)`);
-  lines.push(`Totaal (vakken op de plattegrond): ${occupancyLine(match.total)}`);
+  lines.push(`Totaal (vakken op de plattegrond, zonder rolstoelvakken, vak MM alleen voor het open deel): ${occupancyLine(match.total)}`);
+  if (match.wheelchairTotal?.capacity) {
+    lines.push(`Rolstoelvakken (niet in het totaal): ${occupancyLine(match.wheelchairTotal)}`);
+  }
+  const flex = match.flexArea;
+  if (flex) {
+    lines.push(
+      flex.state === "open"
+        ? `Vak MM (normaal deel van het uitvak): OPEN voor ${flex.open} van de ${flex.capacity} plaatsen, ${flex.sold} verkocht, ${flex.free} vrij${flex.locked ? `, ${flex.locked} vastgehouden voor het uitvak` : ""}.`
+        : flex.state === "dicht"
+          ? `Vak MM: DICHT, hoort bij het uitvak (${flex.capacity} plaatsen) en telt niet mee in de capaciteit.`
+          : "Vak MM staat niet in de stoelenkaart van deze wedstrijd."
+    );
+  }
   if (match.otherTotal.sold + match.otherTotal.reserved > 0) {
     lines.push(`Niet meegeteld (parkeren en vakken buiten de plattegrond): ${nl.format(match.otherTotal.sold)} verkocht, ${nl.format(match.otherTotal.reserved)} gereserveerd`);
   }
@@ -155,6 +168,9 @@ export function overviewContext(overview: StadionOverview): string {
     lines.push("");
     lines.push(`${m.name ?? "onbekend"}, ${m.eventDate ?? "datum onbekend"} (${m.daysOut} dagen tot de aftrap)`);
     lines.push(`  ${occupancyLine(m.total)}`);
+    if (m.flexArea && m.flexArea.state !== "onbekend") {
+      lines.push(`  Vak MM: ${m.flexArea.state === "open" ? `open voor ${m.flexArea.open} (${m.flexArea.sold} verkocht)` : "dicht (bij het uitvak)"}`);
+    }
     if (m.pace) lines.push(`  Verkocht vandaag ${m.pace.today}, laatste 7 dagen ${m.pace.last7Days}`);
     const { sameOpponent, previousSeason } = m.comparison;
     if (sameOpponent) {

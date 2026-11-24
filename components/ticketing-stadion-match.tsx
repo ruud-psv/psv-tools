@@ -24,6 +24,7 @@ import { StadionRecette } from "@/components/stadion-recette";
 import {
   daysLabel,
   Delta,
+  FlexAreaStatusLine,
   formatDateTime,
   formatEventDate,
   number,
@@ -35,7 +36,7 @@ import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
 import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
 import type { Recette } from "@/lib/ticketing-stadion/recette";
-import type { ComparableMatch, Comparison, SalesPace } from "@/lib/ticketing-stadion/summary";
+import type { ComparableMatch, Comparison, FlexAreaStatus, SalesPace } from "@/lib/ticketing-stadion/summary";
 import type { SupplyPoint } from "@/lib/ticketing-stadion/supply-history";
 
 interface MatchResponse {
@@ -47,6 +48,8 @@ interface MatchResponse {
     total: Occupancy;
     areas: AreaOccupancy[];
     otherTotal: Occupancy;
+    wheelchairTotal?: Occupancy;
+    flexArea?: FlexAreaStatus;
   };
   seatMaps: SeatMaps;
   freeGroups: { total: FreeGroups; byArea: Record<string, FreeGroups> };
@@ -452,6 +455,7 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
             </div>
             <OccupancyBar row={total} />
           </div>
+          <FlexAreaStatusLine flex={match.flexArea} wheelchair={match.wheelchairTotal} />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <Stat label="Vrij" value={number.format(total.free)} hint="nog te koop" />
             <Stat label="Gereserveerd" value={number.format(total.reserved)} hint="nog niet afgenomen" />

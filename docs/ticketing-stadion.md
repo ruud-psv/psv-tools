@@ -378,3 +378,22 @@ Target en afnamepercentage staan in `ticketing-stadion/recette.json` in Vercel B
 (`lib/ticketing-stadion/recette-store.ts`) en zijn op de pagina aan te passen via
 `PUT /api/ticketing-stadion/recette`. Standaard: €246.852,94 per thuiswedstrijd (een afwijkend
 target per wedstrijd kan) en 84% afname, tot het historische percentage bekend is.
+
+## Capaciteit: rolstoelvakken en vak MM
+
+Zo rekent Ticketing ook (bevestigd november 2026), en zo telt `summarizeMatch()` in
+`lib/ticketing-stadion/summary.ts` het totaal:
+
+- **Rolstoelvakken** (RSA t/m RSK, `isWheelchairArea()`) tellen niet mee in capaciteit, verkocht
+  en bezetting. Ze staan wel per vak op de plattegrond en in de tabel, en samen in
+  `wheelchairTotal`.
+- **Het uitvak** staat niet in de vakken van de plattegrond (in Ringside heet het niet
+  `BEZOEKERS`) en telt dus niet mee.
+- **Vak MM** telt alleen mee voor het deel dat open is voor PSV-fans: capaciteit min `ga_locks`.
+  Dicht (alles vastgehouden voor het uitvak) is 0. `flexArea` zegt of MM open of dicht is en voor
+  hoeveel; de pagina's tonen dat als "Vak MM: open voor 200" of "Vak MM: dicht", en in het
+  overzicht als label "MM open · 200" bij de wedstrijd.
+
+Voorbeeld PSV - Go Ahead Eagles (24-11-2026): 31.418 (alle vakken) − 416 (rolstoelvakken) − 600
+(MM) + 200 (MM open) = 30.602. Ticketing rekent zonder MM met 30.399; met MM open voor 200 is dat
+30.599. De laatste 3 plaatsen verschil zijn nog niet verklaard.

@@ -62,6 +62,8 @@ export async function loadStadionOverview() {
         total: match.total,
         otherTotal: match.otherTotal,
         areas: match.areas,
+        wheelchairTotal: match.wheelchairTotal,
+        flexArea: match.flexArea,
         pace: own ? salesPace(own.perOffset, daysOut) : null,
         comparison: compareMatch(match, daysOut, sales),
       };

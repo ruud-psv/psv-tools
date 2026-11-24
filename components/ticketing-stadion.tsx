@@ -28,8 +28,10 @@ import {
   percent,
   share,
   Stat,
+  FlexAreaStatusLine,
+  FlexAreaTag,
 } from "@/components/ticketing-stadion-parts";
-import type { Comparison, SalesPace } from "@/lib/ticketing-stadion/summary";
+import type { Comparison, FlexAreaStatus, SalesPace } from "@/lib/ticketing-stadion/summary";
 
 interface MatchRow {
   eventId: string;
@@ -39,6 +41,8 @@ interface MatchRow {
   total: Occupancy;
   otherTotal: Occupancy;
   areas: AreaOccupancy[];
+  wheelchairTotal?: Occupancy;
+  flexArea?: FlexAreaStatus;
   pace: SalesPace | null;
   comparison: Comparison;
 }
@@ -118,6 +122,7 @@ function MatchDetail({ match }: { match: MatchRow }) {
         </p>
         <OccupancyBar row={total} />
       </div>
+      <FlexAreaStatusLine flex={match.flexArea} wheelchair={match.wheelchairTotal} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Stat label="Vrij" value={number.format(total.free)} hint="nog te koop" />
@@ -250,6 +255,7 @@ function MatchTable({ matches }: { matches: MatchRow[] }) {
                     <span className="flex items-center gap-2">
                       <span className="text-sm font-medium truncate">{match.name ?? "Onbekende wedstrijd"}</span>
                       {pct >= NEARLY_SOLD_OUT && <span className="tag shrink-0 text-[10px] px-1.5 py-0">{total.free === 0 ? "Uitverkocht" : "Bijna vol"}</span>}
+                      <FlexAreaTag flex={match.flexArea} />
                     </span>
                     <span className="block text-xs text-muted-foreground">{daysLabel(match.daysOut)}</span>
                   </span>

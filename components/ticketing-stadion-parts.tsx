@@ -2,6 +2,7 @@
 
 import { TrendingDown, TrendingUp } from "lucide-react";
 import type { Occupancy } from "@/lib/ticketing-herdgang/occupancy";
+import type { FlexAreaStatus } from "@/lib/ticketing-stadion/summary";
 
 /** Gedeeld door het overzicht en de wedstrijdpagina van Ticketing Stadion. */
 
@@ -71,6 +72,54 @@ export function Delta({ label, own, reference, detail }: { label: string; own: n
         </span>
         <p className="text-xs text-muted-foreground">{detail}</p>
       </div>
+    </div>
+  );
+}
+
+/** Korte aanduiding voor in een rij: alleen als vak MM open is. */
+export function FlexAreaTag({ flex }: { flex: FlexAreaStatus | undefined }) {
+  if (!flex || flex.state !== "open") return null;
+  return (
+    <span className="tag tag--gold shrink-0 text-[10px] px-1.5 py-0" title={`Vak MM open voor ${number.format(flex.open)} plaatsen`}>
+      MM open · {number.format(flex.open)}
+    </span>
+  );
+}
+
+/**
+ * Of vak MM open is voor PSV-fans, en voor hoeveel. Dat bepaalt mee wat de
+ * capaciteit en de bezetting zijn: alleen het open deel telt mee.
+ */
+export function FlexAreaStatusLine({ flex, wheelchair }: { flex: FlexAreaStatus | undefined; wheelchair?: Occupancy }) {
+  if (!flex) return null;
+  return (
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2 text-sm">
+      <span className="font-heading uppercase tracking-wide">Vak MM</span>
+      {flex.state === "open" ? (
+        <>
+          <span className="tag tag--gold">Open voor {number.format(flex.open)}</span>
+          <span className="text-muted-foreground">
+            {number.format(flex.sold)} verkocht · {number.format(flex.free)} vrij
+            {flex.reserved ? ` · ${number.format(flex.reserved)} gereserveerd` : ""}
+            {flex.locked ? ` · ${number.format(flex.locked)} van de ${number.format(flex.capacity)} bij het uitvak` : ""}
+          </span>
+        </>
+      ) : flex.state === "dicht" ? (
+        <>
+          <span className="tag tag--black">Dicht</span>
+          <span className="text-muted-foreground">
+            Hoort bij het uitvak ({number.format(flex.capacity)} plaatsen); telt niet mee in de capaciteit.
+          </span>
+        </>
+      ) : (
+        <span className="text-muted-foreground">Staat niet in de stoelenkaart van deze wedstrijd.</span>
+      )}
+      {wheelchair && wheelchair.capacity > 0 && (
+        <span className="basis-full text-xs text-muted-foreground">
+          Capaciteit en bezetting zonder rolstoelvakken ({number.format(wheelchair.capacity)} plaatsen,{" "}
+          {number.format(wheelchair.sold)} verkocht) en zonder het uitvak. Vak MM telt mee voor het deel dat open is.
+        </span>
+      )}
     </div>
   );
 }

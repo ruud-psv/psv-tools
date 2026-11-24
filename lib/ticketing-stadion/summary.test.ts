@@ -107,3 +107,43 @@ test("vergelijkbare wedstrijden: alleen eerdere thuiswedstrijden met verkoop, ni
     ["b", "a"]
   );
 });
+
+test("rolstoelvakken tellen niet mee; vak MM alleen voor het deel dat open is", () => {
+  const event: EventSeatState = {
+    eventId: "e",
+    name: "PSV - Go Ahead Eagles",
+    eventDate: "2026-11-28 18:45",
+    seats: {
+      a1: ["A", "1", "1", 1],
+      a2: ["A", "1", "2", 1],
+      rs: ["RSA", "1", "1", 1],
+      mm: ["MM", "", "", 2, 600],
+    },
+    tickets: {
+      t1: ["a1", "A", "1", "1", 0, "x"],
+      t2: ["rs", "RSA", "1", "1", 0, "y"],
+      t3: ["mm", "MM", "", "", 0, "z"],
+    },
+    ga: { mm: { ga_locks: { Backoffice: 400 } } },
+  };
+  const open = summarizeMatch(event);
+  assert.deepEqual(open.flexArea, { state: "open", capacity: 600, open: 200, locked: 400, sold: 1, reserved: 0, free: 199 });
+  // A (2) + MM open (200); RSA niet.
+  assert.equal(open.total.capacity, 202);
+  assert.equal(open.total.sold, 2);
+  assert.equal(open.wheelchairTotal?.capacity, 1);
+  assert.equal(open.wheelchairTotal?.sold, 1);
+  assert.equal(open.areas.find((area) => area.area === "MM")?.capacity, 200);
+  assert.ok(open.areas.some((area) => area.area === "RSA"), "rolstoelvak blijft per vak zichtbaar");
+
+  // Helemaal bij het uitvak: dicht, en MM telt niet mee.
+  event.ga = { mm: { ga_locks: { Backoffice: 600 } } };
+  const closed = summarizeMatch({ ...event, tickets: { t1: event.tickets.t1 } });
+  assert.equal(closed.flexArea?.state, "dicht");
+  assert.equal(closed.total.capacity, 2);
+
+  // Geen MM in de stoelenkaart.
+  const { mm, ...seats } = event.seats;
+  void mm;
+  assert.equal(summarizeMatch({ ...event, seats, tickets: {} }).flexArea?.state, "onbekend");
+});

@@ -40,14 +40,54 @@ export function isStadiumStand(area: string): boolean {
   return STANDS.has(normalizeArea(area));
 }
 
+/**
+ * Vak MM hoort normaal bij het uitvak. Verkoopt het uitvak weinig, dan wordt het
+ * gehalveerd en zet PSV (een deel van) MM open voor eigen fans, als vrije
+ * plaatsen. Welk deel open is, staat in Ringside als `ga_locks`: wat
+ * vastgehouden wordt, hoort bij het uitvak.
+ */
+export const FLEX_AREA = "MM";
+
+/**
+ * Rolstoelvakken (RSA t/m RSK) tellen niet mee in de totalen: Ticketing rekent
+ * de capaciteit zonder (bevestigd november 2026). Ze staan wel per vak in
+ * `areas`, en samen in `wheelchairTotal`.
+ */
+export function isWheelchairArea(area: string): boolean {
+  return normalizeArea(area).startsWith("RS");
+}
+
+/** Of vak MM open is voor PSV-fans, en voor hoeveel plaatsen. */
+export interface FlexAreaStatus {
+  /** `onbekend`: MM staat niet in de stoelenkaart van deze wedstrijd. */
+  state: "open" | "dicht" | "onbekend";
+  /** Alle plaatsen van het vak (600). */
+  capacity: number;
+  /** Open voor PSV-fans: capaciteit min wat het uitvak vasthoudt. */
+  open: number;
+  /** Vastgehouden voor het uitvak (`ga_locks`); `null` als Ringside daar niets over meldt. */
+  locked: number | null;
+  sold: number;
+  reserved: number;
+  free: number;
+}
+
 /** De bezetting van één wedstrijd zoals de overzichtspagina hem nodig heeft. */
 export interface StadionMatch {
   eventId: string;
   name: string | null;
   eventDate: string | null;
-  /** Alleen de vakken op de plattegrond. */
+  /**
+   * De vakken op de plattegrond, zonder rolstoelvakken, met vak MM alleen voor
+   * het deel dat open is. Zo rekent Ticketing ook.
+   */
   total: Occupancy;
+  /** Per vak; MM met als capaciteit alleen het open deel. */
   areas: AreaOccupancy[];
+  /** De rolstoelvakken samen: niet in `total`. Ontbreekt in oudere samenvattingen. */
+  wheelchairTotal?: Occupancy;
+  /** Vak MM open of dicht. Ontbreekt in oudere samenvattingen. */
+  flexArea?: FlexAreaStatus;
   /** Parkeren en andere vakken buiten de plattegrond: apart, niet in `total`. */
   otherTotal: Occupancy;
   /**
@@ -58,16 +98,61 @@ export interface StadionMatch {
   otherAreas?: AreaOccupancy[];
 }
 
+function sumOccupancy(rows: readonly Occupancy[]): Occupancy {
+  const total: Occupancy = { capacity: 0, sellable: 0, sold: 0, reserved: 0, resale: 0, free: 0 };
+  for (const row of rows) {
+    total.capacity += row.capacity;
+    total.sellable += row.sellable;
+    total.sold += row.sold;
+    total.reserved += row.reserved;
+    total.resale += row.resale;
+    total.free += row.free;
+  }
+  return total;
+}
+
+/** Hoeveel van vak MM open is, uit de rijen van de stoelenkaart en hun locks. */
+function flexAreaStatus(event: EventSeatState, row: AreaOccupancy | undefined): FlexAreaStatus {
+  let capacity = 0;
+  let open = 0;
+  let locked: number | null = null;
+  for (const [manifestId, seat] of Object.entries(event.seats)) {
+    if (normalizeArea(seat[0]) !== FLEX_AREA || seat[3] & SEAT_EXCLUDED) continue;
+    const inventory = event.ga?.[manifestId];
+    capacity += seatCapacity(seat);
+    open += sellableCapacity(seat, inventory);
+    const lock = gaLocked(inventory);
+    if (lock !== null) locked = (locked ?? 0) + lock;
+  }
+  return {
+    state: capacity === 0 ? "onbekend" : open > 0 ? "open" : "dicht",
+    capacity,
+    open,
+    locked,
+    sold: row?.sold ?? 0,
+    reserved: row?.reserved ?? 0,
+    free: row?.free ?? 0,
+  };
+}
+
 export function summarizeMatch(event: EventSeatState): StadionMatch {
-  const { total, areas, otherTotal, other } = occupancyByArea(event, isStadiumStand);
+  const result = occupancyByArea(event, isStadiumStand);
+  const flexRow = result.areas.find((area) => area.area === FLEX_AREA);
+  const flexArea = flexAreaStatus(event, flexRow);
+  // MM telt alleen mee voor wat open is; de rest hoort bij het uitvak.
+  const areas = result.areas.map((area) =>
+    area.area === FLEX_AREA ? { ...area, capacity: flexArea.open } : area
+  );
   return {
     eventId: event.eventId,
     name: event.name,
     eventDate: event.eventDate,
-    total,
+    total: sumOccupancy(areas.filter((area) => !isWheelchairArea(area.area))),
     areas,
-    otherTotal,
-    otherAreas: other,
+    wheelchairTotal: sumOccupancy(areas.filter((area) => isWheelchairArea(area.area))),
+    flexArea,
+    otherTotal: result.otherTotal,
+    otherAreas: result.other,
   };
 }
 
