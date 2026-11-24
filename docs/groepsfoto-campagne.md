@@ -1,6 +1,6 @@
 # Groepsfoto-campagne — bouwplan publieke versie
 
-> Status: **stap 2 klaar** (campagnes publiceren vanuit PSV Tools, zie §11). Bouwt voort op de interne Groepsfoto Creator
+> Status: **stap 2 en 3 klaar** (campagnes publiceren vanuit PSV Tools, §11; het script op Bunny, §12). Bouwt voort op de interne Groepsfoto Creator
 > (`docs/groepsfoto-plan.md`). Doel: fans maken op een Playable-campagnepagina
 > (club.psv.nl), achter de Mijn PSV-login, een kerstkaart met hun selfie tussen
 > de spelers.
@@ -220,7 +220,7 @@ door fans dekt (zie §10 van `docs/groepsfoto-plan.md`).
 | 0 | Open vragen uitzetten: Mijn PSV-token in Playable, legal/FG, en of er een link in de mail moet | antwoorden die §7 en §8 vastleggen |
 | 1 | Bunny inrichten: privé map voor campagnes, Edge Script aan de pull zone, eigen Replicate-sleutel met bestedingslimiet, Turnstile-site | infrastructuur; getest dat de privé map niet publiek is |
 | 2 ✅ | PSV Tools: tabblad Campagnes, `config.json` + basisfoto publiceren naar Bunny, aan/uit | campagne te publiceren vanuit beheer |
-| 3 | `packages/groepsfoto-edge`: `/maak`, `/status`, `/beeld`, met validatie, tickets, Turnstile en limieten (zonder accountlimiet) | end-to-end werkend vanaf een testpagina |
+| 3 ✅ | `packages/groepsfoto-edge`: `/maak`, `/status`, `/beeld`, met validatie, tickets, Turnstile en limieten (zonder accountlimiet) | end-to-end werkend vanaf een testpagina |
 | 4 | AI-label en metadata in `/beeld` | elk resultaat gemarkeerd, zichtbaar en machineleesbaar |
 | 5 | Widget via de Playable loader: selfie (§3), keuzes, voortgang, kaartrand, download | werkend op de demo-URL van de campagne |
 | 6 | Tellers zichtbaar in PSV Tools | verbruik per dag |
@@ -276,3 +276,38 @@ tabblad zegt dan wat er mist.
 (`npm test`), en het tabblad in de lokale dev-server met nagebootste API's.
 Publiceren naar een echte Bunny-zone is nog niet getest; dat kan zodra de zone
 en de variabelen er zijn.
+
+## 12. Wat er na stap 3 staat
+
+Het script staat in `packages/groepsfoto-edge/`; de README daar beschrijft de
+routes, het bouwen en het inrichten op Bunny.
+
+| Bestand | Wat |
+|---|---|
+| `src/main.ts` | ingang voor Bunny: leest de secrets, `BunnySDK.net.http.serve()` |
+| `src/handler.ts` | de routes `maak`, `status/<ticket>` en `beeld/<ticket>` onder `/groepsfoto/<campagne>/` |
+| `src/ticket.ts` | tickets: prediction-id + campagne + vervaltijd, versleuteld met AES-GCM |
+| `src/limieten.ts` | dagplafond (teller in de privé zone) en limiet per IP (in het geheugen) |
+| `src/opslag.ts` | de privé storage zone, via de gewone opslag-API (geen S3) |
+| `src/handler.test.ts` | 14 tests, draaien mee in `npm test` |
+
+**Afwijkingen van §4, na het bouwen:**
+
+- De campagne staat in het pad (`/groepsfoto/kerst-2026/maak`), zodat ook de
+  CORS-preflight weet welke pagina's mogen.
+- Het script is een **standalone** script met een eigen `*.b-cdn.net`-adres, los
+  van de pull zone van de Playable loader.
+- **Uitzetten** stopt nieuwe kaarten binnen 30 seconden (zo lang onthoudt het
+  script de config); wie al bezig is, krijgt zijn kaart nog.
+- **Het beeld** moet de widget met `fetch()` ophalen, niet als `<img src>`: zonder
+  `Origin`-header weigert het script. Wie het adres in de adresbalk plakt, krijgt
+  dus niets.
+- **Tellers**: alleen het dagplafond staat in de opslag (niet atomair, kan iets te
+  laag tellen). De limiet per IP werkt per instantie van het script; zet er een
+  rate limit-regel in Bunny Shield naast. De limiet per account volgt met de
+  tokencontrole (stap 7).
+- **Nog niet**: het AI-label en de metadata op het beeld (stap 4).
+
+**Niet getest tegen het echte Bunny**: de documentatie van Bunny was bij het
+bouwen niet bereikbaar. De code volgt de officiële SDK 0.13.0; wat bij de eerste
+deploy te controleren is (IP-header, limieten), staat in de README.

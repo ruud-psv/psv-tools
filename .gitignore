@@ -19,3 +19,6 @@ npm-debug.log*
 
 # App settings (contains API keys)
 config/settings.json
+
+# Bundel van het groepsfoto-script voor Bunny (npm run edge:build)
+packages/groepsfoto-edge/dist/
