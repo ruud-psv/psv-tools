@@ -40,3 +40,12 @@ test("alleen de meest specifieke link licht op", () => {
   assert.equal(activeHref(sections, "/dashboard/ticketing-stadion/instroom"), "/dashboard/ticketing-stadion/instroom");
   assert.equal(activeHref(sections, "/dashboard/ticketing-stadion/123"), "/dashboard/ticketing-stadion");
 });
+
+test("mijn documenten staat onder Assistent, met het recht van de assistent", () => {
+  const sections = sectionsFor(["/dashboard/assistent"]);
+  const hrefs = sections[0].groups.flatMap((g) => g.links.map((l) => l.href));
+  assert.deepEqual(hrefs, ["/dashboard/assistent", "/dashboard/assistent/documenten"]);
+  assert.equal(activeHref(sections, "/dashboard/assistent/documenten"), "/dashboard/assistent/documenten");
+  assert.equal(activeHref(sections, "/dashboard/assistent"), "/dashboard/assistent");
+  assert.equal(sectionsFor(["/dashboard/fanstore"]).some((s) => s.id === "assistent"), false);
+});

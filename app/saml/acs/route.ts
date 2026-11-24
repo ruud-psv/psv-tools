@@ -3,6 +3,7 @@ import { SAML } from "@node-saml/node-saml";
 import { getSamlOptions } from "@/lib/saml-config";
 import { createSessionToken } from "@/lib/auth";
 import { fullNameFromProfile } from "@/lib/saml-name";
+import { registreerLogin } from "@/lib/gebruikers-register";
 
 export async function POST(request: NextRequest) {
   let rawSamlResponse: string | null = null;
@@ -49,6 +50,9 @@ export async function POST(request: NextRequest) {
     console.error("[SAML callback] Validatie mislukt:", err);
     return NextResponse.redirect(new URL("/login?error=saml_validation_failed", request.url), { status: 302 });
   }
+
+  // Voor het delen van stukken: wie er in PSV Tools is, met naam.
+  await registreerLogin(email, fullName || undefined);
 
   const token = createSessionToken(email, fullName || undefined);
   const response = NextResponse.redirect(new URL("/dashboard", request.url), { status: 302 });
