@@ -32,14 +32,25 @@ npm run edge:build   # → packages/groepsfoto-edge/dist/groepsfoto.js
 ```
 
 Het resultaat is één bestand; alleen de SDK van Bunny wordt bij het starten
-van `esm.sh` geladen.
+van `esm.sh` geladen. **`dist/groepsfoto.js` staat in de repo**, zodat je hem
+zonder npm in Bunny kunt plakken. Een test in `npm test` faalt als de code is
+aangepast zonder dat het bestand opnieuw is gebouwd.
 
 ## Inrichten op Bunny
 
-1. **Storage zone** (privé, zonder pull zone, S3-compatibiliteit uit). Dezelfde
-   zone als `GROEPSFOTO_BUNNY_STORAGE_ZONE` in PSV Tools.
-2. **Edge Script**, type standalone. Plak de inhoud van `dist/groepsfoto.js` in
-   de editor en publiceer. Het script krijgt een eigen `*.b-cdn.net`-adres; dat
+1. **Storage zone** (privé, zonder pull zone, S3-compatibiliteit uit). Bunny
+   toont daarbij deze velden:
+
+   | Veld in Bunny | Waar het heen gaat |
+   |---|---|
+   | **Naam** | `GROEPSFOTO_BUNNY_STORAGE_ZONE` in Vercel en `STORAGE_ZONE` in het script |
+   | **Password** | `GROEPSFOTO_BUNNY_STORAGE_KEY` in Vercel en `STORAGE_KEY` in het script. Het script schrijft de dagteller, dus het read-only password is niet genoeg |
+   | **Read-only password** | niet nodig |
+   | **Storage zone ID** | niet nodig |
+   | **Hostname** (onder FTP & API Access) | alleen invullen als hij niet `storage.bunnycdn.com` is: `GROEPSFOTO_BUNNY_STORAGE_HOST` in Vercel en `STORAGE_HOST` in het script |
+
+2. **Edge Script**, type standalone. Open `dist/groepsfoto.js` op GitHub (knop
+   *Raw* of *Copy raw file*), plak de inhoud in de editor van Bunny en publiceer. Het script krijgt een eigen `*.b-cdn.net`-adres; dat
    adres komt in de widget op Playable.
 3. **Omgeving** van het script (zet de geheime waarden als *secret*):
 

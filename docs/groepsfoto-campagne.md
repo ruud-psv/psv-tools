@@ -265,8 +265,8 @@ campagnes/<slug>/basisfoto.<jpg|png|webp>
 
 | Variabele | Wat |
 |---|---|
-| `GROEPSFOTO_BUNNY_STORAGE_ZONE` | een **aparte** storage zone op Bunny, **zonder pull zone**. PSV Tools weigert te publiceren als dit dezelfde zone is als `BUNNY_STORAGE_ZONE` van de Playable loader, want die is openbaar via `psveindhoven.b-cdn.net` |
-| `GROEPSFOTO_BUNNY_STORAGE_KEY` | het wachtwoord (API-sleutel) van die storage zone |
+| `GROEPSFOTO_BUNNY_STORAGE_ZONE` | de **Naam** van een **aparte** storage zone op Bunny, **zonder pull zone**. PSV Tools weigert te publiceren als dit dezelfde zone is als `BUNNY_STORAGE_ZONE` van de Playable loader, want die is openbaar via `psveindhoven.b-cdn.net` |
+| `GROEPSFOTO_BUNNY_STORAGE_KEY` | het **Password** van die storage zone (niet het read-only password; het Storage zone ID is niet nodig) |
 | `GROEPSFOTO_BUNNY_STORAGE_HOST` | optioneel, alleen als de zone in een andere regio staat (bijv. `uk.storage.bunnycdn.com`); standaard `storage.bunnycdn.com` |
 
 Zolang die ontbreken, kun je campagnes wel aanmaken, maar niet publiceren; het
