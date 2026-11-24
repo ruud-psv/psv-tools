@@ -20,6 +20,7 @@ import { StadionChat } from "@/components/stadion-chat";
 import { StadionSupplyChart } from "@/components/stadion-supply-chart";
 import { StadionSupplyHistoryChart } from "@/components/stadion-supply-history-chart";
 import { StadionDailySalesChart, type DailySalesSeries } from "@/components/stadion-daily-sales-chart";
+import { StadionRecette } from "@/components/stadion-recette";
 import {
   daysLabel,
   Delta,
@@ -33,6 +34,7 @@ import {
 import type { FreeGroups } from "@/lib/aangrenzende-stoelen/neighbors";
 import type { SeatMaps } from "@/lib/aangrenzende-stoelen/seat-map";
 import type { AreaOccupancy, Occupancy } from "@/lib/ticketing-herdgang/occupancy";
+import type { Recette } from "@/lib/ticketing-stadion/recette";
 import type { ComparableMatch, Comparison, SalesPace } from "@/lib/ticketing-stadion/summary";
 import type { SupplyPoint } from "@/lib/ticketing-stadion/supply-history";
 
@@ -49,6 +51,7 @@ interface MatchResponse {
   seatMaps: SeatMaps;
   freeGroups: { total: FreeGroups; byArea: Record<string, FreeGroups> };
   sales: { perOffset: Record<string, number>; total: number; season: string } | null;
+  recette: Recette | null;
   supply: SupplyPoint[];
   pace: SalesPace | null;
   comparison: Comparison;
@@ -355,6 +358,8 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
   const [data, setData] = useState<MatchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  // Na het aanpassen van het target alleen de cijfers opnieuw ophalen.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -362,14 +367,15 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
       .then((result) => {
         if (cancelled) return;
         setData(result);
-        // Standaard alleen deze wedstrijd; vergelijken kies je zelf.
-        setCompareIds([]);
+        // Standaard alleen deze wedstrijd; vergelijken kies je zelf. Een herlaad
+        // na het opslaan van de recette laat de keuze staan.
+        if (reload === 0) setCompareIds([]);
       })
       .catch((caught) => !cancelled && setError(caught instanceof Error ? caught.message : String(caught)));
     return () => {
       cancelled = true;
     };
-  }, [dataUrl]);
+  }, [dataUrl, reload]);
 
   const back = shared ? null : (
     <Link
@@ -582,6 +588,27 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
           <SalesSection data={data} salesUrl={salesUrl} selected={compareIds} setSelected={setCompareIds} />
         </CardContent>
       </Card>
+
+      {/* Omzet tegenover het target is intern: niet op de deellink. */}
+      {!shared && (
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <div>
+              <h2 className="text-xl">Recette</h2>
+              <p className="text-sm text-muted-foreground max-w-3xl">
+                Hoe staan we ervoor ten opzichte van het target: wat de vrije verkoop naar verwachting oplevert (xOVV), en
+                wat er daarom uit de resale moet komen.
+              </p>
+            </div>
+            <StadionRecette
+              eventId={match.eventId}
+              recette={data.recette ?? null}
+              editable
+              onSaved={() => setReload((value) => value + 1)}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Stoelstatus van {formatDateTime(seats.caughtUpAt)}, verkoop per dag van {formatDateTime(salesStatus.updatedAt)}.

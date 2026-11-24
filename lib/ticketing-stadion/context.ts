@@ -11,6 +11,7 @@
 import { SEAT_CODE, type SeatMaps } from "../aangrenzende-stoelen/seat-map";
 import type { Occupancy } from "../ticketing-herdgang/occupancy";
 import type { StadionMatchData, StadionOverview } from "./load";
+import type { Recette } from "./recette";
 import { soldBy } from "./summary";
 
 /** Een rij vrije stoelen naast elkaar: opeenvolgende nummers, geen trap ertussen. */
@@ -106,6 +107,9 @@ export function matchContext(
     );
   }
 
+  lines.push("");
+  lines.push(...recetteLines(data.recette));
+
   const supply = (data.supply ?? []).filter((point) => point.free !== null && point.resale !== null);
   if (supply.length) {
     lines.push("");
@@ -166,3 +170,26 @@ export function overviewContext(overview: StadionOverview): string {
   lines.push(`Stand stoelstatus: ${overview.seats.caughtUpAt ?? "onbekend"}; verkoop per dag: ${overview.sales.updatedAt ?? "onbekend"}.`);
   return lines.join("\n");
 }
+
+const euro = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" });
+
+function money(cents: number | null): string {
+  return cents === null ? "onbekend" : euro.format(cents / 100);
+}
+
+function share(value: number | null): string {
+  return value === null ? "onbekend" : `${Math.round(value * 100)}%`;
+}
+
+/** De recette in een paar regels, voor de chat. */
+export function recetteLines(recette: Recette | null): string[] {
+  if (!recette) return ["RECETTE: nog niet bekend (de verkoop per dag wordt opnieuw ingelezen met bedragen)."];
+  const { free, resale } = recette;
+  return [
+    "RECETTE (bedragen incl. btw; vrije verkoop en resale, zonder seizoenkaarten en vrijkaarten)",
+    `Recette ${money(recette.recetteCents)}, target ${money(recette.targetCents)}${recette.customTarget ? " (aangepast voor deze wedstrijd)" : ""}, status (target − recette) ${money(recette.statusCents)}.`,
+    `Vrije verkoop: ${nl.format(free.sold)} verkocht van ${nl.format(free.offered)} aangeboden (${share(free.soldShare)}), opbrengst ${money(free.revenueCents)}, gem. prijs ${money(free.averageCents)}; nog ${nl.format(free.available)} vrij. Potentie ${money(free.potentialCents)}, xOVV (${share(recette.uptake)} afname) ${money(free.expectedCents)}, voortgang t.o.v. xOVV ${share(free.progressShare)}.`,
+    `Resale: ${nl.format(resale.sold)} verkocht, opbrengst ${money(resale.revenueCents)}, gem. prijs ${money(resale.averageCents)}; nu ${nl.format(resale.offered)} aangeboden (waarde ${money(resale.offeredValueCents)}, gem. ${money(resale.offeredAverageCents)}); ${share(resale.soldShare)} van verkocht + aangeboden is verkocht. Minimum resale-target ${money(resale.minimumTargetCents)}, verwacht resale-target ${money(resale.expectedTargetCents)}, tekort ${money(resale.shortfallCents)}.`,
+  ];
+}
+

@@ -5,7 +5,7 @@ import { readShareToken } from "@/lib/ticketing-stadion/share";
 /**
  * De wedstrijdpagina van Ticketing Stadion via een deellink: zonder login,
  * met een ondertekend token (`lib/ticketing-stadion/share.ts`). Dezelfde
- * cijfers als de pagina zelf; geen persoonsgegevens.
+ * cijfers als de pagina zelf, behalve de recette; geen persoonsgegevens.
  */
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
         { status: 404 }
       );
     }
-    return NextResponse.json(data, { headers: { "Cache-Control": "no-store, max-age=0" } });
+    // De recette (omzet tegenover het target) is intern: niet via een link zonder login.
+    return NextResponse.json({ ...data, recette: null }, { headers: { "Cache-Control": "no-store, max-age=0" } });
   } catch (error) {
     console.error("[share/stadion] mislukt:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "De wedstrijd kon niet worden geladen." }, { status: 500 });

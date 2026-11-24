@@ -350,3 +350,27 @@ extra ronde door `/v1/manifests` ze in (`applyManifestGa()`, fase `vrijePlaatsen
 Nog te doen zodra die velden zichtbaar zijn: het aanbod van zo'n rij uit de inventaris
 halen in plaats van uit `is_counted_as_available`, zodat capaciteit, verkocht en vrij
 gelijk lopen met de ticketshop.
+
+## Recette
+
+Blok onderaan de wedstrijdpagina, onder "Verkoop per dag" (`components/stadion-recette.tsx`).
+Niet op de deellink: die werkt zonder login, en omzet tegenover het target is intern. Rekenwerk
+in `computeRecette()` (`lib/ticketing-stadion/recette.ts`, getest in `recette.test.ts`). Alle
+bedragen inclusief btw.
+
+- **Recette** = opbrengst vrije verkoop + opbrengst resale (uit de verkoop per dag, met de prijs
+  per ticket; zie [ticketing-verloop.md](ticketing-verloop.md)). **Status** = target − recette.
+- **Aangeboden vrije verkoop** = verkocht in de vrije verkoop + nu nog vrij (stoelstatus), zonder
+  het uitvak.
+- **Potentie** = opbrengst tot nu toe + elke vrije plaats tegen de prijs van zijn vak. Een vak
+  zonder bekende prijs telt tegen de gemiddelde prijs; de pagina meldt hoeveel plaatsen dat zijn.
+- **xOVV** = afnamepercentage × potentie. **Minimum resale-target** = target − potentie;
+  **verwacht resale-target** = target − xOVV; **tekort** = verwacht resale-target − opbrengst resale.
+- **Resale-aanbod**: de kaarten die nu in de resale staan, tegen de prijs van hun vak in de vrije
+  verkoop (de resaleprijs is daar altijd gelijk aan). **% resale verkocht** = verkocht ÷
+  (verkocht + nu aangeboden).
+
+Target en afnamepercentage staan in `ticketing-stadion/recette.json` in Vercel Blob
+(`lib/ticketing-stadion/recette-store.ts`) en zijn op de pagina aan te passen via
+`PUT /api/ticketing-stadion/recette`. Standaard: €246.852,94 per thuiswedstrijd (een afwijkend
+target per wedstrijd kan) en 84% afname, tot het historische percentage bekend is.

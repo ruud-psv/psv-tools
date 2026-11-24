@@ -18,6 +18,8 @@ import {
   readSeatState,
 } from "../ringside/seat-store";
 import { readMatchSales, readState as readSalesState, type EventSales } from "../ringside/store";
+import { computeRecette } from "./recette";
+import { readRecetteSettings, settingsFor } from "./recette-store";
 import { buildStadionSummaryFromIndex, readStadionSummary, readSupplyHistory } from "./store";
 import { emptySupplyHistory, supplySeries, type SupplyDays } from "./supply-history";
 import {
@@ -90,13 +92,14 @@ export type StadionOverview = Awaited<ReturnType<typeof loadStadionOverview>>;
 
 /** Eén wedstrijd, of `null` als er geen stoelstatus van is (gespeeld, of onbekend). */
 export async function loadStadionMatch(eventId: string) {
-  const [event, seatState, salesState, sales, supplyHistory] = await Promise.all([
+  const [event, seatState, salesState, sales, supplyHistory, recetteSettings] = await Promise.all([
     readEventSeats(eventId),
     readSeatState(),
     readSalesState(),
     readMatchSales(),
     // Een kapot bestand mag de pagina niet breken; dan alleen de stand van nu.
     readSupplyHistory().catch(() => emptySupplyHistory()),
+    readRecetteSettings(),
   ]);
   if (!event) return null;
 
@@ -126,6 +129,8 @@ export async function loadStadionMatch(eventId: string) {
     /** Vakken met vrije plaatsen en hun inventaris in Ringside; zie `gaRows()`. */
     gaRows: gaRows(event),
     sales: own ? { perOffset: own.perOffset, total: own.total, season: own.season } : null,
+    /** `null` zolang de verkoop per dag nog geen bedragen heeft. */
+    recette: computeRecette(own, match.areas, settingsFor(recetteSettings, eventId)),
     supply: supplySeries(supplyDays, match.eventDate),
     pace: own ? salesPace(own.perOffset, daysOut) : null,
     comparison: compareMatch(match, daysOut, sales),
