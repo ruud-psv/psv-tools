@@ -389,11 +389,23 @@ Zo rekent Ticketing ook (bevestigd november 2026), en zo telt `summarizeMatch()`
   `wheelchairTotal`.
 - **Het uitvak** staat niet in de vakken van de plattegrond (in Ringside heet het niet
   `BEZOEKERS`) en telt dus niet mee.
-- **Vak MM** telt alleen mee voor het deel dat open is voor PSV-fans: capaciteit min `ga_locks`.
-  Dicht (alles vastgehouden voor het uitvak) is 0. `flexArea` zegt of MM open of dicht is en voor
-  hoeveel; de pagina's tonen dat als "Vak MM: open voor 200" of "Vak MM: dicht", en in het
-  overzicht als label "MM open · 200" bij de wedstrijd.
+- **Vak MM** telt helemaal mee (600) als het open is, en niet als het dicht is (alles
+  vastgehouden voor het uitvak). Hoeveel er tegelijk te koop staat, is een commerciële keuze:
+  Ticketing geeft MM in tranches vrij, zodat de goedkope plaatsen niet als eerste weggaan. De
+  tranche (capaciteit min `ga_locks`) bepaalt alleen wat nu vrij te koop is; de rest telt als
+  "niet te koop". `flexArea` zegt of MM open of dicht is; de pagina's tonen het label "Vak MM
+  open" bij de wedstrijd (overzicht en wedstrijdpagina) en een regel met de details.
 
-Voorbeeld PSV - Go Ahead Eagles (24-11-2026): 31.418 (alle vakken) − 416 (rolstoelvakken) − 600
-(MM) + 200 (MM open) = 30.602. Ticketing rekent zonder MM met 30.399; met MM open voor 200 is dat
-30.599. De laatste 3 plaatsen verschil zijn nog niet verklaard.
+Voorbeeld PSV - Go Ahead Eagles (24-11-2026): 31.418 (alle vakken) − 416 (rolstoelvakken) =
+31.002, met MM open. Ticketing rekent zonder MM met 30.399; met MM (600) is dat 30.999. De laatste
+3 plaatsen verschil zijn nog niet verklaard.
+
+**Resale is geen bezetting.** Een plaats telt één keer als verkocht, hoe vaak het ticket ook van
+eigenaar wisselt: na een doorverkoop vervalt de kaart van de verkoper (`Resold - Refunded`) en telt
+alleen die van de koper. Een kaart die nu in de resale staat, is nog van de houder en telt als
+verkocht. Hoe de resale het doet, is een eigen cijfer: **% van het aanbod verkocht** =
+doorverkocht ÷ (doorverkocht + nu aangeboden) (`resaleSummary()`), bij "In de resale" op de
+wedstrijdpagina. Kaarten die aangeboden en weer teruggetrokken zijn, ziet Ringside niet als aanbod.
+
+De samenvatting die het overzicht leest, heeft een versie (`SUMMARY_VERSION` in `store.ts`). Een
+oudere versie wordt opnieuw berekend, zodat een nieuwe indeling (zoals vak MM) meteen zichtbaar is.

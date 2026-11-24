@@ -25,10 +25,12 @@ import {
   daysLabel,
   Delta,
   FlexAreaStatusLine,
+  FlexAreaTag,
   formatDateTime,
   formatEventDate,
   number,
   OccupancyBar,
+  percent,
   share,
   Stat,
 } from "@/components/ticketing-stadion-parts";
@@ -54,6 +56,7 @@ interface MatchResponse {
   seatMaps: SeatMaps;
   freeGroups: { total: FreeGroups; byArea: Record<string, FreeGroups> };
   sales: { perOffset: Record<string, number>; total: number; season: string } | null;
+  resale?: { sold: number | null; offered: number; soldShare: number | null };
   recette: Recette | null;
   supply: SupplyPoint[];
   pace: SalesPace | null;
@@ -430,6 +433,7 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-3xl">{match.name ?? "Onbekende wedstrijd"}</h1>
               <span className={`tag ${match.daysOut <= 7 ? "" : "tag--outlined"}`}>{daysLabel(match.daysOut)}</span>
+              <FlexAreaTag flex={match.flexArea} />
             </div>
             <p className="text-muted-foreground">{formatEventDate(match.eventDate)}</p>
           </div>
@@ -459,7 +463,15 @@ export function TicketingStadionMatch(props: { eventId: string } | { shareToken:
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <Stat label="Vrij" value={number.format(total.free)} hint="nog te koop" />
             <Stat label="Gereserveerd" value={number.format(total.reserved)} hint="nog niet afgenomen" />
-            <Stat label="In de resale" value={number.format(total.resale)} hint="aangeboden door de houder" />
+            <Stat
+              label="In de resale"
+              value={number.format(total.resale)}
+              hint={
+                data.resale?.soldShare != null
+                  ? `nu aangeboden · ${percent.format(data.resale.soldShare)} van het aanbod verkocht (${number.format(data.resale.sold ?? 0)})`
+                  : "nu aangeboden door de houder"
+              }
+            />
             <Stat
               label="Laatste 7 dagen"
               value={pace ? number.format(pace.last7Days) : "–"}

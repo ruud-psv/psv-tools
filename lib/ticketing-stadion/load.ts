@@ -18,6 +18,7 @@ import {
   readSeatState,
 } from "../ringside/seat-store";
 import { readMatchSales, readState as readSalesState, type EventSales } from "../ringside/store";
+import { totalOf } from "../ringside/sales-series";
 import { computeRecette } from "./recette";
 import { readRecetteSettings, settingsFor } from "./recette-store";
 import { buildStadionSummaryFromIndex, readStadionSummary, readSupplyHistory } from "./store";
@@ -28,6 +29,7 @@ import {
   daysUntil,
   freeSeatsFromMaps,
   gaRows,
+  resaleSummary,
   isHomeMatchSales,
   isStadiumStand,
   salesPace,
@@ -131,6 +133,12 @@ export async function loadStadionMatch(eventId: string) {
     /** Vakken met vrije plaatsen en hun inventaris in Ringside; zie `gaRows()`. */
     gaRows: gaRows(event),
     sales: own ? { perOffset: own.perOffset, total: own.total, season: own.season } : null,
+    /**
+     * Resale als eigen cijfer, los van de bezetting: doorverkocht (uit de
+     * verkoop per dag) en nu aangeboden (stoelstatus). Een doorverkoop wisselt
+     * alleen van eigenaar en maakt het stadion niet voller.
+     */
+    resale: resaleSummary(own ? totalOf(own.series.resale) : null, match.total.resale),
     /** `null` zolang de verkoop per dag nog geen bedragen heeft. */
     recette: computeRecette(own, match.areas, settingsFor(recetteSettings, eventId)),
     supply: supplySeries(supplyDays, match.eventDate),

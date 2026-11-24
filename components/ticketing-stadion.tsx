@@ -255,7 +255,7 @@ function MatchTable({ matches }: { matches: MatchRow[] }) {
                     <span className="flex items-center gap-2">
                       <span className="text-sm font-medium truncate">{match.name ?? "Onbekende wedstrijd"}</span>
                       {pct >= NEARLY_SOLD_OUT && <span className="tag shrink-0 text-[10px] px-1.5 py-0">{total.free === 0 ? "Uitverkocht" : "Bijna vol"}</span>}
-                      <FlexAreaTag flex={match.flexArea} />
+                      <FlexAreaTag flex={match.flexArea} small />
                     </span>
                     <span className="block text-xs text-muted-foreground">{daysLabel(match.daysOut)}</span>
                   </span>

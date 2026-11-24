@@ -76,12 +76,15 @@ export function Delta({ label, own, reference, detail }: { label: string; own: n
   );
 }
 
-/** Korte aanduiding voor in een rij: alleen als vak MM open is. */
-export function FlexAreaTag({ flex }: { flex: FlexAreaStatus | undefined }) {
+/** Label "Vak MM open": alleen als vak MM open is. `small` voor in een rij. */
+export function FlexAreaTag({ flex, small = false }: { flex: FlexAreaStatus | undefined; small?: boolean }) {
   if (!flex || flex.state !== "open") return null;
   return (
-    <span className="tag tag--gold shrink-0 text-[10px] px-1.5 py-0" title={`Vak MM open voor ${number.format(flex.open)} plaatsen`}>
-      MM open · {number.format(flex.open)}
+    <span
+      className={`tag tag--gold shrink-0 ${small ? "text-[10px] px-1.5 py-0" : ""}`}
+      title={`Vak MM is open voor PSV-fans: ${number.format(flex.capacity)} plaatsen, ${number.format(flex.open)} vrijgegeven`}
+    >
+      Vak MM open
     </span>
   );
 }
@@ -97,11 +100,12 @@ export function FlexAreaStatusLine({ flex, wheelchair }: { flex: FlexAreaStatus 
       <span className="font-heading uppercase tracking-wide">Vak MM</span>
       {flex.state === "open" ? (
         <>
-          <span className="tag tag--gold">Open voor {number.format(flex.open)}</span>
+          <span className="tag tag--gold">Open</span>
           <span className="text-muted-foreground">
-            {number.format(flex.sold)} verkocht · {number.format(flex.free)} vrij
+            Telt mee met {number.format(flex.capacity)} plaatsen · {number.format(flex.sold)} verkocht ·{" "}
+            {number.format(flex.free)} nu te koop
             {flex.reserved ? ` · ${number.format(flex.reserved)} gereserveerd` : ""}
-            {flex.locked ? ` · ${number.format(flex.locked)} van de ${number.format(flex.capacity)} bij het uitvak` : ""}
+            {flex.locked ? ` · ${number.format(flex.locked)} nog niet vrijgegeven` : ""}
           </span>
         </>
       ) : flex.state === "dicht" ? (
@@ -117,7 +121,7 @@ export function FlexAreaStatusLine({ flex, wheelchair }: { flex: FlexAreaStatus 
       {wheelchair && wheelchair.capacity > 0 && (
         <span className="basis-full text-xs text-muted-foreground">
           Capaciteit en bezetting zonder rolstoelvakken ({number.format(wheelchair.capacity)} plaatsen,{" "}
-          {number.format(wheelchair.sold)} verkocht) en zonder het uitvak. Vak MM telt mee voor het deel dat open is.
+          {number.format(wheelchair.sold)} verkocht) en zonder het uitvak. Vak MM telt open helemaal mee, dicht niet.
         </span>
       )}
     </div>

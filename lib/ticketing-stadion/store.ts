@@ -18,7 +18,17 @@ import { isPsvHomeMatch, summarizeMatch, type StadionMatch } from "./summary";
 const SUMMARY_PATH = "ticketing-stadion/summary.json";
 const SUPPLY_PATH = "ticketing-stadion/aanbod.json";
 
+/**
+ * Gaat omhoog als de inhoud van `StadionMatch` verandert. Een samenvatting met
+ * een andere versie wordt niet gebruikt maar opnieuw berekend; anders tonen de
+ * pagina's tot de volgende wijziging aan een wedstrijd de oude indeling (zoals
+ * een overzicht zonder vak MM).
+ */
+export const SUMMARY_VERSION = 2;
+
 export interface StadionSummary {
+  /** Ontbreekt in samenvattingen van vóór versie 2. */
+  version?: number;
   generatedAt: string;
   matches: Record<string, StadionMatch>;
 }
@@ -27,7 +37,9 @@ export async function readStadionSummary(): Promise<StadionSummary | null> {
   const bytes = await readPrivateBlob(SUMMARY_PATH);
   if (!bytes) return null;
   try {
-    return JSON.parse(bytes.toString("utf8")) as StadionSummary;
+    const summary = JSON.parse(bytes.toString("utf8")) as StadionSummary;
+    // Verouderd: de aanroeper rekent hem opnieuw uit.
+    return summary.version === SUMMARY_VERSION ? summary : null;
   } catch {
     console.error(`[ticketing-stadion] ${SUMMARY_PATH} niet te lezen.`);
     return null;
@@ -49,7 +61,7 @@ export function buildStadionSummary(events: EventStates): StadionSummary {
   for (const event of events.values()) {
     if (isPsvHomeMatch(event.name)) matches[event.eventId] = summarizeMatch(event);
   }
-  return { generatedAt: new Date().toISOString(), matches };
+  return { version: SUMMARY_VERSION, generatedAt: new Date().toISOString(), matches };
 }
 
 /**

@@ -70,7 +70,7 @@ export function matchContext(
   if (flex) {
     lines.push(
       flex.state === "open"
-        ? `Vak MM (normaal deel van het uitvak): OPEN voor ${flex.open} van de ${flex.capacity} plaatsen, ${flex.sold} verkocht, ${flex.free} vrij${flex.locked ? `, ${flex.locked} vastgehouden voor het uitvak` : ""}.`
+        ? `Vak MM (normaal deel van het uitvak): OPEN, telt mee met ${flex.capacity} plaatsen; ${flex.sold} verkocht, ${flex.free} nu te koop${flex.locked ? `, ${flex.locked} nog niet vrijgegeven (Ticketing geeft MM in tranches vrij)` : ""}.`
         : flex.state === "dicht"
           ? `Vak MM: DICHT, hoort bij het uitvak (${flex.capacity} plaatsen) en telt niet mee in de capaciteit.`
           : "Vak MM staat niet in de stoelenkaart van deze wedstrijd."
@@ -169,7 +169,7 @@ export function overviewContext(overview: StadionOverview): string {
     lines.push(`${m.name ?? "onbekend"}, ${m.eventDate ?? "datum onbekend"} (${m.daysOut} dagen tot de aftrap)`);
     lines.push(`  ${occupancyLine(m.total)}`);
     if (m.flexArea && m.flexArea.state !== "onbekend") {
-      lines.push(`  Vak MM: ${m.flexArea.state === "open" ? `open voor ${m.flexArea.open} (${m.flexArea.sold} verkocht)` : "dicht (bij het uitvak)"}`);
+      lines.push(`  Vak MM: ${m.flexArea.state === "open" ? `open, ${m.flexArea.capacity} plaatsen (${m.flexArea.sold} verkocht)` : "dicht (bij het uitvak)"}`);
     }
     if (m.pace) lines.push(`  Verkocht vandaag ${m.pace.today}, laatste 7 dagen ${m.pace.last7Days}`);
     const { sameOpponent, previousSeason } = m.comparison;

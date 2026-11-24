@@ -42,9 +42,14 @@ export function isStadiumStand(area: string): boolean {
 
 /**
  * Vak MM hoort normaal bij het uitvak. Verkoopt het uitvak weinig, dan wordt het
- * gehalveerd en zet PSV (een deel van) MM open voor eigen fans, als vrije
- * plaatsen. Welk deel open is, staat in Ringside als `ga_locks`: wat
- * vastgehouden wordt, hoort bij het uitvak.
+ * gehalveerd en is MM voor PSV-fans, als vrije plaatsen.
+ *
+ * Is MM open, dan telt het hele vak (600) mee in de capaciteit. Hoeveel er
+ * tegelijk te koop staat, is een commerciële keuze: Ticketing geeft MM in
+ * tranches vrij (`ga_locks` houdt de rest vast), zodat de goedkope plaatsen niet
+ * als eerste weggaan. Dat bepaalt alleen wat nu vrij te koop is, niet de
+ * capaciteit. Is MM dicht (alles vastgehouden), dan hoort het bij het uitvak en
+ * telt het niet mee.
  */
 export const FLEX_AREA = "MM";
 
@@ -61,11 +66,11 @@ export function isWheelchairArea(area: string): boolean {
 export interface FlexAreaStatus {
   /** `onbekend`: MM staat niet in de stoelenkaart van deze wedstrijd. */
   state: "open" | "dicht" | "onbekend";
-  /** Alle plaatsen van het vak (600). */
+  /** Alle plaatsen van het vak (600); als MM open is, telt dit mee in de capaciteit. */
   capacity: number;
-  /** Open voor PSV-fans: capaciteit min wat het uitvak vasthoudt. */
+  /** Nu vrijgegeven voor de verkoop: capaciteit min `ga_locks`. */
   open: number;
-  /** Vastgehouden voor het uitvak (`ga_locks`); `null` als Ringside daar niets over meldt. */
+  /** Nog niet vrijgegeven (`ga_locks`); `null` als Ringside daar niets over meldt. */
   locked: number | null;
   sold: number;
   reserved: number;
@@ -78,11 +83,11 @@ export interface StadionMatch {
   name: string | null;
   eventDate: string | null;
   /**
-   * De vakken op de plattegrond, zonder rolstoelvakken, met vak MM alleen voor
-   * het deel dat open is. Zo rekent Ticketing ook.
+   * De vakken op de plattegrond, zonder rolstoelvakken en uitvak. Vak MM telt
+   * met alle plaatsen mee als het open is, en niet als het dicht is.
    */
   total: Occupancy;
-  /** Per vak; MM met als capaciteit alleen het open deel. */
+  /** Per vak; een dicht vak MM met capaciteit 0. */
   areas: AreaOccupancy[];
   /** De rolstoelvakken samen: niet in `total`. Ontbreekt in oudere samenvattingen. */
   wheelchairTotal?: Occupancy;
@@ -139,9 +144,9 @@ export function summarizeMatch(event: EventSeatState): StadionMatch {
   const result = occupancyByArea(event, isStadiumStand);
   const flexRow = result.areas.find((area) => area.area === FLEX_AREA);
   const flexArea = flexAreaStatus(event, flexRow);
-  // MM telt alleen mee voor wat open is; de rest hoort bij het uitvak.
+  // Dicht hoort MM bij het uitvak en telt het niet mee; open telt het hele vak.
   const areas = result.areas.map((area) =>
-    area.area === FLEX_AREA ? { ...area, capacity: flexArea.open } : area
+    area.area === FLEX_AREA && flexArea.state === "dicht" ? { ...area, capacity: 0 } : area
   );
   return {
     eventId: event.eventId,
@@ -153,6 +158,19 @@ export function summarizeMatch(event: EventSeatState): StadionMatch {
     flexArea,
     otherTotal: result.otherTotal,
     otherAreas: result.other,
+  };
+}
+
+/**
+ * Hoeveel van het resale-aanbod verkocht is: doorverkocht ÷ (doorverkocht + nu
+ * aangeboden). Een kaart die aangeboden en weer teruggetrokken is, staat in
+ * geen van beide; die ziet Ringside niet als aanbod. `null` zonder cijfers.
+ */
+export function resaleSummary(sold: number | null, offered: number) {
+  return {
+    sold,
+    offered,
+    soldShare: sold !== null && sold + offered > 0 ? sold / (sold + offered) : null,
   };
 }
 
