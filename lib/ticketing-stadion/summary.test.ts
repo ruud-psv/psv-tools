@@ -46,7 +46,7 @@ test("vorig seizoen", () => {
 function sales(productId: string, name: string, eventDate: string, season: string, perOffset: Record<string, number>): EventSales {
   const total = Object.values(perOffset).reduce((a, b) => a + b, 0);
   const series = { vrij: perOffset, resale: {}, seizoenkaart: {}, vrijkaart: {} };
-  return { productId, name, eventDate, productType: "Event", category: "Wedstrijden", season, perOffset, total, series, otherTotal: 0 };
+  return { productId, name, eventDate, productType: "Event", category: "Wedstrijden", season, perOffset, total, series, otherTotal: 0, revenueCents: null };
 }
 
 test("vergelijking: zelfde tegenstander en gemiddelde vorig seizoen", () => {

@@ -111,3 +111,19 @@ eerdere versie niet terugdraaien. Een ticket dat na verkoop wijzigt, kan dus dub
 tellen, en een retour gaat er niet af. Voor gespeelde wedstrijden speelt dit niet. Voor
 lopende wedstrijden lost fase 2 het op door de reeksen uit de stoelstatus te rekenen,
 waar de laatste versie van een regel wint.
+
+## Opbrengst (voor de recette)
+
+Naast het aantal telt de verkoop per dag ook de opbrengst, in centen, per reeks en dag
+(`standCents` en `otherCents` op de opgeslagen wedstrijd; `revenueCents` in `EventSales`).
+De prijs per ticket is `price_after_discount`, met `total_price` als terugval
+(`ticketPriceCents()` in `lib/ringside/sales-series.ts`). Vastgesteld op de probe van
+24 november 2026: een losse kaart heeft daar de lijstprijs, een wedstrijdkaart uit een
+seizoenkaart 0, een resale-aankoop de prijs die de koper betaalde. Btw en servicekosten
+staan in deze dataset op 0: de bedragen zijn inclusief btw. `total_payment` is niet
+bruikbaar (ook 0 bij verkochte tickets).
+
+Bedragen tellen alleen bij wedstrijden die ze vanaf het begin van de doorloop bijhouden;
+anders zou een half bedrag compleet lijken. Bestaande data krijgt ze dus pas na een nieuwe
+doorloop (`/api/ringside/ingest?restart=1`). Tot die klaar is, houden de pagina's de oude
+cijfers en is `revenueCents` `null`.

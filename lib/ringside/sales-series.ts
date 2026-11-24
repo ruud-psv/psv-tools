@@ -53,6 +53,13 @@ export interface StoredEvent {
   stand: CategoryDays;
   /** Parkeren en alles wat verder niet op de plattegrond staat. */
   other: CategoryDays;
+  /**
+   * De opbrengst van dezelfde tickets, in **centen**, met dezelfde indeling als
+   * `stand` en `other`; zie `ticketPriceCents()`. Ontbreekt in bestanden van
+   * vóór de recette, tot een nieuwe doorloop ze vult.
+   */
+  standCents?: CategoryDays;
+  otherCents?: CategoryDays;
 }
 
 /** De velden uit `/v1/sales` die de indeling nodig heeft. Geen persoonsgegevens. */
@@ -73,6 +80,8 @@ export interface SalesSeriesRow {
   price_type?: unknown;
   price_type_group?: unknown;
   area?: unknown;
+  price_after_discount?: unknown;
+  total_price?: unknown;
 }
 
 function text(value: unknown): string {
@@ -91,6 +100,49 @@ export function categoryOf(row: SalesSeriesRow): SalesCategory {
   if (text(row.price_type).toLowerCase().startsWith("vrijkaart")) return "vrijkaart";
   if (text(row.subscription_instance_id)) return "seizoenkaart";
   return "vrij";
+}
+
+/* ---------- Prijs ---------- */
+
+/**
+ * Wat de koper voor dit ticket betaalde, in centen, inclusief btw.
+ *
+ * Vastgesteld op de echte data (probe, 24 november 2026):
+ *
+ * - `price_after_discount` is de prijs na korting: bij een losse kaart gelijk
+ *   aan `list_price`, bij een wedstrijdkaart uit een seizoenkaart 0 (met
+ *   `total_discount` gelijk aan de lijstprijs), bij een resale-aankoop de prijs
+ *   die de koper betaalde.
+ * - `total_price` (type `money`, tekst als `€ 19,12`) is hetzelfde bedrag, maar
+ *   soms leeg. Alleen de terugval.
+ * - `total_payment` is níet bruikbaar: die staat ook op 0 bij verkochte
+ *   tickets (de betaling hoort bij de transactie).
+ * - Btw en servicekosten staan in deze dataset altijd op 0; de prijzen zijn dus
+ *   consumentenprijzen inclusief btw, net als het target.
+ */
+export function ticketPriceCents(row: Pick<SalesSeriesRow, "price_after_discount" | "total_price">): number {
+  const numeric = toAmount(row.price_after_discount);
+  if (numeric !== null) return Math.round(numeric * 100);
+  const money = parseMoney(row.total_price);
+  return money === null ? 0 : Math.round(money * 100);
+}
+
+function toAmount(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(value)) return Number(value);
+  return null;
+}
+
+/** `€ 1.234,50` → 1234.5. */
+export function parseMoney(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[^\d,.-]/g, "");
+  if (!/\d/.test(cleaned)) return null;
+  // Nederlandse notatie: punt voor duizendtallen, komma voor decimalen.
+  const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
 }
 
 /* ---------- Tribune of niet ---------- */
@@ -216,10 +268,19 @@ export function applySalesPage(events: Record<string, StoredEvent>, rows: readon
       seen.add(key);
     }
 
-    const bucket = isStandTicket(event.name, row.area) ? event.stand : event.other;
+    const onStand = isStandTicket(event.name, row.area);
+    const bucket = onStand ? event.stand : event.other;
     const category = categoryOf(row);
     const days = (bucket[category] ??= {});
     days[day] = (days[day] ?? 0) + 1;
+    // Alleen bij wedstrijden die vanaf het begin van de doorloop bedragen
+    // bijhouden; anders staat er een half bedrag dat compleet lijkt.
+    const amounts = onStand ? event.standCents : event.otherCents;
+    const cents = ticketPriceCents(row);
+    if (amounts && cents) {
+      const amountDays = (amounts[category] ??= {});
+      amountDays[day] = (amountDays[day] ?? 0) + cents;
+    }
     result.counted++;
   }
 
@@ -243,6 +304,11 @@ export interface EventSales {
   series: Record<SalesCategory, OffsetCounts>;
   /** Parkeren en overige vakken; niet in `perOffset`. */
   otherTotal: number;
+  /**
+   * De opbrengst in centen per reeks, per dagen-tot-de-wedstrijd, uit dezelfde
+   * vakken als `series`. `null` als de opgeslagen data nog geen bedragen heeft.
+   */
+  revenueCents: Record<SalesCategory, OffsetCounts> | null;
 }
 
 function sumCategories(bucket: CategoryDays): number {
@@ -264,9 +330,13 @@ export function toEventSales(event: StoredEvent, exclude: readonly SalesCategory
   const bucket = standTotal > 0 ? event.stand : event.other;
 
   const series = {} as Record<SalesCategory, OffsetCounts>;
+  const amounts = standTotal > 0 ? event.standCents : event.otherCents;
+  const hasAmounts = event.standCents !== undefined || event.otherCents !== undefined;
+  const revenueCents = hasAmounts ? ({} as Record<SalesCategory, OffsetCounts>) : null;
   const perOffset: OffsetCounts = {};
   for (const category of SALES_CATEGORIES) {
     series[category] = daysToOffsets(bucket[category], event.eventDate);
+    if (revenueCents) revenueCents[category] = daysToOffsets(amounts?.[category], event.eventDate);
     if (exclude.includes(category)) continue;
     for (const [offset, count] of Object.entries(series[category])) {
       perOffset[offset] = (perOffset[offset] ?? 0) + count;
@@ -284,6 +354,7 @@ export function toEventSales(event: StoredEvent, exclude: readonly SalesCategory
     total: totalOf(perOffset),
     series,
     otherTotal: standTotal > 0 ? sumCategories(event.other) : 0,
+    revenueCents,
   };
 }
 

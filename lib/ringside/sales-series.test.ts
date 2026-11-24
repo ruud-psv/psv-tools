@@ -171,3 +171,35 @@ test("meting: houdt de kaart van de verkoper zijn oorspronkelijke datum?", () =>
   assert.equal(summary.buyers, 1);
   assert.deepEqual(summary.matched, { primary_ticket_id: { pairs: 1, sellerEarlier: 1, sameDay: 0, sellerLater: 0 } });
 });
+
+test("prijs: price_after_discount, met total_price als terugval", async () => {
+  const { ticketPriceCents, parseMoney } = await import("./sales-series");
+  assert.equal(ticketPriceCents({ price_after_discount: 19.12, total_price: "€ 19,12" }), 1912);
+  // Wedstrijdkaart uit een seizoenkaart: lijstprijs 60, na korting 0.
+  assert.equal(ticketPriceCents({ price_after_discount: 0, total_price: "€ 0,00" }), 0);
+  assert.equal(ticketPriceCents({ price_after_discount: null, total_price: "€ 1.234,50" }), 123450);
+  assert.equal(ticketPriceCents({ price_after_discount: "37.5" }), 3750);
+  assert.equal(ticketPriceCents({}), 0);
+  assert.equal(parseMoney("€ 0,00"), 0);
+  assert.equal(parseMoney(null), null);
+});
+
+test("opbrengst: per reeks en dag in centen, alleen bij wedstrijden die bedragen bijhouden", () => {
+  const tracked: StoredEvent = { ...event(), standCents: {}, otherCents: {} };
+  const events = { [MATCH]: tracked };
+  applySalesPage(events, [
+    ticket({ price_after_discount: 49.5 }),
+    ticket({ price_after_discount: 46, is_venue_resale: true }),
+    ticket({ price_after_discount: 0, subscription_instance_id: "abc" }),
+  ]);
+  assert.deepEqual(tracked.standCents, { vrij: { "2026-11-10": 4950 }, resale: { "2026-11-10": 4600 } });
+  const sales = toEventSales(tracked);
+  assert.equal(sales.revenueCents?.vrij["18"], 4950);
+  assert.equal(sales.revenueCents?.resale["18"], 4600);
+
+  // Oude data zonder bedragen: geen half bedrag, en de pagina's zien `null`.
+  const old = event();
+  applySalesPage({ [MATCH]: old }, [ticket({ price_after_discount: 49.5 })]);
+  assert.equal(old.standCents, undefined);
+  assert.equal(toEventSales(old).revenueCents, null);
+});

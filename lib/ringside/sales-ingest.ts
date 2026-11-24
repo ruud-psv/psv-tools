@@ -81,6 +81,10 @@ export function applyProducts(events: Record<string, StoredEvent>, rows: readonl
       season: seasonOf(eventDate),
       stand: existing?.stand ?? {},
       other: existing?.other ?? {},
+      // Een nieuwe wedstrijd houdt meteen bedragen bij; een bestaande alleen als
+      // hij dat al deed (zie `applySalesPage()`).
+      ...(existing ? (existing.standCents ? { standCents: existing.standCents } : {}) : { standCents: {} }),
+      ...(existing ? (existing.otherCents ? { otherCents: existing.otherCents } : {}) : { otherCents: {} }),
     };
   }
 }
@@ -88,7 +92,7 @@ export function applyProducts(events: Record<string, StoredEvent>, rows: readonl
 /** Dezelfde wedstrijden, zonder tellingen: het begin van een nieuwe doorloop. */
 function withoutCounts(events: Record<string, StoredEvent>): Record<string, StoredEvent> {
   const cleared: Record<string, StoredEvent> = {};
-  for (const [id, event] of Object.entries(events)) cleared[id] = { ...event, stand: {}, other: {} };
+  for (const [id, event] of Object.entries(events)) cleared[id] = { ...event, stand: {}, other: {}, standCents: {}, otherCents: {} };
   return cleared;
 }
 
