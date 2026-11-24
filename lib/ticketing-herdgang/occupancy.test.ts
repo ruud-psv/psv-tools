@@ -116,3 +116,22 @@ test("resale-vlaggen: aangeboden telt, ook als het een eerder doorverkochte kaar
   assert.equal(result.total.sold, 2);
   assert.equal(result.total.resale, 1);
 });
+
+test("vrije plaatsen met locks (vak MM): te koop is capaciteit min de locks", () => {
+  const state = event({ mm: ["MM", "", "", 2, 600] }, { ...tickets("mm", "MM", 17) });
+  // Zonder inventaris: geblokkeerd, zoals Ringside de vlag zet.
+  assert.equal(occupancyByArea(state).areas[0].free, 0);
+
+  // Go Ahead Eagles, 24-11-2026: 400 vastgehouden voor de backoffice, 200 te koop.
+  state.ga = { mm: { ga_locks: { Backoffice: 400 } } };
+  assert.deepEqual(occupancyByArea(state).areas, [
+    { area: "MM", standing: true, capacity: 600, sellable: 200, sold: 17, reserved: 0, resale: 0, free: 183 },
+  ]);
+
+  // Helemaal vastgehouden (MM hoort bij het uitvak): niets te koop.
+  state.ga = { mm: { ga_locks: { Backoffice: 600 } } };
+  assert.equal(occupancyByArea(state).areas[0].sellable, 0);
+  // Geen locks: dan geldt de vlag weer (hier geblokkeerd).
+  state.ga = { mm: { ga_locks: {} } };
+  assert.equal(occupancyByArea(state).areas[0].sellable, 0);
+});

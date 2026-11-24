@@ -68,6 +68,48 @@ export const SEAT_SELLABLE = 1;
 export const SEAT_GA = 2;
 export const SEAT_EXCLUDED = 4;
 
+/** Alle getallen in een (opgeschoond) inventarisveld bij elkaar opgeteld. */
+function sumNumbers(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : 0;
+  if (typeof value === "string" && /^\d+(\.\d+)?$/.test(value)) return Number(value);
+  if (Array.isArray(value)) return value.reduce((total: number, item) => total + sumNumbers(item), 0);
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).reduce((total: number, item) => total + sumNumbers(item), 0);
+  }
+  return 0;
+}
+
+/**
+ * Hoeveel plaatsen van een rij met vrije plaatsen vastgehouden worden
+ * (`ga_locks`), of `null` als Ringside daar niets over meldt.
+ *
+ * Vak MM bij PSV - Go Ahead Eagles (24-11-2026): capaciteit 600,
+ * `ga_locks: { Backoffice: 400 }`, en in de ticketshop 200 te koop (17
+ * verkocht + 183 beschikbaar). De locks staan per soort (`Backoffice`, …);
+ * alle aantallen samen zijn vastgehouden.
+ */
+export function gaLocked(inventory: GaInventory | undefined): number | null {
+  if (!inventory || inventory.ga_locks === undefined) return null;
+  return sumNumbers(inventory.ga_locks);
+}
+
+/**
+ * Hoeveel plaatsen van een rij werkelijk te koop staan.
+ *
+ * Een genummerde stoel: zijn capaciteit (1) als hij niet geblokkeerd is. Een
+ * rij met vrije plaatsen waarvan Ringside locks meldt: de capaciteit min de
+ * locks. Zonder locks geldt de vlag. Bij zo'n rij zegt `is_counted_as_available` niets: MM staat als "niet
+ * beschikbaar" terwijl er 200 van te koop zijn.
+ */
+export function sellableCapacity(seat: SeatTuple, inventory?: GaInventory): number {
+  const capacity = seat[4] ?? 1;
+  const locked = seat[3] & SEAT_GA ? gaLocked(inventory) : null;
+  // Alleen met locks: zonder locks kan de rij ook op een andere manier
+  // geblokkeerd zijn, en dan is de vlag wel leidend.
+  if (locked !== null && locked > 0) return Math.max(capacity - locked, 0);
+  return seat[3] & SEAT_SELLABLE ? capacity : 0;
+}
+
 /** Capaciteit van een rij uit de stoelenkaart; zonder waarde is dat 1. */
 export function seatCapacity(seat: SeatTuple): number {
   return seat[4] ?? 1;

@@ -347,9 +347,13 @@ extra ronde door `/v1/manifests` ze in (`applyManifestGa()`, fase `vrijePlaatsen
 `/api/ringside/stoelen`). De wedstrijd-API geeft ze terug onder `gaRows`
 (`gaRows()` in `lib/ticketing-stadion/summary.ts`).
 
-Nog te doen zodra die velden zichtbaar zijn: het aanbod van zo'n rij uit de inventaris
-halen in plaats van uit `is_counted_as_available`, zodat capaciteit, verkocht en vrij
-gelijk lopen met de ticketshop.
+Gemeten op 24-11-2026: bij MM staat `ga_locks: { "Backoffice": 400 }`. Te koop is dus
+600 − 400 = 200, precies wat de ticketshop toont (17 verkocht + 183 beschikbaar). Sindsdien
+is bij een rij met vrije plaatsen met locks het aanbod de capaciteit min de locks, wat de vlag
+ook zegt (`sellableCapacity()` in `lib/ringside/seat-state.ts`, gebruikt door
+`occupancyByArea()`). Zonder locks geldt de vlag. De capaciteit blijft 600: de vastgehouden
+plaatsen tellen, net als geblokkeerde stoelen, wel mee in de capaciteit maar niet in het aanbod.
+`gaRows` in de wedstrijd-API toont per rij ook `locked` en `offered`.
 
 ## Recette
 

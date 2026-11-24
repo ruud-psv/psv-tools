@@ -16,7 +16,16 @@ import { normalizeArea, type SeatRef } from "../aangrenzende-stoelen/neighbors";
 import { SEAT_CODE, type SeatMaps } from "../aangrenzende-stoelen/seat-map";
 import { STADIUM_AREAS } from "../aangrenzende-stoelen/stadium";
 import { seasonOf } from "../ringside/daily-sales";
-import { SEAT_EXCLUDED, SEAT_GA, SEAT_SELLABLE, seatCapacity, type EventSeatState, type GaInventory } from "../ringside/seat-state";
+import {
+  gaLocked,
+  SEAT_EXCLUDED,
+  SEAT_GA,
+  SEAT_SELLABLE,
+  seatCapacity,
+  sellableCapacity,
+  type EventSeatState,
+  type GaInventory,
+} from "../ringside/seat-state";
 import type { EventSales, OffsetCounts } from "../ringside/store";
 import { occupancyByArea, type AreaOccupancy, type Occupancy } from "../ticketing-herdgang/occupancy";
 
@@ -63,6 +72,10 @@ export interface GaRow {
   tickets: number;
   /** `null` zolang de cron de inventaris nog niet gelezen heeft. */
   inventory: GaInventory | null;
+  /** Vastgehouden volgens `ga_locks`; `null` als Ringside daar niets over meldt. */
+  locked: number | null;
+  /** Werkelijk te koop: zie `sellableCapacity()`. */
+  offered: number;
 }
 
 /**
@@ -86,6 +99,8 @@ export function gaRows(event: EventSeatState): GaRow[] {
       excluded: Boolean(flags & SEAT_EXCLUDED),
       tickets: ticketsPerRow.get(manifestId) ?? 0,
       inventory: event.ga?.[manifestId] ?? null,
+      locked: gaLocked(event.ga?.[manifestId]),
+      offered: sellableCapacity(seat, event.ga?.[manifestId]),
     });
   }
   return rows.sort((a, b) => a.area.localeCompare(b.area, "nl", { numeric: true }));

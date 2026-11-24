@@ -14,7 +14,9 @@
  *   maar zijn nog niet afgenomen.
  * - **In de resale**: het deel van verkocht dat de houder heeft aangeboden.
  * - **Vrij**: per rij die te koop is de capaciteit min alle tickets erop, ook
- *   reserveringen. Een rij die geblokkeerd is, telt niet als vrij.
+ *   reserveringen. Een rij die geblokkeerd is, telt niet als vrij. Bij een rij
+ *   met vrije plaatsen waarvan Ringside locks meldt (`ga_locks`, zoals vak MM
+ *   als het uitvak gehalveerd is) is te koop: de capaciteit min de locks.
  *
  * Vakken die geen tribune zijn (parkeren, en alles wat niet op de plattegrond
  * staat) komen apart en tellen niet mee in het totaal: anders tellen
@@ -22,7 +24,7 @@
  */
 
 import { normalizeArea } from "../aangrenzende-stoelen/neighbors";
-import { RESALE_POSTED, SEAT_EXCLUDED, SEAT_SELLABLE, seatCapacity, type EventSeatState } from "../ringside/seat-state";
+import { RESALE_POSTED, SEAT_EXCLUDED, seatCapacity, sellableCapacity, type EventSeatState } from "../ringside/seat-state";
 
 export interface Occupancy {
   capacity: number;
@@ -106,9 +108,11 @@ export function occupancyByArea(event: EventSeatState, isStand?: (area: string) 
     const capacity = seatCapacity(seat);
     target.capacity += capacity;
     if (!row && !number) target.standing = true;
-    if (flags & SEAT_SELLABLE) {
-      target.sellable += capacity;
-      target.free += Math.max(capacity - (ticketsPerSeat.get(manifestId) ?? 0), 0);
+    // Bij vrije plaatsen met locks (vak MM) de capaciteit min de locks; zie `sellableCapacity()`.
+    const open = sellableCapacity(seat, event.ga?.[manifestId]);
+    if (open > 0) {
+      target.sellable += open;
+      target.free += Math.max(open - (ticketsPerSeat.get(manifestId) ?? 0), 0);
     }
   }
 
