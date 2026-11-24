@@ -28,6 +28,7 @@
  * wedstrijden veranderen niet meer.
  */
 
+import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
 import { getProductDisplayName } from "./products";
 import { seasonOf } from "./daily-sales";
 import { readFeed, type FeedResult } from "./feed";
@@ -85,6 +86,13 @@ export function applyProducts(events: Record<string, StoredEvent>, rows: readonl
       // hij dat al deed (zie `applySalesPage()`).
       ...(existing ? (existing.standCents ? { standCents: existing.standCents } : {}) : { standCents: {} }),
       ...(existing ? (existing.otherCents ? { otherCents: existing.otherCents } : {}) : { otherCents: {} }),
+      ...(existing
+        ? existing.listPrices
+          ? { listPrices: existing.listPrices }
+          : {}
+        : isPsvHomeMatch(name)
+          ? { listPrices: {} }
+          : {}),
     };
   }
 }
@@ -92,7 +100,14 @@ export function applyProducts(events: Record<string, StoredEvent>, rows: readonl
 /** Dezelfde wedstrijden, zonder tellingen: het begin van een nieuwe doorloop. */
 function withoutCounts(events: Record<string, StoredEvent>): Record<string, StoredEvent> {
   const cleared: Record<string, StoredEvent> = {};
-  for (const [id, event] of Object.entries(events)) cleared[id] = { ...event, stand: {}, other: {}, standCents: {}, otherCents: {} };
+  for (const [id, event] of Object.entries(events)) cleared[id] = {
+      ...event,
+      stand: {},
+      other: {},
+      standCents: {},
+      otherCents: {},
+      ...(isPsvHomeMatch(event.name) ? { listPrices: {} } : {}),
+    };
   return cleared;
 }
 

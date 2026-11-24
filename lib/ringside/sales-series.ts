@@ -60,6 +60,14 @@ export interface StoredEvent {
    */
   standCents?: CategoryDays;
   otherCents?: CategoryDays;
+  /**
+   * Alleen bij thuiswedstrijden van PSV 1: per vak hoe vaak elke lijstprijs
+   * (`list_price`, in centen) voorkwam bij tickets met prijssoort `Normaal`.
+   * De meest voorkomende is de prijs van dat vak in de vrije verkoop, en
+   * daarmee ook de prijs in de resale (die is altijd gelijk aan de vrije
+   * verkoop van het vak). Zie `areaPrices()`.
+   */
+  listPrices?: Record<string, Record<string, number>>;
 }
 
 /** De velden uit `/v1/sales` die de indeling nodig heeft. Geen persoonsgegevens. */
@@ -82,6 +90,7 @@ export interface SalesSeriesRow {
   area?: unknown;
   price_after_discount?: unknown;
   total_price?: unknown;
+  list_price?: unknown;
 }
 
 function text(value: unknown): string {
@@ -143,6 +152,29 @@ export function parseMoney(value: unknown): number | null {
   const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
   const amount = Number(normalized);
   return Number.isFinite(amount) ? amount : null;
+}
+
+/**
+ * Per vak de prijs in de vrije verkoop, in centen: de lijstprijs die bij
+ * `Normaal`-tickets het vaakst voorkwam. Ook een wedstrijdkaart uit een
+ * seizoenkaart heeft die lijstprijs (met de korting apart), dus elk verkocht
+ * vak heeft er een.
+ */
+export function areaPrices(event: Pick<StoredEvent, "listPrices">): Record<string, number> {
+  const prices: Record<string, number> = {};
+  for (const [area, counts] of Object.entries(event.listPrices ?? {})) {
+    let best = -1;
+    let bestCount = 0;
+    for (const [cents, count] of Object.entries(counts)) {
+      const value = Number(cents);
+      if (count > bestCount || (count === bestCount && value > best)) {
+        best = value;
+        bestCount = count;
+      }
+    }
+    if (best > 0) prices[area] = best;
+  }
+  return prices;
 }
 
 /* ---------- Tribune of niet ---------- */
@@ -277,6 +309,15 @@ export function applySalesPage(events: Record<string, StoredEvent>, rows: readon
     // bijhouden; anders staat er een half bedrag dat compleet lijkt.
     const amounts = onStand ? event.standCents : event.otherCents;
     const cents = ticketPriceCents(row);
+    if (event.listPrices && onStand && text(row.price_type).toLowerCase() === "normaal") {
+      const list = parseMoney(row.list_price);
+      const area = normalizeArea(text(row.area));
+      if (list && list > 0 && area) {
+        const counts = (event.listPrices[area] ??= {});
+        const key = String(Math.round(list * 100));
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+    }
     if (amounts && cents) {
       const amountDays = (amounts[category] ??= {});
       amountDays[day] = (amountDays[day] ?? 0) + cents;
@@ -309,6 +350,8 @@ export interface EventSales {
    * vakken als `series`. `null` als de opgeslagen data nog geen bedragen heeft.
    */
   revenueCents: Record<SalesCategory, OffsetCounts> | null;
+  /** Prijs per vak in de vrije verkoop (en resale), in centen; zie `areaPrices()`. Leeg zonder bedragen. */
+  areaPriceCents: Record<string, number>;
 }
 
 function sumCategories(bucket: CategoryDays): number {
@@ -355,6 +398,7 @@ export function toEventSales(event: StoredEvent, exclude: readonly SalesCategory
     series,
     otherTotal: standTotal > 0 ? sumCategories(event.other) : 0,
     revenueCents,
+    areaPriceCents: areaPrices(event),
   };
 }
 

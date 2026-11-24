@@ -203,3 +203,16 @@ test("opbrengst: per reeks en dag in centen, alleen bij wedstrijden die bedragen
   assert.equal(old.standCents, undefined);
   assert.equal(toEventSales(old).revenueCents, null);
 });
+
+test("vakprijs: de meest voorkomende lijstprijs van Normaal-tickets per vak", async () => {
+  const { areaPrices } = await import("./sales-series");
+  const tracked: StoredEvent = { ...event(), standCents: {}, otherCents: {}, listPrices: {} };
+  applySalesPage({ [MATCH]: tracked }, [
+    ticket({ area: "F", list_price: "€ 60,00", price_after_discount: 0, subscription_instance_id: "abc" }),
+    ticket({ area: "F", list_price: "€ 60,00", price_after_discount: 60 }),
+    ticket({ area: "F", list_price: "€ 30,00", price_after_discount: 30, price_type: "Kind" }),
+    ticket({ area: "HH", list_price: "€ 37,50", price_after_discount: 37.5, is_venue_resale: true }),
+  ]);
+  assert.deepEqual(areaPrices(tracked), { F: 6000, HH: 3750 });
+  assert.deepEqual(toEventSales(tracked).areaPriceCents, { F: 6000, HH: 3750 });
+});

@@ -127,3 +127,10 @@ Bedragen tellen alleen bij wedstrijden die ze vanaf het begin van de doorloop bi
 anders zou een half bedrag compleet lijken. Bestaande data krijgt ze dus pas na een nieuwe
 doorloop (`/api/ringside/ingest?restart=1`). Tot die klaar is, houden de pagina's de oude
 cijfers en is `revenueCents` `null`.
+
+Bij thuiswedstrijden van PSV 1 telt de doorloop ook per vak hoe vaak elke `list_price` voorkwam
+bij tickets met prijssoort `Normaal` (`listPrices`). De meest voorkomende is de prijs van het
+vak in de vrije verkoop (`areaPrices()`). Volgens Ticketing is de resaleprijs altijd gelijk aan
+de prijs van het vak in de vrije verkoop; daarmee rekent de recette de waarde van het
+resale-aanbod uit. Ook een wedstrijdkaart uit een seizoenkaart heeft de lijstprijs van zijn
+vak (met de korting apart), dus elk vak met tickets heeft een prijs.
