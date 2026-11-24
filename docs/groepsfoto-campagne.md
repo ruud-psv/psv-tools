@@ -1,6 +1,6 @@
 # Groepsfoto-campagne — bouwplan publieke versie
 
-> Status: **plan**. Bouwt voort op de interne Groepsfoto Creator
+> Status: **stap 2 klaar** (campagnes publiceren vanuit PSV Tools, zie §11). Bouwt voort op de interne Groepsfoto Creator
 > (`docs/groepsfoto-plan.md`). Doel: fans maken op een Playable-campagnepagina
 > (club.psv.nl), achter de Mijn PSV-login, een kerstkaart met hun selfie tussen
 > de spelers.
@@ -219,10 +219,60 @@ door fans dekt (zie §10 van `docs/groepsfoto-plan.md`).
 |---|---|---|
 | 0 | Open vragen uitzetten: Mijn PSV-token in Playable, legal/FG, en of er een link in de mail moet | antwoorden die §7 en §8 vastleggen |
 | 1 | Bunny inrichten: privé map voor campagnes, Edge Script aan de pull zone, eigen Replicate-sleutel met bestedingslimiet, Turnstile-site | infrastructuur; getest dat de privé map niet publiek is |
-| 2 | PSV Tools: tabblad Campagnes, `config.json` + basisfoto publiceren naar Bunny, aan/uit | campagne te publiceren vanuit beheer |
+| 2 ✅ | PSV Tools: tabblad Campagnes, `config.json` + basisfoto publiceren naar Bunny, aan/uit | campagne te publiceren vanuit beheer |
 | 3 | `packages/groepsfoto-edge`: `/maak`, `/status`, `/beeld`, met validatie, tickets, Turnstile en limieten (zonder accountlimiet) | end-to-end werkend vanaf een testpagina |
 | 4 | AI-label en metadata in `/beeld` | elk resultaat gemarkeerd, zichtbaar en machineleesbaar |
 | 5 | Widget via de Playable loader: selfie (§3), keuzes, voortgang, kaartrand, download | werkend op de demo-URL van de campagne |
 | 6 | Tellers zichtbaar in PSV Tools | verbruik per dag |
 | 7 | Tokencontrole Mijn PSV en limiet per account (als stap 0 dat toelaat) | misbruik per account begrensd |
 | 8 | Test: script tegen `/maak`, privé map opvragen, DevTools nalopen op sporen naar Replicate en `tools.psv.nl`, telefoons (iOS/Android, in-app browsers), privacytekst | akkoord voor livegang |
+
+## 11. Wat er na stap 2 staat
+
+Op `/dashboard/groepsfoto` staan nu twee tabbladen: **Maken** (de interne tool)
+en **Campagnes**.
+
+| Bestand | Wat |
+|---|---|
+| `lib/groepsfoto/campagne.ts` | types, `valideerCampagne()`, `bouwConfig()`: rekent per toegestane keuze de prompt uit met `bouwPrompt()` en de vaste modelvelden met `bouwInput()`, met `match_input_image` als het model dat kent |
+| `lib/groepsfoto/campagne-opslag.ts` | campagnes in privé Blob (`groepsfoto/campagnes/<slug>.json`); publiceren, aan/uit en verwijderen op Bunny |
+| `app/api/groepsfoto/campagnes/route.ts` | `GET` lijst (plus of Bunny is ingesteld), `POST` aanmaken/bijwerken, `PATCH` aan/uit, `DELETE` |
+| `app/api/groepsfoto/campagnes/publiceer/route.ts` | `POST`: basisfoto en daarna `config.json` naar Bunny |
+| `components/groepsfoto-campagnes.tsx` | het tabblad Campagnes |
+| `lib/groepsfoto/campagne.test.ts` | validatie, config en de Bunny-aanroepen |
+
+**Gedrag:**
+
+- Een nieuwe campagne staat **uit**. Opslaan zet niets op Bunny; dat doet pas
+  **Publiceren**. Een badge toont als er wijzigingen zijn die nog niet op Bunny
+  staan. Wijzig je de hints van de foto op het tabblad Maken, publiceer dan
+  opnieuw: die zitten in de prompts.
+- **Uitzetten** past alleen `actief` aan in de config op Bunny, zonder opnieuw te
+  publiceren. Zo werkt de noodknop ook als de foto of het model intussen niet
+  meer bruikbaar is.
+- **Verwijderen** haalt eerst de config van Bunny (het script stopt dan meteen),
+  dan de foto, dan de campagne uit Blob.
+- In de config staan geen e-mailadressen.
+
+**Op Bunny** (paden in de privé zone):
+
+```
+campagnes/<slug>/config.json
+campagnes/<slug>/basisfoto.<jpg|png|webp>
+```
+
+**Nieuw in Vercel:**
+
+| Variabele | Wat |
+|---|---|
+| `GROEPSFOTO_BUNNY_STORAGE_ZONE` | een **aparte** storage zone op Bunny, **zonder pull zone**. PSV Tools weigert te publiceren als dit dezelfde zone is als `BUNNY_STORAGE_ZONE` van de Playable loader, want die is openbaar via `psveindhoven.b-cdn.net` |
+| `GROEPSFOTO_BUNNY_STORAGE_KEY` | het wachtwoord (API-sleutel) van die storage zone |
+| `GROEPSFOTO_BUNNY_STORAGE_HOST` | optioneel, alleen als de zone in een andere regio staat (bijv. `uk.storage.bunnycdn.com`); standaard `storage.bunnycdn.com` |
+
+Zolang die ontbreken, kun je campagnes wel aanmaken, maar niet publiceren; het
+tabblad zegt dan wat er mist.
+
+**Getest:** de validatie, de config en de Bunny-aanroepen met unittests
+(`npm test`), en het tabblad in de lokale dev-server met nagebootste API's.
+Publiceren naar een echte Bunny-zone is nog niet getest; dat kan zodra de zone
+en de variabelen er zijn.
