@@ -1,6 +1,6 @@
 # Groepsfoto-campagne — bouwplan publieke versie
 
-> Status: **stap 2 en 3 klaar** (campagnes publiceren vanuit PSV Tools, §11; het script op Bunny, §12). Bouwt voort op de interne Groepsfoto Creator
+> Status: **stap 2, 3 en 5 klaar** (campagnes publiceren vanuit PSV Tools, §11; het script op Bunny, §12). Bouwt voort op de interne Groepsfoto Creator
 > (`docs/groepsfoto-plan.md`). Doel: fans maken op een Playable-campagnepagina
 > (club.psv.nl), achter de Mijn PSV-login, een kerstkaart met hun selfie tussen
 > de spelers.
@@ -222,7 +222,7 @@ door fans dekt (zie §10 van `docs/groepsfoto-plan.md`).
 | 2 ✅ | PSV Tools: tabblad Campagnes, `config.json` + basisfoto publiceren naar Bunny, aan/uit | campagne te publiceren vanuit beheer |
 | 3 ✅ | `packages/groepsfoto-edge`: `/maak`, `/status`, `/beeld`, met validatie, tickets, Turnstile en limieten (zonder accountlimiet) | end-to-end werkend vanaf een testpagina |
 | 4 | AI-label en metadata in `/beeld` | elk resultaat gemarkeerd, zichtbaar en machineleesbaar |
-| 5 | Widget via de Playable loader: selfie (§3), keuzes, voortgang, kaartrand, download | werkend op de demo-URL van de campagne |
+| 5 ✅ | Widget via de Playable loader: selfie (§3), keuzes, voortgang, kaartrand, download | werkend op de demo-URL van de campagne |
 | 6 | Tellers zichtbaar in PSV Tools | verbruik per dag |
 | 7 | Tokencontrole Mijn PSV en limiet per account (als stap 0 dat toelaat) | misbruik per account begrensd |
 | 8 | Test: script tegen `/maak`, privé map opvragen, DevTools nalopen op sporen naar Replicate en `tools.psv.nl`, telefoons (iOS/Android, in-app browsers), privacytekst | akkoord voor livegang |
@@ -311,3 +311,11 @@ routes, het bouwen en het inrichten op Bunny.
 **Niet getest tegen het echte Bunny**: de documentatie van Bunny was bij het
 bouwen niet bereikbaar. De code volgt de officiële SDK 0.13.0; wat bij de eerste
 deploy te controleren is (IP-header, limieten), staat in de README.
+
+## 13. Wat er na stap 5 staat
+
+De widget staat in `packages/groepsfoto-edge/widget/` (HTML, CSS en JS voor de
+Playable loader); de instellingen en wat hij doet staan in de README van het
+script. Het label "Gemaakt met AI" zet de widget nu in de browser op de kaart.
+Stap 4 zet het daarnaast op de server op het beeld, zodat het er ook op staat
+als iemand de widget omzeilt.

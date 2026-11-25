@@ -80,3 +80,28 @@ officiële SDK (`@bunny.net/edgescript-sdk` 0.13.0). Controleer:
   niet op het model, dus dat blijft kort).
 - **Omgevingsvariabelen**: het script leest ze met `Deno.env.get()` en valt
   terug op `process.env`.
+
+## De widget op Playable
+
+In `widget/` staan de drie blokken voor de Playable loader in PSV Tools
+(`/dashboard/playable-loader`, stap Code): `pagina.html`, `pagina.css` en
+`pagina.js`. De Kit zet de loader er zelf bij.
+
+Bovenaan `pagina.js` staan de instellingen:
+
+| Instelling | Wat |
+|---|---|
+| `script` | het `*.b-cdn.net`-adres van het Edge Script, zonder `/` aan het eind |
+| `campagne` | de sleutel van de campagne in PSV Tools (tabblad Campagnes) |
+| `turnstileSiteKey` | de openbare site key van de Turnstile-widget |
+| `kleding` | de keuzes; moeten passen bij wat de campagne in PSV Tools toestaat |
+| `kaarttekst` | de tekst in de rode band onder de foto |
+
+Wat de widget doet: selfie kiezen of maken (op een telefoon opent de
+voorcamera), verkleinen in de browser (de metadata valt eraf), kleding kiezen,
+toestemming en Turnstile, maken, wachten, en de kaart samenstellen op een
+canvas: foto met witte rand, label "Gemaakt met AI" op de foto, rode band met
+tekst en logo. Downloaden als JPEG, en delen op telefoons die dat kennen.
+
+Getest in Chromium (desktop en iPhone-formaat) tegen de echte `handler.ts`,
+met Replicate en Turnstile nagebootst.
