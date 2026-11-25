@@ -35,6 +35,9 @@
  *   --upload                zet de scan in Vercel Blob (BLOB_READ_WRITE_TOKEN
  *                           nodig), zodat Tools > IT > TLD overzicht hem toont;
  *                           vergelijkt dan ook automatisch met de vorige scan
+ *   --upload-url <url>      hetzelfde, maar via Tools zelf in plaats van met de
+ *                           Blob-token: bijv. https://tools.psv.nl/api/tld-overzicht/upload,
+ *                           met CRON_SECRET in de omgevingsvariabele TLD_UPLOAD_SECRET
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
@@ -118,8 +121,8 @@ await browser.close();
 
 // 3. Samenvoegen en indelen
 const webPerDomein = new Map(web.map((w) => [w.domein, w]));
-const blob = args.upload ? await laadBlob() : null;
-const vorige = args.vorige ? leesVorige(String(args.vorige)) : blob ? await vorigeUitBlob(blob) : null;
+const opslag = args["upload-url"] ? viaTools(String(args["upload-url"])) : args.upload ? await viaBlob() : null;
+const vorige = args.vorige ? leesVorige(String(args.vorige)) : opslag ? await vorigeUitOpslag(opslag) : null;
 const resultaten = dns.map((d) => {
   const w = webPerDomein.get(d.domein) ?? null;
   const r = { ...d, ...(w ?? {}), categorie: deelIn(d, w) };
@@ -144,7 +147,7 @@ log("\nSamenvatting:");
 for (const c of [...VOLGORDE, "niet geregistreerd", "wildcard"]) if (telling[c]) log(`  ${c.padEnd(30)} ${telling[c]}`);
 log(`\nRapport: ${join(UIT, "rapport.html")}`);
 
-if (blob) await uploadNaarBlob(blob, scan);
+if (opslag) await upload(opslag, scan);
 
 // ---------------------------------------------------------------- DNS
 
@@ -386,42 +389,85 @@ document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click
 </body></html>`;
 }
 
-// ---------------------------------------------------------------- Vercel Blob
+// ---------------------------------------------------------------- opslag
 
-async function laadBlob() {
+/**
+ * Twee manieren om de scan in Blob te krijgen, met dezelfde drie handelingen:
+ * de vorige scan lezen, een screenshot zetten en de scan zelf zetten.
+ */
+async function viaBlob() {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     console.error("--upload heeft BLOB_READ_WRITE_TOKEN nodig (de token van de Blob-store in Vercel).");
     process.exit(1);
   }
-  return import("@vercel/blob");
+  const blob = await import("@vercel/blob");
+  const opties = { access: "private", addRandomSuffix: false, allowOverwrite: true };
+  return {
+    async vorige() {
+      const r = await blob.get(`${BLOB_MAP}/laatste.json`, { access: "private", useCache: false });
+      return r?.stream ? JSON.parse(await new Response(r.stream).text()) : null;
+    },
+    async beeld(pad, inhoud) {
+      await blob.put(pad, inhoud, { ...opties, contentType: "image/jpeg" });
+    },
+    async scan(scan) {
+      const json = JSON.stringify(scan);
+      await blob.put(`${BLOB_MAP}/${scan.datum}/resultaten.json`, json, { ...opties, contentType: "application/json" });
+      await blob.put(`${BLOB_MAP}/laatste.json`, json, { ...opties, contentType: "application/json" });
+    },
+  };
 }
 
-async function vorigeUitBlob(blob) {
+/** Via `app/api/tld-overzicht/upload` in Tools, dat met zijn eigen Blob-token schrijft. */
+function viaTools(url) {
+  const geheim = process.env.TLD_UPLOAD_SECRET;
+  if (!geheim) {
+    console.error("--upload-url heeft TLD_UPLOAD_SECRET nodig (dezelfde waarde als CRON_SECRET in Vercel).");
+    process.exit(1);
+  }
+  const auth = { authorization: `Bearer ${geheim}` };
+  const verzoek = async (doel, init) => {
+    for (let poging = 1; ; poging++) {
+      const res = await fetch(doel, { ...init, headers: { ...auth, ...init?.headers } });
+      if (res.ok) return res;
+      if (poging >= 4 || res.status < 500) throw new Error(`${init?.method ?? "GET"} ${doel}: HTTP ${res.status} ${await res.text()}`);
+      await new Promise((r) => setTimeout(r, 2000 * poging));
+    }
+  };
+  return {
+    async vorige() {
+      return (await (await verzoek(url)).json()).scan ?? null;
+    },
+    async beeld(pad, inhoud) {
+      await verzoek(`${url}?pad=${encodeURIComponent(pad)}`, { method: "PUT", body: inhoud, headers: { "content-type": "image/jpeg" } });
+    },
+    async scan(scan) {
+      await verzoek(url, { method: "POST", body: JSON.stringify(scan), headers: { "content-type": "application/json" } });
+    },
+  };
+}
+
+async function vorigeUitOpslag(opslag) {
   try {
-    const r = await blob.get(`${BLOB_MAP}/laatste.json`, { access: "private", useCache: false });
-    if (!r?.stream) return null;
-    const data = JSON.parse(await new Response(r.stream).text());
+    const data = await opslag.vorige();
+    if (!data) return null;
     log(`Vergelijken met de vorige scan van ${data.datum}.`);
     return new Map(data.resultaten.map((x) => [x.domein, x]));
   } catch (e) {
-    log(`Geen vorige scan gevonden in Blob (${e.message}).`);
+    log(`Vorige scan niet gelezen (${e.message}).`);
     return null;
   }
 }
 
-async function uploadNaarBlob(blob, scan) {
-  const opties = { access: "private", addRandomSuffix: false, allowOverwrite: true };
-  const map = `${BLOB_MAP}/${DATUM}`;
+async function upload(opslag, scan) {
   const metBeeld = scan.resultaten.filter((r) => r.screenshot);
-  log(`\nUploaden naar Vercel Blob: ${metBeeld.length} screenshots…`);
-  await pool(metBeeld, 8, async (r) => {
-    const pad = `${map}/${r.screenshot}`;
-    await blob.put(pad, readFileSync(join(UIT, r.screenshot)), { ...opties, contentType: "image/jpeg" });
+  log(`\nUploaden: ${metBeeld.length} screenshots…`);
+  await pool(metBeeld, 6, async (r) => {
+    const pad = `${BLOB_MAP}/${DATUM}/${r.screenshot}`;
+    await opslag.beeld(pad, readFileSync(join(UIT, r.screenshot)));
     r.screenshotPad = pad;
   });
-  const json = JSON.stringify(scan);
-  await blob.put(`${map}/resultaten.json`, json, { ...opties, contentType: "application/json" });
-  await blob.put(`${BLOB_MAP}/laatste.json`, json, { ...opties, contentType: "application/json" });
+  await opslag.scan(scan);
   log(`Klaar: ${BLOB_MAP}/laatste.json bijgewerkt.`);
 }
 

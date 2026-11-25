@@ -1,0 +1,62 @@
+name: TLD overzicht
+
+# Scant wat er op psv.<tld> draait (alle topleveldomeinen), maakt screenshots
+# en levert het resultaat af bij Tools (/api/tld-overzicht/upload), dat het in
+# Vercel Blob zet voor IT > TLD overzicht. Draait niet op Vercel zelf: daar is
+# geen browser en duurt het te lang.
+#
+# Gebruikt het bestaande secret CRON_SECRET (hetzelfde als in Vercel).
+# Starten: Actions > TLD overzicht > Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      eigen:
+        description: "Eigen domeinen (komma-gescheiden)"
+        default: "psv.nl"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      UPLOAD_URL: https://tools.psv.nl/api/tld-overzicht/upload
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Wachten tot Tools de upload-route heeft
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          for i in $(seq 1 40); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $CRON_SECRET" "$UPLOAD_URL")
+            echo "Poging $i: HTTP $status"
+            [ "$status" = "200" ] && exit 0
+            sleep 30
+          done
+          echo "Upload-route niet bereikbaar"; exit 1
+
+      - name: Scan
+        env:
+          TLD_UPLOAD_SECRET: ${{ secrets.CRON_SECRET }}
+          EIGEN: ${{ inputs.eigen }}
+        run: node scripts/psv-domeinscan.mjs --upload-url "$UPLOAD_URL" --www --uit domeinscan/laatste --eigen "$EIGEN"
+
+      - name: Rapport bewaren
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tld-overzicht
+          path: domeinscan/laatste
+          retention-days: 30

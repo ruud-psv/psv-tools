@@ -19,6 +19,16 @@ Vercel Blob onder `tld-overzicht/`, waar de pagina het leest:
 BLOB_READ_WRITE_TOKEN=... node scripts/psv-domeinscan.mjs --upload --eigen psv.nl
 ```
 
+Of zonder Blob-token, via GitHub Actions: **Actions → TLD overzicht → Run
+workflow** (`.github/workflows/tld-overzicht.yml`). Die draait de scan op een
+server van GitHub en levert het resultaat af bij `/api/tld-overzicht/upload` in
+Tools, beveiligd met het bestaande `CRON_SECRET`; Tools schrijft het met zijn
+eigen token naar Blob. Lokaal kan dat ook:
+
+```bash
+TLD_UPLOAD_SECRET=<CRON_SECRET> node scripts/psv-domeinscan.mjs --upload-url https://tools.psv.nl/api/tld-overzicht/upload
+```
+
 De token is die van de Blob-store van Tools in Vercel (Storage > Blob >
 `.env.local`). Met `--upload` vergelijkt het script automatisch met de vorige
 scan in Blob.
