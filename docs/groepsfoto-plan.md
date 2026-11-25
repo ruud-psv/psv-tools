@@ -295,8 +295,8 @@ zonder login). Met echte modellen en echte foto's is het nog niet getest; dat is
 
 ## 12. Later (buiten dit plan)
 
-- Publieke versie onder `/share/groepsfoto` met rate limit en zonder vrije tekst. Kan op een
-  Playable-campagnepagina worden ingebed.
+- Publieke versie op een Playable-campagnepagina: uitgewerkt in
+  [groepsfoto-campagne.md](groepsfoto-campagne.md) (via Bunny, niet via `tools.psv.nl`).
 - Printklare kerstkaart als PDF (A6 of A5 gevouwen, met snijmarge).
 - Modus "neem de plek in van…" met een face-swap-model, alleen met expliciet akkoord.
 - Meer kaartontwerpen per gelegenheid (kerst, verjaardag, seizoensstart).

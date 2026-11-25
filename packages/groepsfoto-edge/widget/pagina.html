@@ -1,0 +1,136 @@
+<!-- ============================================================
+     Groepsfoto-kerstkaart — HTML voor de Playable loader.
+     Werkt met de PSV Campaign Kit; de instellingen (adres van het
+     script, campagne, Turnstile) staan bovenaan het JS-blok.
+     ============================================================ -->
+
+<div id="psvk-app" class="psvk-app">
+
+  <a class="psvk-skiplink" href="#psvk-main">Ga naar de inhoud</a>
+
+  <header class="psvk-header">
+    <div class="psvk-wrap psvk-header-inner">
+      <a class="psvk-logo" href="https://www.psv.nl" target="_blank" rel="noopener">
+        <img src="/files/4075/uploads/16747a71-3f29-4df4-9e77-9590a956f8ec.png" alt="PSV" fetchpriority="high">
+      </a>
+    </div>
+  </header>
+
+  <main id="psvk-main">
+
+  <section class="psvk-hero psvk-red">
+    <div class="psvk-hero-inner">
+      <h1 class="psvk-hero-title">
+        <span style="display:block">Jij in de</span>
+        <span class="psvk-mark">kerstfoto</span>
+      </h1>
+      <p class="psvk-hero-lead">Maak een selfie en sta als kerstkaart tussen de spelers van PSV. Klaar in een halve minuut.</p>
+      <div class="psvk-hero-cta">
+        <a class="psvk-btn psvk-btn-primary" href="#psvk-kaart" data-psvk-scroll>Maak je kaart</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="psvk-section psvk-light" id="psvk-kaart">
+    <div class="psvk-wrap">
+      <header class="psvk-head">
+        <h2 class="psvk-title">Maak je kerstkaart</h2>
+        <p class="psvk-lead">Upload een selfie, kies je kleding en wij zetten je op de foto.</p>
+      </header>
+
+      <div class="psvk-split psvk-gf">
+
+        <!-- Links: de stappen -->
+        <form class="psvk-gf-form" id="psvk-gf-form" novalidate>
+
+          <div class="psvk-gf-step">
+            <h3 class="psvk-subtitle">1. Jouw selfie</h3>
+            <input class="psvk-visually-hidden" type="file" id="psvk-gf-file" accept="image/*" capture="user">
+            <div class="psvk-gf-selfie" id="psvk-gf-selfie" hidden>
+              <img id="psvk-gf-selfie-img" alt="Jouw selfie">
+            </div>
+            <div class="psvk-gf-actions">
+              <label class="psvk-btn psvk-btn-dark psvk-btn-flat" for="psvk-gf-file" id="psvk-gf-pick">Maak of kies een selfie</label>
+            </div>
+            <ul class="psvk-gf-tips">
+              <li>Alleen jij in beeld</li>
+              <li>Kijk recht in de camera</li>
+              <li>Goed licht, geen zonnebril</li>
+            </ul>
+          </div>
+
+          <fieldset class="psvk-gf-step" id="psvk-gf-kleding-stap">
+            <legend class="psvk-subtitle">2. Jouw kleding</legend>
+            <div class="psvk-gf-choices" id="psvk-gf-kleding"></div>
+          </fieldset>
+
+          <div class="psvk-gf-step">
+            <h3 class="psvk-subtitle">3. Maken</h3>
+            <label class="psvk-gf-check">
+              <input type="checkbox" id="psvk-gf-ok">
+              <span>Dit is een foto van mezelf, of van iemand die daar toestemming voor gaf. <a class="psvk-link psvk-gf-inline" href="#psvk-gf-faq" data-psvk-scroll>Wat gebeurt er met mijn foto?</a></span>
+            </label>
+            <div class="psvk-gf-turnstile" id="psvk-gf-turnstile"></div>
+            <button type="submit" class="psvk-btn psvk-btn-primary" id="psvk-gf-go" disabled>Maak mijn kaart</button>
+          </div>
+
+          <p class="psvk-gf-message" id="psvk-gf-message" role="alert" hidden></p>
+        </form>
+
+        <!-- Rechts: voorbeeld en resultaat -->
+        <div class="psvk-gf-result" aria-live="polite">
+          <div class="psvk-gf-stage" id="psvk-gf-stage">
+            <p class="psvk-gf-placeholder" id="psvk-gf-placeholder">Hier verschijnt je kaart.</p>
+            <div class="psvk-gf-busy" id="psvk-gf-busy" hidden>
+              <span class="psvk-gf-spinner" aria-hidden="true"></span>
+              <p id="psvk-gf-busy-text">Je kaart wordt gemaakt…</p>
+            </div>
+            <canvas id="psvk-gf-canvas" hidden></canvas>
+          </div>
+          <div class="psvk-gf-actions" id="psvk-gf-done" hidden>
+            <button type="button" class="psvk-btn psvk-btn-primary psvk-btn-flat" id="psvk-gf-download">Download</button>
+            <button type="button" class="psvk-btn psvk-btn-dark psvk-btn-flat" id="psvk-gf-share" hidden>Delen</button>
+            <button type="button" class="psvk-btn psvk-btn-dark psvk-btn-flat" id="psvk-gf-again">Nog een keer</button>
+          </div>
+          <p class="psvk-meta">De kaart is gemaakt met AI en draagt daarom het label "Gemaakt met AI".</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="psvk-section psvk-dark" id="psvk-gf-faq">
+    <div class="psvk-wrap psvk-wrap-narrow">
+      <header class="psvk-head">
+        <h2 class="psvk-title">Goed om te weten</h2>
+      </header>
+      <div class="psvk-accordion">
+        <div class="psvk-accordion-item">
+          <button type="button" class="psvk-accordion-head" data-psvk-accordion aria-expanded="false">Wat gebeurt er met mijn foto?<span class="psvk-accordion-icon" aria-hidden="true"></span></button>
+          <div class="psvk-accordion-body" hidden>
+            <p>Je selfie gebruiken we alleen om deze kaart te maken. We bewaren hem niet. Voor het maken gaat hij naar een AI-dienst, die hem na ongeveer een uur verwijdert. Je kaart bewaren we ook niet: download hem meteen.</p>
+          </div>
+        </div>
+        <div class="psvk-accordion-item">
+          <button type="button" class="psvk-accordion-head" data-psvk-accordion aria-expanded="false">Waarom staat er "Gemaakt met AI" op?<span class="psvk-accordion-icon" aria-hidden="true"></span></button>
+          <div class="psvk-accordion-body" hidden>
+            <p>De kaart is een bewerkte foto, gemaakt met kunstmatige intelligentie. De wet vraagt ons dat duidelijk te maken, zodat niemand denkt dat je echt met de spelers op de foto stond.</p>
+          </div>
+        </div>
+        <div class="psvk-accordion-item">
+          <button type="button" class="psvk-accordion-head" data-psvk-accordion aria-expanded="false">Het lukt niet, wat nu?<span class="psvk-accordion-icon" aria-hidden="true"></span></button>
+          <div class="psvk-accordion-body" hidden>
+            <p>Probeer een andere selfie: alleen jij in beeld, recht naar de camera en met goed licht. Je kunt een paar kaarten per uur maken.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+
+  <footer class="psvk-footer">
+    <p class="psvk-footer-note">Fijne feestdagen</p>
+  </footer>
+
+</div>

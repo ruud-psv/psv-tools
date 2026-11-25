@@ -1,4 +1,6 @@
+import { GroepsfotoCampagnes } from "@/components/groepsfoto-campagnes";
 import { GroepsfotoCreator } from "@/components/groepsfoto-creator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const metadata = {
   title: "Groepsfoto Creator | PSV Tools",
@@ -19,7 +21,18 @@ export default function GroepsfotoPage() {
         </p>
       </div>
 
-      <GroepsfotoCreator />
+      <Tabs defaultValue="maken">
+        <TabsList className="mb-6">
+          <TabsTrigger value="maken">Maken</TabsTrigger>
+          <TabsTrigger value="campagnes">Campagnes</TabsTrigger>
+        </TabsList>
+        <TabsContent value="maken">
+          <GroepsfotoCreator />
+        </TabsContent>
+        <TabsContent value="campagnes">
+          <GroepsfotoCampagnes />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
