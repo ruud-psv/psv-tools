@@ -1,5 +1,5 @@
 /* ============================================================
-   Groepsfoto-kerstkaart — pagina-eigen JS, onder de PSV Campaign Kit.
+   Groepsfoto-kerstkaart — pagina-eigen JS (de loader zet de huisstijlset erbij).
 
    Praat alleen met het script op Bunny (zie packages/groepsfoto-edge).
    Hier staat geen enkele sleutel: de Turnstile site key is openbaar.
@@ -337,7 +337,7 @@ var PSVK_GF = {
     werkKnopBij();
   }
 
-  /* De Kit kan zijn psvk:ready al gestuurd hebben voordat deze code draait,
+  /* De huisstijlset kan zijn psvk:ready al gestuurd hebben voordat deze code draait,
      en Playable bouwt het blok soms opnieuw op. Daarom starten we ook zelf,
      en opnieuw zodra er een nieuw #psvk-app verschijnt. */
   function probeer() {
