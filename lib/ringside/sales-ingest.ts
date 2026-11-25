@@ -37,13 +37,17 @@ import {
   EMPTY_RESALE_PROBE,
   applySalesPage,
   probeResale,
+  pruneRegistry,
   summarizeResaleProbe,
   type SalesSeriesRow,
   type StoredEvent,
+  type TicketRegistry,
 } from "./sales-series";
 import {
   emptySalesData,
+  readRegistry,
   readSalesData,
+  writeRegistry,
   writeSalesData,
   type IngestState,
   type SalesData,
@@ -97,6 +101,11 @@ export function applyProducts(events: Record<string, StoredEvent>, rows: readonl
   }
 }
 
+/** De datum (`YYYY-MM-DD`) van vandaag in Nederland: de grens tussen gespeeld en komend. */
+function todayInAmsterdam(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(now);
+}
+
 /** Dezelfde wedstrijden, zonder tellingen: het begin van een nieuwe doorloop. */
 function withoutCounts(events: Record<string, StoredEvent>): Record<string, StoredEvent> {
   const cleared: Record<string, StoredEvent> = {};
@@ -116,7 +125,7 @@ function beginBackfill(state: IngestState): void {
   state.mode = "backfill";
   state.rowsRead = 0;
   state.salesDateSeen = { earliest: null, latest: null };
-  state.check = { lastSalesItemId: null, outOfOrder: 0, unknownProduct: 0 };
+  state.check = { lastSalesItemId: null, outOfOrder: 0, unknownProduct: 0, replaced: 0, removed: 0, registryMismatch: 0 };
   state.resaleProbe = structuredClone(EMPTY_RESALE_PROBE);
 }
 
@@ -137,9 +146,11 @@ export interface SalesIngestDeps {
   readFeed: typeof readFeed;
   readSalesData: typeof readSalesData;
   writeSalesData: typeof writeSalesData;
+  readRegistry: typeof readRegistry;
+  writeRegistry: typeof writeRegistry;
 }
 
-const DEFAULT_DEPS: SalesIngestDeps = { readFeed, readSalesData, writeSalesData };
+const DEFAULT_DEPS: SalesIngestDeps = { readFeed, readSalesData, writeSalesData, readRegistry, writeRegistry };
 
 export interface SalesIngestResult {
   productsRead: number;
@@ -192,6 +203,21 @@ export async function runSalesIngest(
     data = emptySalesData();
   }
   const current = data;
+  const today = todayInAmsterdam();
+
+  // Het register per ticket, alleen bij data die ermee begonnen is.
+  let registry: TicketRegistry = {};
+  if (current.tracksTickets) {
+    const stored = options.restart ? null : await deps.readRegistry(kind);
+    if (stored) registry = stored.events;
+    // Niet bij de data (het register kon de vorige keer niet opgeslagen worden):
+    // doorgaan met wat er is, en het melden.
+    if ((stored?.salesCursor ?? null) !== current.salesCursor) {
+      state.check.registryMismatch = (state.check.registryMismatch ?? 0) + 1;
+    }
+  }
+  const pageOptions = current.tracksTickets ? { registry, today } : {};
+  state.tracksTickets = Boolean(current.tracksTickets);
 
   let sales: FeedResult | null = null;
   try {
@@ -219,8 +245,10 @@ export async function runSalesIngest(
         current.salesCursor,
         deadline,
         (rows) => {
-          const page = applySalesPage(current.events, rows);
+          const page = applySalesPage(current.events, rows, pageOptions);
           state.check.unknownProduct += page.unknownProduct;
+          state.check.replaced = (state.check.replaced ?? 0) + page.replaced;
+          state.check.removed = (state.check.removed ?? 0) + page.removed;
           const seen = state.salesDateSeen;
           if (page.earliest && (!seen.earliest || page.earliest < seen.earliest)) seen.earliest = page.earliest;
           if (page.latest && (!seen.latest || page.latest > seen.latest)) seen.latest = page.latest;
@@ -251,7 +279,9 @@ export async function runSalesIngest(
       productsCursor: current.productsCursor,
       salesCursor: null,
       events: withoutCounts(current.events),
+      tracksTickets: true,
     });
+    await deps.writeRegistry("work", { salesCursor: null, events: {} });
     return result;
   }
 
@@ -265,6 +295,11 @@ export async function runSalesIngest(
   }
 
   await deps.writeSalesData(kind, current);
+  // Na de data: mislukt dit, dan klopt de data nog en meldt de volgende run het verschil.
+  if (current.tracksTickets) {
+    pruneRegistry(registry, current.events, today);
+    await deps.writeRegistry(kind, { salesCursor: current.salesCursor, events: registry });
+  }
   if (result.published) {
     state.mode = "live";
     state.salesComplete = true;

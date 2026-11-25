@@ -24,6 +24,7 @@
  * verschuift alleen de as.
  */
 
+import { createHash } from "node:crypto";
 import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
 import { normalizeArea } from "../aangrenzende-stoelen/neighbors";
 import { STADIUM_AREAS } from "../aangrenzende-stoelen/stadium";
@@ -72,6 +73,7 @@ export interface StoredEvent {
 
 /** De velden uit `/v1/sales` die de indeling nodig heeft. Geen persoonsgegevens. */
 export interface SalesSeriesRow {
+  _ringside_operation?: unknown;
   sales_item_id?: unknown;
   product_id?: unknown;
   product_item_id?: unknown;
@@ -253,79 +255,186 @@ export function totalOf(counts: Record<string, number> | undefined): number {
 
 /** Wat een pagina opleverde, voor de voortgang. */
 export interface PageResult {
-  /** Regels die als verkocht ticket zijn geteld. */
+  /** Regels die als (nieuw) verkocht ticket zijn geteld. */
   counted: number;
+  /**
+   * Tickets van een komende wedstrijd die opnieuw binnenkwamen (gewijzigd) en
+   * waarvan de eerdere telling vervangen is in plaats van opgeteld.
+   */
+  replaced: number;
+  /** Tickets van een komende wedstrijd die niet meer verkocht zijn (retour, doorverkocht, verwijderd) en eraf gingen. */
+  removed: number;
   /** Verkochte tickets van een product dat (nog) niet in de productenlijst staat. */
   unknownProduct: number;
   earliest: string | null;
   latest: string | null;
 }
 
+/**
+ * Wat één verkocht ticket bijdraagt aan de tellingen van zijn wedstrijd:
+ * `[tribune (1) of niet (0), reeks, dag, centen, vak, lijstprijs in centen]`.
+ * De laatste twee alleen als het ticket meetelt voor de vakprijs (`listPrices`).
+ */
+export type TicketContribution = [
+  onStand: 0 | 1,
+  category: number,
+  day: string,
+  cents: number,
+  listArea?: string,
+  listCents?: number,
+];
+
+/**
+ * Per komende wedstrijd wat elk verkocht ticket bijdraagt, op een korte
+ * sleutel van `sales_item_id` (`ticketKey()`).
+ *
+ * Ringside levert een regel opnieuw aan als hij wijzigt: een kaart die in de
+ * resale gezet wordt, een retour, een doorverkoop. Optellen telde zo'n ticket
+ * dan nog een keer en haalde een retour er niet af. Met dit register wint de
+ * laatste versie: de oude bijdrage gaat eraf, de nieuwe erbij. Alleen voor
+ * wedstrijden die nog niet gespeeld zijn; daarna verandert er niets meer en
+ * valt het register voor die wedstrijd weg.
+ */
+export type TicketRegistry = Record<string, Record<string, TicketContribution>>;
+
 function id(value: unknown): string {
   return text(value).toLowerCase();
 }
 
+/** Korte, vaste sleutel van een `sales_item_id`: 12 hex-tekens. */
+export function ticketKey(salesItemId: string): string {
+  return createHash("sha1").update(salesItemId.toLowerCase()).digest("hex").slice(0, 12);
+}
+
+/** Of de wedstrijd vandaag of later is: dan kan zijn verkoop nog veranderen. */
+export function isUpcoming(event: Pick<StoredEvent, "eventDate">, today: string): boolean {
+  return Boolean(event.eventDate) && event.eventDate.slice(0, 10) >= today;
+}
+
+/** Wat een verkoopregel bijdraagt, of `null` als hij geen verkocht ticket is. */
+function contributionOf(event: StoredEvent, row: SalesSeriesRow): TicketContribution | null {
+  if (!isSoldTicket(row)) return null;
+  const day = amsterdamDay(row.transaction_date);
+  if (!day) return null;
+  const onStand = isStandTicket(event.name, row.area);
+  const contribution: TicketContribution = [
+    onStand ? 1 : 0,
+    SALES_CATEGORIES.indexOf(categoryOf(row)),
+    day,
+    ticketPriceCents(row),
+  ];
+  if (event.listPrices && onStand && text(row.price_type).toLowerCase() === "normaal") {
+    const list = parseMoney(row.list_price);
+    const area = normalizeArea(text(row.area));
+    if (list && list > 0 && area) contribution.push(area, Math.round(list * 100));
+  }
+  return contribution;
+}
+
+function bump(map: Record<string, number>, key: string, by: number): void {
+  const next = (map[key] ?? 0) + by;
+  if (next) map[key] = next;
+  else delete map[key];
+}
+
+/** Telt een bijdrage op (`sign` 1) of haalt hem eraf (`sign` −1). */
+function applyContribution(event: StoredEvent, contribution: TicketContribution, sign: 1 | -1): void {
+  const [onStand, categoryIndex, day, cents, listArea, listCents] = contribution;
+  const category = SALES_CATEGORIES[categoryIndex];
+  if (!category) return;
+  bump(((onStand ? event.stand : event.other)[category] ??= {}), day, sign);
+  // Alleen bij wedstrijden die vanaf het begin van de doorloop bedragen
+  // bijhouden; anders staat er een half bedrag dat compleet lijkt.
+  const amounts = onStand ? event.standCents : event.otherCents;
+  if (amounts && cents) bump((amounts[category] ??= {}), day, sign * cents);
+  if (event.listPrices && listArea && listCents) bump((event.listPrices[listArea] ??= {}), String(listCents), sign);
+}
+
 /**
- * Telt de verkochte tickets van één pagina op bij de wedstrijden.
+ * Telt de verkochte tickets van één pagina bij de wedstrijden.
  *
- * Optellen: een regel komt in de eerste vulling één keer langs (de stroom is
- * dan gesorteerd op `sales_item_id`; de ingest controleert dat). Binnen een
- * pagina ontdubbelen we nog op ticket en dag, zoals de definitie van SeatGeek
- * (`COUNT(DISTINCT product_item_id)`).
+ * - **Met register** (`registry` en `today`), voor wedstrijden die nog komen:
+ *   de laatste versie van een regel wint, zie `TicketRegistry`.
+ * - **Anders** (gespeelde wedstrijden, of data van vóór het register): optellen.
+ *   Een regel komt in de eerste vulling één keer langs; binnen een pagina
+ *   ontdubbelen we nog op ticket en dag, zoals de definitie van SeatGeek
+ *   (`COUNT(DISTINCT product_item_id)`).
  */
-export function applySalesPage(events: Record<string, StoredEvent>, rows: readonly SalesSeriesRow[]): PageResult {
-  const result: PageResult = { counted: 0, unknownProduct: 0, earliest: null, latest: null };
+export function applySalesPage(
+  events: Record<string, StoredEvent>,
+  rows: readonly SalesSeriesRow[],
+  options: { registry?: TicketRegistry; today?: string } = {}
+): PageResult {
+  const result: PageResult = { counted: 0, replaced: 0, removed: 0, unknownProduct: 0, earliest: null, latest: null };
   const seen = new Set<string>();
+  const { registry, today } = options;
+
+  const note = (row: SalesSeriesRow) => {
+    const transaction = text(row.transaction_date);
+    if (!transaction) return;
+    if (!result.earliest || transaction < result.earliest) result.earliest = transaction;
+    if (!result.latest || transaction > result.latest) result.latest = transaction;
+  };
 
   for (const row of rows) {
-    if (!isSoldTicket(row)) continue;
     const productId = id(row.product_id);
-    if (!productId) continue;
+    const salesItemId = id(row.sales_item_id);
+    const isDelete = row._ringside_operation === "D";
+
+    if (registry && today && salesItemId) {
+      const key = ticketKey(salesItemId);
+      // Een verwijderde regel heeft soms alleen zijn sleutel; dan zoeken.
+      let eventId = productId && events[productId] ? productId : null;
+      if (!eventId && isDelete) eventId = Object.keys(registry).find((candidate) => registry[candidate][key]) ?? null;
+      const event = eventId ? events[eventId] : undefined;
+      if (eventId && event && isUpcoming(event, today)) {
+        const tickets = (registry[eventId] ??= {});
+        const previous = tickets[key];
+        const next = isDelete ? null : contributionOf(event, row);
+        if (previous) applyContribution(event, previous, -1);
+        if (next) {
+          applyContribution(event, next, 1);
+          tickets[key] = next;
+          if (previous) result.replaced++;
+          else result.counted++;
+          note(row);
+        } else if (previous) {
+          delete tickets[key];
+          result.removed++;
+        }
+        continue;
+      }
+    }
+
+    if (isDelete || !isSoldTicket(row) || !productId) continue;
     const event = events[productId];
     if (!event) {
       result.unknownProduct++;
       continue;
     }
-
-    const day = amsterdamDay(row.transaction_date);
-    if (!day) continue;
-    const transaction = text(row.transaction_date);
-    if (!result.earliest || transaction < result.earliest) result.earliest = transaction;
-    if (!result.latest || transaction > result.latest) result.latest = transaction;
+    const contribution = contributionOf(event, row);
+    if (!contribution) continue;
 
     const itemId = id(row.product_item_id);
     if (itemId) {
-      const key = `${productId}|${day}|${itemId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const dedupe = `${productId}|${contribution[2]}|${itemId}`;
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
     }
-
-    const onStand = isStandTicket(event.name, row.area);
-    const bucket = onStand ? event.stand : event.other;
-    const category = categoryOf(row);
-    const days = (bucket[category] ??= {});
-    days[day] = (days[day] ?? 0) + 1;
-    // Alleen bij wedstrijden die vanaf het begin van de doorloop bedragen
-    // bijhouden; anders staat er een half bedrag dat compleet lijkt.
-    const amounts = onStand ? event.standCents : event.otherCents;
-    const cents = ticketPriceCents(row);
-    if (event.listPrices && onStand && text(row.price_type).toLowerCase() === "normaal") {
-      const list = parseMoney(row.list_price);
-      const area = normalizeArea(text(row.area));
-      if (list && list > 0 && area) {
-        const counts = (event.listPrices[area] ??= {});
-        const key = String(Math.round(list * 100));
-        counts[key] = (counts[key] ?? 0) + 1;
-      }
-    }
-    if (amounts && cents) {
-      const amountDays = (amounts[category] ??= {});
-      amountDays[day] = (amountDays[day] ?? 0) + cents;
-    }
+    applyContribution(event, contribution, 1);
+    note(row);
     result.counted++;
   }
 
   return result;
+}
+
+/** Haalt wedstrijden uit het register die gespeeld zijn of niet meer bestaan. */
+export function pruneRegistry(registry: TicketRegistry, events: Record<string, StoredEvent>, today: string): void {
+  for (const eventId of Object.keys(registry)) {
+    const event = events[eventId];
+    if (!event || !isUpcoming(event, today)) delete registry[eventId];
+  }
 }
 
 /* ---------- Wat de pagina's lezen ---------- */

@@ -104,7 +104,14 @@ export async function GET(req: NextRequest) {
         updatedAt: state.updatedAt || null,
         caughtUpAt: state.caughtUpAt,
         lastError: state.lastError,
-        check: { outOfOrder: state.check.outOfOrder, unknownProduct: state.check.unknownProduct },
+        tracksTickets: Boolean(state.tracksTickets),
+        check: {
+          outOfOrder: state.check.outOfOrder,
+          unknownProduct: state.check.unknownProduct,
+          replaced: state.check.replaced ?? 0,
+          removed: state.check.removed ?? 0,
+          registryMismatch: state.check.registryMismatch ?? 0,
+        },
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );

@@ -95,8 +95,9 @@ gelezen, zodat later aangemaakte wedstrijden nooit verkoop kregen.
 
 Het antwoord van `/api/ringside/ingest` heeft een blok `check`:
 
-- **`outOfOrder`**: regels die in de doorloop niet oplopen op `sales_item_id`. Is dit 0,
-  dan kwam elke regel één keer langs en klopt het optellen.
+- **`outOfOrder`**: regels die in de doorloop niet oplopen op `sales_item_id`. Zonder register
+  betekent een getal boven 0 dat er dubbel geteld kan zijn; met register vangt dat het op.
+- **`replaced`**, **`removed`** en **`registryMismatch`**: zie "Register per ticket" hieronder.
 - **`unknownProduct`**: verkochte tickets van een product dat niet in de productenlijst
   staat; die zijn niet geteld.
 - **`resale`**: een steekproef die de regel van de koper koppelt aan de vervallen kaart
@@ -104,13 +105,29 @@ Het antwoord van `/api/ringside/ingest` heeft een blok `check`:
   verkoopdatum houdt. Dan kan een doorverkocht ticket ook bij de vrije verkoop meetellen
   op de dag dat het voor het eerst verkocht werd.
 
-## Bekende beperking
+## Register per ticket: de laatste versie wint
 
-Bij het bijhouden levert Ringside een gewijzigde regel opnieuw aan, en optellen kan een
-eerdere versie niet terugdraaien. Een ticket dat na verkoop wijzigt, kan dus dubbel
-tellen, en een retour gaat er niet af. Voor gespeelde wedstrijden speelt dit niet. Voor
-lopende wedstrijden lost fase 2 het op door de reeksen uit de stoelstatus te rekenen,
-waar de laatste versie van een regel wint.
+Ringside levert een regel opnieuw aan als hij wijzigt: een kaart die in de resale gezet wordt,
+een retour, een doorverkoop. Optellen telde zo'n ticket dan nog een keer en haalde een retour er
+niet af. Dat gebeurde ook tijdens een doorloop van een paar uur: wat in die tijd veranderde,
+kwam er los achteraan (de doorloop van 24 november 2026 had 17.395 regels buiten volgorde).
+
+Sinds 25 november 2026 houdt de cron voor elke wedstrijd die nog komt per ticket bij wat hij
+heeft geteld: reeks, dag, bedrag en vakprijs (`TicketRegistry` in
+`lib/ringside/sales-series.ts`, op een korte sleutel van `sales_item_id`). Komt een regel opnieuw
+binnen, dan gaat de oude bijdrage eraf en de nieuwe erbij; is het geen verkocht ticket meer
+(retour, doorverkocht, verwijderd), dan gaat hij er alleen af. Gespeelde wedstrijden veranderen
+niet meer: die vallen uit het register en tellen op zoals eerst.
+
+- Het register staat in een eigen bestand (`ringside/verloop/register-live.json.gz` en
+  `register-work.json.gz`), met de cursor van de data waar het bij hoort. Alleen de cron leest
+  het; de pagina's niet. De cron schrijft eerst de data en dan het register.
+- Alleen data die met het register begonnen is, gebruikt het (`tracksTickets`): halverwege
+  beginnen zou de tickets van daarvoor niet kennen. Data van daarvoor telt op zoals eerst, tot
+  een nieuwe doorloop (`?restart=1`, of "Opnieuw beginnen" in Beheer > Crons).
+- Controles in `check`: `replaced` (gewijzigde tickets vervangen), `removed` (eraf) en
+  `registryMismatch` (het register paste niet bij de data; moet 0 zijn). `outOfOrder` zegt
+  met het register niets meer over dubbeltellingen.
 
 ## Opbrengst (voor de recette)
 

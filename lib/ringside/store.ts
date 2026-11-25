@@ -34,6 +34,7 @@ import {
   type ResaleProbeSummary,
   type SalesCategory,
   type StoredEvent,
+  type TicketRegistry,
 } from "./sales-series";
 
 export type { EventSales, OffsetCounts };
@@ -42,6 +43,8 @@ const PREFIX = "ringside/verloop";
 const STATE_PATH = `${PREFIX}/state.json`;
 const LIVE_PATH = `${PREFIX}/live.json.gz`;
 const WORK_PATH = `${PREFIX}/work.json.gz`;
+const REGISTRY_LIVE_PATH = `${PREFIX}/register-live.json.gz`;
+const REGISTRY_WORK_PATH = `${PREFIX}/register-work.json.gz`;
 
 export type SalesDataKind = "live" | "work";
 
@@ -50,10 +53,31 @@ export interface SalesData {
   productsCursor: string | null;
   salesCursor: string | null;
   events: Record<string, StoredEvent>;
+  /**
+   * Of deze data per ticket bijhoudt wat er geteld is (`TicketRegistry`), voor
+   * de wedstrijden die nog komen. Alleen data die met het register begonnen is:
+   * halverwege beginnen zou de tickets van daarvoor niet kennen. Ontbreekt in
+   * data van daarvoor; die telt op zoals eerst.
+   */
+  tracksTickets?: boolean;
 }
 
 export function emptySalesData(): SalesData {
-  return { productsCursor: null, salesCursor: null, events: {} };
+  return { productsCursor: null, salesCursor: null, events: {}, tracksTickets: true };
+}
+
+/**
+ * Het register per ticket, in een eigen bestand naast de data: het is groot
+ * (een regel per verkocht ticket van elke komende wedstrijd) en alleen de cron
+ * heeft het nodig. De pagina's lezen het nooit.
+ *
+ * `salesCursor` is de cursor van de data waar het bij hoort. De cron schrijft
+ * eerst de data en dan het register; wijkt de cursor af (het register kon niet
+ * opgeslagen worden), dan meldt de cron dat (`check.registryMismatch`).
+ */
+export interface StoredRegistry {
+  salesCursor: string | null;
+  events: TicketRegistry;
 }
 
 export interface IngestState {
@@ -87,8 +111,20 @@ export interface IngestState {
    * dan komt elke regel één keer langs en is optellen juist; `outOfOrder` telt
    * de regels die daar niet aan voldoen.
    */
-  check: { lastSalesItemId: string | null; outOfOrder: number; unknownProduct: number };
+  check: {
+    lastSalesItemId: string | null;
+    outOfOrder: number;
+    unknownProduct: number;
+    /** Tickets van komende wedstrijden die opnieuw binnenkwamen en vervangen zijn (sinds het begin van de doorloop). */
+    replaced?: number;
+    /** Tickets van komende wedstrijden die eraf gingen: retour, doorverkocht, verwijderd. */
+    removed?: number;
+    /** Runs waarin het register niet bij de data paste (zie `StoredRegistry`). */
+    registryMismatch?: number;
+  };
   resaleProbe: ResaleProbe;
+  /** Of de data per ticket bijhoudt wat er geteld is (zie `SalesData.tracksTickets`). */
+  tracksTickets?: boolean;
   /** De uitkomst van `resaleProbe` na een complete doorloop; de steekproef zelf is dan weg. */
   resaleSummary: ResaleProbeSummary | null;
 }
@@ -107,7 +143,7 @@ export const EMPTY_STATE: IngestState = {
   caughtUpAt: null,
   resets: 0,
   lastResetAt: null,
-  check: { lastSalesItemId: null, outOfOrder: 0, unknownProduct: 0 },
+  check: { lastSalesItemId: null, outOfOrder: 0, unknownProduct: 0, replaced: 0, removed: 0, registryMismatch: 0 },
   resaleProbe: EMPTY_RESALE_PROBE,
   resaleSummary: null,
 };
@@ -165,6 +201,7 @@ export function decodeSalesData(bytes: Buffer): SalesData {
     productsCursor: parsed.productsCursor ?? null,
     salesCursor: parsed.salesCursor ?? null,
     events: parsed.events,
+    ...(parsed.tracksTickets ? { tracksTickets: true } : {}),
   };
 }
 
@@ -186,6 +223,33 @@ export async function readSalesData(kind: SalesDataKind): Promise<SalesData | nu
 
 export async function writeSalesData(kind: SalesDataKind, data: SalesData): Promise<void> {
   await put(pathOf(kind), encodeSalesData(data), {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/gzip",
+  });
+}
+
+function registryPathOf(kind: SalesDataKind): string {
+  return kind === "live" ? REGISTRY_LIVE_PATH : REGISTRY_WORK_PATH;
+}
+
+/** `null` als het bestand niet bestaat; gooit `CorruptStoreError` als het niet te lezen is. */
+export async function readRegistry(kind: SalesDataKind): Promise<StoredRegistry | null> {
+  const path = registryPathOf(kind);
+  const bytes = await readPrivateBlob(path);
+  if (!bytes) return null;
+  try {
+    const parsed = JSON.parse(gunzipSync(bytes).toString("utf8")) as Partial<StoredRegistry> | null;
+    if (!parsed || typeof parsed.events !== "object" || parsed.events === null) throw new Error("geen register in het bestand");
+    return { salesCursor: parsed.salesCursor ?? null, events: parsed.events };
+  } catch (error) {
+    throw new CorruptStoreError(path, error);
+  }
+}
+
+export async function writeRegistry(kind: SalesDataKind, registry: StoredRegistry): Promise<void> {
+  await put(registryPathOf(kind), gzipSync(JSON.stringify(registry)), {
     access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,

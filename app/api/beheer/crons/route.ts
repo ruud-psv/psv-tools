@@ -81,14 +81,35 @@ async function jobs() {
               summary: "Bij: houdt nieuwe verkoop bij",
               detail: sales.caughtUpAt ? `Laatst bijgewerkt tot het eind van de stroom: ${sales.caughtUpAt}.` : "",
             },
-      checks: [
-        {
-          label: "Regels buiten volgorde",
-          value: sales.check.outOfOrder,
-          ok: sales.check.outOfOrder === 0,
-          hint: "Moet 0 zijn: dan komt elke regel in de doorloop precies één keer langs.",
-        },
-      ],
+      checks: sales.tracksTickets
+        ? [
+            {
+              label: "Gewijzigde tickets vervangen",
+              value: sales.check.replaced ?? 0,
+              ok: true,
+              hint: "Tickets van komende wedstrijden die opnieuw binnenkwamen (bijvoorbeeld in de resale gezet) en niet dubbel geteld zijn.",
+            },
+            {
+              label: "Tickets eraf",
+              value: sales.check.removed ?? 0,
+              ok: true,
+              hint: "Retouren, doorverkochte kaarten van verkopers en verwijderde regels: niet meer meegeteld.",
+            },
+            {
+              label: "Register niet opgeslagen",
+              value: sales.check.registryMismatch ?? 0,
+              ok: (sales.check.registryMismatch ?? 0) === 0,
+              hint: "Moet 0 zijn. Anders kon het register een keer niet worden opgeslagen; dan kan een gewijzigd ticket alsnog dubbel tellen. Opnieuw beginnen lost het op.",
+            },
+          ]
+        : [
+            {
+              label: "Telt op zonder register",
+              value: sales.check.outOfOrder,
+              ok: false,
+              hint: "Deze cijfers komen uit een doorloop van vóór het register: een ticket dat na verkoop wijzigt, kan dubbel tellen. Kies \"Opnieuw beginnen\" om het register op te bouwen. (Het getal is het aantal regels buiten volgorde in die doorloop.)",
+            },
+          ],
       phases: [] as { name: string; read: number; complete: boolean }[],
     },
     {

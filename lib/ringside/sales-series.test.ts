@@ -216,3 +216,54 @@ test("vakprijs: de meest voorkomende lijstprijs van Normaal-tickets per vak", as
   assert.deepEqual(areaPrices(tracked), { F: 6000, HH: 3750 });
   assert.deepEqual(toEventSales(tracked).areaPriceCents, { F: 6000, HH: 3750 });
 });
+
+test("register: een gewijzigd ticket telt één keer, een retour gaat eraf", async () => {
+  const { pruneRegistry, ticketKey } = await import("./sales-series");
+  const tracked: StoredEvent = { ...event(), standCents: {}, otherCents: {}, listPrices: {} };
+  const events = { [MATCH]: tracked };
+  const registry = {};
+  const options = { registry, today: "2026-11-25" };
+  const sold = ticket({ sales_item_id: "row-1", price_after_discount: 49.5, list_price: "€ 49,50" });
+
+  applySalesPage(events, [sold], options);
+  // Dezelfde regel opnieuw, nu in de resale gezet: vervangen, niet opgeteld.
+  const again = applySalesPage(events, [{ ...sold, resale_status: "Posted" }], options);
+  assert.equal(again.replaced, 1);
+  assert.deepEqual(tracked.stand.vrij, { "2026-11-10": 1 });
+  assert.deepEqual(tracked.standCents?.vrij, { "2026-11-10": 4950 });
+  assert.deepEqual(tracked.listPrices?.HH, { "4950": 1 });
+
+  // Doorverkocht: de kaart van de verkoper vervalt en gaat eraf; de koper komt erbij.
+  const gone = applySalesPage(
+    events,
+    [
+      { ...sold, current_status: false, resale_status: "Resold - Refunded" },
+      ticket({ sales_item_id: "row-2", is_venue_resale: true, price_after_discount: 49.5 }),
+    ],
+    options
+  );
+  assert.equal(gone.removed, 1);
+  assert.equal(gone.counted, 1);
+  assert.equal(tracked.stand.vrij?.["2026-11-10"], undefined);
+  assert.deepEqual(tracked.stand.resale, { "2026-11-10": 1 });
+  assert.deepEqual(tracked.listPrices?.HH, {});
+
+  // Een verwijderde regel met alleen zijn sleutel.
+  applySalesPage(events, [{ _ringside_operation: "D", sales_item_id: "row-2" }], options);
+  assert.deepEqual(tracked.stand.resale, {});
+  assert.deepEqual(Object.keys((registry as Record<string, object>)[MATCH]), []);
+  assert.equal(ticketKey("ROW-2"), ticketKey("row-2"));
+
+  // Gespeeld: niet meer in het register.
+  pruneRegistry(registry, events, "2026-12-01");
+  assert.deepEqual(registry, {});
+});
+
+test("register: gespeelde wedstrijden tellen op zoals eerst", () => {
+  const played: StoredEvent = { ...event("PSV - Excelsior Rotterdam", "2026-10-01 18:45:00"), standCents: {}, otherCents: {} };
+  const registry = {};
+  const row = ticket({ sales_item_id: "row-9", price_after_discount: 10 });
+  applySalesPage({ [MATCH]: played }, [row], { registry, today: "2026-11-25" });
+  assert.deepEqual(registry, {});
+  assert.equal(played.stand.vrij?.["2026-11-10"], 1);
+});

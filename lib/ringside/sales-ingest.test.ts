@@ -11,6 +11,7 @@ import {
   type IngestState,
   type SalesData,
   type SalesDataKind,
+  type StoredRegistry,
 } from "./store";
 
 const MATCH = "300e0601-0006-ad5f-dd90-08decd2c20fe";
@@ -44,6 +45,7 @@ type Step = { rows?: unknown[]; cursor?: string; end?: boolean; reset?: boolean;
 function harness(feeds: Record<string, Step[]>, stored: Partial<Record<SalesDataKind, SalesData | "corrupt">> = {}) {
   const store = new Map<SalesDataKind, SalesData | "corrupt">(Object.entries(stored) as [SalesDataKind, SalesData][]);
   const cursors: Record<string, (string | null)[]> = {};
+  const registries = new Map<SalesDataKind, StoredRegistry>();
   const deps: SalesIngestDeps = {
     async readFeed(path, cursor, _deadline, onRows, onCursor) {
       (cursors[path] ??= []).push(cursor);
@@ -66,8 +68,15 @@ function harness(feeds: Record<string, Step[]>, stored: Partial<Record<SalesData
     async writeSalesData(kind, data) {
       store.set(kind, structuredClone(data));
     },
+    async readRegistry(kind) {
+      const value = registries.get(kind);
+      return value ? structuredClone(value) : null;
+    },
+    async writeRegistry(kind, registry) {
+      registries.set(kind, structuredClone(registry));
+    },
   };
-  return { deps, store, cursors };
+  return { deps, store, cursors, registries };
 }
 
 function state(extra: Partial<IngestState> = {}): IngestState {
@@ -223,4 +232,35 @@ test("opslag: gecomprimeerd heen en terug, en onzin wordt geweigerd", () => {
   assert.deepEqual(decodeSalesData(encodeSalesData(data)), data);
   assert.throws(() => decodeSalesData(Buffer.from("geen gzip")));
   assert.throws(() => decodeSalesData(encodeSalesData({} as SalesData)));
+});
+
+test("register: een nieuwe doorloop houdt per ticket bij, een wijziging telt niet dubbel", async () => {
+  // Een wedstrijd die nog komt.
+  const upcoming = { ...PRODUCT, event_date: "2099-11-28 18:45:00" };
+  const first = harness({ "/v1/products": [{ rows: [upcoming], cursor: "p1", end: true }], "/v1/sales": [{ rows: [sale(1)], cursor: "s1", end: true }] });
+  await runSalesIngest(state(), FAR, { restart: true }, first.deps);
+  const live = first.store.get("live");
+  assert.ok(live && live !== "corrupt" && live.tracksTickets);
+  assert.equal(first.registries.get("live")?.salesCursor, "s1");
+  assert.equal(Object.keys(first.registries.get("live")?.events[MATCH] ?? {}).length, 1);
+
+  // Bijhouden: dezelfde regel komt gewijzigd terug.
+  const next = harness(
+    { "/v1/products": [{ end: true }], "/v1/sales": [{ rows: [sale(1, { resale_status: "Posted" })], cursor: "s2", end: true }] },
+    { live }
+  );
+  next.registries.set("live", first.registries.get("live")!);
+  const s = state({ mode: "live", salesComplete: true });
+  await runSalesIngest(s, FAR, {}, next.deps);
+  assert.equal(total(next.store.get("live")), 1);
+  assert.equal(s.check.replaced, 1);
+  assert.equal(s.check.registryMismatch, 0);
+});
+
+test("register: data van daarvoor telt op zoals eerst, zonder register", async () => {
+  const old: SalesData = { ...emptySalesData(), tracksTickets: undefined };
+  applyProducts(old.events, [PRODUCT]);
+  const { deps, registries } = harness({ "/v1/products": [{ end: true }], "/v1/sales": [{ rows: [sale(1)], end: true }] }, { live: old });
+  await runSalesIngest(state({ mode: "live", salesComplete: true }), FAR, {}, deps);
+  assert.equal(registries.size, 0);
 });
