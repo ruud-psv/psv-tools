@@ -24,7 +24,6 @@
  * verschuift alleen de as.
  */
 
-import { createHash } from "node:crypto";
 import { isPsvHomeMatch } from "../aangrenzende-stoelen/events";
 import { normalizeArea } from "../aangrenzende-stoelen/neighbors";
 import { STADIUM_AREAS } from "../aangrenzende-stoelen/stadium";
@@ -301,9 +300,23 @@ function id(value: unknown): string {
   return text(value).toLowerCase();
 }
 
-/** Korte, vaste sleutel van een `sales_item_id`: 12 hex-tekens. */
+/**
+ * Korte, vaste sleutel van een `sales_item_id`: 12 hex-tekens (48 bits, uit
+ * twee 32-bits FNV-1a-hashes). Puur JavaScript en geen `node:crypto`: dit
+ * bestand komt via `recette.ts` ook in de browser terecht. Binnen één wedstrijd
+ * (tienduizenden tickets) is de kans op twee gelijke sleutels verwaarloosbaar.
+ */
 export function ticketKey(salesItemId: string): string {
-  return createHash("sha1").update(salesItemId.toLowerCase()).digest("hex").slice(0, 12);
+  const value = salesItemId.toLowerCase();
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ 0x9e3779b9;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    a = Math.imul(a ^ code, 0x01000193) >>> 0;
+    b = Math.imul(b ^ code, 0x01000193) >>> 0;
+    b = (b ^ (b >>> 15)) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + (b >>> 16).toString(16).padStart(4, "0");
 }
 
 /** Of de wedstrijd vandaag of later is: dan kan zijn verkoop nog veranderen. */
