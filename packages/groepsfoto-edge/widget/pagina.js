@@ -9,7 +9,7 @@ var PSVK_GF = {
   /* Het adres van het Edge Script op Bunny (kerstkaart26), zonder / aan het eind. */
   script: 'https://kerstkaart26-qesy7.bunny.run',
   /* De sleutel van de campagne in PSV Tools (tabblad Campagnes). */
-  campagne: 'kerst-2026',
+  campagne: 'kerstkaart-2026',
   turnstileSiteKey: '0x4AAAAAAGSEje6q0YHijq2a',
   /* Moet overeenkomen met de kleding die de campagne in PSV Tools toestaat. */
   kleding: [
