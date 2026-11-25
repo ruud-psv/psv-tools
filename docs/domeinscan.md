@@ -5,12 +5,30 @@ IANA, ± 1.450) plus veelgebruikte tweede niveaus (`co.uk`, `com.au`, `com.br`, 
 wat er op `psv.<tld>` draait, en maakt van elke website een screenshot. Zo zie je
 wie de combinatie gebruikt en of iemand onze site namaakt voor phishing.
 
+## In Tools: IT > TLD overzicht
+
+De pagina `/dashboard/tld-overzicht` (rail-icoon **IT**) toont de laatste scan:
+tellers, filters per categorie, zoeken en een kaart met screenshot per domein.
+Nieuwe of veranderde domeinen sinds de vorige scan krijgen een gouden label.
+
+De scan zelf draait niet op Vercel (geen browser, en hij duurt te lang voor een
+serverfunctie). Je draait het script met `--upload`; dat zet het resultaat in
+Vercel Blob onder `tld-overzicht/`, waar de pagina het leest:
+
+```bash
+BLOB_READ_WRITE_TOKEN=... node scripts/psv-domeinscan.mjs --upload --eigen psv.nl
+```
+
+De token is die van de Blob-store van Tools in Vercel (Storage > Blob >
+`.env.local`). Met `--upload` vergelijkt het script automatisch met de vorige
+scan in Blob.
+
 ## Draaien
 
 Eenmalig:
 
 ```bash
-npm i -D playwright
+npm ci
 npx playwright install chromium
 ```
 

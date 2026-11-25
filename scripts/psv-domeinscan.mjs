@@ -32,6 +32,9 @@
  *   --vorige <json>         vergelijk met een eerdere resultaten.json en markeer
  *                           wat nieuw of veranderd is
  *   --dns 1.1.1.1,8.8.8.8   andere DNS-servers gebruiken
+ *   --upload                zet de scan in Vercel Blob (BLOB_READ_WRITE_TOKEN
+ *                           nodig), zodat Tools > IT > TLD overzicht hem toont;
+ *                           vergelijkt dan ook automatisch met de vorige scan
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
@@ -51,6 +54,9 @@ const PARALLEL = Math.max(1, Number(args.parallel ?? 6));
 const DATUM = new Date().toISOString().slice(0, 10);
 const UIT = String(args.uit ?? join("domeinscan", DATUM));
 const PAGINA_TIMEOUT = 25_000;
+const START = new Date().toISOString();
+/** Het pad in Vercel Blob; `lib/tld-overzicht/store.ts` leest hetzelfde. */
+const BLOB_MAP = "tld-overzicht";
 
 const resolver = new Resolver({ timeout: 4000, tries: 2 });
 if (args.dns) resolver.setServers(String(args.dns).split(","));
@@ -112,11 +118,13 @@ await browser.close();
 
 // 3. Samenvoegen en indelen
 const webPerDomein = new Map(web.map((w) => [w.domein, w]));
-const vorige = args.vorige ? leesVorige(String(args.vorige)) : null;
+const blob = args.upload ? await laadBlob() : null;
+const vorige = args.vorige ? leesVorige(String(args.vorige)) : blob ? await vorigeUitBlob(blob) : null;
 const resultaten = dns.map((d) => {
   const w = webPerDomein.get(d.domein) ?? null;
   const r = { ...d, ...(w ?? {}), categorie: deelIn(d, w) };
   if (vorige) r.wijziging = vergelijk(r, vorige.get(r.domein));
+  delete r.tekst; // alleen nodig voor de indeling; de rest van de pagina bewaren we niet
   return r;
 });
 
@@ -125,7 +133,8 @@ resultaten.sort(
   (a, b) => rang(a.categorie) - rang(b.categorie) || a.domein.localeCompare(b.domein),
 );
 
-writeFileSync(join(UIT, "resultaten.json"), JSON.stringify({ datum: DATUM, naam: NAAM, eigen: EIGEN, resultaten }, null, 2));
+const scan = { datum: DATUM, gescandOp: START, naam: NAAM, eigen: EIGEN, resultaten };
+writeFileSync(join(UIT, "resultaten.json"), JSON.stringify(scan, null, 2));
 writeFileSync(join(UIT, "resultaten.csv"), naarCsv(resultaten));
 writeFileSync(join(UIT, "rapport.html"), naarHtml(resultaten));
 
@@ -134,6 +143,8 @@ for (const r of resultaten) telling[r.categorie] = (telling[r.categorie] ?? 0) +
 log("\nSamenvatting:");
 for (const c of [...VOLGORDE, "niet geregistreerd", "wildcard"]) if (telling[c]) log(`  ${c.padEnd(30)} ${telling[c]}`);
 log(`\nRapport: ${join(UIT, "rapport.html")}`);
+
+if (blob) await uploadNaarBlob(blob, scan);
 
 // ---------------------------------------------------------------- DNS
 
@@ -205,8 +216,8 @@ async function bezoek(browser, domein) {
         await page.waitForLoadState("networkidle", { timeout: 6000 }).catch(() => {});
         await page.waitForTimeout(1000);
 
-        const bestand = join("screenshots", `${domein}.png`);
-        await page.screenshot({ path: join(UIT, bestand), timeout: 10_000 });
+        const bestand = `screenshots/${domein}.jpg`;
+        await page.screenshot({ path: join(UIT, bestand), type: "jpeg", quality: 70, timeout: 10_000 });
         const info = await page.evaluate(() => ({
           titel: document.title,
           tekst: (document.body?.innerText ?? "").replace(/\s+/g, " ").slice(0, 4000),
@@ -373,6 +384,45 @@ document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click
 }));
 </script>
 </body></html>`;
+}
+
+// ---------------------------------------------------------------- Vercel Blob
+
+async function laadBlob() {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error("--upload heeft BLOB_READ_WRITE_TOKEN nodig (de token van de Blob-store in Vercel).");
+    process.exit(1);
+  }
+  return import("@vercel/blob");
+}
+
+async function vorigeUitBlob(blob) {
+  try {
+    const r = await blob.get(`${BLOB_MAP}/laatste.json`, { access: "private", useCache: false });
+    if (!r?.stream) return null;
+    const data = JSON.parse(await new Response(r.stream).text());
+    log(`Vergelijken met de vorige scan van ${data.datum}.`);
+    return new Map(data.resultaten.map((x) => [x.domein, x]));
+  } catch (e) {
+    log(`Geen vorige scan gevonden in Blob (${e.message}).`);
+    return null;
+  }
+}
+
+async function uploadNaarBlob(blob, scan) {
+  const opties = { access: "private", addRandomSuffix: false, allowOverwrite: true };
+  const map = `${BLOB_MAP}/${DATUM}`;
+  const metBeeld = scan.resultaten.filter((r) => r.screenshot);
+  log(`\nUploaden naar Vercel Blob: ${metBeeld.length} screenshots…`);
+  await pool(metBeeld, 8, async (r) => {
+    const pad = `${map}/${r.screenshot}`;
+    await blob.put(pad, readFileSync(join(UIT, r.screenshot)), { ...opties, contentType: "image/jpeg" });
+    r.screenshotPad = pad;
+  });
+  const json = JSON.stringify(scan);
+  await blob.put(`${map}/resultaten.json`, json, { ...opties, contentType: "application/json" });
+  await blob.put(`${BLOB_MAP}/laatste.json`, json, { ...opties, contentType: "application/json" });
+  log(`Klaar: ${BLOB_MAP}/laatste.json bijgewerkt.`);
 }
 
 // ---------------------------------------------------------------- hulpjes

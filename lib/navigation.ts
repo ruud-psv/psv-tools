@@ -1,4 +1,4 @@
-import { FolderOpen, Headset, ListOrdered, LogIn, Megaphone, ShoppingBag, Sparkles, Ticket, type LucideIcon } from "lucide-react";
+import { FolderOpen, Headset, ListOrdered, LogIn, Megaphone, MonitorCog, ShoppingBag, Sparkles, Ticket, type LucideIcon } from "lucide-react";
 import { betaTools, insightTools, knowledgeTools, makeTools } from "@/lib/tools";
 
 /**
@@ -113,6 +113,12 @@ const SPECS: SectionSpec[] = [
     name: "FANdesk",
     icon: Headset,
     groups: [{ title: "Inzichten", hrefs: ["/dashboard/fandesk"] }],
+  },
+  {
+    id: "it",
+    name: "IT",
+    icon: MonitorCog,
+    groups: [{ title: "Inzichten", hrefs: ["/dashboard/tld-overzicht"] }],
   },
 ];
 

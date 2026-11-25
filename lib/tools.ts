@@ -5,6 +5,7 @@ import {
   Building2,
   ClipboardCheck,
   Database,
+  Earth,
   FileText,
   Globe,
   Headset,
@@ -192,6 +193,14 @@ export const insightTools: ToolEntry[] = [
       "Hoeveel tickets er binnenkomen, waar ze over gaan en op welke momenten.",
     href: "/dashboard/fandesk",
     icon: Headset,
+  },
+  {
+    name: "TLD overzicht",
+    title: "Domeinen op psv.<tld> bekijken",
+    description:
+      "Wat er draait op psv.nl, psv.com, psv.co.uk en alle andere topleveldomeinen, met screenshots, om namaak en phishing te zien.",
+    href: "/dashboard/tld-overzicht",
+    icon: Earth,
   },
 ];
 
