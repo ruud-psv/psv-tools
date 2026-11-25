@@ -13,15 +13,22 @@
 
       <div class="psvk-gf-step">
         <h3 class="psvk-subtitle">1. Jouw selfie</h3>
-        <input class="psvk-visually-hidden" type="file" id="psvk-gf-file" accept="image/*" capture="user">
+        <!-- Alleen de camera, met een kader: geen upload van bestaande foto's. -->
+        <div class="psvk-gf-camera" id="psvk-gf-camera" hidden>
+          <video id="psvk-gf-video" playsinline muted autoplay></video>
+          <div class="psvk-gf-frame" aria-hidden="true"></div>
+          <p class="psvk-gf-frame-hint">Zet je gezicht in het kader</p>
+        </div>
         <div class="psvk-gf-selfie" id="psvk-gf-selfie" hidden>
           <img id="psvk-gf-selfie-img" alt="Jouw selfie">
         </div>
         <div class="psvk-gf-actions">
-          <label class="psvk-btn psvk-btn-dark psvk-btn-flat" for="psvk-gf-file" id="psvk-gf-pick">Maak of kies een selfie</label>
+          <button type="button" class="psvk-btn psvk-btn-dark psvk-btn-flat" id="psvk-gf-start">Start je camera</button>
+          <button type="button" class="psvk-btn psvk-btn-primary psvk-btn-flat" id="psvk-gf-snap" hidden>Maak foto</button>
+          <button type="button" class="psvk-btn psvk-btn-dark psvk-btn-flat" id="psvk-gf-retake" hidden>Opnieuw</button>
         </div>
         <ul class="psvk-gf-tips">
-          <li>Alleen jij in beeld</li>
+          <li>Alleen jij in beeld, gezicht in het kader</li>
           <li>Kijk recht in de camera</li>
           <li>Goed licht, geen zonnebril</li>
         </ul>

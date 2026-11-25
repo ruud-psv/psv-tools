@@ -24,21 +24,59 @@
 
 #psvk-app .psvk-gf-selfie {
   width: 160px;
-  aspect-ratio: 1;
   margin-bottom: 14px;
   background: var(--psvk-grey);
   border-radius: var(--psvk-radius);
   overflow: hidden;
 }
-#psvk-app .psvk-gf-selfie img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#psvk-app .psvk-gf-selfie img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
+
+#psvk-app .psvk-gf-selfie { width: 180px; aspect-ratio: 3 / 4; }
+
+/* Camerabeeld in 3:4 met een ovaal kader; buiten het kader donker. */
+#psvk-app .psvk-gf-camera {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 3 / 4;
+  margin-bottom: 14px;
+  background: var(--psvk-black);
+  border-radius: var(--psvk-radius);
+  overflow: hidden;
+}
+#psvk-app .psvk-gf-camera video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* spiegelbeeld, zoals mensen een selfie gewend zijn */
+}
+#psvk-app .psvk-gf-frame {
+  position: absolute;
+  left: 20%;
+  top: 14%;
+  width: 60%;
+  height: 58%;
+  border: var(--psvk-rule) solid var(--psvk-white);
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+#psvk-app .psvk-gf-frame-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  margin: 0;
+  color: var(--psvk-white);
+  font-family: var(--psvk-display);
+  font-size: var(--psvk-size-lead);
+  text-transform: uppercase;
+  text-align: center;
+}
 
 #psvk-app .psvk-gf-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-#psvk-app label.psvk-btn { cursor: pointer; }
-#psvk-app #psvk-gf-file:focus-visible + .psvk-gf-selfie + .psvk-gf-actions .psvk-btn,
-#psvk-app #psvk-gf-file:focus-visible ~ .psvk-gf-actions .psvk-btn {
-  outline: 2px solid var(--psvk-red);
-  outline-offset: 3px;
-}
 
 #psvk-app .psvk-gf-tips {
   margin: 14px 0 0 !important;

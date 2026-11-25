@@ -101,11 +101,20 @@ De widget is een **embed** voor een bestaande Playable-pagina: alleen het
 formulier en de kaart, zonder kop, achtergrond of footer, en met een korte
 privacytekst bij het toestemmingsvinkje.
 
-Wat de widget doet: selfie kiezen of maken (op een telefoon opent de
-voorcamera), verkleinen in de browser (de metadata valt eraf), kleding kiezen,
+Wat de widget doet: een selfie **alleen met de camera** (geen upload van
+bestaande foto's), met een ovaal kader in een 3:4-beeld. Wat in beeld is wordt
+de selfie: 768×1024 als JPEG, zonder metadata. De camera gaat uit na de foto en
+als de pagina uit beeld gaat. Daarna kleding kiezen,
 toestemming en Turnstile, maken, wachten, en de kaart samenstellen op een
 canvas: foto met witte rand, label "Gemaakt met AI" op de foto, rode band met
 tekst en logo. Downloaden als JPEG, en delen op telefoons die dat kennen.
 
-Getest in Chromium (desktop en iPhone-formaat) tegen de echte `handler.ts`,
-met Replicate en Turnstile nagebootst.
+Getest in Chromium (desktop en iPhone-formaat) met een nagebootste camera,
+tegen de echte `handler.ts`, met Replicate en Turnstile nagebootst; ook de
+melding als iemand de camera weigert.
+
+Grenzen: de camera-eis houdt bestaande foto's van internet tegen en geeft elke
+selfie dezelfde opbouw, maar het script op Bunny kan niet controleren dat een
+beeld uit de camera komt. Wie de camera op een foto of scherm richt, of het
+script rechtstreeks aanroept, komt er nog langs. Een laptop zonder camera kan
+niet meedoen.

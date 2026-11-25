@@ -53,22 +53,46 @@ var PSVK_GF = {
     });
   }
 
-  /* Verkleint de selfie en codeert hem opnieuw als JPEG. De browser zet de
-     foto daarbij recht, en alle metadata (zoals GPS) valt eraf. */
-  function verklein(bestand) {
-    var url = URL.createObjectURL(bestand);
-    return laadBeeld(url).then(function (img) {
-      var schaal = Math.min(1, PSVK_GF.selfieZijde / Math.max(img.naturalWidth, img.naturalHeight));
-      var c = document.createElement('canvas');
-      c.width = Math.round(img.naturalWidth * schaal);
-      c.height = Math.round(img.naturalHeight * schaal);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      return c.toDataURL('image/jpeg', 0.88);
-    }, function (err) {
-      URL.revokeObjectURL(url);
-      throw err;
+  /* Alleen de camera: geen upload, zodat er geen bestaande foto van een
+     ander in kan, en elke selfie dezelfde opbouw heeft (3:4, gezicht in het
+     kader). Wat in beeld is, wordt het beeld: het midden in 3:4, verkleind tot
+     hooguit 1024px en opnieuw als JPEG, zonder metadata. Het spiegelbeeld is
+     alleen voor het scherm; het model krijgt de foto zoals de camera hem ziet. */
+  function vraagCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return Promise.reject({ melding: 'Je browser kan hier de camera niet gebruiken. Open deze pagina in Safari of Chrome.' });
+    }
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1280 } },
+      audio: false
+    }).catch(function (err) {
+      var naam = err && err.name;
+      if (naam === 'NotAllowedError' || naam === 'SecurityError') {
+        throw { melding: 'Je gaf geen toestemming voor de camera. Sta de camera toe in je browser en probeer het opnieuw.' };
+      }
+      if (naam === 'NotFoundError' || naam === 'OverconstrainedError') {
+        throw { melding: 'We vinden geen camera. Maak je kaart op je telefoon.' };
+      }
+      if (naam === 'NotReadableError') {
+        throw { melding: 'Je camera is bezet door een andere app. Sluit die en probeer het opnieuw.' };
+      }
+      throw { melding: 'De camera start niet. Probeer het opnieuw of open de pagina in Safari of Chrome.' };
     });
+  }
+
+  function legVast(video) {
+    var vb = video.videoWidth;
+    var vh = video.videoHeight;
+    var cw = vb;
+    var ch = vh;
+    if (vb / vh > 3 / 4) cw = Math.round(vh * 3 / 4);
+    else ch = Math.round(vb * 4 / 3);
+    var schaal = Math.min(1, PSVK_GF.selfieZijde / ch);
+    var c = document.createElement('canvas');
+    c.width = Math.round(cw * schaal);
+    c.height = Math.round(ch * schaal);
+    c.getContext('2d').drawImage(video, (vb - cw) / 2, (vh - ch) / 2, cw, ch, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.9);
   }
 
   function api(pad, init) {
@@ -144,10 +168,13 @@ var PSVK_GF = {
     root.setAttribute('data-psvk-gf', 'aan');
 
     var el = function (id) { return root.querySelector('#' + id); };
-    var bestand = el('psvk-gf-file');
+    var cameraVak = el('psvk-gf-camera');
+    var video = el('psvk-gf-video');
+    var startKnop = el('psvk-gf-start');
+    var snapKnop = el('psvk-gf-snap');
+    var opnieuwFoto = el('psvk-gf-retake');
     var selfieVak = el('psvk-gf-selfie');
     var selfieImg = el('psvk-gf-selfie-img');
-    var kies = el('psvk-gf-pick');
     var keuzes = el('psvk-gf-kleding');
     var akkoord = el('psvk-gf-ok');
     var knop = el('psvk-gf-go');
@@ -207,20 +234,61 @@ var PSVK_GF = {
       });
     }
 
-    bestand.addEventListener('change', function () {
-      var f = bestand.files && bestand.files[0];
-      bestand.value = '';
-      if (!f) return;
+    var stroom = null;
+
+    function stopCamera() {
+      if (stroom) stroom.getTracks().forEach(function (t) { t.stop(); });
+      stroom = null;
+      video.srcObject = null;
+      cameraVak.hidden = true;
+      snapKnop.hidden = true;
+    }
+
+    function startCamera() {
       toon('');
-      verklein(f).then(function (dataUrl) {
-        selfie = dataUrl;
-        selfieImg.src = dataUrl;
-        selfieVak.hidden = false;
-        kies.textContent = 'Andere selfie';
-        werkKnopBij();
-      }).catch(function () {
-        toon('Deze foto kunnen we niet openen. Kies een jpg of png.');
+      startKnop.disabled = true;
+      vraagCamera().then(function (s) {
+        stroom = s;
+        video.srcObject = s;
+        cameraVak.hidden = false;
+        selfieVak.hidden = true;
+        startKnop.hidden = true;
+        opnieuwFoto.hidden = true;
+        snapKnop.hidden = false;
+        return video.play();
+      }).catch(function (err) {
+        stopCamera();
+        startKnop.hidden = false;
+        toon((err && err.melding) || 'De camera start niet. Probeer het opnieuw.');
+      }).then(function () {
+        startKnop.disabled = false;
       });
+    }
+
+    startKnop.addEventListener('click', startCamera);
+    opnieuwFoto.addEventListener('click', function () {
+      selfie = null;
+      werkKnopBij();
+      startCamera();
+    });
+
+    snapKnop.addEventListener('click', function () {
+      if (!stroom || !video.videoWidth) return;
+      selfie = legVast(video);
+      stopCamera();
+      selfieImg.src = selfie;
+      selfieVak.hidden = false;
+      opnieuwFoto.hidden = false;
+      werkKnopBij();
+    });
+
+    /* Camera uit zodra de pagina niet meer in beeld is. */
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && stroom) {
+        stopCamera();
+        if (!selfie) startKnop.hidden = false;
+        else opnieuwFoto.hidden = false;
+      }
     });
 
     akkoord.addEventListener('change', werkKnopBij);
