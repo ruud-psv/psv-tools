@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --experimental-strip-types --no-warnings --import ./scripts/test-hooks.mjs --test \"lib/**/*.test.ts\""
+    "test": "node --experimental-strip-types --no-warnings --import ./scripts/test-hooks.mjs --test \"lib/**/*.test.ts\" \"packages/groepsfoto-edge/src/**/*.test.ts\"",
+    "edge:build": "esbuild packages/groepsfoto-edge/src/main.ts --bundle --format=esm --platform=neutral --target=es2022 --external:https://* --outfile=packages/groepsfoto-edge/dist/groepsfoto.js",
+    "edge:check": "tsc -p packages/groepsfoto-edge"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.86.1",
@@ -43,6 +45,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
+    "esbuild": "^0.25.12",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
     "postcss": "^8",
