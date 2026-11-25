@@ -91,7 +91,7 @@ Bovenaan `pagina.js` staan de instellingen:
 
 | Instelling | Wat |
 |---|---|
-| `script` | het `*.b-cdn.net`-adres van het Edge Script, zonder `/` aan het eind |
+| `script` | het adres van het Edge Script (bijv. `https://kerstkaart26-qesy7.bunny.run`), zonder `/` aan het eind |
 | `campagne` | de sleutel van de campagne in PSV Tools (tabblad Campagnes) |
 | `turnstileSiteKey` | de openbare site key van de Turnstile-widget |
 | `kleding` | de keuzes; moeten passen bij wat de campagne in PSV Tools toestaat |
