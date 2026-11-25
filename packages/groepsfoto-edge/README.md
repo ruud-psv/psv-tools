@@ -97,6 +97,10 @@ Bovenaan `pagina.js` staan de instellingen:
 | `kleding` | de keuzes; moeten passen bij wat de campagne in PSV Tools toestaat |
 | `kaarttekst` | de tekst in de rode band onder de foto |
 
+De widget is een **embed** voor een bestaande Playable-pagina: alleen het
+formulier en de kaart, zonder kop, achtergrond of footer, en met een korte
+privacytekst bij het toestemmingsvinkje.
+
 Wat de widget doet: selfie kiezen of maken (op een telefoon opent de
 voorcamera), verkleinen in de browser (de metadata valt eraf), kleding kiezen,
 toestemming en Turnstile, maken, wachten, en de kaart samenstellen op een

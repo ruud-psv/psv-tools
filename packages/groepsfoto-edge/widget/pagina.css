@@ -3,7 +3,13 @@
    Alleen tokens uit de Kit; alles gescoped met #psvk-app .psvk-gf-.
    ============================================================ */
 
+/* Embed: geen eigen achtergrond of zijmarge; de pagina van Playable eromheen bepaalt dat. */
+#psvk-app.psvk-gf-embed { background: transparent; padding: 0; }
+
 #psvk-app .psvk-gf { align-items: start; }
+
+/* Wat het script verbergt, blijft verborgen, ook als een klasse display zet. */
+#psvk-app .psvk-gf [hidden] { display: none !important; }
 
 #psvk-app .psvk-gf-form { display: flex; flex-direction: column; gap: 32px; }
 
@@ -78,7 +84,13 @@
   cursor: pointer;
 }
 #psvk-app .psvk-gf-check input { accent-color: var(--psvk-red); width: 18px; height: 18px; margin: 2px 0 0; flex: none; }
-#psvk-app a.psvk-link.psvk-gf-inline { display: inline !important; font-size: var(--psvk-size-small) !important; }
+#psvk-app .psvk-gf-privacy {
+  margin: 0 0 16px;
+  max-width: 520px;
+  color: var(--psvk-grey-mid);
+  font-size: var(--psvk-size-meta);
+  line-height: 1.5;
+}
 
 #psvk-app .psvk-gf-turnstile { min-height: 0; margin-bottom: 16px; }
 #psvk-app .psvk-gf-turnstile:empty { margin: 0; }
@@ -93,7 +105,7 @@
   font-size: var(--psvk-size-small);
 }
 
-#psvk-app .psvk-gf-result { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 110px; }
+#psvk-app .psvk-gf-result { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 24px; }
 
 #psvk-app .psvk-gf-stage {
   position: relative;
