@@ -11,11 +11,11 @@ var PSVK_GF = {
   /* De sleutel van de campagne in PSV Tools (tabblad Campagnes). */
   campagne: 'kerstkaart-2026',
   turnstileSiteKey: '0x4AAAAAAGSEje6q0YHijq2a',
-  /* Moet overeenkomen met de kleding die de campagne in PSV Tools toestaat. */
+  /* De kleding van de kaart: die van de spelers op de foto. Moet in de
+     campagne in PSV Tools aangevinkt staan. Met meer dan één waarde én een
+     element #psvk-gf-kleding in de HTML kan de fan kiezen. */
   kleding: [
-    { waarde: 'passend', label: 'Kersttrui, net als de spelers' },
-    { waarde: 'eigen', label: 'Mijn eigen kleding' },
-    { waarde: 'shirt', label: 'PSV-thuisshirt' }
+    { waarde: 'passend', label: 'Kersttrui, net als de spelers' }
   ],
   kaarttekst: 'Fijne feestdagen en een sportief 2027!',
   aiLabel: 'Gemaakt met AI',
@@ -166,8 +166,8 @@ var PSVK_GF = {
     var widget = null;
     var bezig = false;
 
-    /* Kledingkeuzes; met één keuze is er niets te kiezen. */
-    PSVK_GF.kleding.forEach(function (k, i) {
+    /* Kledingkeuzes; zonder keuzevak of met één keuze is er niets te kiezen. */
+    if (keuzes && PSVK_GF.kleding.length > 1) PSVK_GF.kleding.forEach(function (k, i) {
       var label = document.createElement('label');
       label.className = 'psvk-gf-choice';
       var input = document.createElement('input');
@@ -179,7 +179,8 @@ var PSVK_GF = {
       label.appendChild(document.createTextNode(k.label));
       keuzes.appendChild(label);
     });
-    if (PSVK_GF.kleding.length < 2) el('psvk-gf-kleding-stap').hidden = true;
+    var stap = el('psvk-gf-kleding-stap');
+    if (stap && !(keuzes && PSVK_GF.kleding.length > 1)) stap.hidden = true;
 
     function toon(tekst) {
       bericht.textContent = tekst;
@@ -232,7 +233,7 @@ var PSVK_GF = {
     }
 
     function maak() {
-      var kleding = (form.querySelector('input[name="psvk-gf-kleding"]:checked') || {}).value;
+      var kleding = (form.querySelector('input[name="psvk-gf-kleding"]:checked') || {}).value || PSVK_GF.kleding[0].waarde;
       bezig = true;
       werkKnopBij();
       toon('');
