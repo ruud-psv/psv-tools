@@ -20,3 +20,6 @@ npm-debug.log*
 # App settings (contains API keys)
 config/settings.json
 
+
+# Uitvoer van scripts/psv-domeinscan.mjs
+/domeinscan/
