@@ -9,6 +9,7 @@ import {
   isBlueconicIngesteld,
   kiesEigenschappen,
   leesProfielPagina,
+  probeerScopes,
   type BlueconicConfig,
 } from "./blueconic";
 
@@ -184,4 +185,35 @@ test("nul profielen in het segment is een fout, geen telling", async () => {
     url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok" }) : json({ itemsPerPage: 1000, profiles: [], startIndex: 0, totalPages: 0, totalResults: 0 })
   );
   await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /0 profielen/);
+});
+
+test("scopes: standaard, uit BLUECONIC_SCOPES, of geen", () => {
+  assert.equal(blueconicConfig(ENV).scopes, "read:profiles read:properties read:segments");
+  assert.equal(blueconicConfig({ ...ENV, BLUECONIC_SCOPES: "profiles:read segments:read" }).scopes, "profiles:read segments:read");
+  assert.equal(blueconicConfig({ ...ENV, BLUECONIC_SCOPES: "geen" }).scopes, "");
+});
+
+test("scopes proberen: per schrijfwijze het token, het segment en het aantal profielen", async () => {
+  // Alleen de tweede schrijfwijze geeft echte rechten.
+  const goed = nep(({ url, init }) => {
+    if (url.pathname.endsWith("/oauth/token")) {
+      const scope = new URLSearchParams(String(init?.body)).get("scope");
+      return json({ access_token: scope === "profiles:read segments:read" ? "goed" : "leeg" });
+    }
+    const auth = new Headers(init?.headers).get("Authorization");
+    if (auth !== "Bearer goed") return url.pathname.startsWith("/rest/v2/segments") ? json({}, 403) : json({ profiles: [], totalResults: 0 });
+    return url.pathname.startsWith("/rest/v2/segments") ? json({ id: "x" }) : json({ profiles: [{ id: "1" }], totalResults: 64_700 });
+  });
+  const proeven = await probeerScopes(CONFIG, { doeFetch: goed.doeFetch, varianten: ["read:profiles", "profiles:read segments:read", ""] });
+  assert.deepEqual(
+    proeven.map((p) => [p.scopes, p.segment, p.profielen]),
+    [
+      ["read:profiles", 403, 0],
+      ["profiles:read segments:read", 200, 64_700],
+      ["(geen)", 403, 0],
+    ]
+  );
+  // Zonder scope gaat er ook echt geen scope mee.
+  const zonder = goed.verzoeken.filter((v) => v.url.pathname.endsWith("/oauth/token")).at(-1);
+  assert.equal(new URLSearchParams(String(zonder?.init?.body)).get("scope"), null);
 });
