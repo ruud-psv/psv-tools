@@ -137,7 +137,8 @@ export function leesProfielPagina(body: unknown): ProfielPagina {
   let volgende: string | null = null;
   let totaal: number | null = null;
   if (isObject(body)) {
-    const cursor = body.nextCursor ?? body.next ?? body.cursor ?? (isObject(body.paging) ? (body.paging.next ?? body.paging.cursor) : null);
+    // `cursor` is de huidige pagina; alleen `nextCursor` wijst naar de volgende.
+    const cursor = body.nextCursor ?? (isObject(body.paging) ? body.paging.next : null);
     volgende = typeof cursor === "string" && cursor && !/^https?:/.test(cursor) ? cursor : null;
     const t = body.total ?? body.totalCount ?? body.totalResults ?? (isObject(body.paging) ? body.paging.total : null);
     totaal = typeof t === "number" && Number.isFinite(t) ? t : null;
@@ -338,7 +339,7 @@ export function profielVraag(segmentId: string, eigenschappen: string[], cursor:
       ["cursor", cursor],
       ["count", String(aantal)],
       ...eigenschappen.map((e): [string, string] => ["profileProperty", e]),
-      ["properties", eigenschappen.join(",")],
+      ...(eigenschappen.length ? [["properties", eigenschappen.join(",")] as [string, string]] : []),
     ],
   };
 }

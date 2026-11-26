@@ -59,32 +59,49 @@ export async function GET(req: NextRequest) {
     uit.eigenschappen = { fout: fout(err) };
   }
 
-  try {
-    const begin = Date.now();
-    const vraag = profielVraag(config.segmentId, eigenschappen ? [eigenschappen.sso, eigenschappen.login] : [], "*", 20);
-    const body = await api.get(vraag.pad, vraag.params);
-    const pagina = leesProfielPagina(body);
-    const e = eigenschappen;
-    uit.profielen = {
-      ms: Date.now() - begin,
-      sleutels: typeof body === "object" && body ? Object.keys(body) : typeof body,
-      opPagina: pagina.profielen.length,
-      totaal: pagina.totaal,
-      volgendeCursor: Boolean(pagina.volgende),
-      metSsoId: e ? pagina.profielen.filter((p) => p.eigenschappen.get(e.sso)?.[0]).length : null,
-      metLogindatum: e ? pagina.profielen.filter((p) => dagUitWaarde(p.eigenschappen.get(e.login)?.[0])).length : null,
-      voorbeeld: pagina.profielen[0]
-        ? Object.fromEntries(
-            [...pagina.profielen[0].eigenschappen].map(([id, w]) => [
-              id,
-              e && id === e.login ? w.map((x) => ({ dag: dagUitWaarde(x), vorm: x.replace(/\d/g, "9") })) : w.map((x) => ({ lengte: x.length })),
-            ])
-          )
-        : null,
-    };
-  } catch (err) {
-    uit.profielen = { fout: fout(err) };
+  // Dezelfde eerste pagina op vier manieren: zonder eigenschappen, met alleen de
+  // logindatum, met alleen het SSO-id, en met beide. Komen er alleen profielen
+  // zonder het SSO-id, dan houdt BlueConic ze tegen om PII.
+  const e = eigenschappen;
+  const varianten: [string, string[]][] = [
+    ["zonderEigenschappen", []],
+    ...(e
+      ? ([
+          ["alleenLogindatum", [e.login]],
+          ["alleenSsoId", [e.sso]],
+          ["beide", [e.sso, e.login]],
+        ] as [string, string[]][])
+      : []),
+  ];
+  const proeven: Record<string, unknown> = {};
+  for (const [naam, props] of varianten) {
+    try {
+      const begin = Date.now();
+      const vraag = profielVraag(config.segmentId, props, "*", 5);
+      const body = await api.get(vraag.pad, vraag.params);
+      const pagina = leesProfielPagina(body);
+      const eerste = pagina.profielen[0];
+      proeven[naam] = {
+        ms: Date.now() - begin,
+        opPagina: pagina.profielen.length,
+        totaal: pagina.totaal,
+        volgendeCursor: Boolean(pagina.volgende),
+        metSsoId: e ? pagina.profielen.filter((p) => p.eigenschappen.get(e.sso)?.[0]).length : null,
+        metLogindatum: e ? pagina.profielen.filter((p) => dagUitWaarde(p.eigenschappen.get(e.login)?.[0])).length : null,
+        // Van het eerste profiel alleen welke eigenschappen er zijn, en van de logindatum de dag.
+        eigenschapIds: eerste ? [...eerste.eigenschappen.keys()].sort().slice(0, 60) : null,
+        logindag: e && eerste ? dagUitWaarde(eerste.eigenschappen.get(e.login)?.[0]) : null,
+        // Alles behalve de profielen zelf: zo is te zien hoe BlueConic de vraag las.
+        rest:
+          typeof body === "object" && body && !Array.isArray(body)
+            ? Object.fromEntries(Object.entries(body as Record<string, unknown>).filter(([k]) => k !== "profiles"))
+            : null,
+      };
+    } catch (err) {
+      proeven[naam] = { fout: fout(err) };
+    }
   }
+  uit.profielen = proeven;
 
   return NextResponse.json(uit, { headers });
 }

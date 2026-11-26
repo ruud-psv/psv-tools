@@ -182,3 +182,12 @@ test("een geweigerd token geeft uitleg; een 403 noemt de rechten", async () => {
   const verboden = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? TOKEN() : new Response("", { status: 403 })));
   await assert.rejects(blueconicApi(CONFIG, { doeFetch: verboden.doeFetch, wachttijden: [] }).get("/segments"), /Read op Profiles/);
 });
+
+test("de huidige cursor is geen volgende pagina, en zonder eigenschappen gaat er geen lege properties mee", () => {
+  assert.equal(leesProfielPagina({ cursor: "*", totalResults: 0, profiles: [] }).volgende, null);
+  assert.equal(leesProfielPagina({ cursor: "*", nextCursor: "c2", profiles: [] }).volgende, "c2");
+  assert.deepEqual(profielVraag(STANDAARD_SEGMENT, [], "*", 5).params, [
+    ["cursor", "*"],
+    ["count", "5"],
+  ]);
+});
