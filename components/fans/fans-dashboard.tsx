@@ -18,11 +18,12 @@ import {
 } from "recharts";
 import { AlertTriangle, Info, Loader2, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Badge, CHART, CHART_TOOLTIP, DataTable, HoverTip, SectionCard, SegmentBar, Td, Th } from "@/components/paid-ads/shared";
+import { Badge, CHART, CHART_TOOLTIP, DataTable, HoverTip, SectionCard, Td, Th } from "@/components/paid-ads/shared";
 import { datumKort, datumLang, getal } from "@/components/psv-play/format";
 import type { ActivePunt, MaandWaarde, Overzicht } from "@/lib/fans/bereken";
 import type { Niveau } from "@/lib/fans/doelen";
 import { maandenTussen } from "@/lib/fans/tijd";
+import { vennVorm } from "@/lib/fans/venn";
 import type { Tone } from "@/lib/paid-ads/derive";
 import { cn } from "@/lib/utils";
 
@@ -213,11 +214,13 @@ function Samenvatting({ o }: { o: Overzicht }) {
       {a && (
         <>
           Active Fans staat op <b className="tabular-nums">{getal(a.laatste.totaal)}</b> unieke fans sinds 1 juli.
-          {a.prognose != null && (
+          {a.prognose != null && a.model && (
             <>
               {" "}
-              Bij het tempo van de afgelopen {a.tempo?.dagen} dagen komt het seizoen uit rond <b className="tabular-nums">{getal(a.prognose)}</b>,
-              goed voor niveau <b>{a.niveauPrognose}</b>.
+              {a.model.methode === "verzadiging"
+                ? "Neemt de groei verder af zoals in de afgelopen weken, dan komt het seizoen uit rond "
+                : "Blijft de groei zoals in de afgelopen weken, dan komt het seizoen uit rond "}
+              <b className="tabular-nums">{getal(a.prognose)}</b>, goed voor niveau <b>{a.niveauPrognose}</b>.
             </>
           )}
         </>
@@ -316,6 +319,12 @@ function ActiveKaart({ o }: { o: Overzicht }) {
               <p>
                 Het aantal ligt <b className="text-foreground">{getal(-a.tempo.groei)}</b> lager dan {a.tempo.dagen} dagen eerder. Een uniek
                 totaal kan niet dalen; controleer de bronnen.
+              </p>
+            )}
+            {a.model?.methode === "verzadiging" && (
+              <p>
+                De groei per dag neemt af met zo&apos;n <b className="text-foreground">{getal(a.model.afnamePerMaand * 100)}%</b> per maand,
+                omdat terugkerende fans niet opnieuw tellen. Nu is dat zo&apos;n <b className="text-foreground">{getal(a.model.tempoNu)}</b> per dag.
               </p>
             )}
             {a.nodig.length > 0 && (
@@ -532,14 +541,9 @@ function ActiveGrafiek({ o }: { o: Overzicht }) {
   const eind = tijd(o.seizoen.eind);
 
   const reeks = o.punten.map((p) => ({ t: tijd(p.datum), totaal: p.totaal, datum: p.datum }));
-  const prognose =
-    a && a.prognose != null
-      ? [
-          { t: tijd(a.laatste.datum), prognose: a.laatste.totaal, datum: a.laatste.datum },
-          { t: eind, prognose: a.prognose, datum: o.seizoen.eind },
-        ]
-      : [];
-  const waarden = [...reeks.map((r) => r.totaal), ...(a?.prognose != null ? [a.prognose] : [])];
+  // De verwachte stand per week, elke dag opnieuw berekend uit de peilingen tot nu (`prognoseModel`).
+  const prognose = (a?.model?.lijn ?? []).map((p) => ({ t: tijd(p.datum), prognose: Math.round(p.waarde), datum: p.datum }));
+  const waarden = [...reeks.map((r) => r.totaal), ...prognose.map((p) => p.prognose)];
   const lo = waarden.length ? Math.floor((Math.min(...waarden) - 8_000) / 10_000) * 10_000 : 0;
   const hi = Math.ceil((Math.max(...waarden, n5 ?? 0) + 6_000) / 10_000) * 10_000;
 
@@ -551,7 +555,7 @@ function ActiveGrafiek({ o }: { o: Overzicht }) {
   }
 
   return (
-    <SectionCard title="Active Fans richting 30 juni" hint="Stippellijn: het tempo van de afgelopen weken doorgetrokken.">
+    <SectionCard title="Active Fans richting 30 juni" hint="Stippellijn: de verwachte stand, elke dag opnieuw berekend.">
       {reeks.length ? (
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -621,8 +625,10 @@ function ActiveGrafiek({ o }: { o: Overzicht }) {
         <p className="text-sm text-muted-foreground">Nog geen telling.</p>
       )}
       <p className="mt-2 text-xs text-muted-foreground">
-        Unieke aantallen groeien meestal steeds langzamer, omdat terugkerende fans niet opnieuw tellen. Lees de prognose daarom als
-        optimistisch.
+        {a?.model?.methode === "verzadiging"
+          ? `Unieke fans groeien steeds langzamer, omdat terugkerende fans niet opnieuw tellen. De stippellijn gaat ervan uit dat de groei per dag blijft afnemen zoals in de afgelopen weken (zo'n ${getal(a.model.afnamePerMaand * 100)}% per maand). `
+          : "Er is nog te weinig verloop om een afname te schatten, dus de stippellijn trekt het tempo van de laatste periode recht door. "}
+        Eenmalige pieken, zoals een campagne of de kaartverkoop, zitten er niet in.
       </p>
     </SectionCard>
   );
@@ -630,48 +636,87 @@ function ActiveGrafiek({ o }: { o: Overzicht }) {
 
 /* ---------- Herkomst ---------- */
 
-const SERIES = [
-  { key: "maileon", label: "Alleen e-mail (Maileon)", fill: "bg-psv-red-primary" },
-  { key: "beide", label: "Beide", fill: "bg-psv-neutralDark" },
-  { key: "mijnpsv", label: "Alleen MijnPSV (BlueConic)", fill: "bg-psv-gold" },
-] as const;
-
 function delen(p: ActivePunt) {
   return { maileon: p.maileon - p.overlap, beide: p.overlap, mijnpsv: p.mijnpsv - p.overlap };
+}
+
+const VENN_B = 560;
+const VENN_H = 260;
+
+/**
+ * Twee cirkels op schaal (`lib/fans/venn.ts`): de oppervlakte is het aantal
+ * fans per bron, de overlap het aantal in beide. Alleen de laatste peildatum.
+ */
+function Venn({ p }: { p: ActivePunt }) {
+  const v = vennVorm(p.maileon, p.mijnpsv, p.overlap);
+  const marge = 16;
+  const breedte = v.rA + v.d + v.rB;
+  const s = Math.min((VENN_B - 2 * marge) / breedte, (VENN_H - 2 * marge) / (2 * Math.max(v.rA, v.rB)));
+  const links = (VENN_B - breedte * s) / 2;
+  const cxA = links + v.rA * s;
+  const cxB = cxA + v.d * s;
+  const cy = VENN_H / 2;
+  const d = delen(p);
+  const vakken = [
+    { x: (cxA - v.rA * s + cxB - v.rB * s) / 2, waarde: d.maileon, label: "alleen e-mail" },
+    { x: (cxB - v.rB * s + cxA + v.rA * s) / 2, waarde: d.beide, label: "beide" },
+    { x: (cxA + v.rA * s + cxB + v.rB * s) / 2, waarde: d.mijnpsv, label: "alleen MijnPSV" },
+  ];
+  return (
+    <svg
+      viewBox={`0 0 ${VENN_B} ${VENN_H}`}
+      className="h-auto w-full max-w-[560px]"
+      role="img"
+      aria-label={`Venn-diagram op ${datumLang(p.datum)}: ${getal(d.maileon)} alleen via e-mail, ${getal(d.beide)} via beide, ${getal(d.mijnpsv)} alleen via MijnPSV.`}
+    >
+      <circle cx={cxA} cy={cy} r={v.rA * s} fill="var(--color-red-primary)" fillOpacity={0.5} stroke="var(--color-red-primary)" strokeWidth={2} />
+      <circle cx={cxB} cy={cy} r={v.rB * s} fill="var(--color-gold)" fillOpacity={0.55} stroke="var(--color-gold)" strokeWidth={2} />
+      {vakken.map((vak) => (
+        <g key={vak.label}>
+          <text x={vak.x} y={cy - 2} textAnchor="middle" className="fill-foreground font-heading" fontSize={22}>
+            {getal(vak.waarde)}
+          </text>
+          <text x={vak.x} y={cy + 16} textAnchor="middle" className="fill-foreground" fontSize={12}>
+            {vak.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
 }
 
 function Herkomst({ o }: { o: Overzicht }) {
   if (!o.tabel.length) return null;
   const rijen = [...o.tabel].reverse();
+  const laatste = o.tabel.at(-1)!;
+  const d = delen(laatste);
+  const regels = [
+    { kleur: "bg-psv-red-primary", label: "E-mail (Maileon)", waarde: laatste.maileon, uitleg: "klikte op een e-mail" },
+    { kleur: "bg-psv-gold", label: "MijnPSV (BlueConic)", waarde: laatste.mijnpsv, uitleg: "logde in op een MijnPSV-touchpoint" },
+    { kleur: "bg-psv-gray-09", label: "In beide", waarde: d.beide, uitleg: `${getal((d.beide / laatste.totaal) * 100)}% van alle Active Fans` },
+  ];
   return (
-    <SectionCard title="Waar Active Fans vandaan komen" hint="Per peildatum, elke fan één keer geteld.">
-      <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {SERIES.map((s) => (
-          <span key={s.key} className="inline-flex items-center gap-1.5">
-            <span className={cn("h-3 w-3 rounded-sm", s.fill)} />
-            {s.label}
-          </span>
-        ))}
-      </div>
-      <div className="space-y-2">
-        {o.tabel.map((p) => {
-          const d = delen(p);
-          return (
-            <div key={p.datum} className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-              <span className="text-xs text-muted-foreground">{datumKort(p.datum)}</span>
-              <SegmentBar
-                className="h-4"
-                segments={SERIES.map((s) => ({
-                  key: s.key,
-                  share: d[s.key],
-                  fill: s.fill,
-                  tip: `${s.label}: ${getal(d[s.key])} (${getal((d[s.key] / p.totaal) * 100)}%)`,
-                }))}
-              />
-              <span className="text-right text-sm font-bold tabular-nums">{getal(p.totaal)}</span>
+    <SectionCard title="Waar Active Fans vandaan komen" hint={`Stand van ${datumLang(laatste.datum)}, elke fan één keer geteld.`}>
+      <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center">
+        <div className="w-full lg:w-3/5">
+          <Venn p={laatste} />
+        </div>
+        <dl className="w-full space-y-3 lg:w-2/5">
+          {regels.map((r) => (
+            <div key={r.label} className="flex items-start gap-3">
+              <span className={cn("mt-1 h-3 w-3 shrink-0 rounded-sm", r.kleur)} />
+              <div>
+                <dt className="font-heading text-xs uppercase tracking-wide text-muted-foreground">{r.label}</dt>
+                <dd className="font-heading text-2xl leading-tight tabular-nums">{getal(r.waarde)}</dd>
+                <dd className="text-xs text-muted-foreground">{r.uitleg}</dd>
+              </div>
             </div>
-          );
-        })}
+          ))}
+          <div className="border-t border-border pt-3">
+            <dt className="font-heading text-xs uppercase tracking-wide text-muted-foreground">Active Fans, ontdubbeld</dt>
+            <dd className="font-heading text-2xl leading-tight tabular-nums">{getal(laatste.totaal)}</dd>
+          </div>
+        </dl>
       </div>
 
       <DataTable className="mt-5">
@@ -745,7 +790,10 @@ function Toelichting() {
           niveau 1. Wijs een niveau op de schaal aan om de grenzen te zien.
         </p>
         <p>
-          <b className="text-foreground">Prognose</b>: de groei per dag over de afgelopen vier weken, doorgetrokken tot 30 juni.
+          <b className="text-foreground">Prognose</b>: unieke fans groeien steeds langzamer, omdat wie al meetelt niet opnieuw telt.
+          Tools meet de groei per dag in perioden van minstens twee weken, schat hoe snel die afneemt, en trekt die afname door tot 30
+          juni. Elke dag opnieuw, met de nieuwste peilingen. Perioden lopen nooit over de overgang van handmatige naar automatische
+          tellingen, omdat die een paar procent kunnen verschillen. Neemt de groei niet af, dan is de prognose een rechte lijn.
         </p>
         <p>
           <b className="text-foreground">Handmatig en automatisch</b>: juli tot en met oktober komen uit de handmatige updates in Asana.

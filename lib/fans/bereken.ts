@@ -58,15 +58,48 @@ export interface EngagedStand {
   inclLopend: { gemiddelde: number; niveau: number; maand: string; tm: string | null } | null;
 }
 
+export interface GroeiInterval {
+  van: string;
+  tot: string;
+  dagen: number;
+  groei: number;
+  perDag: number;
+  bron: Bron;
+}
+
+/**
+ * De prognose met verzadiging. Unieke fans groeien steeds langzamer: wie al
+ * meetelt, telt niet opnieuw. Het model neemt aan dat de groei per dag
+ * exponentieel afneemt, `g(t) = g0 · e^(−λt)`, en schat λ uit de groei per
+ * periode van de afgelopen weken (gewogen naar de lengte van elke periode).
+ * Het totaal op dag d na de laatste peiling is dan
+ * `N + g0/λ · (1 − e^(−λd))`. Neemt de groei niet af (λ ≤ 0), dan wordt het
+ * een rechte lijn.
+ */
+export interface PrognoseModel {
+  methode: "verzadiging" | "lineair";
+  /** Groei per dag op de laatste peiling, volgens het model. */
+  tempoNu: number;
+  /** Hoeveel de groei per dag in 30 dagen afneemt, als fractie (0,22 = 22%). */
+  afnamePerMaand: number;
+  /** Het totaal waar de groei naartoe gaat als die zo blijft afnemen; `null` bij een rechte lijn. */
+  plafond: number | null;
+  /** Op welke perioden het model rust. */
+  intervallen: GroeiInterval[];
+  /** De verwachte stand per week tot het einde van het seizoen. */
+  lijn: { datum: string; waarde: number }[];
+}
+
 export interface ActiveStand {
   laatste: ActivePunt;
   niveau: number;
-  /** Groei per dag over de laatste vier weken, of tussen de laatste twee peilingen. */
+  /** Groei per dag in de laatste periode van minstens twee weken. */
   tempo: { van: string; dagen: number; groei: number; perDag: number } | null;
   dagenResterend: number;
-  /** Het tempo doorgetrokken tot het einde van het seizoen, op honderdtallen. */
+  /** De verwachte stand op het einde van het seizoen, op honderdtallen. */
   prognose: number | null;
   niveauPrognose: number | null;
+  model: PrognoseModel | null;
   nodig: { niveau: number; aantal: number; perDag: number | null }[];
 }
 
@@ -94,7 +127,12 @@ export interface Overzicht {
   };
 }
 
-const TEMPO_DAGEN = 28;
+/** Perioden voor de groei per dag zijn minstens zo lang, zodat dagelijkse ruis wegvalt. */
+const MIN_INTERVAL_DAGEN = 14;
+/** Het model kijkt naar de laatste zoveel perioden, zo'n drie maanden. */
+const MAX_INTERVALLEN = 6;
+/** Kleiner dan dit telt niet als afname (minder dan 0,3% per maand). */
+const MIN_LAMBDA = 1e-4;
 const NODIG_NIVEAUS = [3, 5];
 
 function gemiddelde(waarden: number[]): number {
@@ -191,6 +229,16 @@ export function activePunten(handmatig: Handmatig, dagen: DagStand[]): ActivePun
   return [...perDatum.values()].sort((a, b) => (a.datum < b.datum ? -1 : 1));
 }
 
+/**
+ * Alle peilingen zonder ontdubbeling op datum: de handmatige van 26 november
+ * blijft naast de automatische van die dag staan, zodat de handmatige reeks
+ * zijn laatste periode houdt.
+ */
+export function alleReeksen(handmatig: Handmatig, dagen: DagStand[]): ActivePunt[] {
+  const auto = activePunten({ engaged: [], active: [] }, dagen);
+  return [...handmatig.active.map((p) => ({ ...p, bron: "handmatig" as const })), ...auto];
+}
+
 /** Handmatige peilingen, plus per maand de laatste automatische stand. */
 export function tabelPunten(punten: ActivePunt[]): ActivePunt[] {
   const laatstePerMaand = new Map<string, ActivePunt>();
@@ -199,23 +247,89 @@ export function tabelPunten(punten: ActivePunt[]): ActivePunt[] {
   return punten.filter((p) => p.bron === "handmatig" || auto.has(p));
 }
 
-export function activeStand(seizoen: SeizoenDoelen, punten: ActivePunt[]): ActiveStand | null {
-  const laatste = punten.at(-1);
-  if (!laatste) return null;
-  const grens = plusDagen(laatste.datum, -TEMPO_DAGEN);
-  const eerder = punten.slice(0, -1);
-  const ref = eerder.filter((p) => p.datum <= grens).at(-1) ?? eerder.at(-1);
+/**
+ * Groei per periode, binnen één bron: handmatige en automatische tellingen
+ * kunnen een paar procent verschillen, en een sprong op de overgang is geen
+ * groei. Per bron worden de peilingen van achter naar voren gekozen, steeds
+ * minstens twee weken uit elkaar, zodat dagelijkse ruis wegvalt.
+ */
+export function groeiIntervallen(punten: ActivePunt[]): GroeiInterval[] {
+  const uit: GroeiInterval[] = [];
+  for (const bron of ["handmatig", "automatisch"] as Bron[]) {
+    const reeks = punten.filter((p) => p.bron === bron).sort((a, b) => (a.datum < b.datum ? -1 : 1));
+    const gekozen: ActivePunt[] = [];
+    for (let i = reeks.length - 1; i >= 0; i--) {
+      const vorige = gekozen.at(-1);
+      if (!vorige || dagenTussen(reeks[i].datum, vorige.datum) >= MIN_INTERVAL_DAGEN) gekozen.push(reeks[i]);
+    }
+    gekozen.reverse();
+    for (let i = 1; i < gekozen.length; i++) {
+      const a = gekozen[i - 1];
+      const b = gekozen[i];
+      const dagen = dagenTussen(a.datum, b.datum);
+      uit.push({ van: a.datum, tot: b.datum, dagen, groei: b.totaal - a.totaal, perDag: (b.totaal - a.totaal) / dagen, bron });
+    }
+  }
+  return uit.sort((a, b) => (a.tot < b.tot ? -1 : a.tot > b.tot ? 1 : a.bron === "automatisch" ? 1 : -1));
+}
 
-  let tempo: ActiveStand["tempo"] = null;
-  if (ref) {
-    const dagen = dagenTussen(ref.datum, laatste.datum);
-    const groei = laatste.totaal - ref.totaal;
-    if (dagen > 0) tempo = { van: ref.datum, dagen, groei, perDag: groei / dagen };
+/** Zie `PrognoseModel`. `null` als er geen periode met groei is. */
+export function prognoseModel(intervallen: GroeiInterval[], laatste: ActivePunt, eind: string): PrognoseModel | null {
+  const bruikbaar = intervallen.filter((i) => i.perDag > 0).slice(-MAX_INTERVALLEN);
+  if (!bruikbaar.length) return null;
+
+  // ln(groei per dag) tegen het midden van elke periode, in dagen vanaf de laatste peiling.
+  const punten = bruikbaar.map((i) => ({
+    x: (dagenTussen(laatste.datum, i.van) + dagenTussen(laatste.datum, i.tot)) / 2,
+    y: Math.log(i.perDag),
+    w: i.dagen,
+  }));
+  let lambda = 0;
+  let tempoNu = bruikbaar.at(-1)!.perDag;
+  if (punten.length >= 2) {
+    const sw = punten.reduce((s, p) => s + p.w, 0);
+    const mx = punten.reduce((s, p) => s + p.w * p.x, 0) / sw;
+    const my = punten.reduce((s, p) => s + p.w * p.y, 0) / sw;
+    const sxx = punten.reduce((s, p) => s + p.w * (p.x - mx) ** 2, 0);
+    const sxy = punten.reduce((s, p) => s + p.w * (p.x - mx) * (p.y - my), 0);
+    const helling = sxx > 0 ? sxy / sxx : 0;
+    if (-helling > MIN_LAMBDA) {
+      lambda = -helling;
+      tempoNu = Math.exp(my - helling * mx);
+    }
   }
 
+  const waarde = (d: number) => (lambda > 0 ? laatste.totaal + (tempoNu / lambda) * (1 - Math.exp(-lambda * d)) : laatste.totaal + tempoNu * d);
+  const rest = Math.max(0, dagenTussen(laatste.datum, eind));
+  const lijn: PrognoseModel["lijn"] = [];
+  for (let d = 0; d < rest; d += 7) lijn.push({ datum: plusDagen(laatste.datum, d), waarde: waarde(d) });
+  lijn.push({ datum: plusDagen(laatste.datum, rest), waarde: waarde(rest) });
+
+  return {
+    methode: lambda > 0 ? "verzadiging" : "lineair",
+    tempoNu,
+    afnamePerMaand: lambda > 0 ? 1 - Math.exp(-30 * lambda) : 0,
+    plafond: lambda > 0 ? laatste.totaal + tempoNu / lambda : null,
+    intervallen: bruikbaar,
+    lijn,
+  };
+}
+
+/**
+ * @param reeksen Alle peilingen, ook een handmatige op een dag met een
+ *   automatische: voor de groei per bron. Standaard `punten`.
+ */
+export function activeStand(seizoen: SeizoenDoelen, punten: ActivePunt[], reeksen: ActivePunt[] = punten): ActiveStand | null {
+  const laatste = punten.at(-1);
+  if (!laatste) return null;
+  const intervallen = groeiIntervallen(reeksen);
+  const recent = intervallen.at(-1);
+  const tempo: ActiveStand["tempo"] = recent ? { van: recent.van, dagen: recent.dagen, groei: recent.groei, perDag: recent.perDag } : null;
+
   const dagenResterend = Math.max(0, dagenTussen(laatste.datum, seizoen.eind));
-  // Een uniek totaal kan niet dalen; een negatief tempo is een fout in de bron, geen prognose.
-  const prognoseRuw = tempo && tempo.perDag >= 0 ? laatste.totaal + tempo.perDag * dagenResterend : null;
+  // Een uniek totaal kan niet dalen; zonder periode met groei is er geen prognose.
+  const model = prognoseModel(intervallen, laatste, seizoen.eind);
+  const prognoseRuw = model ? model.lijn.at(-1)!.waarde : null;
   const prognose = prognoseRuw == null ? null : Math.round(prognoseRuw / 100) * 100;
 
   return {
@@ -225,6 +339,7 @@ export function activeStand(seizoen: SeizoenDoelen, punten: ActivePunt[]): Activ
     dagenResterend,
     prognose,
     niveauPrognose: prognoseRuw == null ? null : niveauVan(seizoen.active, prognoseRuw),
+    model,
     nodig: NODIG_NIVEAUS.flatMap((niveau) => {
       const van = seizoen.active.find((n) => n.niveau === niveau)?.van;
       if (van == null) return [];
@@ -261,7 +376,7 @@ export function maakOverzicht(opties: {
     engaged: engagedStand(seizoen, maanden),
     punten,
     tabel: tabelPunten(punten),
-    active: activeStand(seizoen, punten),
+    active: activeStand(seizoen, punten, alleReeksen(handmatig, dagen)),
     automatisch: {
       maileonTot: historie?.maileon.tot ?? null,
       maileonSeizoen: laatsteDag?.active.maileon ?? null,

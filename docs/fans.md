@@ -25,9 +25,19 @@ Gelijk aan de filters van de handmatige werkwijze:
   hoogste niveau waarvan de ondergrens gehaald is. Groen is niveau 3 of hoger,
   oranje 2, rood 1. In de doelstelling in Asana staat bij Engaged niveau 2 de
   bovengrens 44.4549; dat is gelezen als 44.549.
-- **Prognose**: de groei per dag over de afgelopen vier weken (of tussen de
-  laatste twee peilingen), doorgetrokken tot 30 juni. Unieke aantallen groeien
-  steeds langzamer, dus de prognose is aan de optimistische kant.
+- **Prognose met verzadiging** (`prognoseModel` in `lib/fans/bereken.ts`):
+  unieke fans groeien steeds langzamer, omdat wie al meetelt niet opnieuw telt.
+  Tools meet de groei per dag in perioden van minstens twee weken (per bron,
+  nooit over de overgang van handmatig naar automatisch), past daarop
+  `g(t) = g0 · e^(−λt)` met gewogen kleinste kwadraten (de laatste zes
+  perioden), en trekt dat door: `N + g0/λ · (1 − e^(−λd))`. Elke dag opnieuw,
+  met de nieuwste peilingen. Neemt de groei niet af, dan een rechte lijn. Met de
+  handmatige peilingen (270 per dag, daarna 202) is de afname zo'n 22% per
+  maand en komt het seizoen uit rond 121.700, in plaats van 148.100 bij een
+  rechte lijn. Eenmalige pieken, zoals een campagne of de kaartverkoop, zitten
+  er niet in.
+- **Herkomst** staat als Venn-diagram met cirkels op schaal (`lib/fans/venn.ts`),
+  voor de laatste peildatum; de tabel eronder toont alle peildata.
 
 ## Handmatig en automatisch
 
@@ -174,7 +184,7 @@ Vercel Blob, privé, onder `fans/`:
 | BlueConic-lezer | `lib/fans/blueconic.ts` |
 | Hash-sets | `lib/fans/sets.ts` |
 | Telling en opslag | `lib/fans/run.ts`, `lib/fans/store.ts`, `lib/fans/types.ts` |
-| Cijfers voor de pagina | `lib/fans/bereken.ts` |
+| Cijfers en prognose voor de pagina | `lib/fans/bereken.ts`, `lib/fans/venn.ts` |
 | Routes | `app/api/fans/route.ts`, `app/api/fans/snapshot/route.ts`, `app/api/fans/blueconic/route.ts` |
 | Pagina | `app/dashboard/fans/page.tsx`, `components/fans/fans-dashboard.tsx` |
 

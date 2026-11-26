@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activeStand, engagedStand, maakOverzicht, maandWaarden, tabelPunten, activePunten } from "./bereken";
+import { activeStand, alleReeksen, engagedStand, groeiIntervallen, maakOverzicht, maandWaarden, tabelPunten, activePunten } from "./bereken";
 import { DOELEN, doelenVoor, niveauVan } from "./doelen";
 import { HANDMATIG, type Handmatig } from "./handmatig";
 import { amsterdamDag, amsterdamMiddernacht, laatsteDag, maandenTussen } from "./tijd";
@@ -93,7 +93,7 @@ test("zonder MijnPSV blijft de handmatige maand staan; zonder iets anders alleen
   assert.deepEqual([nov.bron, nov.totaal], ["handmatig", 41_914]);
 });
 
-test("Active Fans: tempo over vier weken, prognose en wat er per dag nodig is", () => {
+test("Active Fans: tempo van de laatste periode, prognose met verzadiging, en wat er per dag nodig is", () => {
   const punten = activePunten(HANDMATIG, []);
   const stand = activeStand(SEIZOEN, punten)!;
   assert.equal(stand.laatste.totaal, 104_494);
@@ -101,12 +101,66 @@ test("Active Fans: tempo over vier weken, prognose en wat er per dag nodig is", 
   assert.deepEqual([stand.tempo!.van, stand.tempo!.dagen, stand.tempo!.groei], ["2026-10-13", 44, 8_879]);
   assert.equal(Math.round(stand.tempo!.perDag), 202);
   assert.equal(stand.dagenResterend, 216);
-  assert.equal(stand.prognose, 148_100);
-  assert.equal(stand.niveauPrognose, 5);
+
+  // 270 per dag (half sep tot half okt), daarna 202 per dag: een afname van
+  // zo'n 22% per maand. Doorgetrokken komt dat uit rond 121.700, niet 148.100.
+  const m = stand.model!;
+  assert.equal(m.methode, "verzadiging");
+  assert.equal(Math.round(m.afnamePerMaand * 100), 22);
+  assert.equal(Math.round(m.tempoNu), 169);
+  assert.equal(stand.prognose, 121_700);
+  assert.equal(stand.niveauPrognose, 1);
+  assert.equal(m.lijn[0].datum, "2026-11-26");
+  assert.equal(m.lijn[0].waarde, 104_494);
+  assert.equal(m.lijn.at(-1)!.datum, "2027-06-30");
+  assert.ok(m.plafond! > stand.prognose! && m.plafond! < 130_000);
   assert.deepEqual(stand.nodig, [
     { niveau: 3, aantal: 29_156, perDag: 135 },
     { niveau: 5, aantal: 37_256, perDag: 173 },
   ]);
+});
+
+test("verzadiging: één periode of geen afname geeft een rechte lijn", () => {
+  const twee = activePunten({ engaged: [], active: HANDMATIG.active.slice(1) }, []);
+  const lineair = activeStand(SEIZOEN, twee)!;
+  assert.equal(lineair.model!.methode, "lineair");
+  assert.equal(lineair.prognose, Math.round((104_494 + (8_879 / 44) * 216) / 100) * 100);
+
+  const gelijk = activePunten(
+    {
+      engaged: [],
+      active: [
+        { datum: "2026-09-01", maileon: 0, mijnpsv: 0, overlap: 0, totaal: 80_000 },
+        { datum: "2026-10-01", maileon: 0, mijnpsv: 0, overlap: 0, totaal: 86_000 },
+        { datum: "2026-10-31", maileon: 0, mijnpsv: 0, overlap: 0, totaal: 92_000 },
+      ],
+    },
+    []
+  );
+  assert.equal(activeStand(SEIZOEN, gelijk)!.model!.methode, "lineair");
+});
+
+test("verzadiging: geen periode over de grens van handmatig naar automatisch, en elke dag opnieuw", () => {
+  // De automatische telling ligt hoger dan de handmatige; die sprong is geen groei.
+  const dagen = [
+    dag("2026-11-26", {}, { maileon: 80_000, mijnpsv: 64_800, overlap: 36_000, totaal: 108_800 }),
+    dag("2026-12-10", {}, { maileon: 81_000, mijnpsv: 66_400, overlap: 36_600, totaal: 110_800 }),
+  ];
+  const reeksen = alleReeksen(HANDMATIG, dagen);
+  const intervallen = groeiIntervallen(reeksen);
+  assert.deepEqual(
+    intervallen.map((i) => [i.van, i.tot, i.bron]),
+    [
+      ["2026-09-15", "2026-10-13", "handmatig"],
+      ["2026-10-13", "2026-11-26", "handmatig"],
+      ["2026-11-26", "2026-12-10", "automatisch"],
+    ]
+  );
+  const stand = activeStand(SEIZOEN, activePunten(HANDMATIG, dagen), reeksen)!;
+  assert.equal(stand.laatste.datum, "2026-12-10");
+  assert.equal(stand.tempo!.van, "2026-11-26");
+  assert.equal(stand.model!.lijn[0].waarde, 110_800);
+  assert.equal(stand.model!.intervallen.length, 3);
 });
 
 test("automatische dagstanden vullen de reeks aan; de tabel houdt per maand de laatste", () => {
