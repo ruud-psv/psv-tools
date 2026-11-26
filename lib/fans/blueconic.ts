@@ -357,6 +357,106 @@ export async function probeerScopes(
   return uit;
 }
 
+/* ---------- Ruwe proef ---------- */
+
+export interface RuwAntwoord {
+  status: number;
+  /** De `WWW-Authenticate`-header: bij een 403 staat daar vaak welk recht mist. */
+  wwwAuthenticate: string | null;
+  contentType: string | null;
+  /** Bij een fout het begin van het antwoord; bij succes alleen het aantal (geen profieldata). */
+  inhoud: string | null;
+  totaal: number | null;
+}
+
+export interface RuweProef {
+  /** Hoe het token gevraagd is: client-gegevens in de body, in een Basic-header, of geen token. */
+  manier: "body" | "basic" | "geen";
+  token: { status: number; sleutels: string[]; tokenType: string | null; fout: string | null } | null;
+  segment: RuwAntwoord | null;
+  profielen: RuwAntwoord | null;
+}
+
+async function ruwGet(doeFetch: typeof fetch, url: string, token: string | null): Promise<RuwAntwoord> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await doeFetch(url, { headers, cache: "no-store" });
+  const tekst_ = await res.text();
+  let totaal: number | null = null;
+  if (res.ok) {
+    try {
+      totaal = leesProfielPagina(JSON.parse(tekst_)).totaal;
+    } catch {
+      // geen JSON
+    }
+  }
+  return {
+    status: res.status,
+    wwwAuthenticate: res.headers.get("www-authenticate"),
+    contentType: res.headers.get("content-type"),
+    inhoud: res.ok ? null : tekst_.slice(0, 300),
+    totaal,
+  };
+}
+
+/**
+ * Dezelfde twee verzoeken (het segment en één profiel) op drie manieren: met
+ * een token waarvoor de client-gegevens in de body staan, met een token via een
+ * Basic-header, en zonder token. Is alles gelijk, dan negeert BlueConic het
+ * token. Toont geen token en geen profieldata.
+ */
+export async function ruweProeven(config: BlueconicConfig, opties: { doeFetch?: typeof fetch } = {}): Promise<RuweProef[]> {
+  const doeFetch = opties.doeFetch ?? fetch;
+  const basis = `https://${config.host}/rest/v2`;
+  const uit: RuweProef[] = [];
+  for (const manier of ["body", "basic", "geen"] as const) {
+    const proef: RuweProef = { manier, token: null, segment: null, profielen: null };
+    let token: string | null = null;
+    if (manier !== "geen") {
+      const body = new URLSearchParams({ grant_type: "client_credentials" });
+      if (config.scopes) body.set("scope", config.scopes);
+      const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
+      if (manier === "body") {
+        body.set("client_id", config.clientId);
+        body.set("client_secret", config.clientSecret);
+      } else {
+        headers.Authorization = `Basic ${Buffer.from(`${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`).toString("base64")}`;
+      }
+      try {
+        const res = await doeFetch(`${basis}/oauth/token`, { method: "POST", headers, body, cache: "no-store" });
+        const tekst_ = await res.text();
+        let json: unknown = null;
+        try {
+          json = JSON.parse(tekst_);
+        } catch {
+          // geen JSON
+        }
+        token = isObject(json) ? tekst(json.access_token) : null;
+        proef.token = {
+          status: res.status,
+          sleutels: isObject(json) ? Object.keys(json) : [],
+          tokenType: isObject(json) ? tekst(json.token_type) : null,
+          fout: token ? null : isObject(json) ? tekst(json.error_description ?? json.error) : tekst_.slice(0, 200),
+        };
+      } catch (err) {
+        proef.token = { status: 0, sleutels: [], tokenType: null, fout: err instanceof Error ? err.message : String(err) };
+      }
+      if (!token) {
+        uit.push(proef);
+        continue;
+      }
+    }
+    try {
+      proef.segment = await ruwGet(doeFetch, `${basis}/segments/${config.segmentId}`, token);
+      proef.profielen = await ruwGet(doeFetch, `${basis}/profiles?count=1&startIndex=0`, token);
+    } catch (err) {
+      proef.segment ??= { status: 0, wwwAuthenticate: null, contentType: null, inhoud: err instanceof Error ? err.message : String(err), totaal: null };
+    }
+    uit.push(proef);
+  }
+  return uit;
+}
+
 /* ---------- Bron voor de telling ---------- */
 
 /**

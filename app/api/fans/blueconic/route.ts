@@ -9,6 +9,7 @@ import {
   leesEigenschappenLijst,
   leesProfielPagina,
   probeerScopes,
+  ruweProeven,
 } from "@/lib/fans/blueconic";
 
 /**
@@ -43,6 +44,14 @@ export async function GET(req: NextRequest) {
     uit.token = await api.tokenInfo();
   } catch (err) {
     uit.token = { fout: fout(err) };
+  }
+
+  // Met token (twee manieren) en zonder: is alles gelijk, dan negeert BlueConic
+  // het token. Met de WWW-Authenticate-header van een 403.
+  try {
+    uit.ruweProeven = await ruweProeven(config);
+  } catch (err) {
+    uit.ruweProeven = { fout: fout(err) };
   }
 
   // Elke schrijfwijze van de scopes: welke geeft een token dat het segment en

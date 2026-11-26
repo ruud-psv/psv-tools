@@ -10,6 +10,7 @@ import {
   kiesEigenschappen,
   leesProfielPagina,
   probeerScopes,
+  ruweProeven,
   type BlueconicConfig,
 } from "./blueconic";
 
@@ -216,4 +217,28 @@ test("scopes proberen: per schrijfwijze het token, het segment en het aantal pro
   // Zonder scope gaat er ook echt geen scope mee.
   const zonder = goed.verzoeken.filter((v) => v.url.pathname.endsWith("/oauth/token")).at(-1);
   assert.equal(new URLSearchParams(String(zonder?.init?.body)).get("scope"), null);
+});
+
+test("ruwe proeven: token via body, via Basic-header en zonder, met de uitleg bij een 403", async () => {
+  const { doeFetch, verzoeken } = nep(({ url, init }) => {
+    if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok", token_type: "Bearer", expires_in: 3600 });
+    const auth = new Headers(init?.headers).get("Authorization");
+    if (url.pathname.startsWith("/rest/v2/segments")) {
+      return new Response("Forbidden", { status: 403, headers: { "WWW-Authenticate": 'Bearer error="insufficient_scope"' } });
+    }
+    return json({ profiles: [], totalResults: auth ? 5 : 0 });
+  });
+  const proeven = await ruweProeven(CONFIG, { doeFetch });
+  assert.deepEqual(proeven.map((p) => p.manier), ["body", "basic", "geen"]);
+  assert.deepEqual(proeven[0].token, { status: 200, sleutels: ["access_token", "token_type", "expires_in"], tokenType: "Bearer", fout: null });
+  assert.equal(proeven[0].segment?.wwwAuthenticate, 'Bearer error="insufficient_scope"');
+  assert.equal(proeven[0].segment?.inhoud, "Forbidden");
+  assert.equal(proeven[0].profielen?.totaal, 5);
+  assert.equal(proeven[2].token, null);
+  assert.equal(proeven[2].profielen?.totaal, 0);
+
+  const tokenVragen = verzoeken.filter((v) => v.url.pathname.endsWith("/oauth/token"));
+  assert.match(String(tokenVragen[0].init?.body), /client_secret=geheim/);
+  assert.doesNotMatch(String(tokenVragen[1].init?.body), /client_secret/);
+  assert.equal(new Headers(tokenVragen[1].init?.headers).get("Authorization"), `Basic ${Buffer.from("id:geheim").toString("base64")}`);
 });
