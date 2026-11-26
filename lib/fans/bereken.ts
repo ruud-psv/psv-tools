@@ -6,6 +6,7 @@
 
 import { niveauVan, type SeizoenDoelen } from "./doelen";
 import type { Handmatig } from "./handmatig";
+import { zonderLegeMijnpsv } from "./herstel";
 import { dagenTussen, laatsteDag, maandenTussen, maandVan, plusDagen } from "./tijd";
 import type { DagStand, Historie } from "./types";
 
@@ -213,7 +214,8 @@ export function activeStand(seizoen: SeizoenDoelen, punten: ActivePunt[]): Activ
   }
 
   const dagenResterend = Math.max(0, dagenTussen(laatste.datum, seizoen.eind));
-  const prognoseRuw = tempo ? laatste.totaal + tempo.perDag * dagenResterend : null;
+  // Een uniek totaal kan niet dalen; een negatief tempo is een fout in de bron, geen prognose.
+  const prognoseRuw = tempo && tempo.perDag >= 0 ? laatste.totaal + tempo.perDag * dagenResterend : null;
   const prognose = prognoseRuw == null ? null : Math.round(prognoseRuw / 100) * 100;
 
   return {
@@ -240,7 +242,7 @@ export function maakOverzicht(opties: {
   mijnpsvGekoppeld: boolean;
 }): Overzicht {
   const { seizoen, handmatig, historie, vandaag } = opties;
-  const dagen = [...(historie?.dagen ?? [])].sort((a, b) => (a.datum < b.datum ? -1 : 1));
+  const dagen = (historie?.dagen ?? []).map(zonderLegeMijnpsv).sort((a, b) => (a.datum < b.datum ? -1 : 1));
   const maanden = maandWaarden(seizoen, handmatig, dagen, vandaag).map((m) => ({
     ...m,
     maileonTools: historie?.maileonMaanden?.[m.maand] ?? null,

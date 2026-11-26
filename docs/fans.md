@@ -98,6 +98,16 @@ client credentials:
   `/api/fans/blueconic` toont onder `standaardEigenschappen` de ID's die
   BlueConic bij een profiel meegeeft.
 
+Het token wordt gevraagd met de scopes `read:profiles read:properties
+read:segments`. Kent BlueConic die namen niet, dan zonder. Een token zonder
+scopes gaf bij PSV een 403 op het segment en een lege lijst profielen.
+
+**Nul profielen is een fout, geen telling.** Het segment heeft tienduizenden
+profielen, dus een lege uitkomst stopt het MijnPSV-deel met een melding. Op
+26 november 2026 kwam zo'n lege uitkomst als "0 MijnPSV-fans" in de cijfers.
+`lib/fans/herstel.ts` maakt zo'n stand weer onbekend, en de volgende run leest
+MijnPSV opnieuw vanaf het begin van het seizoen.
+
 De antwoorden worden tolerant gelezen (profielen onder `profiles`, `items` of
 `data`; eigenschappen als lijst of object; pagineren met cursor of
 `startIndex`). **Controle**: open `/api/fans/blueconic` (ingelogd). Die laat

@@ -145,7 +145,11 @@ test("de lijst met eigenschappen: het eerste pad dat bestaat, anders uitleg over
   const { doeFetch, verzoeken } = nep(({ url }) => {
     if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok" });
     if (url.pathname === "/rest/v2/profileProperties") return json(props);
-    if (url.pathname === "/rest/v2/profiles") return json({ profiles: [] });
+    if (url.pathname === "/rest/v2/profiles") {
+      return Number(url.searchParams.get("startIndex"))
+        ? json({ profiles: [] })
+        : json({ profiles: [{ id: "1", properties: { ssoid: "A", ssodatum: "2026-11-01T10:00:00Z" } }] });
+    }
     return json({ message: "Not found" }, 404);
   });
   await blueconicBron(blueconicApi(zonder, { doeFetch, wachttijden: [] }), zonder).profielenSinds("2026-07-01");
@@ -159,12 +163,25 @@ test("de lijst met eigenschappen: het eerste pad dat bestaat, anders uitleg over
   );
 });
 
-test("vraagt de scopes expliciet als BlueConic daarom vraagt", async () => {
-  const { doeFetch, verzoeken } = nep(({ url, init }) => {
-    if (!url.pathname.endsWith("/oauth/token")) return json({ id: "x" });
-    return /scope=/.test(String(init?.body)) ? json({ access_token: "tok" }) : json({ error: "invalid_scope" }, 400);
-  });
-  const api = blueconicApi(CONFIG, { doeFetch, wachttijden: [] });
+test("vraagt het token met de scopes, en zonder als BlueConic die namen niet kent", async () => {
+  const met = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok", scope: "read:profiles" }) : json({ id: "x" })));
+  const api = blueconicApi(CONFIG, { doeFetch: met.doeFetch, wachttijden: [] });
   await api.get("/segments/x");
-  assert.match(String(verzoeken[1].init?.body), /scope=read%3Aprofiles/);
+  assert.match(String(met.verzoeken[0].init?.body), /scope=read%3Aprofiles\+read%3Aproperties\+read%3Asegments/);
+  assert.deepEqual(await api.tokenInfo(), { metScopes: true, scope: "read:profiles", geldigSeconden: 600 });
+
+  const zonder = nep(({ url, init }) => {
+    if (!url.pathname.endsWith("/oauth/token")) return json({ id: "x" });
+    return /scope=/.test(String(init?.body)) ? json({ error: "invalid_scope" }, 400) : json({ access_token: "tok" });
+  });
+  const api2 = blueconicApi(CONFIG, { doeFetch: zonder.doeFetch, wachttijden: [] });
+  await api2.get("/segments/x");
+  assert.equal((await api2.tokenInfo()).metScopes, false);
+});
+
+test("nul profielen in het segment is een fout, geen telling", async () => {
+  const { doeFetch } = nep(({ url }) =>
+    url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok" }) : json({ itemsPerPage: 1000, profiles: [], startIndex: 0, totalPages: 0, totalResults: 0 })
+  );
+  await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /0 profielen/);
 });

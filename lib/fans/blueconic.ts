@@ -183,8 +183,17 @@ export function kiesEigenschappen(body: unknown): { sso: string; login: string; 
 
 /* ---------- Client ---------- */
 
+export interface TokenInfo {
+  /** Of het token met de scopes erbij gevraagd is. */
+  metScopes: boolean;
+  /** De scopes die BlueConic teruggaf, als het die noemt. */
+  scope: string | null;
+  geldigSeconden: number;
+}
+
 export interface BlueconicApi {
   get(pad: string, params?: [string, string][]): Promise<unknown>;
+  tokenInfo(): Promise<TokenInfo>;
 }
 
 export function blueconicApi(
@@ -210,11 +219,15 @@ export function blueconicApi(
 
   async function haalToken(): Promise<string> {
     if (token && token.tot > nu()) return token.waarde;
-    let res = await vraagToken(false);
+    // Eerst met de scopes erbij: een token zonder gaf bij PSV een 403 op het
+    // segment en een lege lijst profielen. Kent BlueConic die scope-namen niet,
+    // dan zonder.
+    let metScopes = true;
+    let res = await vraagToken(true);
     let tekst_ = await res.text();
-    // Wil BlueConic de scopes expliciet in de vraag, dan nog een keer met.
-    if (!res.ok && /scope/i.test(tekst_)) {
-      res = await vraagToken(true);
+    if (!res.ok && (res.status === 400 || /scope/i.test(tekst_))) {
+      metScopes = false;
+      res = await vraagToken(false);
       tekst_ = await res.text();
     }
     let body: unknown = null;
@@ -233,10 +246,17 @@ export function blueconicApi(
     }
     const geldig = isObject(body) && typeof body.expires_in === "number" ? body.expires_in : 600;
     token = { waarde, tot: nu() + Math.max(30, geldig - 60) * 1000 };
+    info = { metScopes, scope: isObject(body) ? tekst(body.scope) : null, geldigSeconden: geldig };
     return waarde;
   }
 
+  let info: TokenInfo | null = null;
+
   return {
+    async tokenInfo() {
+      await haalToken();
+      return info!;
+    },
     async get(pad, params = []) {
       const url = new URL(`${basis}${pad}`);
       for (const [k, v] of params) url.searchParams.append(k, v);
@@ -369,13 +389,21 @@ export function blueconicBron(api: BlueconicApi, config: BlueconicConfig, opties
           if (id && dag && dag >= sinds) uit.push({ sso: id, laatsteLogin: dag });
         }
       }
-      if (gelezen > 0 && metSso === 0) {
+      // Het segment heeft tienduizenden profielen. Nul is dus geen telling maar
+      // een fout, en mag nooit als "0 MijnPSV-fans" in de cijfers belanden.
+      if (gelezen === 0) {
+        throw new BlueconicFout(
+          `BlueConic gaf 0 profielen in segment ${config.segmentId}. Waarschijnlijk mist het token rechten of herkent BlueConic het segment niet; zie /api/fans/blueconic.`,
+          502
+        );
+      }
+      if (metSso === 0) {
         throw new BlueconicFout(
           `BlueConic gaf ${gelezen} profielen maar geen SSO-id (eigenschap ${sso}). Is die eigenschap als PII gemarkeerd? Vink dan PII aan bij de applicatie in BlueConic.`,
           502
         );
       }
-      if (gelezen > 0 && metLogin === 0) {
+      if (metLogin === 0) {
         throw new BlueconicFout(`BlueConic gaf ${gelezen} profielen maar geen logindatum (eigenschap ${login}).`, 502);
       }
       return uit;

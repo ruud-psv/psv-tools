@@ -39,6 +39,11 @@ function maandLang(maand: string): string {
   return `${MAANDEN[Number(maand.slice(5, 7)) - 1]} ${maand.slice(0, 4)}`;
 }
 
+/** `+8.879` of `−1.234`. */
+function metTeken(n: number): string {
+  return `${n < 0 ? "−" : "+"}${getal(Math.abs(n))}`;
+}
+
 function duizend(n: number): string {
   return `${getal(n / 1000, n % 1000 === 0 ? 0 : 1)}k`;
 }
@@ -301,10 +306,16 @@ function ActiveKaart({ o }: { o: Overzicht }) {
             neven={a.prognose != null ? { waarde: a.laatste.totaal, label: `nu: ${getal(a.laatste.totaal)}` } : null}
           />
           <div className="space-y-1 text-sm text-muted-foreground">
-            {a.tempo && (
+            {a.tempo && a.tempo.groei >= 0 && (
               <p>
                 In de afgelopen {a.tempo.dagen} dagen kwamen er <b className="text-foreground">{getal(a.tempo.groei)}</b> bij,{" "}
                 <b className="text-foreground">{getal(a.tempo.perDag)}</b> per dag.
+              </p>
+            )}
+            {a.tempo && a.tempo.groei < 0 && (
+              <p>
+                Het aantal ligt <b className="text-foreground">{getal(-a.tempo.groei)}</b> lager dan {a.tempo.dagen} dagen eerder. Een uniek
+                totaal kan niet dalen; controleer de bronnen.
               </p>
             )}
             {a.nodig.length > 0 && (
@@ -688,7 +699,7 @@ function Herkomst({ o }: { o: Overzicht }) {
                   {getal(p.totaal)}
                 </Td>
                 <Td align="right" className="text-muted-foreground">
-                  {vorige ? `+${getal(p.totaal - vorige.totaal)}` : "–"}
+                  {vorige ? metTeken(p.totaal - vorige.totaal) : "–"}
                 </Td>
                 <Td>
                   <Badge tone="neutral">{p.bron === "handmatig" ? "Handmatig" : "Automatisch"}</Badge>

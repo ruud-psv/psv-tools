@@ -128,3 +128,14 @@ test("het overzicht neemt de peildatum en de automatische status mee", () => {
   assert.equal(o.automatisch.mijnpsvGekoppeld, false);
   assert.equal(o.tabel.length, 3);
 });
+
+test("een dalend uniek totaal geeft geen prognose", () => {
+  const punten = activePunten({ engaged: [], active: [] }, [
+    dag("2026-10-01", {}, { maileon: 50_000, mijnpsv: 50_000, overlap: 10_000, totaal: 90_000 }),
+    dag("2026-11-01", {}, { maileon: 50_000, mijnpsv: 40_000, overlap: 10_000, totaal: 80_000 }),
+  ]);
+  const stand = activeStand(SEIZOEN, punten)!;
+  assert.ok(stand.tempo!.perDag < 0);
+  assert.equal(stand.prognose, null);
+  assert.equal(stand.niveauPrognose, null);
+});

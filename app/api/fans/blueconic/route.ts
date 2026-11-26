@@ -37,6 +37,30 @@ export async function GET(req: NextRequest) {
   const api = blueconicApi(config);
   const uit: Record<string, unknown> = { ingesteld: true, host: config.host, segmentId: config.segmentId };
 
+  // Welke rechten zitten er in het token (zonder het token zelf).
+  try {
+    uit.token = await api.tokenInfo();
+  } catch (err) {
+    uit.token = { fout: fout(err) };
+  }
+
+  // Hoeveel profielen BlueConic telt: zonder filter, en met het segment onder
+  // twee mogelijke namen. Zo is te zien of het aan de rechten of aan de vraag ligt.
+  const totalen: Record<string, unknown> = {};
+  for (const [naam, params] of [
+    ["zonderFilter", []],
+    ["segment", [["segment", config.segmentId]]],
+    ["segmentId", [["segmentId", config.segmentId]]],
+  ] as [string, [string, string][]][]) {
+    try {
+      const p = leesProfielPagina(await api.get("/profiles", [...params, ["count", "1"], ["startIndex", "0"]]));
+      totalen[naam] = { totaal: p.totaal, opPagina: p.profielen.length };
+    } catch (err) {
+      totalen[naam] = { fout: fout(err) };
+    }
+  }
+  uit.totalen = totalen;
+
   try {
     const segment = await api.get(`/segments/${config.segmentId}`);
     uit.segment =

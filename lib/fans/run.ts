@@ -16,6 +16,7 @@
  */
 
 import { doelenVoor, DOELEN, type SeizoenDoelen } from "./doelen";
+import { zonderLegeMijnpsv } from "./herstel";
 import type { MaileonKlikken } from "./maileon";
 import { maakSet, normaliseerSso, overlap, voegSamen, LEGE_SET, type FanSet } from "./sets";
 import { leesHistorie, leesSet, schrijfHistorie, schrijfSet, type BronSleutel, type Opslag } from "./store";
@@ -98,6 +99,13 @@ export async function fansRun(opties: {
   const totDag = gedaan.at(-1) ?? historie.maileon.tot;
   for (const m of totDag ? maandenTussen(seizoen.start, totDag) : []) {
     if (aangeraakt.has(m) || maileonMaanden[m] == null) maileonMaanden[m] = (await set("maileon", m)).count;
+  }
+
+  // Herstel: een stand met 0 MijnPSV-fans was een lege BlueConic-uitkomst. Is
+  // de seizoensset leeg, dan begint MijnPSV opnieuw vanaf het begin.
+  historie.dagen = historie.dagen.map(zonderLegeMijnpsv);
+  if (historie.mijnpsv.laatste && (await set("mijnpsv", "seizoen")).count === 0) {
+    historie.mijnpsv = { maanden: [], laatste: null };
   }
 
   // 2. MijnPSV

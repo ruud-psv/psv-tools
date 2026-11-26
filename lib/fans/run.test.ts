@@ -2,7 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fansRun, type MijnpsvBron } from "./run";
 import type { MaileonKlikken } from "./maileon";
-import { geheugenOpslag, leesHistorie, leesSet, paden } from "./store";
+import { geheugenOpslag, leesHistorie, leesSet, paden, schrijfHistorie } from "./store";
+import { maakOverzicht } from "./bereken";
+import { legeHistorie } from "./types";
 import type { SeizoenDoelen } from "./doelen";
 import { DOELEN } from "./doelen";
 
@@ -102,6 +104,36 @@ test("een fout bij MijnPSV laat Maileon en de stand van de vorige keer staan", a
   assert.deepEqual(v.mijnpsv, { fout: "BlueConic onbereikbaar" });
   assert.equal(v.stand?.engaged.mijnpsv, 1);
   assert.ok(opslag.inhoud.has(paden.historie("2026-27")));
+});
+
+test("herstel: een stand met 0 MijnPSV-fans wordt weer onbekend, en MijnPSV begint opnieuw", async () => {
+  const opslag = geheugenOpslag();
+  // Zoals op 26 november: BlueConic gaf een lege lijst en dat telde als 0.
+  const kapot = {
+    ...legeHistorie("2026-27"),
+    maileon: { tot: "2026-11-01", endpoint: "/reports/clicks/unique" },
+    mijnpsv: { maanden: ["2026-11"], laatste: "2026-11-02" },
+    dagen: [
+      {
+        datum: "2026-11-02",
+        engaged: { maand: "2026-11", maileon: 3, mijnpsv: 0, overlap: 0, totaal: 3 },
+        active: { maileon: 5, mijnpsv: 0, overlap: 0, totaal: 5 },
+      },
+    ],
+  };
+  await schrijfHistorie(opslag, kapot);
+  const vragen: string[] = [];
+  const v = await fansRun({
+    opslag,
+    maileon: nepMaileon(),
+    mijnpsv: nepMijnpsv([{ sso: "x", laatsteLogin: "2026-11-01" }], vragen),
+    nu: NU,
+    budgetMs: 60_000,
+    doelen: KORT,
+  });
+  assert.deepEqual(vragen, ["2026-10-30"], "opnieuw vanaf het begin van het seizoen");
+  assert.equal(v.stand?.active.mijnpsv, 1);
+  assert.equal(maakOverzicht({ seizoen: KORT[0], handmatig: { engaged: [], active: [] }, historie: kapot, vandaag: "2026-11-02", mijnpsvGekoppeld: true }).punten.length, 0);
 });
 
 test("buiten een seizoen met doelen stopt de run met uitleg", async () => {
