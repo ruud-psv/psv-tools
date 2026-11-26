@@ -84,6 +84,19 @@ test("Playable loader is een beta tool, los van Landingspagina's", () => {
   assert.ok(!canAccessApi(zonderBeta, "/api/playable-loader"));
 });
 
+test("Active & Engaged Fans is een beta tool, met de eigen API erbij", () => {
+  const beta = resolveAccess("Nieuw@PSV.nl", users, []);
+  assert.ok(canAccessPath(beta, "/dashboard/fans"));
+  assert.ok(canAccessApi(beta, "/api/fans"));
+  assert.ok(canAccessApi(beta, "/api/fans/snapshot"));
+
+  const zonderBeta = resolveAccess("alles@psv.nl", users, []);
+  assert.ok(!canAccessPath(zonderBeta, "/dashboard/fans"));
+  assert.ok(!canAccessApi(zonderBeta, "/api/fans"));
+  // FANdesk begint met dezelfde letters maar valt er niet onder.
+  assert.ok(canAccessApi(zonderBeta, "/api/fandesk"));
+});
+
 test("paden matchen op segmentgrens en langste pagina wint", () => {
   assert.equal(pageForPath("/dashboard/ticketing-stadion/123"), "/dashboard/ticketing-stadion");
   assert.equal(pageForPath("/dashboard/auth/google/callback"), null);

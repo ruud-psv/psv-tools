@@ -22,6 +22,7 @@ import {
   Plug,
   Users,
   ShoppingBag,
+  Target,
   Ticket,
   type LucideIcon,
 } from "lucide-react";
@@ -215,4 +216,5 @@ export const betaTools: Pick<ToolEntry, "name" | "href" | "icon">[] = [
   { name: "Groepsfoto", href: "/dashboard/groepsfoto", icon: Users },
   { name: "Contact Filter Import", href: "/dashboard/contact-filter-import", icon: ListFilter },
   { name: "Playable loader (test)", href: "/dashboard/playable-loader", icon: Plug },
+  { name: "Active & Engaged Fans", href: "/dashboard/fans", icon: Target },
 ];

@@ -14,6 +14,13 @@ test("beta tools krijgen het label Beta", () => {
   assert.equal(ALL_LINKS.get("/dashboard/utm-builder")?.beta, false);
 });
 
+test("Active & Engaged Fans staat als beta onder Marketing > Inzichten", () => {
+  assert.equal(ALL_LINKS.get("/dashboard/fans")?.beta, true);
+  const marketing = NAV_SECTIONS.find((s) => s.id === "marketing");
+  const inzichten = marketing?.groups.find((g) => g.title === "Inzichten");
+  assert.ok(inzichten?.links.some((l) => l.href === "/dashboard/fans"));
+});
+
 test("onderdelen zonder toegestane pagina's vallen weg", () => {
   const sections = sectionsFor(["/dashboard/fanstore"]);
   assert.deepEqual(sections.map((s) => s.id), ["merchandise"]);

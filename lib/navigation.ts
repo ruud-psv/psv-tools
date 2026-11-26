@@ -100,6 +100,7 @@ const SPECS: SectionSpec[] = [
           "/dashboard/landingspaginas",
           "/dashboard/psv-play",
           "/dashboard/database",
+          "/dashboard/fans",
         ],
       },
       {

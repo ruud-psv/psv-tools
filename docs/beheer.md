@@ -353,7 +353,9 @@ Tabblad op `/dashboard/beheer?tab=crons` (`components/cron-beheer.tsx`, API
     die gaat verder waar hij was.
   - **Opnieuw beginnen** (alleen de verkoop) start een nieuwe doorloop (`?restart=1`). Kan
     alleen als er geen run bezig is: stop hem eerst.
-- **Overige crons** (wachtlijst, PSV Play, Asana-automaat): alleen het schema.
+- **Overige crons** (wachtlijst, PSV Play, Active & Engaged Fans, Asana-automaat): alleen het
+  schema. Active & Engaged Fans heeft een knop **Nu bijwerken** op de eigen pagina
+  (`docs/fans.md`).
 
 Status zonder te starten kan ook via de routes zelf: `/api/ringside/ingest?status=1` en
 `/api/ringside/stoelen?status=1`.

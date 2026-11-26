@@ -68,6 +68,7 @@ const API_PAGES: Record<string, string[]> = {
   "/api/database": ["/dashboard/database"],
   "/api/dm-insights": ["/dashboard/dm-performance"],
   "/api/fandesk": ["/dashboard/fandesk"],
+  "/api/fans": ["/dashboard/fans"],
   "/api/groepsfoto": ["/dashboard/groepsfoto"],
   "/api/kennisbank": ["/dashboard/kennisbank"],
   "/api/kleurplaat": ["/dashboard/kleurplaat"],
