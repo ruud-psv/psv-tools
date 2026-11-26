@@ -9,20 +9,22 @@ import {
   isBlueconicIngesteld,
   kiesEigenschappen,
   leesProfielPagina,
-  probeerScopes,
-  ruweProeven,
+  profielVraag,
+  zoekSegment,
   type BlueconicConfig,
 } from "./blueconic";
 
 const ENV = { BLUECONIC_CLIENT_ID: "id", BLUECONIC_CLIENT_SECRET: "geheim" };
 
-test("config: client ID en secret verplicht, segment en host met standaard", () => {
+test("config: client ID en secret verplicht; segment, host en scopes met standaard", () => {
   assert.equal(isBlueconicIngesteld({}), false);
   assert.throws(() => blueconicConfig({ BLUECONIC_CLIENT_ID: "id" }), /BLUECONIC_CLIENT_SECRET/);
   const c = blueconicConfig({ ...ENV, BLUECONIC_HOST: "https://psv.blueconic.com/" });
   assert.equal(c.host, "psv.blueconic.com");
   assert.equal(c.segmentId, STANDAARD_SEGMENT);
   assert.equal(c.eigenschapSso, null);
+  assert.equal(c.scopes, "", "volgens de documentatie hoort er geen scope in de tokenvraag");
+  assert.equal(blueconicConfig({ ...ENV, BLUECONIC_SCOPES: "read:profiles" }).scopes, "read:profiles");
 });
 
 test("datums als milliseconden of ISO-tekst worden een Nederlandse dag", () => {
@@ -32,31 +34,42 @@ test("datums als milliseconden of ISO-tekst worden een Nederlandse dag", () => {
   assert.equal(dagUitWaarde("geen datum"), null);
 });
 
-test("profielpagina's in beide vormen: eigenschappen als lijst of als object", () => {
-  const lijst = leesProfielPagina({
-    profiles: [{ id: "p1", properties: [{ id: "sso_id", values: ["ABC"] }, { id: "sso_login", values: ["1764150000000"] }] }],
-    total: 10,
-    nextCursor: "c2",
+test("een pagina uit /segments/{id}/profiles: eigenschappen, totaal en nextCursor", () => {
+  const pagina = leesProfielPagina({
+    itemsPerPage: 20,
+    totalPages: 5,
+    totalResults: 100,
+    cursor: "*",
+    nextCursor: "AoJy",
+    profiles: [{ id: "p1", properties: [{ id: "sso_id", values: ["ABC"] }, { id: "login", values: ["1764150000000"] }] }],
   });
-  assert.deepEqual([lijst.profielen[0].id, lijst.profielen[0].eigenschappen.get("sso_id"), lijst.totaal, lijst.volgende], ["p1", ["ABC"], 10, "c2"]);
-
-  const object = leesProfielPagina([{ id: "p2", properties: { sso_id: "DEF", sso_login: ["2026-11-02T08:00:00Z"] } }]);
-  assert.deepEqual(object.profielen[0].eigenschappen.get("sso_id"), ["DEF"]);
-  assert.equal(object.volgende, null);
+  assert.deepEqual([pagina.profielen[0].id, pagina.profielen[0].eigenschappen.get("sso_id"), pagina.totaal, pagina.volgende], ["p1", ["ABC"], 100, "AoJy"]);
 });
 
-test("eigenschappen op naam kiezen, en bij twijfel de kandidaten noemen", () => {
+test("de vraag voor een pagina: het segment in het pad, cursor, count en de eigenschappen", () => {
+  const v = profielVraag(STANDAARD_SEGMENT, ["sso_id", "login"], "*", 50);
+  assert.equal(v.pad, `/segments/${STANDAARD_SEGMENT}/profiles`);
+  assert.deepEqual(v.params, [
+    ["cursor", "*"],
+    ["count", "50"],
+    ["profileProperty", "sso_id"],
+    ["profileProperty", "login"],
+    ["properties", "sso_id,login"],
+  ]);
+});
+
+test("eigenschappen op naam kiezen uit /profileProperties, en bij twijfel de kandidaten noemen", () => {
   const props = {
-    properties: [
-      { id: "ssoid", name: "SSO ID" },
-      { id: "sso_login_recent", name: "[Persoon] SSO Ingelogd Datum (meest recent)" },
-      { id: "sso_login_first", name: "[Persoon] SSO Ingelogd Datum (eerste)" },
+    profileProperties: [
+      { id: "sso_id", name: "SSO ID" },
+      { id: "_persoon_sso_ingelogd_datum_meest_recent_", name: "[Persoon] SSO Ingelogd Datum (meest recent)" },
+      { id: "sso_first", name: "[Persoon] SSO Ingelogd Datum (eerste)" },
       { id: "email", name: "E-mail" },
     ],
   };
   const k = kiesEigenschappen(props);
-  assert.deepEqual([k.sso, k.login], ["ssoid", "sso_login_recent"]);
-  assert.throws(() => kiesEigenschappen({ properties: [{ id: "email", name: "E-mail" }] }), /BLUECONIC_PROP_SSO/);
+  assert.deepEqual([k.sso, k.login], ["sso_id", "_persoon_sso_ingelogd_datum_meest_recent_"]);
+  assert.throws(() => kiesEigenschappen({ profileProperties: [{ id: "email", name: "E-mail" }] }), /BLUECONIC_PROP_SSO/);
 });
 
 interface Verzoek {
@@ -75,6 +88,7 @@ function nep(handler: (v: Verzoek) => Response) {
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const TOKEN = () => json({ access_token: "tok", token_type: "Bearer", expires_in: 3600 });
 
 const CONFIG: BlueconicConfig = { ...blueconicConfig(ENV), eigenschapSso: "sso", eigenschapLogin: "login" };
 
@@ -82,163 +96,89 @@ function profiel(id: string, sso: string | null, login: string) {
   return { id, properties: [...(sso ? [{ id: "sso", values: [sso] }] : []), { id: "login", values: [login] }] };
 }
 
-test("token met client credentials, en pagineren met startIndex tot een lege pagina", async () => {
-  // BlueConic geeft maar 2 per pagina, ook al vraagt Tools er meer.
+/** Een segment van drie profielen, twee per pagina, met cursors zoals BlueConic. */
+function segmentNep() {
   const alle = [
     profiel("1", "A", "2026-11-25T10:00:00Z"),
     profiel("2", "B", "2026-10-03T10:00:00Z"),
     profiel("3", "C", "2026-11-26T10:00:00Z"),
   ];
-  const { doeFetch, verzoeken } = nep(({ url }) => {
-    if (url.pathname === "/rest/v2/oauth/token") return json({ access_token: "tok", expires_in: 3600 });
-    const start = Number(url.searchParams.get("startIndex"));
-    return json({ profiles: alle.slice(start, start + 2) });
+  return nep(({ url }) => {
+    if (url.pathname === "/rest/v2/oauth/token") return TOKEN();
+    if (url.pathname === `/rest/v2/segments/${STANDAARD_SEGMENT}/profiles`) {
+      return url.searchParams.get("cursor") === "*"
+        ? json({ totalResults: 3, cursor: "*", nextCursor: "c2", profiles: alle.slice(0, 2) })
+        : json({ totalResults: 3, cursor: "c2", profiles: alle.slice(2) });
+    }
+    return json({}, 404);
   });
-  const api = blueconicApi(CONFIG, { doeFetch, wachttijden: [] });
-  const uit = await blueconicBron(api, CONFIG).profielenSinds("2026-11-01");
+}
 
+test("token met client credentials in de body, zonder scope; profielen per cursor", async () => {
+  const { doeFetch, verzoeken } = segmentNep();
+  const uit = await blueconicBron(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-11-01");
   assert.deepEqual(uit, [
     { sso: "A", laatsteLogin: "2026-11-25" },
     { sso: "C", laatsteLogin: "2026-11-26" },
   ]);
+
   const token = verzoeken[0];
   assert.equal(token.url.href, "https://psv.blueconic.com/rest/v2/oauth/token");
-  assert.match(String(token.init?.body), /grant_type=client_credentials/);
-  const pagina = verzoeken[1].url;
-  assert.equal(pagina.pathname, "/rest/v2/profiles");
-  assert.equal(pagina.searchParams.get("segment"), STANDAARD_SEGMENT);
-  assert.equal(pagina.searchParams.get("properties"), "sso,login");
-  assert.equal(verzoeken.filter((v) => v.url.pathname === "/rest/v2/oauth/token").length, 1, "het token wordt hergebruikt");
-  assert.deepEqual(verzoeken.slice(1).map((v) => v.url.searchParams.get("startIndex")), ["0", "2", "3"]);
+  const body = new URLSearchParams(String(token.init?.body));
+  assert.deepEqual([body.get("grant_type"), body.get("client_id"), body.get("client_secret"), body.get("scope")], ["client_credentials", "id", "geheim", null]);
+  assert.equal(verzoeken.filter((v) => v.url.pathname.endsWith("/oauth/token")).length, 1, "het token wordt hergebruikt");
+  assert.deepEqual(verzoeken.slice(1).map((v) => v.url.searchParams.get("cursor")), ["*", "c2"]);
+  assert.equal(new Headers(verzoeken[1].init?.headers).get("Authorization"), "Bearer tok");
 });
 
-test("pagineren met een cursor, en stoppen als het totaal bereikt is", async () => {
-  const { doeFetch, verzoeken } = nep(({ url }) => {
-    if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok" });
-    return url.searchParams.get("cursor")
-      ? json({ profiles: [profiel("2", "B", "2026-11-02T10:00:00Z")], total: 2 })
-      : json({ profiles: [profiel("1", "A", "2026-11-01T10:00:00Z")], total: 2, nextCursor: "volgende" });
-  });
-  const uit = await blueconicBron(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01");
-  assert.equal(uit.length, 2);
-  assert.equal(verzoeken.at(-1)?.url.searchParams.get("cursor"), "volgende");
-  assert.equal(verzoeken.length, 3);
+test("nul profielen of een veel te korte lijst is een fout, geen telling", async () => {
+  const leeg = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? TOKEN() : json({ totalResults: 0, profiles: [] })));
+  await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch: leeg.doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /0 profielen/);
+
+  // BlueConic zegt 100 profielen, maar er komt er één en geen cursor.
+  const kort = nep(({ url }) =>
+    url.pathname.endsWith("/oauth/token") ? TOKEN() : json({ totalResults: 100, profiles: [profiel("1", "A", "2026-11-01T10:00:00Z")] })
+  );
+  await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch: kort.doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /onvolledig/);
 });
 
 test("profielen zonder SSO-id wijzen op een PII-eigenschap", async () => {
-  const { doeFetch } = nep(({ url }) => {
-    if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok" });
-    return Number(url.searchParams.get("startIndex")) ? json({ profiles: [] }) : json({ profiles: [profiel("1", null, "2026-11-01T10:00:00Z")] });
-  });
+  const { doeFetch } = nep(({ url }) =>
+    url.pathname.endsWith("/oauth/token") ? TOKEN() : json({ totalResults: 1, profiles: [profiel("1", null, "2026-11-01T10:00:00Z")] })
+  );
   await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /PII/);
 });
 
-test("een geweigerd token geeft uitleg; dezelfde pagina twee keer is een fout", async () => {
-  const geweigerd = nep(() => json({ error: "invalid_client" }, 401));
-  await assert.rejects(blueconicApi(CONFIG, { doeFetch: geweigerd.doeFetch, wachttijden: [] }).get("/profiles"), /invalid_client.*BLUECONIC_CLIENT_ID/s);
-
-  const steeds = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok" }) : json({ profiles: [profiel("1", "A", "2026-11-01")] })));
-  await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch: steeds.doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /pagineren/);
-});
-
-test("de lijst met eigenschappen: het eerste pad dat bestaat, anders uitleg over de ID's", async () => {
+test("zonder eigenschap-ID's zoekt Tools ze op in /profileProperties", async () => {
   const zonder = { ...CONFIG, eigenschapSso: null, eigenschapLogin: null };
-  const props = { items: [{ id: "ssoid", name: "SSO ID" }, { id: "ssodatum", name: "SSO Ingelogd Datum (meest recent)" }] };
   const { doeFetch, verzoeken } = nep(({ url }) => {
-    if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok" });
-    if (url.pathname === "/rest/v2/profileProperties") return json(props);
-    if (url.pathname === "/rest/v2/profiles") {
-      return Number(url.searchParams.get("startIndex"))
-        ? json({ profiles: [] })
-        : json({ profiles: [{ id: "1", properties: { ssoid: "A", ssodatum: "2026-11-01T10:00:00Z" } }] });
+    if (url.pathname.endsWith("/oauth/token")) return TOKEN();
+    if (url.pathname === "/rest/v2/profileProperties") {
+      return json({ profileProperties: [{ id: "sso_id", name: "SSO ID" }, { id: "datum", name: "SSO Ingelogd Datum (meest recent)" }] });
     }
-    return json({ message: "Not found" }, 404);
+    return json({ totalResults: 1, profiles: [{ id: "1", properties: [{ id: "sso_id", values: ["A"] }, { id: "datum", values: ["2026-11-01T10:00:00Z"] }] }] });
   });
   await blueconicBron(blueconicApi(zonder, { doeFetch, wachttijden: [] }), zonder).profielenSinds("2026-07-01");
-  const profielen = verzoeken.find((v) => v.url.pathname === "/rest/v2/profiles");
-  assert.equal(profielen?.url.searchParams.get("properties"), "ssoid,ssodatum");
-
-  const nergens = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok" }) : json({}, 404)));
-  await assert.rejects(
-    blueconicBron(blueconicApi(zonder, { doeFetch: nergens.doeFetch, wachttijden: [] }), zonder).profielenSinds("2026-07-01"),
-    /BLUECONIC_PROP_SSO en BLUECONIC_PROP_LOGIN/
-  );
+  const profielen = verzoeken.find((v) => v.url.pathname.endsWith("/profiles"));
+  assert.deepEqual(profielen?.url.searchParams.getAll("profileProperty"), ["sso_id", "datum"]);
 });
 
-test("vraagt het token met de scopes, en zonder als BlueConic die namen niet kent", async () => {
-  const met = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok", scope: "read:profiles" }) : json({ id: "x" })));
-  const api = blueconicApi(CONFIG, { doeFetch: met.doeFetch, wachttijden: [] });
-  await api.get("/segments/x");
-  assert.match(String(met.verzoeken[0].init?.body), /scope=read%3Aprofiles\+read%3Aproperties\+read%3Asegments/);
-  assert.deepEqual(await api.tokenInfo(), { metScopes: true, scope: "read:profiles", geldigSeconden: 600 });
-
-  const zonder = nep(({ url, init }) => {
-    if (!url.pathname.endsWith("/oauth/token")) return json({ id: "x" });
-    return /scope=/.test(String(init?.body)) ? json({ error: "invalid_scope" }, 400) : json({ access_token: "tok" });
+test("het segment opzoeken in /segments, met profileCount", async () => {
+  const { doeFetch } = nep(({ url }) => {
+    if (url.pathname.endsWith("/oauth/token")) return TOKEN();
+    return json({ segments: [{ id: "x", name: "Ander" }, { id: STANDAARD_SEGMENT, name: "[Doelstelling] Ingelogd via login.psv.nl", profileCount: 64_700 }] });
   });
-  const api2 = blueconicApi(CONFIG, { doeFetch: zonder.doeFetch, wachttijden: [] });
-  await api2.get("/segments/x");
-  assert.equal((await api2.tokenInfo()).metScopes, false);
-});
-
-test("nul profielen in het segment is een fout, geen telling", async () => {
-  const { doeFetch } = nep(({ url }) =>
-    url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok" }) : json({ itemsPerPage: 1000, profiles: [], startIndex: 0, totalPages: 0, totalResults: 0 })
-  );
-  await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /0 profielen/);
-});
-
-test("scopes: standaard, uit BLUECONIC_SCOPES, of geen", () => {
-  assert.equal(blueconicConfig(ENV).scopes, "read:profiles read:properties read:segments");
-  assert.equal(blueconicConfig({ ...ENV, BLUECONIC_SCOPES: "profiles:read segments:read" }).scopes, "profiles:read segments:read");
-  assert.equal(blueconicConfig({ ...ENV, BLUECONIC_SCOPES: "geen" }).scopes, "");
-});
-
-test("scopes proberen: per schrijfwijze het token, het segment en het aantal profielen", async () => {
-  // Alleen de tweede schrijfwijze geeft echte rechten.
-  const goed = nep(({ url, init }) => {
-    if (url.pathname.endsWith("/oauth/token")) {
-      const scope = new URLSearchParams(String(init?.body)).get("scope");
-      return json({ access_token: scope === "profiles:read segments:read" ? "goed" : "leeg" });
-    }
-    const auth = new Headers(init?.headers).get("Authorization");
-    if (auth !== "Bearer goed") return url.pathname.startsWith("/rest/v2/segments") ? json({}, 403) : json({ profiles: [], totalResults: 0 });
-    return url.pathname.startsWith("/rest/v2/segments") ? json({ id: "x" }) : json({ profiles: [{ id: "1" }], totalResults: 64_700 });
+  assert.deepEqual(await zoekSegment(blueconicApi(CONFIG, { doeFetch, wachttijden: [] }), STANDAARD_SEGMENT), {
+    id: STANDAARD_SEGMENT,
+    naam: "[Doelstelling] Ingelogd via login.psv.nl",
+    profielen: 64_700,
   });
-  const proeven = await probeerScopes(CONFIG, { doeFetch: goed.doeFetch, varianten: ["read:profiles", "profiles:read segments:read", ""] });
-  assert.deepEqual(
-    proeven.map((p) => [p.scopes, p.segment, p.profielen]),
-    [
-      ["read:profiles", 403, 0],
-      ["profiles:read segments:read", 200, 64_700],
-      ["(geen)", 403, 0],
-    ]
-  );
-  // Zonder scope gaat er ook echt geen scope mee.
-  const zonder = goed.verzoeken.filter((v) => v.url.pathname.endsWith("/oauth/token")).at(-1);
-  assert.equal(new URLSearchParams(String(zonder?.init?.body)).get("scope"), null);
 });
 
-test("ruwe proeven: token via body, via Basic-header en zonder, met de uitleg bij een 403", async () => {
-  const { doeFetch, verzoeken } = nep(({ url, init }) => {
-    if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok", token_type: "Bearer", expires_in: 3600 });
-    const auth = new Headers(init?.headers).get("Authorization");
-    if (url.pathname.startsWith("/rest/v2/segments")) {
-      return new Response("Forbidden", { status: 403, headers: { "WWW-Authenticate": 'Bearer error="insufficient_scope"' } });
-    }
-    return json({ profiles: [], totalResults: auth ? 5 : 0 });
-  });
-  const proeven = await ruweProeven(CONFIG, { doeFetch });
-  assert.deepEqual(proeven.map((p) => p.manier), ["body", "basic", "geen"]);
-  assert.deepEqual(proeven[0].token, { status: 200, sleutels: ["access_token", "token_type", "expires_in"], tokenType: "Bearer", fout: null });
-  assert.equal(proeven[0].segment?.wwwAuthenticate, 'Bearer error="insufficient_scope"');
-  assert.equal(proeven[0].segment?.inhoud, "Forbidden");
-  assert.equal(proeven[0].profielen?.totaal, 5);
-  assert.equal(proeven[2].token, null);
-  assert.equal(proeven[2].profielen?.totaal, 0);
+test("een geweigerd token geeft uitleg; een 403 noemt de rechten", async () => {
+  const geweigerd = nep(() => json({ error: "invalid_client" }, 401));
+  await assert.rejects(blueconicApi(CONFIG, { doeFetch: geweigerd.doeFetch, wachttijden: [] }).get("/segments"), /invalid_client.*BLUECONIC_CLIENT_ID/s);
 
-  const tokenVragen = verzoeken.filter((v) => v.url.pathname.endsWith("/oauth/token"));
-  assert.match(String(tokenVragen[0].init?.body), /client_secret=geheim/);
-  assert.doesNotMatch(String(tokenVragen[1].init?.body), /client_secret/);
-  assert.equal(new Headers(tokenVragen[1].init?.headers).get("Authorization"), `Basic ${Buffer.from("id:geheim").toString("base64")}`);
+  const verboden = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? TOKEN() : new Response("", { status: 403 })));
+  await assert.rejects(blueconicApi(CONFIG, { doeFetch: verboden.doeFetch, wachttijden: [] }).get("/segments"), /Read op Profiles/);
 });

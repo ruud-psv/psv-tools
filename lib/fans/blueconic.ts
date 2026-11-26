@@ -1,13 +1,20 @@
 /**
  * BlueConic voor Active & Engaged Fans: de profielen in het segment
  * "[Doelstelling] Ingelogd via login.psv.nl", met hun SSO-id en hun meest
- * recente SSO-login. Via de REST API v2, met OAuth 2.0 client credentials (een
- * applicatie in BlueConic met leesrechten op Profiles, Properties en Segments).
+ * recente SSO-login. Via de REST API v2 (https://rest.apidoc.blueconic.com),
+ * met OAuth 2.0 client credentials: een applicatie in BlueConic met Read op
+ * Profiles, Properties en Segments, en PII als het SSO-id een PII-eigenschap is.
  *
- * De vorm van de antwoorden is tolerant gelezen: profielen onder `profiles`,
- * `items` of `data`, eigenschappen als lijst (`[{id, values}]`) of als object,
- * pagineren met een cursor of met `startIndex`. Wat BlueConic precies teruggeeft,
- * laat `/api/fans/blueconic` zien (zonder SSO-id's).
+ * - Token: `POST /oauth/token`, client ID en secret in de body. De rechten
+ *   komen uit de applicatie; een `scope` hoort niet in de vraag.
+ * - Profielen: `GET /segments/{segment}/profiles`, met `cursor` (eerst `*`,
+ *   daarna `nextCursor`), `count` en `profileProperty` per eigenschap.
+ * - Segmenten: `GET /segments` (met `profileCount`); een segment los ophalen
+ *   kan niet.
+ * - Eigenschappen: `GET /profileProperties`.
+ *
+ * Let op: `GET /profiles` is zoeken op één waarde van een geïndexeerde
+ * eigenschap, niet een lijst; zonder zoekwaarde geeft het altijd 0.
  *
  * De SSO-id's gaan niet verder dan het geheugen van de run: de opslag krijgt
  * alleen hashes (`sets.ts`).
@@ -19,23 +26,12 @@ import { amsterdamDag } from "./tijd";
 /** Het segment uit BlueConic: "[Doelstelling] Ingelogd via login.psv.nl". */
 export const STANDAARD_SEGMENT = "ff5e51f8-3eb4-46cc-8640-6b66460d2633";
 export const STANDAARD_HOST = "psv.blueconic.com";
-const PAGINA = 1000;
-const MAX_PAGINAS = 2000;
+/** Profielen per pagina; BlueConic staat tot 1.000.000 toe. */
+const PAGINA = 10_000;
+const MAX_PAGINAS = 500;
 const WACHTTIJDEN_MS = [2_000, 5_000, 15_000];
-export const STANDAARD_SCOPES = "read:profiles read:properties read:segments";
-
-/**
- * Schrijfwijzen van de scopes om te proberen: BlueConic weigerde de standaard
- * niet, maar gaf er ook geen rechten voor. `""` is zonder scope in de vraag.
- */
-export const SCOPE_VARIANTEN = [
-  STANDAARD_SCOPES,
-  "profiles:read properties:read segments:read",
-  "read_profiles read_properties read_segments",
-  "read:profile read:property read:segment",
-  "profiles properties segments",
-  "",
-];
+/** Leest het segment minder dan dit deel van zijn `profileCount`, dan is de lijst onvolledig. */
+const MIN_DEEL_VAN_SEGMENT = 0.8;
 
 export class BlueconicConfigFout extends Error {}
 export class BlueconicFout extends Error {
@@ -54,7 +50,7 @@ export interface BlueconicConfig {
   /** Eigenschap-ID's; zonder deze zoekt Tools ze op naam op. */
   eigenschapSso: string | null;
   eigenschapLogin: string | null;
-  /** De scopes in de tokenvraag; `""` vraagt zonder scope. */
+  /** Scopes in de tokenvraag; leeg (standaard) vraagt zonder, zoals de documentatie zegt. */
   scopes: string;
 }
 
@@ -66,6 +62,7 @@ export function blueconicConfig(env: Record<string, string | undefined> = proces
   const ontbreekt = ["BLUECONIC_CLIENT_ID", "BLUECONIC_CLIENT_SECRET"].filter((k) => !env[k]?.trim());
   if (ontbreekt.length) throw new BlueconicConfigFout(`BlueConic-configuratie ontbreekt: ${ontbreekt.join(", ")}.`);
   const host = (env.BLUECONIC_HOST?.trim() || STANDAARD_HOST).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const scopes = env.BLUECONIC_SCOPES?.trim() ?? "";
   return {
     host,
     clientId: env.BLUECONIC_CLIENT_ID!.trim(),
@@ -73,7 +70,7 @@ export function blueconicConfig(env: Record<string, string | undefined> = proces
     segmentId: env.BLUECONIC_SEGMENT_ID?.trim() || STANDAARD_SEGMENT,
     eigenschapSso: env.BLUECONIC_PROP_SSO?.trim() || null,
     eigenschapLogin: env.BLUECONIC_PROP_LOGIN?.trim() || null,
-    scopes: env.BLUECONIC_SCOPES?.trim() === "geen" ? "" : env.BLUECONIC_SCOPES?.trim() || STANDAARD_SCOPES,
+    scopes: scopes === "geen" ? "" : scopes,
   };
 }
 
@@ -170,7 +167,7 @@ export interface EigenschapKandidaat {
  * juiste in `BLUECONIC_PROP_SSO` of `BLUECONIC_PROP_LOGIN` kan.
  */
 export function kiesEigenschappen(body: unknown): { sso: string; login: string; kandidaten: EigenschapKandidaat[] } {
-  const alle: EigenschapKandidaat[] = lijst(body, ["properties", "items", "data", "results"]).flatMap((p) => {
+  const alle: EigenschapKandidaat[] = lijst(body, ["profileProperties", "properties", "items", "data", "results"]).flatMap((p) => {
     if (!isObject(p)) return [];
     const id = tekst(p.id);
     const naam = tekst(p.name ?? p.label) ?? "";
@@ -214,18 +211,18 @@ export interface BlueconicApi {
 
 export function blueconicApi(
   config: Pick<BlueconicConfig, "host" | "clientId" | "clientSecret"> & { scopes?: string },
-  opties: { doeFetch?: typeof fetch; wachttijden?: number[]; nu?: () => number; terugval?: boolean } = {}
+  opties: { doeFetch?: typeof fetch; wachttijden?: number[]; nu?: () => number } = {}
 ): BlueconicApi {
-  const scopes = config.scopes ?? STANDAARD_SCOPES;
+  const scopes = config.scopes ?? "";
   const doeFetch = opties.doeFetch ?? fetch;
   const wachttijden = opties.wachttijden ?? WACHTTIJDEN_MS;
   const nu = opties.nu ?? Date.now;
   const basis = `https://${config.host}/rest/v2`;
   let token: { waarde: string; tot: number } | null = null;
 
-  async function vraagToken(metScopes: boolean): Promise<Response> {
+  async function vraagToken(): Promise<Response> {
     const body = new URLSearchParams({ grant_type: "client_credentials", client_id: config.clientId, client_secret: config.clientSecret });
-    if (metScopes && scopes) body.set("scope", scopes);
+    if (scopes) body.set("scope", scopes);
     return doeFetch(`${basis}/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
@@ -236,17 +233,8 @@ export function blueconicApi(
 
   async function haalToken(): Promise<string> {
     if (token && token.tot > nu()) return token.waarde;
-    // Eerst met de scopes erbij: een token zonder gaf bij PSV een 403 op het
-    // segment en een lege lijst profielen. Kent BlueConic die scope-namen niet,
-    // dan zonder.
-    let metScopes = Boolean(scopes);
-    let res = await vraagToken(metScopes);
-    let tekst_ = await res.text();
-    if (metScopes && opties.terugval !== false && !res.ok && (res.status === 400 || /scope/i.test(tekst_))) {
-      metScopes = false;
-      res = await vraagToken(false);
-      tekst_ = await res.text();
-    }
+    const res = await vraagToken();
+    const tekst_ = await res.text();
     let body: unknown = null;
     try {
       body = JSON.parse(tekst_);
@@ -263,7 +251,7 @@ export function blueconicApi(
     }
     const geldig = isObject(body) && typeof body.expires_in === "number" ? body.expires_in : 600;
     token = { waarde, tot: nu() + Math.max(30, geldig - 60) * 1000 };
-    info = { metScopes, scope: isObject(body) ? tekst(body.scope) : null, geldigSeconden: geldig };
+    info = { metScopes: Boolean(scopes), scope: isObject(body) ? tekst(body.scope) : null, geldigSeconden: geldig };
     return waarde;
   }
 
@@ -304,235 +292,85 @@ export function blueconicApi(
         } catch {
           reden = tekst_.slice(0, 200) || null;
         }
-        const hint = res.status === 403 ? " Heeft de applicatie leesrechten op Profiles, Properties en Segments?" : "";
+        const hint = res.status === 403 ? " Heeft de applicatie Read op Profiles, Properties en Segments (en PII voor het SSO-id)?" : "";
         throw new BlueconicFout(`BlueConic gaf ${res.status} op ${pad}${reden ? `: ${reden}` : ""}.${hint}`, res.status);
       }
     },
   };
 }
 
-/* ---------- Scopes proberen ---------- */
+/* ---------- Segment en eigenschappen ---------- */
 
-export interface ScopeProef {
-  scopes: string;
-  token: TokenInfo | { fout: string };
-  /** HTTP-status van het segment, of de fout. */
-  segment: number | string;
-  /** Profielen in BlueConic zonder filter (`totalResults`), of de fout. */
-  profielen: number | null | string;
+export interface SegmentInfo {
+  id: string;
+  naam: string | null;
+  /** Het aantal profielen volgens BlueConic; kan uit een cache komen. */
+  profielen: number | null;
 }
 
-/**
- * Probeert elke schrijfwijze van de scopes: een nieuw token, dan het segment
- * en het aantal profielen. Zonder terugval, zodat elke regel zegt wat hij test.
- */
-export async function probeerScopes(
-  config: BlueconicConfig,
-  opties: { doeFetch?: typeof fetch; varianten?: string[] } = {}
-): Promise<ScopeProef[]> {
-  const uit: ScopeProef[] = [];
-  for (const scopes of opties.varianten ?? SCOPE_VARIANTEN) {
-    const api = blueconicApi({ ...config, scopes }, { doeFetch: opties.doeFetch, wachttijden: [], terugval: false });
-    const proef: ScopeProef = { scopes: scopes || "(geen)", token: { fout: "" }, segment: "", profielen: null };
-    try {
-      proef.token = await api.tokenInfo();
-    } catch (err) {
-      proef.token = { fout: err instanceof Error ? err.message : String(err) };
-      uit.push(proef);
-      continue;
-    }
-    try {
-      await api.get(`/segments/${config.segmentId}`);
-      proef.segment = 200;
-    } catch (err) {
-      proef.segment = err instanceof BlueconicFout ? err.status : String(err);
-    }
-    try {
-      proef.profielen = leesProfielPagina(await api.get("/profiles", [["count", "1"], ["startIndex", "0"]])).totaal;
-    } catch (err) {
-      proef.profielen = err instanceof Error ? err.message : String(err);
-    }
-    uit.push(proef);
-  }
-  return uit;
-}
-
-/* ---------- Ruwe proef ---------- */
-
-export interface RuwAntwoord {
-  status: number;
-  /** De `WWW-Authenticate`-header: bij een 403 staat daar vaak welk recht mist. */
-  wwwAuthenticate: string | null;
-  contentType: string | null;
-  /** Bij een fout het begin van het antwoord; bij succes alleen het aantal (geen profieldata). */
-  inhoud: string | null;
-  totaal: number | null;
-}
-
-export interface RuweProef {
-  /** Hoe het token gevraagd is: client-gegevens in de body, in een Basic-header, of geen token. */
-  manier: "body" | "basic" | "geen";
-  token: { status: number; sleutels: string[]; tokenType: string | null; fout: string | null } | null;
-  segment: RuwAntwoord | null;
-  profielen: RuwAntwoord | null;
-}
-
-async function ruwGet(doeFetch: typeof fetch, url: string, token: string | null): Promise<RuwAntwoord> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await doeFetch(url, { headers, cache: "no-store" });
-  const tekst_ = await res.text();
-  let totaal: number | null = null;
-  if (res.ok) {
-    try {
-      totaal = leesProfielPagina(JSON.parse(tekst_)).totaal;
-    } catch {
-      // geen JSON
-    }
-  }
-  return {
-    status: res.status,
-    wwwAuthenticate: res.headers.get("www-authenticate"),
-    contentType: res.headers.get("content-type"),
-    inhoud: res.ok ? null : tekst_.slice(0, 300),
-    totaal,
-  };
-}
-
-/**
- * Dezelfde twee verzoeken (het segment en één profiel) op drie manieren: met
- * een token waarvoor de client-gegevens in de body staan, met een token via een
- * Basic-header, en zonder token. Is alles gelijk, dan negeert BlueConic het
- * token. Toont geen token en geen profieldata.
- */
-export async function ruweProeven(config: BlueconicConfig, opties: { doeFetch?: typeof fetch } = {}): Promise<RuweProef[]> {
-  const doeFetch = opties.doeFetch ?? fetch;
-  const basis = `https://${config.host}/rest/v2`;
-  const uit: RuweProef[] = [];
-  for (const manier of ["body", "basic", "geen"] as const) {
-    const proef: RuweProef = { manier, token: null, segment: null, profielen: null };
-    let token: string | null = null;
-    if (manier !== "geen") {
-      const body = new URLSearchParams({ grant_type: "client_credentials" });
-      if (config.scopes) body.set("scope", config.scopes);
-      const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
-      if (manier === "body") {
-        body.set("client_id", config.clientId);
-        body.set("client_secret", config.clientSecret);
-      } else {
-        headers.Authorization = `Basic ${Buffer.from(`${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`).toString("base64")}`;
-      }
-      try {
-        const res = await doeFetch(`${basis}/oauth/token`, { method: "POST", headers, body, cache: "no-store" });
-        const tekst_ = await res.text();
-        let json: unknown = null;
-        try {
-          json = JSON.parse(tekst_);
-        } catch {
-          // geen JSON
-        }
-        token = isObject(json) ? tekst(json.access_token) : null;
-        proef.token = {
-          status: res.status,
-          sleutels: isObject(json) ? Object.keys(json) : [],
-          tokenType: isObject(json) ? tekst(json.token_type) : null,
-          fout: token ? null : isObject(json) ? tekst(json.error_description ?? json.error) : tekst_.slice(0, 200),
-        };
-      } catch (err) {
-        proef.token = { status: 0, sleutels: [], tokenType: null, fout: err instanceof Error ? err.message : String(err) };
-      }
-      if (!token) {
-        uit.push(proef);
-        continue;
+/** Het segment uit `GET /segments`, of `null` als het er niet tussen staat. */
+export async function zoekSegment(api: BlueconicApi, segmentId: string): Promise<SegmentInfo | null> {
+  const perPagina = 100;
+  for (let start = 0; start < 10_000; start += perPagina) {
+    const body = await api.get("/segments", [["startIndex", String(start)], ["count", String(perPagina)]]);
+    const segmenten = lijst(body, ["segments"]);
+    for (const s of segmenten) {
+      if (isObject(s) && s.id === segmentId) {
+        return { id: segmentId, naam: tekst(s.name), profielen: typeof s.profileCount === "number" ? s.profileCount : null };
       }
     }
-    try {
-      proef.segment = await ruwGet(doeFetch, `${basis}/segments/${config.segmentId}`, token);
-      proef.profielen = await ruwGet(doeFetch, `${basis}/profiles?count=1&startIndex=0`, token);
-    } catch (err) {
-      proef.segment ??= { status: 0, wwwAuthenticate: null, contentType: null, inhoud: err instanceof Error ? err.message : String(err), totaal: null };
-    }
-    uit.push(proef);
+    if (segmenten.length < perPagina) return null;
   }
-  return uit;
-}
-
-/* ---------- Bron voor de telling ---------- */
-
-/**
- * Waar de lijst met profieleigenschappen kan staan. `/properties` gaf bij PSV
- * een 404; de andere twee zijn de gangbare namen in de v2-API.
- */
-export const EIGENSCHAPPEN_PADEN = ["/profileproperties", "/profileProperties", "/properties"];
-
-/** De lijst met eigenschappen, van het eerste pad dat bestaat. */
-export async function leesEigenschappenLijst(api: BlueconicApi): Promise<{ pad: string; body: unknown }> {
-  const geprobeerd: string[] = [];
-  for (const pad of EIGENSCHAPPEN_PADEN) {
-    try {
-      return { pad, body: await api.get(pad, [["count", "10000"]]) };
-    } catch (err) {
-      if (err instanceof BlueconicFout && (err.status === 404 || err.status === 405)) {
-        geprobeerd.push(pad);
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new BlueconicFout(
-    `BlueConic kent geen lijst met eigenschappen op ${geprobeerd.join(", ")}. Zet de ID's van het SSO-id en van "SSO Ingelogd Datum (meest recent)" in BLUECONIC_PROP_SSO en BLUECONIC_PROP_LOGIN.`,
-    404
-  );
+  return null;
 }
 
 export async function eigenschappenVoor(api: BlueconicApi, config: BlueconicConfig): Promise<{ sso: string; login: string }> {
   if (config.eigenschapSso && config.eigenschapLogin) return { sso: config.eigenschapSso, login: config.eigenschapLogin };
-  const gekozen = kiesEigenschappen((await leesEigenschappenLijst(api)).body);
+  const gekozen = kiesEigenschappen(await api.get("/profileProperties", [["count", "10000"]]));
   return { sso: config.eigenschapSso ?? gekozen.sso, login: config.eigenschapLogin ?? gekozen.login };
 }
 
+/** De vraag voor één pagina profielen van een segment. */
+export function profielVraag(segmentId: string, eigenschappen: string[], cursor: string, aantal = PAGINA): { pad: string; params: [string, string][] } {
+  return {
+    pad: `/segments/${encodeURIComponent(segmentId)}/profiles`,
+    params: [
+      ["cursor", cursor],
+      ["count", String(aantal)],
+      ...eigenschappen.map((e): [string, string] => ["profileProperty", e]),
+      ["properties", eigenschappen.join(",")],
+    ],
+  };
+}
+
 /**
- * Leest alle profielen van het segment, pagina voor pagina. Doorgaan tot een
- * lege pagina, het totaal of het eind van de cursor: zo maakt het niet uit of
- * BlueConic minder per pagina geeft dan gevraagd.
+ * Leest alle profielen van het segment, pagina voor pagina met de cursor van
+ * BlueConic. Stopt bij een lege pagina, als er geen nieuwe cursor komt, of als
+ * het totaal bereikt is.
  */
 export async function* profielenUitSegment(
   api: BlueconicApi,
   segmentId: string,
   eigenschappen: string[],
   deadline?: number
-): AsyncGenerator<RuwProfiel[]> {
-  let cursor: string | null = null;
-  let start = 0;
+): AsyncGenerator<{ profielen: RuwProfiel[]; totaal: number | null }> {
+  let cursor = "*";
   let gezien = 0;
-  let eersteId: string | null = null;
   for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
     if (deadline && Date.now() > deadline) throw new BlueconicFout(`BlueConic lezen duurde te lang (${gezien} profielen gelezen).`, 504);
-    const params: [string, string][] = [
-      ["segment", segmentId],
-      ["properties", eigenschappen.join(",")],
-      ["count", String(PAGINA)],
-    ];
-    if (cursor) params.push(["cursor", cursor]);
-    else params.push(["startIndex", String(start)]);
-    const deel = leesProfielPagina(await api.get("/profiles", params));
+    const vraag = profielVraag(segmentId, eigenschappen, cursor);
+    const deel = leesProfielPagina(await api.get(vraag.pad, vraag.params));
     if (!deel.profielen.length) return;
-    // Negeert BlueConic het pagineren, dan komt steeds dezelfde pagina terug.
-    if (pagina > 0 && deel.profielen[0].id && deel.profielen[0].id === eersteId) {
-      throw new BlueconicFout("BlueConic gaf twee keer dezelfde pagina; het pagineren werkt niet zoals verwacht.", 502);
-    }
-    if (pagina === 0) eersteId = deel.profielen[0].id;
-    yield deel.profielen;
+    yield { profielen: deel.profielen, totaal: deel.totaal };
     gezien += deel.profielen.length;
-    start += deel.profielen.length;
     if (deel.totaal != null && gezien >= deel.totaal) return;
-    if (cursor || deel.volgende) {
-      if (!deel.volgende) return;
-      cursor = deel.volgende;
-    }
+    if (!deel.volgende || deel.volgende === cursor) return;
+    cursor = deel.volgende;
   }
   throw new BlueconicFout(`Meer dan ${MAX_PAGINAS} pagina's in het segment; het lezen is gestopt.`, 500);
 }
+
+/* ---------- Bron voor de telling ---------- */
 
 export function blueconicBron(api: BlueconicApi, config: BlueconicConfig, opties: { deadline?: () => number | undefined } = {}): MijnpsvBron {
   return {
@@ -542,8 +380,10 @@ export function blueconicBron(api: BlueconicApi, config: BlueconicConfig, opties
       let gelezen = 0;
       let metSso = 0;
       let metLogin = 0;
+      let totaal: number | null = null;
       for await (const pagina of profielenUitSegment(api, config.segmentId, [sso, login], opties.deadline?.())) {
-        for (const p of pagina) {
+        totaal ??= pagina.totaal;
+        for (const p of pagina.profielen) {
           gelezen++;
           const id = p.eigenschappen.get(sso)?.[0]?.trim();
           const dag = dagUitWaarde(p.eigenschappen.get(login)?.[0]);
@@ -555,10 +395,10 @@ export function blueconicBron(api: BlueconicApi, config: BlueconicConfig, opties
       // Het segment heeft tienduizenden profielen. Nul is dus geen telling maar
       // een fout, en mag nooit als "0 MijnPSV-fans" in de cijfers belanden.
       if (gelezen === 0) {
-        throw new BlueconicFout(
-          `BlueConic gaf 0 profielen in segment ${config.segmentId}. Waarschijnlijk mist het token rechten of herkent BlueConic het segment niet; zie /api/fans/blueconic.`,
-          502
-        );
+        throw new BlueconicFout(`BlueConic gaf 0 profielen in segment ${config.segmentId}; zie /api/fans/blueconic.`, 502);
+      }
+      if (totaal != null && gelezen < totaal * MIN_DEEL_VAN_SEGMENT) {
+        throw new BlueconicFout(`BlueConic gaf ${gelezen} van de ${totaal} profielen in het segment; de lijst is onvolledig.`, 502);
       }
       if (metSso === 0) {
         throw new BlueconicFout(
