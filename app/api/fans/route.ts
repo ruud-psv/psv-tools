@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
 import { maakOverzicht } from "@/lib/fans/bereken";
+import { isBlueconicIngesteld } from "@/lib/fans/blueconic";
 import { doelenVoor } from "@/lib/fans/doelen";
 import { HANDMATIG } from "@/lib/fans/handmatig";
 import { blobOpslag, isBezig, leesHistorie, leesStatus } from "@/lib/fans/store";
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const [historie, status] = await Promise.all([leesHistorie(blobOpslag, seizoen.seizoen), leesStatus(blobOpslag)]);
-    const overzicht = maakOverzicht({ seizoen, handmatig: HANDMATIG, historie, vandaag, mijnpsvGekoppeld: false });
+    const overzicht = maakOverzicht({ seizoen, handmatig: HANDMATIG, historie, vandaag, mijnpsvGekoppeld: isBlueconicIngesteld() });
     return NextResponse.json(
       {
         overzicht,

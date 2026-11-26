@@ -51,6 +51,7 @@ achteraf niet na te rekenen. Daarom:
 |---|---|
 | `GET /api/fans` | De cijfers voor de pagina: handmatig plus automatisch, met niveaus, tempo en prognose. Ingelogd, met toegang tot de pagina. |
 | `GET /api/fans/snapshot` | De telling (`lib/fans/run.ts`). De cron met `CRON_SECRET`, of ingelogd via de knop **Nu bijwerken**. Geeft 409 als er al een telling loopt. |
+| `GET /api/fans/blueconic` | Controle van de BlueConic-koppeling, zonder SSO-id's. Ingelogd. |
 
 ## De telling
 
@@ -63,8 +64,10 @@ Elke avond om 21.30 uur UTC (22.30 uur in de winter, 23.30 uur in de zomer):
    `/reports/clicks`. Vandaag blijft open en wordt de volgende avond opnieuw
    gelezen. De **eerste vulling** begint op 1 juli; past die niet in één run,
    dan start de run zelf de volgende (`?chain=`), tot Maileon bij is.
-2. **MijnPSV**: alle profielen met een meest recente SSO-login op of na de
-   vorige keer lezen. Elk profiel telt in de maand van die login.
+2. **MijnPSV**: het hele segment, pagina voor pagina. Profielen met een meest
+   recente SSO-login op of na de vorige keer lezen tellen mee, elk in de maand
+   van die login. Alleen als Maileon bij is; BlueConic moet binnen 280 seconden
+   na de start klaar zijn.
 3. **De stand**: per bron het aantal fans in de maand en in het seizoen, de
    overlap en het totaal. Alleen als Maileon bij is.
 
@@ -72,29 +75,42 @@ Bij 429 of een storing bij Maileon wacht de lezer en probeert hij het opnieuw.
 Een fout bij BlueConic laat Maileon en de vorige BlueConic-stand staan, en komt
 als laatste fout op de pagina.
 
-## BlueConic koppelen (nog te doen)
+## BlueConic
 
-BlueConic loopt via een **MCP-server**. Nodig:
+Via de **REST API v2** van BlueConic (`lib/fans/blueconic.ts`), met OAuth 2.0
+client credentials:
 
-1. De URL en het token van de server. Voeg hem toe in Beheer > MCP Servers en
-   zet het token als `MCP_BLUECONIC_TOKEN` in Vercel.
-2. Een tool die profielen met hun SSO-id en SSO Ingelogd Datum teruggeeft,
-   **in pagina's**: Tools neemt per MCP-antwoord hooguit 60.000 tekens aan
-   (`MAX_RESULT_CHARS` in `lib/mcp/config.ts`). Geeft de server alleen
-   aantallen, dan kan Tools niet ontdubbelen.
-3. Eén vast segment per seizoen: "Heeft SSO ID" met SSO Ingelogd Datum vanaf
-   1 juli, zonder einddatum. Uit die ene lijst komen beide doelen.
+- **Applicatie** in BlueConic (Settings > Access management > Applications)
+  met leesrechten (scope Read) op **Profiles**, **Properties** en
+  **Segments**. Is het SSO-id als PII gemarkeerd, dan ook **PII**: anders geeft
+  BlueConic het SSO-id niet mee en stopt de telling met die uitleg.
+- **Segment** "[Doelstelling] Ingelogd via login.psv.nl"
+  (`ff5e51f8-3eb4-46cc-8640-6b66460d2633`): deel van "[Fan Identificatie]
+  Heeft SSO ID" én SSO Ingelogd Datum (meest recent) tussen 1 juli 2026 en
+  30 juni 2027. Niet aanpassen: Tools leest het elke avond helemaal. Uit die
+  ene lijst komen beide doelen; de maand volgt uit de logindatum. Per seizoen
+  alleen de datums aanpassen.
+- **Eigenschappen**: Tools zoekt het SSO-id en "SSO Ingelogd Datum (meest
+  recent)" op naam. Lukt dat niet, dan noemt de foutmelding de kandidaten; zet
+  dan de ID's in `BLUECONIC_PROP_SSO` en `BLUECONIC_PROP_LOGIN`.
 
-In de code: een `MijnpsvBron` (`lib/fans/run.ts`) die `profielenSinds(dag)`
-levert, meegeven in `app/api/fans/snapshot/route.ts` in plaats van `null`, en
-`mijnpsvGekoppeld: true` in `app/api/fans/route.ts`.
+De antwoorden worden tolerant gelezen (profielen onder `profiles`, `items` of
+`data`; eigenschappen als lijst of object; pagineren met cursor of
+`startIndex`). **Controle**: open `/api/fans/blueconic` (ingelogd). Die laat
+zien of het token lukt, welk segment en welke eigenschappen gekozen zijn, en hoe
+een pagina profielen eruitziet, met hoe lang die pagina duurde. Zonder SSO-id's:
+van elke waarde alleen de lengte, van de logindatum de dag.
 
 ## Omgevingsvariabelen
 
 | Variabele | Nodig | Wat |
 |---|---|---|
-| `MAILEON_API_KEY` | ja | Bestaat al (account PSV, psv-news-mailer). |
-| `MCP_BLUECONIC_TOKEN` | voor BlueConic | Het token van de BlueConic MCP-server. |
+| `MAILEON_API_KEY` | ja | Bestaat al (account PSV, psv-news-mailer). Moet klikrapporten met contactvelden mogen lezen. |
+| `BLUECONIC_CLIENT_ID` | voor BlueConic | Client ID van de applicatie in BlueConic. |
+| `BLUECONIC_CLIENT_SECRET` | voor BlueConic | Client secret van die applicatie. Zonder ID en secret telt alleen Maileon. |
+| `BLUECONIC_HOST` | nee | Standaard `psv.blueconic.com`. |
+| `BLUECONIC_SEGMENT_ID` | nee | Standaard het segment hierboven. |
+| `BLUECONIC_PROP_SSO`, `BLUECONIC_PROP_LOGIN` | nee | ID's van de eigenschappen, als het zoeken op naam niet lukt. |
 | `CRON_SECRET` | ja | Bestaat al. |
 | `BLOB_READ_WRITE_TOKEN` | ja | Bestaat al (Vercel Blob). |
 
@@ -118,6 +134,12 @@ Vercel Blob, privé, onder `fans/`:
   Maileon en nog niet tegen de echte API gedraaid. Vergelijk de eerste telling
   met contactfilter 6027 (oktober: ongeveer 24.090; juli t/m oktober: ongeveer
   70.343). Afmeldingen sinds die export geven kleine verschillen.
+- **BlueConic-endpoints**: `POST /rest/v2/oauth/token` en `GET /rest/v2/profiles`
+  met `segment`, `properties`, `count` en `startIndex` of `cursor`, gebouwd
+  zonder toegang tot de documentatie. Controleer met `/api/fans/blueconic`, en
+  vergelijk het aantal met het segment (64,7k op 26 november). Is het lezen van
+  het hele segment te traag (meer dan zo'n 250 seconden), dan moet BlueConic in
+  een eigen run.
 - **Een gemiste avond** aan het eind van een maand kost bij BlueConic de fans
   die die laatste dag inlogden en de dag erna opnieuw. De maand staat dan als
   "niet volledig geteld".
@@ -131,10 +153,11 @@ Vercel Blob, privé, onder `fans/`:
 | Doelen en handmatige cijfers | `lib/fans/doelen.ts`, `lib/fans/handmatig.ts` |
 | Datums (Nederlandse tijd) | `lib/fans/tijd.ts` |
 | Maileon-lezer | `lib/fans/maileon.ts` |
+| BlueConic-lezer | `lib/fans/blueconic.ts` |
 | Hash-sets | `lib/fans/sets.ts` |
 | Telling en opslag | `lib/fans/run.ts`, `lib/fans/store.ts`, `lib/fans/types.ts` |
 | Cijfers voor de pagina | `lib/fans/bereken.ts` |
-| Routes | `app/api/fans/route.ts`, `app/api/fans/snapshot/route.ts` |
+| Routes | `app/api/fans/route.ts`, `app/api/fans/snapshot/route.ts`, `app/api/fans/blueconic/route.ts` |
 | Pagina | `app/dashboard/fans/page.tsx`, `components/fans/fans-dashboard.tsx` |
 
 Tests: `npm test` (`lib/fans/*.test.ts`, met nep-antwoorden van Maileon en

@@ -80,7 +80,10 @@ export interface Overzicht {
   active: ActiveStand | null;
   automatisch: {
     maileonTot: string | null;
+    /** BlueConic is ingesteld (client ID en secret). */
     mijnpsvGekoppeld: boolean;
+    /** De laatste dag waarop BlueConic gelezen is. */
+    mijnpsvLaatste: string | null;
     bijgewerkt: string | null;
     laatsteDag: DagStand | null;
   };
@@ -253,6 +256,7 @@ export function maakOverzicht(opties: {
     automatisch: {
       maileonTot: historie?.maileon.tot ?? null,
       mijnpsvGekoppeld: opties.mijnpsvGekoppeld,
+      mijnpsvLaatste: historie?.mijnpsv.laatste ?? null,
       bijgewerkt: historie?.bijgewerkt ?? null,
       laatsteDag,
     },

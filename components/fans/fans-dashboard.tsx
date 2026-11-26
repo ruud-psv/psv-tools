@@ -137,13 +137,15 @@ export function FansDashboard() {
         </div>
       )}
 
-      {!o.automatisch.mijnpsvGekoppeld && (
+      {!o.automatisch.mijnpsvLaatste && (
         <div className="alert alert--info flex items-start gap-2">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            BlueConic (MijnPSV) is nog niet gekoppeld. Tot die tijd komen de totalen uit de handmatige updates. Maileon telt Tools al
-            elke avond automatisch
-            {o.automatisch.maileonTot ? `; ingelezen tot en met ${datumLang(o.automatisch.maileonTot)}` : ""}.
+            {o.automatisch.mijnpsvGekoppeld
+              ? "BlueConic (MijnPSV) is ingesteld maar nog niet gelezen. Dat gebeurt bij de eerste telling nadat Maileon is bijgewerkt."
+              : "BlueConic (MijnPSV) is nog niet gekoppeld."}{" "}
+            Tot die tijd komen de totalen uit de handmatige updates.
+            {o.automatisch.maileonTot ? ` Maileon is ingelezen tot en met ${datumLang(o.automatisch.maileonTot)}.` : ""}
           </span>
         </div>
       )}

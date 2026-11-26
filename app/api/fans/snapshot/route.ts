@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { blueconicApi, blueconicBron, blueconicConfig, isBlueconicIngesteld } from "@/lib/fans/blueconic";
 import { maileonKlikken } from "@/lib/fans/maileon";
 import { fansRun } from "@/lib/fans/run";
 import { blobOpslag, isBezig, leesStatus, schrijfStatus } from "@/lib/fans/store";
@@ -18,14 +19,18 @@ import { chainRemaining, isCronOrSession, startNextRun } from "@/lib/ringside/ch
  * Toegang: de cron met `CRON_SECRET`, of een ingelogde gebruiker (de knop Nu
  * bijwerken op de pagina).
  *
- * MijnPSV (BlueConic) is nog niet gekoppeld: dat komt via de BlueConic
- * MCP-server, zodra die bekend is (`docs/fans.md`). Tot dan telt alleen Maileon.
+ * MijnPSV (BlueConic) via de REST API, zodra `BLUECONIC_CLIENT_ID` en
+ * `BLUECONIC_CLIENT_SECRET` gezet zijn (`lib/fans/blueconic.ts`). Zonder die
+ * twee telt alleen Maileon.
  */
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const BUDGET_MS = 230_000;
+/** Zolang mag Maileon inlezen; daarna start een volgende run. */
+const BUDGET_MS = 200_000;
+/** BlueConic moet voor dit moment klaar zijn, met ruimte om op te slaan. */
+const DEADLINE_MS = 280_000;
 /** Het slot loopt iets langer dan een run mag duren. */
 const SLOT_MS = 300_000;
 const DEFAULT_CHAIN = 30;
@@ -40,10 +45,12 @@ export async function GET(req: NextRequest) {
   await schrijfStatus(blobOpslag, { ...status, runningUntil: new Date(Date.now() + SLOT_MS).toISOString() });
 
   try {
+    const begin = Date.now();
+    const blueconic = isBlueconicIngesteld() ? blueconicConfig() : null;
     const verslag = await fansRun({
       opslag: blobOpslag,
       maileon: maileonKlikken(maileonConfig()),
-      mijnpsv: null,
+      mijnpsv: blueconic ? blueconicBron(blueconicApi(blueconic), blueconic, { deadline: () => begin + DEADLINE_MS }) : null,
       nu: new Date(),
       budgetMs: BUDGET_MS,
     });
