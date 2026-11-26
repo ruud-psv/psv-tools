@@ -42,6 +42,11 @@ export interface Historie {
     /** De dag van de laatste keer lezen. */
     laatste: string | null;
   };
+  /**
+   * Fans met een klik in Maileon per maand, tot waar ingelezen. Om naast de
+   * Maileon-filters te leggen. Ontbreekt in historie van vóór deze teller.
+   */
+  maileonMaanden?: Record<string, number>;
   /** Moment van de laatste geslaagde run. */
   bijgewerkt: string | null;
 }
@@ -53,6 +58,7 @@ export function legeHistorie(seizoen: string): Historie {
     dagen: [],
     maileon: { tot: null, endpoint: null },
     mijnpsv: { maanden: [], laatste: null },
+    maileonMaanden: {},
     bijgewerkt: null,
   };
 }

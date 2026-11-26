@@ -28,6 +28,8 @@ export interface MaandWaarde {
   status: MaandStatus;
   /** Tot en met welke dag geteld is, als dat niet de hele maand is. */
   tm: string | null;
+  /** Wat Tools zelf in Maileon telt, ook in een handmatige maand: om naast de Maileon-filters te leggen. */
+  maileonTools?: number | null;
 }
 
 export interface ActivePunt {
@@ -80,6 +82,8 @@ export interface Overzicht {
   active: ActiveStand | null;
   automatisch: {
     maileonTot: string | null;
+    /** Fans met een klik in Maileon sinds 1 juli, volgens de laatste telling. */
+    maileonSeizoen: number | null;
     /** BlueConic is ingesteld (client ID en secret). */
     mijnpsvGekoppeld: boolean;
     /** De laatste dag waarop BlueConic gelezen is. */
@@ -237,7 +241,10 @@ export function maakOverzicht(opties: {
 }): Overzicht {
   const { seizoen, handmatig, historie, vandaag } = opties;
   const dagen = [...(historie?.dagen ?? [])].sort((a, b) => (a.datum < b.datum ? -1 : 1));
-  const maanden = maandWaarden(seizoen, handmatig, dagen, vandaag);
+  const maanden = maandWaarden(seizoen, handmatig, dagen, vandaag).map((m) => ({
+    ...m,
+    maileonTools: historie?.maileonMaanden?.[m.maand] ?? null,
+  }));
   const punten = activePunten(handmatig, dagen);
   const laatsteDag = dagen.at(-1) ?? null;
 
@@ -255,6 +262,7 @@ export function maakOverzicht(opties: {
     active: activeStand(seizoen, punten),
     automatisch: {
       maileonTot: historie?.maileon.tot ?? null,
+      maileonSeizoen: laatsteDag?.active.maileon ?? null,
       mijnpsvGekoppeld: opties.mijnpsvGekoppeld,
       mijnpsvLaatste: historie?.mijnpsv.laatste ?? null,
       bijgewerkt: historie?.bijgewerkt ?? null,

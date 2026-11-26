@@ -276,9 +276,35 @@ export function blueconicApi(
 
 /* ---------- Bron voor de telling ---------- */
 
+/**
+ * Waar de lijst met profieleigenschappen kan staan. `/properties` gaf bij PSV
+ * een 404; de andere twee zijn de gangbare namen in de v2-API.
+ */
+export const EIGENSCHAPPEN_PADEN = ["/profileproperties", "/profileProperties", "/properties"];
+
+/** De lijst met eigenschappen, van het eerste pad dat bestaat. */
+export async function leesEigenschappenLijst(api: BlueconicApi): Promise<{ pad: string; body: unknown }> {
+  const geprobeerd: string[] = [];
+  for (const pad of EIGENSCHAPPEN_PADEN) {
+    try {
+      return { pad, body: await api.get(pad, [["count", "10000"]]) };
+    } catch (err) {
+      if (err instanceof BlueconicFout && (err.status === 404 || err.status === 405)) {
+        geprobeerd.push(pad);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new BlueconicFout(
+    `BlueConic kent geen lijst met eigenschappen op ${geprobeerd.join(", ")}. Zet de ID's van het SSO-id en van "SSO Ingelogd Datum (meest recent)" in BLUECONIC_PROP_SSO en BLUECONIC_PROP_LOGIN.`,
+    404
+  );
+}
+
 export async function eigenschappenVoor(api: BlueconicApi, config: BlueconicConfig): Promise<{ sso: string; login: string }> {
   if (config.eigenschapSso && config.eigenschapLogin) return { sso: config.eigenschapSso, login: config.eigenschapLogin };
-  const gekozen = kiesEigenschappen(await api.get("/properties", [["count", "10000"]]));
+  const gekozen = kiesEigenschappen((await leesEigenschappenLijst(api)).body);
   return { sso: config.eigenschapSso ?? gekozen.sso, login: config.eigenschapLogin ?? gekozen.login };
 }
 

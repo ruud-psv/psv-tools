@@ -141,9 +141,11 @@ export function FansDashboard() {
         <div className="alert alert--info flex items-start gap-2">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            {o.automatisch.mijnpsvGekoppeld
-              ? "BlueConic (MijnPSV) is ingesteld maar nog niet gelezen. Dat gebeurt bij de eerste telling nadat Maileon is bijgewerkt."
-              : "BlueConic (MijnPSV) is nog niet gekoppeld."}{" "}
+            {!o.automatisch.mijnpsvGekoppeld
+              ? "BlueConic (MijnPSV) is nog niet gekoppeld."
+              : data.status.lastError?.startsWith("MijnPSV:")
+                ? `BlueConic (MijnPSV) lezen lukte nog niet. ${data.status.lastError.replace(/^MijnPSV:\s*/, "")}`
+                : "BlueConic (MijnPSV) is ingesteld maar nog niet gelezen. Dat gebeurt bij de eerste telling nadat Maileon is bijgewerkt."}{" "}
             Tot die tijd komen de totalen uit de handmatige updates.
             {o.automatisch.maileonTot ? ` Maileon is ingelezen tot en met ${datumLang(o.automatisch.maileonTot)}.` : ""}
           </span>
@@ -471,6 +473,11 @@ function EngagedGrafiek({ o }: { o: Overzicht }) {
             <Th align="right">Engaged Fans</Th>
             <Th>Telling</Th>
             <Th>Bron</Th>
+            <Th align="right" className="hidden sm:table-cell">
+              <span title="Wat Tools zelf in Maileon telt: fans met een SSOID en minstens één klik in de maand. Om naast een filter in Maileon te leggen.">
+                Waarvan e-mail (Tools)
+              </span>
+            </Th>
           </tr>
         </thead>
         <tbody>
@@ -492,6 +499,9 @@ function EngagedGrafiek({ o }: { o: Overzicht }) {
               </Td>
               <Td>
                 <Badge tone="neutral">{m.bron === "handmatig" ? "Handmatig" : "Automatisch"}</Badge>
+              </Td>
+              <Td align="right" className="hidden text-muted-foreground sm:table-cell">
+                {m.maileonTools != null ? getal(m.maileonTools) : "–"}
               </Td>
             </tr>
           ))}
@@ -692,6 +702,12 @@ function Herkomst({ o }: { o: Overzicht }) {
         Maileon telt fans met een SSO-id die op een e-mail klikten. MijnPSV telt fans die inlogden op de PSV-app, PSV Play, de FANstore,
         Playable of een ander MijnPSV-touchpoint. In de handmatige update van 26 november staat bij Maileon 68.708, hetzelfde getal als op 13
         oktober; alleen 73.852 klopt met de vermelde groei en het totaal, dus dat getal staat hier.
+        {o.automatisch.maileonSeizoen != null && o.automatisch.laatsteDag && (
+          <>
+            {" "}
+            Tools telt zelf {getal(o.automatisch.maileonSeizoen)} fans met een klik sinds 1 juli (t/m {datumLang(o.automatisch.laatsteDag.datum)}).
+          </>
+        )}
       </p>
     </SectionCard>
   );

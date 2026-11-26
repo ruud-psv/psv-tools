@@ -90,9 +90,13 @@ client credentials:
   30 juni 2027. Niet aanpassen: Tools leest het elke avond helemaal. Uit die
   ene lijst komen beide doelen; de maand volgt uit de logindatum. Per seizoen
   alleen de datums aanpassen.
-- **Eigenschappen**: Tools zoekt het SSO-id en "SSO Ingelogd Datum (meest
-  recent)" op naam. Lukt dat niet, dan noemt de foutmelding de kandidaten; zet
-  dan de ID's in `BLUECONIC_PROP_SSO` en `BLUECONIC_PROP_LOGIN`.
+- **Eigenschappen**: met `BLUECONIC_PROP_SSO` en `BLUECONIC_PROP_LOGIN` (de
+  ID's van het SSO-id en van "SSO Ingelogd Datum (meest recent)") gebruikt
+  Tools die. Zonder zoekt Tools ze op naam in de lijst met eigenschappen
+  (`/profileproperties`, `/profileProperties` of `/properties`; bij PSV gaf
+  `/properties` een 404). Lukt dat niet, dan noemt de foutmelding wat er mist.
+  `/api/fans/blueconic` toont onder `standaardEigenschappen` de ID's die
+  BlueConic bij een profiel meegeeft.
 
 De antwoorden worden tolerant gelezen (profielen onder `profiles`, `items` of
 `data`; eigenschappen als lijst of object; pagineren met cursor of

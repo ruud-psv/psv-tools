@@ -6,6 +6,7 @@ import {
   dagUitWaarde,
   isBlueconicIngesteld,
   kiesEigenschappen,
+  leesEigenschappenLijst,
   leesProfielPagina,
 } from "@/lib/fans/blueconic";
 
@@ -49,11 +50,30 @@ export async function GET(req: NextRequest) {
   let gekozen: { sso: string; login: string } | null =
     config.eigenschapSso && config.eigenschapLogin ? { sso: config.eigenschapSso, login: config.eigenschapLogin } : null;
   try {
-    const k = kiesEigenschappen(await api.get("/properties", [["count", "10000"]]));
-    uit.eigenschappen = { gekozen: gekozen ?? { sso: k.sso, login: k.login }, uitVercel: Boolean(gekozen), kandidaten: k.kandidaten };
+    const lijst = await leesEigenschappenLijst(api);
+    const k = kiesEigenschappen(lijst.body);
+    uit.eigenschappen = { pad: lijst.pad, gekozen: gekozen ?? { sso: k.sso, login: k.login }, uitVercel: Boolean(gekozen), kandidaten: k.kandidaten };
     gekozen ??= { sso: k.sso, login: k.login };
   } catch (err) {
-    uit.eigenschappen = { gekozen, fout: fout(err) };
+    uit.eigenschappen = { gekozen, uitVercel: Boolean(gekozen), fout: fout(err) };
+  }
+
+  // Een pagina zonder eigenschappen te vragen: welke eigenschap-ID's komen er
+  // standaard mee, en welke lijken een datum. Alleen ID's en aantallen.
+  try {
+    const pagina = leesProfielPagina(await api.get("/profiles", [["segment", config.segmentId], ["count", "20"], ["startIndex", "0"]]));
+    const perId = new Map<string, { profielen: number; datums: number }>();
+    for (const p of pagina.profielen) {
+      for (const [id, w] of p.eigenschappen) {
+        const s = perId.get(id) ?? { profielen: 0, datums: 0 };
+        s.profielen++;
+        if (w.length && dagUitWaarde(w[0]) && /^\d{11,14}$|^\d{4}-\d{2}-\d{2}/.test(w[0].trim())) s.datums++;
+        perId.set(id, s);
+      }
+    }
+    uit.standaardEigenschappen = { opPagina: pagina.profielen.length, ids: Object.fromEntries([...perId].sort()) };
+  } catch (err) {
+    uit.standaardEigenschappen = { fout: fout(err) };
   }
 
   try {

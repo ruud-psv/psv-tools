@@ -19,7 +19,7 @@ import { doelenVoor, DOELEN, type SeizoenDoelen } from "./doelen";
 import type { MaileonKlikken } from "./maileon";
 import { maakSet, normaliseerSso, overlap, voegSamen, LEGE_SET, type FanSet } from "./sets";
 import { leesHistorie, leesSet, schrijfHistorie, schrijfSet, type BronSleutel, type Opslag } from "./store";
-import { amsterdamDag, maandVan, plusDagen } from "./tijd";
+import { amsterdamDag, maandenTussen, maandVan, plusDagen } from "./tijd";
 import { legeHistorie, type DagStand, type Telling } from "./types";
 
 export interface MijnpsvProfiel {
@@ -90,6 +90,15 @@ export async function fansRun(opties: {
     gedaan.push(dag);
   }
   historie.maileon.endpoint = maileon.endpoint() ?? historie.maileon.endpoint;
+
+  // Per maand het aantal Maileon-fans, voor de vergelijking met de filters in
+  // Maileon: de maanden van deze run, en die nog geen aantal hebben.
+  const maileonMaanden = (historie.maileonMaanden ??= {});
+  const aangeraakt = new Set(gedaan.map(maandVan));
+  const totDag = gedaan.at(-1) ?? historie.maileon.tot;
+  for (const m of totDag ? maandenTussen(seizoen.start, totDag) : []) {
+    if (aangeraakt.has(m) || maileonMaanden[m] == null) maileonMaanden[m] = (await set("maileon", m)).count;
+  }
 
   // 2. MijnPSV
   let mijnpsvVerslag: FansRunVerslag["mijnpsv"] = null;

@@ -139,6 +139,26 @@ test("een geweigerd token geeft uitleg; dezelfde pagina twee keer is een fout", 
   await assert.rejects(blueconicBron(blueconicApi(CONFIG, { doeFetch: steeds.doeFetch, wachttijden: [] }), CONFIG).profielenSinds("2026-07-01"), /pagineren/);
 });
 
+test("de lijst met eigenschappen: het eerste pad dat bestaat, anders uitleg over de ID's", async () => {
+  const zonder = { ...CONFIG, eigenschapSso: null, eigenschapLogin: null };
+  const props = { items: [{ id: "ssoid", name: "SSO ID" }, { id: "ssodatum", name: "SSO Ingelogd Datum (meest recent)" }] };
+  const { doeFetch, verzoeken } = nep(({ url }) => {
+    if (url.pathname.endsWith("/oauth/token")) return json({ access_token: "tok" });
+    if (url.pathname === "/rest/v2/profileProperties") return json(props);
+    if (url.pathname === "/rest/v2/profiles") return json({ profiles: [] });
+    return json({ message: "Not found" }, 404);
+  });
+  await blueconicBron(blueconicApi(zonder, { doeFetch, wachttijden: [] }), zonder).profielenSinds("2026-07-01");
+  const profielen = verzoeken.find((v) => v.url.pathname === "/rest/v2/profiles");
+  assert.equal(profielen?.url.searchParams.get("properties"), "ssoid,ssodatum");
+
+  const nergens = nep(({ url }) => (url.pathname.endsWith("/oauth/token") ? json({ access_token: "tok" }) : json({}, 404)));
+  await assert.rejects(
+    blueconicBron(blueconicApi(zonder, { doeFetch: nergens.doeFetch, wachttijden: [] }), zonder).profielenSinds("2026-07-01"),
+    /BLUECONIC_PROP_SSO en BLUECONIC_PROP_LOGIN/
+  );
+});
+
 test("vraagt de scopes expliciet als BlueConic daarom vraagt", async () => {
   const { doeFetch, verzoeken } = nep(({ url, init }) => {
     if (!url.pathname.endsWith("/oauth/token")) return json({ id: "x" });

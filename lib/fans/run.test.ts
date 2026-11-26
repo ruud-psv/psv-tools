@@ -63,6 +63,7 @@ test("eerste run: Maileon vanaf het begin, MijnPSV erbij, en een ontdubbelde sta
 
   const h = await leesHistorie(opslag, "2026-27");
   assert.deepEqual(h?.mijnpsv, { maanden: ["2026-11"], laatste: "2026-11-02" });
+  assert.deepEqual(h?.maileonMaanden, { "2026-10": 3, "2026-11": 3 });
   assert.equal(h?.dagen.length, 1);
   assert.equal((await leesSet(opslag, "2026-27", "maileon", "2026-10")).count, 3);
   // Er staat geen SSO-id in de opslag, alleen hashes en aantallen.
