@@ -90,30 +90,35 @@ client credentials:
   30 juni 2027. Niet aanpassen: Tools leest het elke avond helemaal. Uit die
   ene lijst komen beide doelen; de maand volgt uit de logindatum. Per seizoen
   alleen de datums aanpassen.
-- **Eigenschappen**: met `BLUECONIC_PROP_SSO` en `BLUECONIC_PROP_LOGIN` (de
-  ID's van het SSO-id en van "SSO Ingelogd Datum (meest recent)") gebruikt
-  Tools die. Zonder zoekt Tools ze op naam in de lijst met eigenschappen
-  (`/profileproperties`, `/profileProperties` of `/properties`; bij PSV gaf
-  `/properties` een 404). Lukt dat niet, dan noemt de foutmelding wat er mist.
-  `/api/fans/blueconic` toont onder `standaardEigenschappen` de ID's die
-  BlueConic bij een profiel meegeeft.
+- **Eigenschappen**: met `BLUECONIC_PROP_SSO` en `BLUECONIC_PROP_LOGIN` (bij
+  PSV `sso_id` en `_persoon_sso_ingelogd_datum_meest_recent_`) gebruikt Tools
+  die. Zonder zoekt Tools ze op naam in `GET /profileProperties`.
 
-Het token wordt gevraagd met de scopes `read:profiles read:properties
-read:segments`. Kent BlueConic die namen niet, dan zonder. Een token zonder
-scopes gaf bij PSV een 403 op het segment en een lege lijst profielen.
+Endpoints, volgens de documentatie (https://rest.apidoc.blueconic.com):
+
+| Wat | Endpoint |
+|---|---|
+| Token | `POST /rest/v2/oauth/token`, met `grant_type=client_credentials`, `client_id` en `client_secret` in de body. Geen `scope`: de rechten komen uit de applicatie. |
+| Profielen van het segment | `GET /rest/v2/segments/{segment}/profiles`, met `cursor` (eerst `*`, daarna `nextCursor`), `count` (Tools vraagt 10.000 per pagina; BlueConic staat tot 1.000.000 toe) en `profileProperty` per eigenschap. |
+| Het segment en zijn aantal | `GET /rest/v2/segments` (lijst met `profileCount`). Een los segment ophalen bestaat niet. |
+| Eigenschappen | `GET /rest/v2/profileProperties`. |
+
+Twee valkuilen: `GET /profiles` is
+"Search profiles" (zoeken op één waarde van een geïndexeerde eigenschap) en
+geeft zonder zoekwaarde altijd 0; en `GET /segments/{id}` bestaat niet, wat
+BlueConic beantwoordt met een 403.
 
 **Nul profielen is een fout, geen telling.** Het segment heeft tienduizenden
-profielen, dus een lege uitkomst stopt het MijnPSV-deel met een melding. Op
-26 november 2026 kwam zo'n lege uitkomst als "0 MijnPSV-fans" in de cijfers.
+profielen, dus een lege uitkomst stopt het MijnPSV-deel met een melding. Dat
+geldt ook als BlueConic minder dan 80% van zijn eigen `totalResults` teruggeeft.
+Op 26 november 2026 kwam een lege uitkomst als "0 MijnPSV-fans" in de cijfers;
 `lib/fans/herstel.ts` maakt zo'n stand weer onbekend, en de volgende run leest
 MijnPSV opnieuw vanaf het begin van het seizoen.
 
-De antwoorden worden tolerant gelezen (profielen onder `profiles`, `items` of
-`data`; eigenschappen als lijst of object; pagineren met cursor of
-`startIndex`). **Controle**: open `/api/fans/blueconic` (ingelogd). Die laat
-zien of het token lukt, welk segment en welke eigenschappen gekozen zijn, en hoe
-een pagina profielen eruitziet, met hoe lang die pagina duurde. Zonder SSO-id's:
-van elke waarde alleen de lengte, van de logindatum de dag.
+**Controle**: open `/api/fans/blueconic` (ingelogd). Die laat zien of het
+token lukt, het segment met zijn aantal volgens BlueConic, de gekozen
+eigenschappen, en de eerste pagina profielen met hoe lang die duurde. Zonder
+SSO-id's: van elke waarde alleen de lengte, van de logindatum de dag.
 
 ## Omgevingsvariabelen
 
@@ -125,7 +130,7 @@ van elke waarde alleen de lengte, van de logindatum de dag.
 | `BLUECONIC_HOST` | nee | Standaard `psv.blueconic.com`. |
 | `BLUECONIC_SEGMENT_ID` | nee | Standaard het segment hierboven. |
 | `BLUECONIC_PROP_SSO`, `BLUECONIC_PROP_LOGIN` | nee | ID's van de eigenschappen, als het zoeken op naam niet lukt. |
-| `BLUECONIC_SCOPES` | nee | De scopes in de tokenvraag. Standaard `read:profiles read:properties read:segments`; `geen` vraagt zonder. `/api/fans/blueconic` probeert onder `scopeProeven` meerdere schrijfwijzen en laat zien welke het segment en de profielen mag lezen. |
+| `BLUECONIC_SCOPES` | nee | Scopes in de tokenvraag. Standaard leeg, zoals de documentatie zegt. |
 | `CRON_SECRET` | ja | Bestaat al. |
 | `BLOB_READ_WRITE_TOKEN` | ja | Bestaat al (Vercel Blob). |
 
@@ -149,12 +154,10 @@ Vercel Blob, privé, onder `fans/`:
   Maileon en nog niet tegen de echte API gedraaid. Vergelijk de eerste telling
   met contactfilter 6027 (oktober: ongeveer 24.090; juli t/m oktober: ongeveer
   70.343). Afmeldingen sinds die export geven kleine verschillen.
-- **BlueConic-endpoints**: `POST /rest/v2/oauth/token` en `GET /rest/v2/profiles`
-  met `segment`, `properties`, `count` en `startIndex` of `cursor`, gebouwd
-  zonder toegang tot de documentatie. Controleer met `/api/fans/blueconic`, en
-  vergelijk het aantal met het segment (64,7k op 26 november). Is het lezen van
-  het hele segment te traag (meer dan zo'n 250 seconden), dan moet BlueConic in
-  een eigen run.
+- **Duur van BlueConic**: het hele segment wordt elke avond gelezen, in
+  pagina's van 10.000. Is dat te traag (BlueConic moet binnen 280 seconden na
+  de start klaar zijn), dan kan de vraag kleiner met een `refinement` op de
+  logindatum, of moet BlueConic in een eigen run.
 - **Een gemiste avond** aan het eind van een maand kost bij BlueConic de fans
   die die laatste dag inlogden en de dag erna opnieuw. De maand staat dan als
   "niet volledig geteld".
