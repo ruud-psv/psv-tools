@@ -8,6 +8,7 @@ import {
   kiesEigenschappen,
   leesEigenschappenLijst,
   leesProfielPagina,
+  probeerScopes,
 } from "@/lib/fans/blueconic";
 
 /**
@@ -35,13 +36,21 @@ export async function GET(req: NextRequest) {
   }
   const config = blueconicConfig();
   const api = blueconicApi(config);
-  const uit: Record<string, unknown> = { ingesteld: true, host: config.host, segmentId: config.segmentId };
+  const uit: Record<string, unknown> = { ingesteld: true, host: config.host, segmentId: config.segmentId, scopes: config.scopes || "(geen)" };
 
   // Welke rechten zitten er in het token (zonder het token zelf).
   try {
     uit.token = await api.tokenInfo();
   } catch (err) {
     uit.token = { fout: fout(err) };
+  }
+
+  // Elke schrijfwijze van de scopes: welke geeft een token dat het segment en
+  // profielen mag lezen? De winnaar kan in BLUECONIC_SCOPES.
+  try {
+    uit.scopeProeven = await probeerScopes(config);
+  } catch (err) {
+    uit.scopeProeven = { fout: fout(err) };
   }
 
   // Hoeveel profielen BlueConic telt: zonder filter, en met het segment onder

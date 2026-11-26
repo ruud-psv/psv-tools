@@ -125,6 +125,7 @@ van elke waarde alleen de lengte, van de logindatum de dag.
 | `BLUECONIC_HOST` | nee | Standaard `psv.blueconic.com`. |
 | `BLUECONIC_SEGMENT_ID` | nee | Standaard het segment hierboven. |
 | `BLUECONIC_PROP_SSO`, `BLUECONIC_PROP_LOGIN` | nee | ID's van de eigenschappen, als het zoeken op naam niet lukt. |
+| `BLUECONIC_SCOPES` | nee | De scopes in de tokenvraag. Standaard `read:profiles read:properties read:segments`; `geen` vraagt zonder. `/api/fans/blueconic` probeert onder `scopeProeven` meerdere schrijfwijzen en laat zien welke het segment en de profielen mag lezen. |
 | `CRON_SECRET` | ja | Bestaat al. |
 | `BLOB_READ_WRITE_TOKEN` | ja | Bestaat al (Vercel Blob). |
 

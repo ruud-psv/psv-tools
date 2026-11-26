@@ -22,7 +22,20 @@ export const STANDAARD_HOST = "psv.blueconic.com";
 const PAGINA = 1000;
 const MAX_PAGINAS = 2000;
 const WACHTTIJDEN_MS = [2_000, 5_000, 15_000];
-const SCOPES = "read:profiles read:properties read:segments";
+export const STANDAARD_SCOPES = "read:profiles read:properties read:segments";
+
+/**
+ * Schrijfwijzen van de scopes om te proberen: BlueConic weigerde de standaard
+ * niet, maar gaf er ook geen rechten voor. `""` is zonder scope in de vraag.
+ */
+export const SCOPE_VARIANTEN = [
+  STANDAARD_SCOPES,
+  "profiles:read properties:read segments:read",
+  "read_profiles read_properties read_segments",
+  "read:profile read:property read:segment",
+  "profiles properties segments",
+  "",
+];
 
 export class BlueconicConfigFout extends Error {}
 export class BlueconicFout extends Error {
@@ -41,6 +54,8 @@ export interface BlueconicConfig {
   /** Eigenschap-ID's; zonder deze zoekt Tools ze op naam op. */
   eigenschapSso: string | null;
   eigenschapLogin: string | null;
+  /** De scopes in de tokenvraag; `""` vraagt zonder scope. */
+  scopes: string;
 }
 
 export function isBlueconicIngesteld(env: Record<string, string | undefined> = process.env): boolean {
@@ -58,6 +73,7 @@ export function blueconicConfig(env: Record<string, string | undefined> = proces
     segmentId: env.BLUECONIC_SEGMENT_ID?.trim() || STANDAARD_SEGMENT,
     eigenschapSso: env.BLUECONIC_PROP_SSO?.trim() || null,
     eigenschapLogin: env.BLUECONIC_PROP_LOGIN?.trim() || null,
+    scopes: env.BLUECONIC_SCOPES?.trim() === "geen" ? "" : env.BLUECONIC_SCOPES?.trim() || STANDAARD_SCOPES,
   };
 }
 
@@ -197,9 +213,10 @@ export interface BlueconicApi {
 }
 
 export function blueconicApi(
-  config: Pick<BlueconicConfig, "host" | "clientId" | "clientSecret">,
-  opties: { doeFetch?: typeof fetch; wachttijden?: number[]; nu?: () => number } = {}
+  config: Pick<BlueconicConfig, "host" | "clientId" | "clientSecret"> & { scopes?: string },
+  opties: { doeFetch?: typeof fetch; wachttijden?: number[]; nu?: () => number; terugval?: boolean } = {}
 ): BlueconicApi {
+  const scopes = config.scopes ?? STANDAARD_SCOPES;
   const doeFetch = opties.doeFetch ?? fetch;
   const wachttijden = opties.wachttijden ?? WACHTTIJDEN_MS;
   const nu = opties.nu ?? Date.now;
@@ -208,7 +225,7 @@ export function blueconicApi(
 
   async function vraagToken(metScopes: boolean): Promise<Response> {
     const body = new URLSearchParams({ grant_type: "client_credentials", client_id: config.clientId, client_secret: config.clientSecret });
-    if (metScopes) body.set("scope", SCOPES);
+    if (metScopes && scopes) body.set("scope", scopes);
     return doeFetch(`${basis}/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
@@ -222,10 +239,10 @@ export function blueconicApi(
     // Eerst met de scopes erbij: een token zonder gaf bij PSV een 403 op het
     // segment en een lege lijst profielen. Kent BlueConic die scope-namen niet,
     // dan zonder.
-    let metScopes = true;
-    let res = await vraagToken(true);
+    let metScopes = Boolean(scopes);
+    let res = await vraagToken(metScopes);
     let tekst_ = await res.text();
-    if (!res.ok && (res.status === 400 || /scope/i.test(tekst_))) {
+    if (metScopes && opties.terugval !== false && !res.ok && (res.status === 400 || /scope/i.test(tekst_))) {
       metScopes = false;
       res = await vraagToken(false);
       tekst_ = await res.text();
@@ -292,6 +309,52 @@ export function blueconicApi(
       }
     },
   };
+}
+
+/* ---------- Scopes proberen ---------- */
+
+export interface ScopeProef {
+  scopes: string;
+  token: TokenInfo | { fout: string };
+  /** HTTP-status van het segment, of de fout. */
+  segment: number | string;
+  /** Profielen in BlueConic zonder filter (`totalResults`), of de fout. */
+  profielen: number | null | string;
+}
+
+/**
+ * Probeert elke schrijfwijze van de scopes: een nieuw token, dan het segment
+ * en het aantal profielen. Zonder terugval, zodat elke regel zegt wat hij test.
+ */
+export async function probeerScopes(
+  config: BlueconicConfig,
+  opties: { doeFetch?: typeof fetch; varianten?: string[] } = {}
+): Promise<ScopeProef[]> {
+  const uit: ScopeProef[] = [];
+  for (const scopes of opties.varianten ?? SCOPE_VARIANTEN) {
+    const api = blueconicApi({ ...config, scopes }, { doeFetch: opties.doeFetch, wachttijden: [], terugval: false });
+    const proef: ScopeProef = { scopes: scopes || "(geen)", token: { fout: "" }, segment: "", profielen: null };
+    try {
+      proef.token = await api.tokenInfo();
+    } catch (err) {
+      proef.token = { fout: err instanceof Error ? err.message : String(err) };
+      uit.push(proef);
+      continue;
+    }
+    try {
+      await api.get(`/segments/${config.segmentId}`);
+      proef.segment = 200;
+    } catch (err) {
+      proef.segment = err instanceof BlueconicFout ? err.status : String(err);
+    }
+    try {
+      proef.profielen = leesProfielPagina(await api.get("/profiles", [["count", "1"], ["startIndex", "0"]])).totaal;
+    } catch (err) {
+      proef.profielen = err instanceof Error ? err.message : String(err);
+    }
+    uit.push(proef);
+  }
+  return uit;
 }
 
 /* ---------- Bron voor de telling ---------- */
