@@ -42,6 +42,13 @@ const OTHER_JOBS = [
     description: "Legt de cijfers van JW Player van de vorige dag vast.",
   },
   {
+    id: "fans",
+    name: "Active & Engaged Fans",
+    path: "/api/fans/snapshot",
+    schedule: "Elke dag om 21:30 (UTC)",
+    description: "Telt de unieke fans uit Maileon (klikken) en, zodra gekoppeld, MijnPSV (BlueConic), voor de seizoensdoelen.",
+  },
+  {
     id: "asana-automaat",
     name: "Asana-automaat",
     path: "/api/marnix/asana/automaat",

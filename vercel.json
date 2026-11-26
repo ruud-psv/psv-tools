@@ -19,6 +19,10 @@
     {
       "path": "/api/marnix/asana/automaat",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/fans/snapshot",
+      "schedule": "30 21 * * *"
     }
   ]
 }
