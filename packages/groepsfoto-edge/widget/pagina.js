@@ -20,7 +20,8 @@ var PSVK_GF = {
   kaarttekst: 'Fijne feestdagen en een sportief 2027!',
   aiLabel: 'Gemaakt met AI',
   logo: '/files/4075/uploads/16747a71-3f29-4df4-9e77-9590a956f8ec.png',
-  selfieZijde: 1024,
+  /* Lange kant van de selfie; groter wordt hij niet, kleiner als de camera minder geeft. */
+  selfieZijde: 1280,
   pollMs: 1500,
   maxWachtMs: 180000
 };
@@ -63,7 +64,9 @@ var PSVK_GF = {
       return Promise.reject({ melding: 'Je browser kan hier de camera niet gebruiken. Open deze pagina in Safari of Chrome.' });
     }
     return navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1280 } },
+      /* Zo hoog mogelijk vragen: telefoons geven vaak een liggend beeld, en de
+         staande uitsnede daaruit wordt anders klein. */
+      video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1920 } },
       audio: false
     }).catch(function (err) {
       var naam = err && err.name;
@@ -92,7 +95,9 @@ var PSVK_GF = {
     c.width = Math.round(cw * schaal);
     c.height = Math.round(ch * schaal);
     c.getContext('2d').drawImage(video, (vb - cw) / 2, (vh - ch) / 2, cw, ch, 0, 0, c.width, c.height);
-    return c.toDataURL('image/jpeg', 0.9);
+    /* Handig bij het testen: hoe groot het camerabeeld en de selfie waren. */
+    try { console.info('[psvk] selfie ' + c.width + 'x' + c.height + ' uit camerabeeld ' + vb + 'x' + vh); } catch (e) {}
+    return c.toDataURL('image/jpeg', 0.92);
   }
 
   function api(pad, init) {
@@ -255,6 +260,9 @@ var PSVK_GF = {
         startKnop.hidden = true;
         opnieuwFoto.hidden = true;
         snapKnop.hidden = false;
+        /* Even wachten tot de camera belichting en scherpte heeft ingeregeld. */
+        snapKnop.disabled = true;
+        setTimeout(function () { snapKnop.disabled = false; }, 1200);
         return video.play();
       }).catch(function (err) {
         stopCamera();

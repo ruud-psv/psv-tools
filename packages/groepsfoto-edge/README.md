@@ -103,7 +103,7 @@ privacytekst bij het toestemmingsvinkje.
 
 Wat de widget doet: een selfie **alleen met de camera** (geen upload van
 bestaande foto's), met een ovaal kader in een 3:4-beeld. Wat in beeld is wordt
-de selfie: 768×1024 als JPEG, zonder metadata. De camera gaat uit na de foto en
+de selfie: tot 960×1280 als JPEG (de widget vraagt de camera om 1920 pixels), zonder metadata. De knop "Maak foto" werkt pas na ruim een seconde, als de camera is ingeregeld. De camera gaat uit na de foto en
 als de pagina uit beeld gaat. Daarna kleding kiezen,
 toestemming en Turnstile, maken, wachten, en de kaart samenstellen op een
 canvas: foto met witte rand, label "Gemaakt met AI" op de foto, rode band met
