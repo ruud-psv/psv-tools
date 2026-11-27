@@ -986,20 +986,39 @@ export async function fetchMetaCreativeDetails(
   adIds: string[],
   signal?: AbortSignal
 ): Promise<Map<string, CreativeDetails>> {
+  const ads = await fetchMetaAdCreatives(adIds, signal);
+  return new Map([...ads].map(([id, ad]) => [id, ad.details]));
+}
+
+/** Een advertentie met zijn naam, campagne en creative. */
+export interface MetaAdCreative {
+  id: string;
+  naam: string | null;
+  campagne: string | null;
+  details: CreativeDetails;
+}
+
+/** Als `fetchMetaCreativeDetails`, met de naam en campagne van de advertentie erbij. */
+export async function fetchMetaAdCreatives(
+  adIds: string[],
+  signal?: AbortSignal
+): Promise<Map<string, MetaAdCreative>> {
   const config = getConfig();
   const ids = [...new Set(adIds.filter(isMetaId))];
-  const out = new Map<string, CreativeDetails>();
-  if (ids.length === 0) return out;
+  const ads = new Map<string, MetaAdCreative>();
+  if (ids.length === 0) return ads;
 
-  const { nodes, error } = await fetchFromAccount<{ creative?: MetaCreativeRaw }>(
-    config,
-    "ads",
-    ids,
-    CREATIVE_VELDEN,
-    signal
-  );
+  const { nodes, error } = await fetchFromAccount<{
+    name?: string;
+    campaign?: { name?: string };
+    creative?: MetaCreativeRaw;
+  }>(config, "ads", ids, `name,campaign{name},${CREATIVE_VELDEN}`, signal);
   if (error) console.error("[paid-ads] meta creatives deels niet opgehaald", error);
-  for (const [id, node] of nodes) out.set(id, normaliseerCreative(node.creative));
+  const out = new Map<string, CreativeDetails>();
+  for (const [id, node] of nodes) {
+    out.set(id, normaliseerCreative(node.creative));
+    ads.set(id, { id, naam: node.name ?? null, campagne: node.campaign?.name ?? null, details: out.get(id)! });
+  }
 
   const zonderTekst = [...out].flatMap(([id, d]) => {
     const post = postZonderTekst(d);
@@ -1010,14 +1029,15 @@ export async function fetchMetaCreativeDetails(
       zonderTekst.slice(i, i + POST_CONCURRENCY).map(async ({ id, post }) => {
         try {
           const body = await graphGet<{ message?: string }>(config, post, { fields: "message" });
-          out.set(id, metPostTekst(out.get(id)!, body.message));
+          const ad = ads.get(id)!;
+          ads.set(id, { ...ad, details: metPostTekst(ad.details, body.message) });
         } catch (err) {
           console.error(`[paid-ads] meta post ${post} van advertentie ${id} niet opgehaald`, err);
         }
       })
     );
   }
-  return out;
+  return ads;
 }
 
 /**

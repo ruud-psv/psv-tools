@@ -121,7 +121,8 @@ const NAAMVELDEN: Record<Niveau, string[]> = {
   account: [],
   campaign: ["campaign_name"],
   adset: ["campaign_name", "adset_name"],
-  ad: ["campaign_name", "adset_name", "ad_name"],
+  // Het ID erbij, zodat het model een advertentie kan tonen met meta_creatives_tonen.
+  ad: ["campaign_name", "adset_name", "ad_name", "ad_id"],
 };
 
 function limiet(waarde: number | undefined, standaard = STANDAARD_RIJEN): number {

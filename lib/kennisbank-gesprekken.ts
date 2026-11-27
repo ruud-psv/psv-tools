@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "crypto";
 import { put, del, get, list } from "@vercel/blob";
+import type { AssistentCreative } from "@/lib/assistent/creative-tools";
 
 /**
  * Gesprekken met de kennisbank-assistent, per collega bewaard. Eén blob per
@@ -36,6 +37,8 @@ export interface GesprekBericht {
   bronnen?: string[];
   /** Alleen bij de assistent van PSV Tools: welke tools met welke invoer zijn aangeroepen. */
   stappen?: GesprekStap[];
+  /** Alleen bij de assistent van PSV Tools: de advertenties die als kaart onder het antwoord staan. */
+  creatives?: AssistentCreative[];
 }
 
 export interface Gesprek {

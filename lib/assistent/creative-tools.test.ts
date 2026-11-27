@@ -1,0 +1,56 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { normaliseerCreative } from "../meta-ads/creative";
+import { creativeTools, leesCreatives, type AssistentCreative } from "./creative-tools";
+import { ToolFout } from "./toegang";
+
+const details = normaliseerCreative({
+  object_story_spec: {
+    video_data: { message: "Romário kwam twee dagen te laat.", title: "Bekijk het interview", video_id: "77", call_to_action: { type: "WATCH_MORE" } },
+  },
+});
+
+function maak(bekend: string[] = ["11"]) {
+  const getoond: AssistentCreative[][] = [];
+  const gevraagd: string[][] = [];
+  const [tool] = creativeTools({
+    async haal(ids) {
+      gevraagd.push(ids);
+      return new Map(ids.filter((id) => bekend.includes(id)).map((id) => [id, { id, naam: "Snack | 3", campagne: "PSV Play Guus Hiddink", details }]));
+    },
+    onGetoond: (c) => getoond.push(c),
+  });
+  return { tool, getoond, gevraagd };
+}
+
+test("toont de advertenties als kaart en geeft de copy aan het model", async () => {
+  const { tool, getoond, gevraagd } = maak(["11"]);
+  assert.equal(tool.page, "/dashboard/paid-ads");
+  const gelezen = tool.lees({ advertentie_ids: ["11", "12", "11"] });
+  assert.ok("invoer" in gelezen);
+  const tekst = await tool.run(gelezen.invoer);
+
+  assert.deepEqual(gevraagd, [["11", "12"]]);
+  assert.equal(getoond.length, 1);
+  assert.equal(getoond[0][0].adId, "11");
+  assert.equal(getoond[0][0].details.videoLijst[0].id, "77");
+  assert.match(tekst, /1 advertentie staat als kaart in de chat/);
+  assert.match(tekst, /Niet gevonden bij Meta: 12/);
+  assert.match(tekst, /Tekst: Romário kwam twee dagen te laat\./);
+});
+
+test("weigert ongeldige invoer en meldt als niets bekend is", async () => {
+  const { tool, getoond } = maak([]);
+  assert.ok("fout" in tool.lees({ advertentie_ids: ["../me"] }));
+  assert.ok("fout" in tool.lees({ advertentie_ids: [] }));
+  assert.ok("fout" in tool.lees({ advertentie_ids: ["1", "2", "3", "4", "5", "6", "7"] }));
+  await assert.rejects(tool.run({ advertentie_ids: ["99"] }), ToolFout);
+  assert.equal(getoond.length, 0);
+});
+
+test("leesCreatives laat alleen geldige kaarten door", () => {
+  const goed: AssistentCreative = { platform: "meta", adId: "11", naam: null, campagne: null, details };
+  assert.deepEqual(leesCreatives([goed, { platform: "meta", adId: "x/../", details }, null, "x"]), [goed]);
+  assert.deepEqual(leesCreatives(undefined), []);
+});

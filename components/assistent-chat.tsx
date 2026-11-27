@@ -9,6 +9,8 @@ import { formatAnswer } from "@/components/chat-opmaak";
 import { cn } from "@/lib/utils";
 import { pakEersteVraag, SUGGESTIES } from "@/lib/assistent-start";
 import type { GesprekSamenvatting, GesprekStap } from "@/lib/kennisbank-gesprekken";
+import { leesCreatives, type AssistentCreative } from "@/lib/assistent/creative-tools";
+import { AssistentCreatives } from "@/components/assistent-creatives";
 
 /**
  * De chat van de assistent: één gesprek over de databronnen van PSV Tools
@@ -27,6 +29,7 @@ interface Beurt {
   content: string;
   bronnen?: Bron[];
   stappen?: GesprekStap[];
+  creatives?: AssistentCreative[];
 }
 
 /**
@@ -102,6 +105,7 @@ function Zoekstappen({ stappen }: { stappen: GesprekStap[] }) {
 function Antwoord({ beurt, bezig }: { beurt: Beurt; bezig: boolean }) {
   const bronnen = beurt.bronnen ?? [];
   const stappen = beurt.stappen ?? [];
+  const creatives = beurt.creatives ?? [];
   // Meerdere tools van dezelfde pagina tonen als één bron.
   const paginas = bronnen.filter((b, i) => bronnen.findIndex((x) => x.href === b.href) === i);
 
@@ -117,6 +121,8 @@ function Antwoord({ beurt, bezig }: { beurt: Beurt; bezig: boolean }) {
           </div>
         )
       )}
+
+      {creatives.length > 0 && <AssistentCreatives creatives={creatives} />}
 
       {paginas.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -319,9 +325,10 @@ export function AssistentChat() {
       let antwoord = "";
       const bronnen: Bron[] = [];
       const stappen: GesprekStap[] = [];
+      let creatives: AssistentCreative[] = [];
       const verwerk = (regel: string) => {
         if (!regel.trim()) return;
-        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string; stuk?: Stuk; titel?: string } & Partial<Bron> & Partial<GesprekStap>;
+        const gebeurtenis = JSON.parse(regel) as { t: string; d?: string; stuk?: Stuk; titel?: string; creatives?: unknown } & Partial<Bron> & Partial<GesprekStap>;
         if (gebeurtenis.t === "tekst") antwoord += gebeurtenis.d ?? "";
         else if (gebeurtenis.t === "wis") antwoord = "";
         else if (gebeurtenis.t === "bron" && gebeurtenis.naam && gebeurtenis.label && gebeurtenis.href)
@@ -338,6 +345,7 @@ export function AssistentChat() {
         }
         else if (gebeurtenis.t === "stap" && gebeurtenis.label && typeof gebeurtenis.invoer === "string")
           stappen.push({ label: gebeurtenis.label, invoer: gebeurtenis.invoer, ok: gebeurtenis.ok === true, melding: gebeurtenis.melding });
+        else if (gebeurtenis.t === "creatives") creatives = leesCreatives(gebeurtenis.creatives);
         else if (gebeurtenis.t === "fout") throw new Error(gebeurtenis.d || "Er ging iets mis.");
       };
       while (true) {
@@ -347,7 +355,7 @@ export function AssistentChat() {
         const regels = rest.split("\n");
         rest = done ? "" : (regels.pop() ?? "");
         regels.forEach(verwerk);
-        setBeurten([...geschiedenis, { role: "assistant", content: antwoord, bronnen: [...bronnen], stappen: [...stappen] }]);
+        setBeurten([...geschiedenis, { role: "assistant", content: antwoord, bronnen: [...bronnen], stappen: [...stappen], creatives }]);
         if (done) break;
       }
       if (!antwoord.trim()) throw new Error("Er kwam geen antwoord terug.");
@@ -394,11 +402,12 @@ export function AssistentChat() {
       setGesprekId(id);
       setTitel(typeof data.gesprek.titel === "string" ? data.gesprek.titel : null);
       setBeurten(
-        (data.gesprek.berichten as { role: Beurt["role"]; content: string; bronnen?: string[]; stappen?: GesprekStap[] }[]).map((b) => ({
+        (data.gesprek.berichten as { role: Beurt["role"]; content: string; bronnen?: string[]; stappen?: GesprekStap[]; creatives?: unknown }[]).map((b) => ({
           role: b.role,
           content: b.content,
           bronnen: (b.bronnen ?? []).map((naam) => bekend[naam]).filter(Boolean),
           stappen: b.stappen ?? [],
+          creatives: leesCreatives(b.creatives),
         }))
       );
       plakRef.current = true;

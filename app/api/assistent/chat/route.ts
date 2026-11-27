@@ -7,6 +7,8 @@ import { alsChatTool, ToolFout, toolsVoor, type ChatTool } from "@/lib/assistent
 import { ASSISTENT_TOOLS } from "@/lib/assistent/tools";
 import { mcpToolsVoor } from "@/lib/mcp/assistent";
 import { stukTools } from "@/lib/assistent/stukken-tools";
+import { creativeTools, MAX_CREATIVES, type AssistentCreative } from "@/lib/assistent/creative-tools";
+import { fetchMetaAdCreatives, isMetaConfigured } from "@/lib/paid-ads/connectors/meta";
 import { maakTitel } from "@/lib/assistent/titel";
 import { inhoudVan, samenvatting, type Stuk } from "@/lib/stukken/model";
 import { getStuk, saveStuk } from "@/lib/stukken/store";
@@ -24,7 +26,8 @@ import { modelVoor } from "@/lib/modellen/store";
  * gaan mee, en de tools lezen alleen.
  *
  * Het antwoord komt binnen als regels JSON terwijl het model schrijft:
- * `{t:"tekst",d}` voor een stuk tekst, `{t:"bron",naam,label,href}` zodra een
+ * `{t:"tekst",d}` voor een stuk tekst, `{t:"creatives",creatives}` met
+ * advertenties die als kaart onder het antwoord komen, `{t:"bron",naam,label,href}` zodra een
  * tool is gebruikt, `{t:"stap",label,invoer,ok,melding?}` voor elke
  * tool-aanroep (zodat je ziet wat er is gezocht) en `{t:"fout",d}` als het
  * misgaat. Het id van het gesprek
@@ -65,6 +68,8 @@ Een stuk maken: vraagt de collega om een rapport, een one-pager, een presentatie
 - Vorm: vraagt de collega om iets groter, kleiner, op een andere kleur, naast elkaar of uitgelicht, gebruik dan de actie "opmaken" en laat de inhoud staan. Gebruik nadruk om de belangrijkste reeks, rij of het belangrijkste kerngetal te laten opvallen. Rood en zwart zijn voor nadruk, niet voor elk blok.
 - Schrijf zoals in de chat: kort, Nederlands, zonder em-dash. Bedragen als "€ 374.610", percentages als "12,4%".
 - Herhaal de inhoud van het stuk niet in de chat. Zeg in een paar zinnen wat je hebt gemaakt of veranderd, en dat de collega het naast de chat kan bekijken, aanpassen en delen.
+
+Advertenties laten zien (als je de tool meta_creatives_tonen hebt): vraagt de collega naar een creative of advertentie van Meta (de beste, de slechtste, "laat zien"), of licht je in je antwoord specifieke Meta-advertenties uit, roep dan meta_creatives_tonen aan met hun ID's (kolom ad_id in het rapport op niveau ad). De chat toont ze als kaart met afbeelding of video en copy. Noem in je tekst de cijfers en wat opvalt aan de copy, maar schrijf de copy niet helemaal over.
 
 Reken waar nodig zelf (optellen, vergelijken, percentages) en noem de getallen waarop je antwoord rust.
 
@@ -166,6 +171,9 @@ export async function POST(req: NextRequest) {
   });
   // Wordt in de stroom gezet: elke wijziging aan het stuk gaat meteen naar de chat.
   let meldStuk: (stuk: Stuk) => void = () => undefined;
+  // Idem voor advertenties die het model laat zien.
+  let meldCreatives: (creatives: AssistentCreative[]) => void = () => undefined;
+  const metCreatives = access.pages.includes("/dashboard/paid-ads") && isMetaConfigured();
   const tools = [
     ...bronTools,
     ...stukTools({
@@ -175,6 +183,12 @@ export async function POST(req: NextRequest) {
       vandaag: todayInAmsterdam(),
       onGewijzigd: (stuk) => meldStuk(stuk),
     }),
+    ...(metCreatives
+      ? creativeTools({
+          haal: (ids) => fetchMetaAdCreatives(ids, afgebroken.signal),
+          onGetoond: (creatives) => meldCreatives(creatives),
+        })
+      : []),
   ];
   const stukContext = huidigStuk
     ? `Er is al een stuk bij dit gesprek. ${samenvatting(huidigStuk)}\nDe volledige inhoud: ${JSON.stringify(inhoudVan(huidigStuk)).slice(0, 40_000)}`
@@ -196,6 +210,16 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       const stuur = (regel: Record<string, unknown>) => controller.enqueue(encoder.encode(`${JSON.stringify(regel)}\n`));
       meldStuk = (stuk) => stuur({ t: "stuk", stuk });
+      // Per antwoord dezelfde advertentie één keer, in de volgorde van tonen.
+      const creatives: AssistentCreative[] = [];
+      meldCreatives = (nieuw) => {
+        for (const c of nieuw) {
+          const bestaand = creatives.findIndex((x) => x.adId === c.adId);
+          if (bestaand >= 0) creatives[bestaand] = c;
+          else if (creatives.length < MAX_CREATIVES * 2) creatives.push(c);
+        }
+        stuur({ t: "creatives", creatives });
+      };
       let antwoord = "";
       const bronnen: string[] = [];
       const stappen: GesprekStap[] = [];
@@ -303,6 +327,7 @@ export async function POST(req: NextRequest) {
               content: antwoord.trim(),
               ...(bronnen.length > 0 && { bronnen }),
               ...(stappen.length > 0 && { stappen }),
+              ...(creatives.length > 0 && { creatives }),
             },
           ],
           createdAt: bestaand?.createdAt ?? nu,

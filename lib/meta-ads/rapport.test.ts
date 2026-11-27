@@ -65,7 +65,7 @@ test("rapport: eigen periode, per dag of maand, uitsplitsing en filters", () => 
   ]);
   assert.equal(p.sort, '["inline_link_clicks_ascending"]');
   assert.equal(p.limit, "250");
-  assert.equal(p.fields, "campaign_name,adset_name,ad_name,spend,inline_link_clicks");
+  assert.equal(p.fields, "campaign_name,adset_name,ad_name,ad_id,spend,inline_link_clicks");
   assert.equal(rapportParams({ ...basis, per: "dag" }).time_increment, "1");
 });
 
