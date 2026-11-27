@@ -60,6 +60,35 @@ het geheugen; een wijziging is dus binnen een halve minuut overal actief, ook
 voor wie al is ingelogd. Is de opslag even onbereikbaar, dan wordt de laatst
 bekende lijst gebruikt.
 
+# Assistent
+
+Het tabblad Assistent laat zien welke tools de assistent heeft, en daar beheer
+je de vaardigheden.
+
+**Tools.** Alle tools op één plek: de eigen tools van PSV Tools (data van de
+pagina's, Paid Ads creatives, stukken, vaardigheid lezen) en die van de
+MCP-servers, met de pagina die bepaalt wie de tool krijgt en of hij aan staat.
+De eigen tools worden uit de code opgebouwd, dus de lijst loopt nooit achter.
+Aan- en uitzetten kan alleen bij MCP-tools, in het tabblad MCP Servers.
+
+**Vaardigheden.** Instructies van het team voor een soort vraag, zoals een
+campagne-evaluatie of copy beoordelen. Net als skills in Claude: het model ziet
+bij elke vraag alleen de naam en het veld "Wanneer", en leest de instructies
+met de tool `vaardigheid_lezen` als een vraag erbij past. Schrijf "Wanneer"
+dus zo dat duidelijk is bij welke vragen hij hoort. Een vaardigheid kan voor
+iedereen met de assistent gelden, of alleen voor wie bepaalde pagina's mag
+zien. Een wijziging is binnen een halve minuut actief. Instructies gaan voor
+op de algemene werkwijze van de assistent, maar niet op de regels over data
+en bronnen.
+
+| Onderdeel | Bestand |
+|---|---|
+| Vaardigheden: regels, prompt en tool | `lib/assistent/vaardigheden.ts` (met tests) |
+| Opslag (Vercel Blob, `beheer/assistent-vaardigheden.json`) | `lib/assistent/vaardigheden-store.ts` |
+| Het overzicht van de tools | `lib/assistent/catalogus.ts` (met tests) |
+| Beheer-API (alleen admins) | `app/api/beheer/assistent/route.ts` |
+| Het tabblad | `components/assistent-beheer.tsx` |
+
 # MCP Servers
 
 Een MCP-server geeft de assistent extra tools, rechtstreeks van een leverancier

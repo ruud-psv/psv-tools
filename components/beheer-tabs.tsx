@@ -2,22 +2,23 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Plug, Sprout, Timer, Users } from "lucide-react";
+import { Bot, Plug, Sprout, Timer, Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserManagement } from "@/components/user-management";
 import { McpBeheer } from "@/components/mcp-beheer";
 import { ModelGarden } from "@/components/model-garden";
 import { CronBeheer } from "@/components/cron-beheer";
+import { AssistentBeheer } from "@/components/assistent-beheer";
 
-export type BeheerTab = "gebruikers" | "mcp" | "modellen" | "crons";
+export type BeheerTab = "gebruikers" | "assistent" | "mcp" | "modellen" | "crons";
 
 function leesBeheerTab(tab?: string): BeheerTab {
-  return tab === "mcp" || tab === "modellen" || tab === "crons" ? tab : "gebruikers";
+  return tab === "assistent" || tab === "mcp" || tab === "modellen" || tab === "crons" ? tab : "gebruikers";
 }
 
 /**
  * De tabbladen van Beheer. Het gekozen tabblad staat in de URL (`?tab=mcp`),
- * (of `?tab=modellen`, `?tab=crons`), zodat je naar een tabblad kunt linken en verversen je op dezelfde plek laat.
+ * (of `?tab=assistent`, `?tab=modellen`, `?tab=crons`), zodat je naar een tabblad kunt linken en verversen je op dezelfde plek laat.
  */
 export function BeheerTabs({ initialTab }: { initialTab: BeheerTab }) {
   const [tab, setTab] = useState<BeheerTab>(initialTab);
@@ -37,6 +38,10 @@ export function BeheerTabs({ initialTab }: { initialTab: BeheerTab }) {
           <Users className="h-4 w-4" />
           Gebruikers
         </TabsTrigger>
+        <TabsTrigger value="assistent" className="gap-2 font-heading uppercase tracking-wide">
+          <Bot className="h-4 w-4" />
+          Assistent
+        </TabsTrigger>
         <TabsTrigger value="mcp" className="gap-2 font-heading uppercase tracking-wide">
           <Plug className="h-4 w-4" />
           MCP Servers
@@ -52,6 +57,9 @@ export function BeheerTabs({ initialTab }: { initialTab: BeheerTab }) {
       </TabsList>
       <TabsContent value="gebruikers">
         <UserManagement />
+      </TabsContent>
+      <TabsContent value="assistent">
+        <AssistentBeheer />
       </TabsContent>
       <TabsContent value="mcp">
         <McpBeheer />

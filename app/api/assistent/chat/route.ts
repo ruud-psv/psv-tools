@@ -9,6 +9,8 @@ import { mcpToolsVoor } from "@/lib/mcp/assistent";
 import { stukTools } from "@/lib/assistent/stukken-tools";
 import { creativeTools, eerdereCreativesContext, MAX_CREATIVES, type AssistentCreative } from "@/lib/assistent/creative-tools";
 import { creativeBeeldVoorStuk } from "@/lib/stukken/creative-beeld";
+import { vaardighedenContext, vaardighedenVoor, vaardigheidTool } from "@/lib/assistent/vaardigheden";
+import { readVaardigheden } from "@/lib/assistent/vaardigheden-store";
 import { fetchMetaAdCreatives, isMetaConfigured } from "@/lib/paid-ads/connectors/meta";
 import { maakTitel } from "@/lib/assistent/titel";
 import { inhoudVan, samenvatting, type Stuk } from "@/lib/stukken/model";
@@ -176,6 +178,9 @@ export async function POST(req: NextRequest) {
   // Idem voor advertenties die het model laat zien.
   let meldCreatives: (creatives: AssistentCreative[]) => void = () => undefined;
   const metCreatives = access.pages.includes("/dashboard/paid-ads") && isMetaConfigured();
+  // De vaardigheden uit Beheer > Assistent die deze collega krijgt.
+  const vaardigheden = vaardighedenVoor(await readVaardigheden(), access.pages);
+  const leesVaardigheid = vaardigheidTool(vaardigheden);
   const tools = [
     ...bronTools,
     ...stukTools({
@@ -192,6 +197,7 @@ export async function POST(req: NextRequest) {
           beeldVoorStuk: creativeBeeldVoorStuk,
         })
       : []),
+    ...(leesVaardigheid ? [leesVaardigheid] : []),
   ];
   // De advertenties die eerder als kaart zijn getoond, zodat het model ze in een stuk kan zetten.
   const creativesContext = metCreatives
@@ -252,6 +258,7 @@ export async function POST(req: NextRequest) {
               { type: "text", text: `Vandaag is het ${todayInAmsterdam()}.` },
               ...(stukContext ? [{ type: "text" as const, text: stukContext }] : []),
               ...(creativesContext ? [{ type: "text" as const, text: creativesContext }] : []),
+              ...(vaardigheden.length > 0 ? [{ type: "text" as const, text: vaardighedenContext(vaardigheden)! }] : []),
             ],
             tools: toolParams(tools),
             messages,
