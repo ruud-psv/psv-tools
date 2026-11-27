@@ -12,6 +12,7 @@ import {
   MousePointerClick,
   Paperclip,
   Pencil,
+  Plus,
   RefreshCw,
   Send,
   Undo2,
@@ -27,7 +28,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlayableLoaderPreview, type PreviewHandle } from "@/components/playable-loader-preview";
 import { StappenBalk, type Stap, type StapId } from "@/components/playable-loader-steps";
 import { uploadNaarBunny } from "@/components/playable-loader-bewerken";
-import { parseCampaignId, zonderKit, type PageSource } from "@/lib/playable-loader/bundle";
+import {
+  mountHtml,
+  parseCampaignId,
+  splitsDelen,
+  voegDelenSamen,
+  zonderKit,
+  type PageSource,
+} from "@/lib/playable-loader/bundle";
 import { EDITOR_MAP, PAGES_MAP, UPLOAD_ACCEPT, isAfbeelding, type BunnyCampagne } from "@/lib/playable-loader/bunny";
 import type { PlayableCampaign } from "@/lib/playable-loader/playable";
 import { selectieNotitie, type Aanwijzing, type Selectie } from "@/lib/playable-loader/selectie";
@@ -46,7 +54,9 @@ import { cn } from "@/lib/utils";
  *    zelf bewerken: tekst, foto, link, verplaatsen. Bestanden voor de pagina
  *    gaan naar Bunny, in `playable/editor`.
  * 3. Publiceren: het concept live zetten.
- * 4. Code: de HTML, CSS en JS zelf, en het vaste stukje voor Playable.
+ * 4. Code: de HTML, CSS en JS zelf, en het vaste stukje voor Playable. Staat
+ *    er in Playable iets tussen de pagina (zoals een formulier), dan bestaat
+ *    de HTML uit meer html-blokken, elk voor een eigen html-element.
  */
 
 interface LoadResponse {
@@ -78,8 +88,7 @@ interface ChatBericht {
   eigen?: boolean;
 }
 
-const FIELDS: { key: keyof PageSource; label: string; rows: number }[] = [
-  { key: "html", label: "HTML", rows: 16 },
+const FIELDS: { key: "css" | "js"; label: string; rows: number }[] = [
   { key: "css", label: "CSS", rows: 10 },
   { key: "js", label: "JavaScript", rows: 10 },
 ];
@@ -130,6 +139,41 @@ function CodeBlock({ label, value }: { label: string; value: string }) {
       </div>
       <pre className="max-h-64 overflow-auto border border-border bg-muted p-3 text-xs">{value}</pre>
     </div>
+  );
+}
+
+/**
+ * Eén html-blok in de code-stap. Het veld houdt zijn eigen tekst bij tijdens
+ * het typen: de blokken worden bij het samenvoegen bijgeknipt, en anders zou
+ * een regel aan het eind meteen weer verdwijnen.
+ */
+function BlokVeld({
+  id,
+  waarde,
+  rows,
+  onChange,
+}: {
+  id: string;
+  waarde: string;
+  rows: number;
+  onChange: (waarde: string) => void;
+}) {
+  const [lokaal, setLokaal] = useState(waarde);
+  useEffect(() => {
+    setLokaal((l) => (l.trim() === waarde.trim() ? l : waarde));
+  }, [waarde]);
+  return (
+    <Textarea
+      id={id}
+      value={lokaal}
+      onChange={(e) => {
+        setLokaal(e.target.value);
+        onChange(e.target.value);
+      }}
+      rows={rows}
+      spellCheck={false}
+      className="font-mono text-xs"
+    />
   );
 }
 
@@ -504,6 +548,24 @@ export function PlayableLoader() {
     } finally {
       setCacheBezig(false);
     }
+  }
+
+  /** De html-blokken van de pagina; meer dan één als er in Playable iets tussen staat. */
+  const delen = splitsDelen(source.html);
+
+  function zetBlok(i: number, waarde: string) {
+    if (delen.length === 1 && i === 0) {
+      setSource({ ...source, html: waarde });
+      return;
+    }
+    const nieuw = [...delen];
+    nieuw[i] = waarde;
+    setSource({ ...source, html: voegDelenSamen(nieuw) });
+  }
+
+  function haalBlokWeg(i: number) {
+    if (delen[i].trim() && !window.confirm(`Html-blok ${i + 1} weghalen? De HTML erin gaat uit het concept.`)) return;
+    setSource({ ...source, html: voegDelenSamen(delen.filter((_, j) => j !== i)) });
   }
 
   const toegestaan = opBunny ? new Set(opBunny.map((c) => c.campaignId)) : null;
@@ -993,6 +1055,38 @@ export function PlayableLoader() {
                 zet PSV Tools er zelf bij; staat hij er al in, dan haalt PSV Tools hem eruit.
                 {!published && " Nog niet gepubliceerd: hieronder staat de startpagina van de Kit."}
               </p>
+              {delen.map((deel, i) => (
+                <div key={`${delen.length}-${i}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor={`loader-html-${i}`} className="form-label !mb-0">
+                      {delen.length > 1 ? `HTML, html-blok ${i + 1}` : "HTML"}
+                    </label>
+                    {i > 0 && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => haalBlokWeg(i)}>
+                        <X />
+                        Html-blok weghalen
+                      </Button>
+                    )}
+                  </div>
+                  <BlokVeld
+                    id={`loader-html-${i}`}
+                    waarde={deel}
+                    rows={i === 0 ? 16 : 10}
+                    onChange={(waarde) => zetBlok(i, waarde)}
+                  />
+                </div>
+              ))}
+              <div className="space-y-1.5">
+                <Button type="button" variant="outline" size="sm" onClick={() => zetBlok(delen.length, "")}>
+                  <Plus />
+                  Html-blok toevoegen
+                </Button>
+                <p className="form-hint !mt-0">
+                  Staat er in Playable iets tussen de pagina, zoals een formulier? Dan staat de pagina daar in meer
+                  html-elementen. Plak elk html-element in een eigen html-blok, van boven naar beneden, en de CSS en
+                  JavaScript van alle elementen onder elkaar in de velden hieronder.
+                </p>
+              </div>
               {FIELDS.map(({ key, label, rows }) => (
                 <div key={key}>
                   <label htmlFor={`loader-${key}`} className="form-label">
@@ -1011,21 +1105,61 @@ export function PlayableLoader() {
             </TabsContent>
 
             <TabsContent value="playable" className="space-y-4 pt-4">
-              <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-                <li>Plak eerst de huidige code uit Playable onder HTML, CSS en JS en publiceer, zodat hij bewaard is.</li>
-                <li>
-                  Vervang in Playable de inhoud van de drie velden van het html-element door de drie blokken
-                  hieronder, en sla op.
-                </li>
-                <li>Open de demo. De pagina komt nu uit PSV Tools.</li>
-              </ol>
+              {delen.length === 1 ? (
+                <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                  <li>Plak eerst de huidige code uit Playable onder HTML, CSS en JS en publiceer, zodat hij bewaard is.</li>
+                  <li>
+                    Vervang in Playable de inhoud van de drie velden van het html-element door de drie blokken
+                    hieronder, en sla op.
+                  </li>
+                  <li>Open de demo. De pagina komt nu uit PSV Tools.</li>
+                </ol>
+              ) : (
+                <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                  <li>
+                    Plak eerst de huidige code uit Playable onder HTML, CSS en JS: elk html-element in een eigen
+                    html-blok, de CSS en JavaScript van alle elementen onder elkaar. Publiceer, zodat hij bewaard is.
+                  </li>
+                  <li>
+                    Vervang in Playable de inhoud van de {delen.length} html-elementen door wat hieronder staat, van
+                    boven naar beneden, en sla op. Wat ertussen staat, zoals het formulier, blijft staan.
+                  </li>
+                  <li>Open de demo. De pagina komt nu uit PSV Tools.</li>
+                </ol>
+              )}
               <p className="form-hint !mt-0">
                 Of het vaste stukje in Playable staat, kan PSV Tools niet zien: de API van Playable kijkt niet in
                 het html-element. Controleer het op de demo.
               </p>
-              <CodeBlock label="HTML" value={data.loader.html} />
-              <CodeBlock label="CSS" value={data.loader.css} />
-              <CodeBlock label="JavaScript" value={data.loader.js} />
+              {delen.map((_, i) => (
+                <section
+                  key={i}
+                  className={cn("space-y-4", delen.length > 1 && "border-t border-border pt-4")}
+                  aria-label={`Html-element ${i + 1}`}
+                >
+                  {delen.length > 1 && (
+                    <h3 className="text-base">
+                      Html-element {i + 1}
+                      {i === 0 ? ", bovenaan" : ""}
+                    </h3>
+                  )}
+                  {i === 0 ? (
+                    <>
+                      <CodeBlock label="HTML" value={data.loader.html} />
+                      <CodeBlock label="CSS" value={data.loader.css} />
+                      <CodeBlock label="JavaScript" value={data.loader.js} />
+                    </>
+                  ) : (
+                    <>
+                      <CodeBlock label="HTML" value={mountHtml(i)} />
+                      <p className="form-hint !mt-0">
+                        Het CSS- en JavaScript-veld van dit html-element maak je leeg: die komen mee met
+                        html-element 1.
+                      </p>
+                    </>
+                  )}
+                </section>
+              ))}
             </TabsContent>
           </Tabs>
         </Card>

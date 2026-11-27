@@ -7,10 +7,15 @@ import {
   PageSourceError,
   buildBundle,
   bundlePath,
+  DEEL_SCHEIDING,
   loaderFields,
+  mountHtml,
+  mountId,
   parseCampaignId,
   preparePage,
   splitKit,
+  splitsDelen,
+  voegDelenSamen,
 } from "./bundle";
 import { FRAMEWORK_CSS, FRAMEWORK_JS, STARTER_HTML } from "./kit";
 
@@ -24,6 +29,42 @@ test("splitKit: eigen kit eruit, andere versie laten staan, anders niets", () =>
   assert.deepEqual(splitKit(PAGE_JS, FRAMEWORK_JS), { rest: PAGE_JS, kit: "geen" });
   const ouder = "/* PSV CAMPAIGN KIT — v0.9 */\n(function(){})();";
   assert.deepEqual(splitKit(ouder, FRAMEWORK_JS), { rest: ouder, kit: "andere-versie" });
+});
+
+test("splitKit: ook een tweede kopie van de kit gaat eruit", () => {
+  const twee = `${FRAMEWORK_JS}\n${PAGE_JS}\n${FRAMEWORK_JS}\nvar onder = 1;`;
+  const { rest, kit } = splitKit(twee, FRAMEWORK_JS);
+  assert.equal(kit, "eigen");
+  assert.ok(!rest.includes("PSV CAMPAIGN KIT"));
+  assert.ok(rest.includes(PAGE_JS) && rest.includes("var onder = 1;"));
+});
+
+test("html-blokken: splitsen, samenvoegen en de plek in Playable", () => {
+  assert.deepEqual(splitsDelen("<p>a</p>"), ["<p>a</p>"]);
+  assert.deepEqual(splitsDelen("<p>a</p>\n<!-- psvk-deel -->\n<p>b</p><!--PSVK-DEEL: formulier--><p>c</p>"), [
+    "<p>a</p>",
+    "<p>b</p>",
+    "<p>c</p>",
+  ]);
+  assert.equal(voegDelenSamen([" <p>a</p>", "<p>b</p>\n"]), `<p>a</p>\n\n${DEEL_SCHEIDING}\n\n<p>b</p>`);
+  assert.deepEqual(splitsDelen(voegDelenSamen(["<p>a</p>", ""])), ["<p>a</p>", ""]);
+  assert.equal(mountId(0), "psvk-mount");
+  assert.equal(mountId(1), "psvk-mount-2");
+  assert.equal(mountHtml(2), '<div id="psvk-mount-3"></div>');
+});
+
+test("preparePage en buildBundle: elk html-blok apart in de bundel", () => {
+  const html = voegDelenSamen(['<div id="psvk-app"><h1>Boven</h1></div>', '<div id="psvk-app"><p>Onder</p></div>']);
+  const page = preparePage({ html, css: "", js: "" });
+  assert.deepEqual(page.delen, ['<div id="psvk-app"><h1>Boven</h1></div>', '<div id="psvk-app"><p>Onder</p></div>']);
+  assert.deepEqual(page.warnings, []);
+  const bundle = buildBundle(page, { campaignId: 243381, publishedAt: "2026-11-27T10:00:00.000Z" });
+  assert.doesNotThrow(() => new Function(bundle));
+  assert.ok(bundle.includes(`var DELEN = ${JSON.stringify(page.delen)};`));
+  assert.ok(!bundle.includes(DEEL_SCHEIDING), "de scheiding zelf komt niet op de pagina");
+
+  const leeg = preparePage({ html: voegDelenSamen(['<div id="psvk-app"></div>', ""]), css: "", js: "" });
+  assert.match(leeg.warnings[0], /Html-blok 2 is leeg/);
 });
 
 test("preparePage: de kit zit er één keer in, ook als hij al geplakt was", () => {

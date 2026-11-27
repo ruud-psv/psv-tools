@@ -14,7 +14,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BewerkBalk, FotoVenster, LinkVenster, type BewerkActie } from "@/components/playable-loader-bewerken";
-import { buildBundle, preparePage, PageSourceError, type PageSource } from "@/lib/playable-loader/bundle";
+import {
+  buildBundle,
+  mountHtml,
+  preparePage,
+  PageSourceError,
+  splitsDelen,
+  type PageSource,
+} from "@/lib/playable-loader/bundle";
 import {
   dupliceerElement,
   leesAttribuut,
@@ -148,8 +155,21 @@ function inline(js: string): string {
   return js.replace(/<\/script/gi, "<\\/script");
 }
 
+/**
+ * Tussen twee html-blokken staat in Playable iets van Playable zelf, zoals een
+ * formulier. Dat kan het voorbeeld niet tonen; dit vak houdt de plek vrij.
+ * Vaste kleuren (grijs uit de huisstijl): het voorbeeld kan niet bij de tokens.
+ */
+const TUSSENVAK =
+  '<div data-psvk-tussen style="margin:0;padding:40px 16px;background:#eee;color:#333;text-align:center;' +
+  "font:14px/1.5 Arial,Helvetica,sans-serif;border-top:2px dashed #999;border-bottom:2px dashed #999\">" +
+  "Hier staat in Playable iets van Playable zelf, zoals het formulier. Dat is in dit voorbeeld niet te zien.</div>";
+
 function voorbeeldDocument(bron: PageSource, fonts: string): { html: string; fout: string | null } {
   try {
+    const mounts = splitsDelen(bron.html)
+      .map((_, i) => mountHtml(i))
+      .join(TUSSENVAK);
     // Elk element krijgt zijn nummer uit de bron, voor de bewerkstand. Alleen hier, niet op Bunny.
     const bundle = buildBundle(preparePage({ ...bron, html: markeer(bron.html) }), {
       campaignId: 0,
@@ -160,7 +180,7 @@ function voorbeeldDocument(bron: PageSource, fonts: string): { html: string; fou
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base href="${PLAYABLE_BASE}" target="_blank">
 <style>${fonts}\nhtml, body { margin: 0; }</style>
-</head><body><div id="psvk-mount"></div><script>${inline(bundle)}</script><script>${inline(AANWIJZER_JS)}</script></body></html>`,
+</head><body>${mounts}<script>${inline(bundle)}</script><script>${inline(AANWIJZER_JS)}</script></body></html>`,
       fout: null,
     };
   } catch (err) {
@@ -330,8 +350,8 @@ export function PlayableLoaderPreview({
         stuur({ actie: "stand", stand: nu.stand });
         if (scrollY.current > 0) stuur({ actie: "scroll", y: scrollY.current });
         if (nu.aanwijzing) {
-          const { wijzer, niveau, niveaus } = nu.aanwijzing;
-          stuur({ actie: "herstel", wijzer, niveau, niveaus });
+          const { wijzer, niveau, niveaus, deel } = nu.aanwijzing;
+          stuur({ actie: "herstel", wijzer, niveau, niveaus, deel });
         }
         if (nu.stand === "bewerken" && keuzeNummer.current !== null) {
           stuur({ actie: "kies-nummer", nummer: keuzeNummer.current });
