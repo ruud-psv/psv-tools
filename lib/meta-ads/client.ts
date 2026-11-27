@@ -35,5 +35,10 @@ export function metaApi(config: MetaConfig, signal?: AbortSignal): MetaApi {
     account: () => get(config.accountPath, { fields: "name,currency,timezone_name" }),
     insights: (params) => get(`${config.accountPath}/insights`, params),
     objecten: (edge, params) => get(`${config.accountPath}/${edge}`, params),
+    object: async (id, params) => {
+      // Alleen Graph-ID's (cijfers, of pagina_post): geen paden of andere edges.
+      if (!/^\d{1,30}(_\d{1,30})?$/.test(id)) throw new MetaFout("Ongeldig object-ID.", 400);
+      return get(id, params);
+    },
   };
 }

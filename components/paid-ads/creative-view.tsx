@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   adsByAdSet,
@@ -29,6 +29,7 @@ import {
 } from "./shared";
 import type { PaidViewProps } from "./shared";
 import { AdHoverPreview } from "./ad-preview";
+import { CreativeCopy, useMetaCreativeCopy } from "./creative-copy";
 import { cn } from "@/lib/utils";
 
 /** Zoveel advertentiesets staan er standaard; de rest achter "Toon alle". */
@@ -176,6 +177,7 @@ function AdGallery({
     [ads]
   );
   const visible = showAll ? withImage : withImage.slice(0, VISIBLE_ADS);
+  const copy = useMetaCreativeCopy(visible);
 
   return (
     <SectionCard
@@ -200,6 +202,7 @@ function AdGallery({
                 key={`${ad.platform}-${ad.id}`}
                 ad={ad}
                 adSetName={setNames.get(`${ad.platform}:${ad.adSetId}`) ?? null}
+                copy={<CreativeCopy details={copy.get(ad)} loading={copy.loading} />}
               />
             ))}
           </div>
@@ -210,6 +213,11 @@ function AdGallery({
             >
               {showAll ? "Toon minder" : `Toon alle ${nl(withImage.length)} advertenties`}
             </button>
+          )}
+          {copy.failed && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              De copy van de advertenties kwam niet binnen bij Meta.
+            </p>
           )}
           {warnings.length > 0 && (
             <div className="mt-4 text-xs text-muted-foreground">
@@ -234,7 +242,15 @@ function ImageWarnings({ warnings }: { warnings: PaidAdsWarning[] }) {
   );
 }
 
-function AdPreview({ ad, adSetName }: { ad: PaidAdsAd; adSetName: string | null }) {
+function AdPreview({
+  ad,
+  adSetName,
+  copy,
+}: {
+  ad: PaidAdsAd;
+  adSetName: string | null;
+  copy: ReactNode;
+}) {
   const d = derive(ad.metrics);
   return (
     <figure className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-border">
@@ -267,6 +283,7 @@ function AdPreview({ ad, adSetName }: { ad: PaidAdsAd; adSetName: string | null 
             </span>
           </p>
         </div>
+        {copy}
         <dl className="mt-auto grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs tabular-nums">
           <Stat label="Besteed" value={eur(ad.metrics.spend)} />
           <Stat label="CTR" value={pct(d.ctr)} />

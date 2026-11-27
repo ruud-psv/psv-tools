@@ -45,6 +45,14 @@ import {
   type FetchWindow,
   type PaidConnector,
 } from "./types";
+import {
+  CREATIVE_VELDEN,
+  metPostTekst,
+  normaliseerCreative,
+  postZonderTekst,
+  type CreativeDetails,
+  type MetaCreativeRaw,
+} from "@/lib/meta-ads/creative";
 
 const GRAPH_HOST = "https://graph.facebook.com";
 const DEFAULT_API_VERSION = "v21.0";
@@ -909,6 +917,53 @@ export async function fetchMetaAdPreview(
     width: Number.isFinite(width) && width > 0 ? width : 320,
     height: Number.isFinite(height) && height > 0 ? height : 560,
   };
+}
+
+/** Zoveel posts tegelijk opvragen voor advertenties die op een bestaande post draaien. */
+const POST_CONCURRENCY = 4;
+
+/**
+ * De copy en opbouw van de creatives van een rij advertenties, per
+ * advertentie-ID. Advertenties die Meta niet (meer) kent ontbreken in het
+ * resultaat. Draait een advertentie op een bestaande post zonder eigen tekst,
+ * dan komt de tekst uit de post; lukt dat niet, dan blijft hij leeg.
+ */
+export async function fetchMetaCreativeDetails(
+  adIds: string[],
+  signal?: AbortSignal
+): Promise<Map<string, CreativeDetails>> {
+  const config = getConfig();
+  const ids = [...new Set(adIds.filter(isMetaId))];
+  const out = new Map<string, CreativeDetails>();
+  if (ids.length === 0) return out;
+
+  const { nodes, error } = await fetchFromAccount<{ creative?: MetaCreativeRaw }>(
+    config,
+    "ads",
+    ids,
+    CREATIVE_VELDEN,
+    signal
+  );
+  if (error) console.error("[paid-ads] meta creatives deels niet opgehaald", error);
+  for (const [id, node] of nodes) out.set(id, normaliseerCreative(node.creative));
+
+  const zonderTekst = [...out].flatMap(([id, d]) => {
+    const post = postZonderTekst(d);
+    return post ? [{ id, post }] : [];
+  });
+  for (let i = 0; i < zonderTekst.length; i += POST_CONCURRENCY) {
+    await Promise.all(
+      zonderTekst.slice(i, i + POST_CONCURRENCY).map(async ({ id, post }) => {
+        try {
+          const body = await graphGet<{ message?: string }>(config, post, { fields: "message" });
+          out.set(id, metPostTekst(out.get(id)!, body.message));
+        } catch (err) {
+          console.error(`[paid-ads] meta post ${post} van advertentie ${id} niet opgehaald`, err);
+        }
+      })
+    );
+  }
+  return out;
 }
 
 /**

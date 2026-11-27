@@ -23,6 +23,10 @@ function nepMeta(overrides: Partial<MetaApi> = {}) {
       verzoeken.push({ soort: edge, params });
       return { data: [{ id: "1", name: "Seizoenkaart", effective_status: "ACTIVE" }] };
     },
+    async object(id, params) {
+      verzoeken.push({ soort: `object:${id}`, params });
+      return { id, message: "Tekst uit de post" };
+    },
     ...overrides,
   };
   return { api, verzoeken };
@@ -41,10 +45,10 @@ function tekst(result: Awaited<ReturnType<Client["callTool"]>>): string {
   return ((result.content ?? []) as { text?: string }[]).map((c) => c.text ?? "").join("\n");
 }
 
-test("twee tools, alle twee alleen lezen", async () => {
+test("drie tools, alle drie alleen lezen", async () => {
   const client = await verbind(() => nepMeta().api);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name), ["rapport", "campagnes"]);
+  assert.deepEqual(tools.map((t) => t.name), ["rapport", "campagnes", "creatives"]);
   for (const tool of tools) assert.equal(toolKind({ annotations: tool.annotations }), "leest");
 
   const schema = tools[0].inputSchema as Record<string, unknown>;
@@ -102,4 +106,63 @@ test("fouten gaan als leesbare melding terug: invoer, Meta en instellingen", asy
   const geen = await zonderConfig.callTool({ name: "campagnes", arguments: { niveau: "ad" } });
   assert.equal(tekst(geen), "Meta-configuratie ontbreekt: META_ADS_ACCOUNT_ID.");
   await zonderConfig.close();
+});
+
+test("creatives: copy per advertentie, ook uit een bestaande post", async () => {
+  const { api, verzoeken } = nepMeta({
+    async objecten(edge, params) {
+      verzoeken.push({ soort: edge, params });
+      return {
+        data: [
+          {
+            id: "11",
+            name: "Shirt 26/27",
+            effective_status: "ACTIVE",
+            campaign: { name: "Fanstore" },
+            adset: { name: "Fans NL" },
+            creative: {
+              object_story_spec: {
+                link_data: {
+                  message: "Het nieuwe thuisshirt is er.",
+                  name: "Shop het shirt",
+                  link: "https://psv.nl/shop",
+                  call_to_action: { type: "SHOP_NOW", value: { link: "https://psv.nl/shop" } },
+                  picture: "https://scontent.fbcdn.net/x.jpg",
+                },
+              },
+            },
+          },
+          { id: "12", name: "Boost", effective_status: "PAUSED", creative: { effective_object_story_id: "123_456" } },
+        ],
+      };
+    },
+  });
+  const client = await verbind(() => api);
+  const result = await client.callTool({
+    name: "creatives",
+    arguments: { advertentie_ids: ["11", "12"], alleen_actief: true },
+  });
+  const uit = tekst(result);
+  assert.equal(result.isError, undefined);
+  assert.match(uit, /## Shirt 26\/27 \(id 11, ACTIVE\)/);
+  assert.match(uit, /Campagne › set: Fanstore › Fans NL/);
+  assert.match(uit, /Tekst: Het nieuwe thuisshirt is er\./);
+  assert.match(uit, /Knop: Shop nu \(SHOP_NOW\)/);
+  assert.match(uit, /Tekst: Tekst uit de post/);
+
+  const ads = verzoeken.find((v) => v.soort === "ads")!;
+  assert.match(ads.params.fields, /creative\{/);
+  assert.deepEqual(JSON.parse(ads.params.filtering), [{ field: "id", operator: "IN", value: ["11", "12"] }]);
+  assert.equal(ads.params.effective_status, '["ACTIVE"]');
+  assert.ok(verzoeken.some((v) => v.soort === "object:123_456"));
+  await client.close();
+});
+
+test("creatives: een ID dat geen getal is, gaat niet naar Meta", async () => {
+  const { api, verzoeken } = nepMeta();
+  const client = await verbind(() => api);
+  const result = await client.callTool({ name: "creatives", arguments: { advertentie_ids: ["../me"] } });
+  assert.equal(result.isError, true);
+  assert.equal(verzoeken.length, 0);
+  await client.close();
 });

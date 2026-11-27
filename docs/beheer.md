@@ -162,6 +162,7 @@ GET-verzoeken naar de Graph API: aanmaken of wijzigen kan hij niet.
 |---|---|
 | `rapport` | Insights op account-, campagne-, advertentieset- of advertentieniveau: het model kiest zelf de velden, de periode, per dag/week/maand, de uitsplitsing (leeftijd, geslacht, plaatsing, land) en filters op naam of id. Acties (`actions`) per soort. Met dezelfde attributie als Ads Manager. |
 | `campagnes` | De campagnes, advertentiesets of advertenties met status, doel, budget en looptijd; ook om een naam of id te vinden. |
+| `creatives` | De copy van advertenties (hoofdtekst, kop, beschrijving, knop, link) en de opbouw: afbeelding, video, carrousel met de tekst per kaart, of Advantage+ met alle varianten. Draait een advertentie op een bestaande post, dan komt de tekst uit de post. Op id of op naam. |
 
 | Onderdeel | Bestand |
 |---|---|
@@ -169,6 +170,7 @@ GET-verzoeken naar de Graph API: aanmaken of wijzigen kan hij niet.
 | Token, sessies en foutantwoorden (gedeeld met Google Analytics) | `lib/mcp/servers/http.ts` (met tests) |
 | De tools | `lib/mcp/servers/meta-ads.ts` (met tests) |
 | Parameters voor Meta en tekst voor het model | `lib/meta-ads/rapport.ts` (met tests) |
+| De creative in één vorm (ook voor het Paid Ads-dashboard) | `lib/meta-ads/creative.ts` (met tests) |
 | De Graph-client (alleen GET) | `lib/meta-ads/client.ts` (met tests) |
 
 ### Aanzetten
@@ -179,7 +181,7 @@ GET-verzoeken naar de Graph API: aanmaken of wijzigen kan hij niet.
 2. Verwijder in Beheer > MCP Servers een eerdere server met het id `metaads`
    (bijvoorbeeld die naar `mcp.facebook.com`).
 3. Klik bij **Ingebouwd: Meta Ads** op **Invullen**, en dan op **Opslaan**.
-4. Klik **Verbinding testen** en zet `rapport` en `campagnes` aan.
+4. Klik **Verbinding testen** en zet `rapport`, `campagnes` en `creatives` aan.
 5. Vraag in de assistent bijvoorbeeld: "Welke 5 campagnes hadden de afgelopen
    7 dagen de meeste linkkliks, en wat was de CPC?" Alleen wie Paid Ads mag
    zien, krijgt deze tools.
