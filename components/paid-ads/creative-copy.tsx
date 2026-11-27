@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ctaLabel, type CreativeDetails } from "@/lib/meta-ads/creative";
+import { ctaLabel, type CreativeDetails, type CreativeVideo } from "@/lib/meta-ads/creative";
 import type { PaidAdsAd } from "@/lib/paid-ads/types";
 import { cn } from "@/lib/utils";
 
@@ -146,6 +146,82 @@ export function CreativeCopy({
           <span className="text-[11px] text-muted-foreground">{varianten.join(" · ")}</span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Speelt een video van de advertentie af op de plek van het voorbeeld. Het
+ * bestand komt via `/api/paid-ads/meta/[adId]/video`, die doorstuurt naar een
+ * verse URL bij Meta. Bij meerdere video's (carrousel, Advantage+) kies je
+ * eronder welke.
+ */
+export function CreativeVideoPlayer({
+  adId,
+  videos,
+  index,
+  poster,
+  onSelect,
+  onClose,
+}: {
+  adId: string;
+  videos: CreativeVideo[];
+  index: number;
+  poster: string | null;
+  onSelect: (index: number) => void;
+  onClose: () => void;
+}) {
+  const [failed, setFailed] = useState<number | null>(null);
+  const src = `/api/paid-ads/meta/${encodeURIComponent(adId)}/video?n=${index}`;
+
+  return (
+    <div className="relative bg-psv-black">
+      {failed === index ? (
+        <div className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 p-4 text-center text-xs text-psv-white">
+          <p>Meta gaf deze video niet vrij.</p>
+          <p className="text-psv-gray-09">
+            Mogelijk mist het token leesrechten op de pagina waar de video bij hoort.
+          </p>
+        </div>
+      ) : (
+        <video
+          key={src}
+          src={src}
+          poster={index === 0 ? poster ?? undefined : undefined}
+          controls
+          autoPlay
+          playsInline
+          preload="metadata"
+          onError={() => setFailed(index)}
+          className="aspect-[4/5] w-full object-contain"
+        />
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        title="Terug naar het voorbeeld"
+        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-sm bg-psv-black/70 hover:bg-psv-black"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icons/psv/WHITE/2px/ICON_PSV_white_cross_2px.svg" alt="Sluiten" className="h-4 w-4" />
+      </button>
+      {videos.length > 1 && (
+        <div className="flex flex-wrap gap-1 bg-psv-black px-2 pb-2">
+          {videos.map((v, i) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => onSelect(i)}
+              className={cn(
+                "rounded-sm px-1.5 py-0.5 font-heading text-[10px] uppercase tracking-wide",
+                i === index ? "bg-psv-red-primary text-psv-white" : "bg-psv-white/10 text-psv-white hover:bg-psv-white/20"
+              )}
+            >
+              Video {i + 1}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

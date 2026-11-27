@@ -94,3 +94,36 @@ test("lege creative en onbekende CTA", () => {
   assert.equal(ctaLabel("SHOP_NOW"), "Shop nu");
   assert.equal(ctaLabel("GET_DIRECTIONS"), "Get directions");
 });
+
+test("video's: alle ID's in volgorde, zonder dubbele, met poster", () => {
+  const d = normaliseerCreative({
+    video_id: "9",
+    thumbnail_url: "https://scontent.fbcdn.net/t.jpg",
+    object_story_spec: {
+      video_data: { video_id: "9", image_url: "https://scontent.fbcdn.net/p.jpg" },
+    },
+  });
+  assert.deepEqual(d.videoLijst, [{ id: "9", poster: "https://scontent.fbcdn.net/p.jpg" }]);
+  assert.match(creativeTekst(d).join("\n"), /Video-ID's: 9/);
+
+  const carrousel = normaliseerCreative({
+    object_story_spec: {
+      link_data: {
+        child_attachments: [
+          { name: "A", video_id: "1", picture: "http://onveilig" },
+          { name: "B", picture: "https://x" },
+          { name: "C", video_id: "2" },
+        ],
+      },
+    },
+  });
+  assert.deepEqual(carrousel.videoLijst, [
+    { id: "1", poster: null },
+    { id: "2", poster: null },
+  ]);
+
+  const dynamisch = normaliseerCreative({
+    asset_feed_spec: { videos: [{ video_id: "5" }, { video_id: "../6" }] },
+  });
+  assert.deepEqual(dynamisch.videoLijst.map((v) => v.id), ["5"]);
+});

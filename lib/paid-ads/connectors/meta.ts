@@ -919,6 +919,60 @@ export async function fetchMetaAdPreview(
   };
 }
 
+export interface MetaVideo {
+  /** Tijdelijke URL van het videobestand bij Meta (fbcdn), een paar uur geldig. */
+  source: string;
+  /** Tijdelijke URL van een stilstaand beeld. */
+  picture: string | null;
+  /** Lengte in seconden. */
+  length: number | null;
+}
+
+type VideoNode = { id?: string; source?: string; picture?: string; length?: number };
+
+/**
+ * Het videobestand achter video `n` (vanaf 0) van één advertentie. Eerst de
+ * video zelf; mag het token die niet lezen (video's van een pagina vragen
+ * paginarechten), dan de videobibliotheek van het advertentieaccount, waar
+ * `ads_read` genoeg is. `null` als de advertentie geen video `n` heeft of
+ * Meta geen bestand geeft.
+ *
+ * Alleen video's uit de creative van een advertentie in dit account: wie de
+ * route aanroept, kan zo geen willekeurige video-ID's opvragen.
+ */
+export async function fetchMetaVideo(adId: string, n: number): Promise<MetaVideo | null> {
+  const config = getConfig();
+  const ad = await graphGet<{ creative?: MetaCreativeRaw }>(config, adId, { fields: CREATIVE_VELDEN });
+  const video = normaliseerCreative(ad.creative).videoLijst[n];
+  if (!video) return null;
+
+  const pogingen: (() => Promise<VideoNode | undefined>)[] = [
+    () => graphGet<VideoNode>(config, video.id, { fields: "source,picture,length" }),
+    async () => {
+      const body = await graphGet<{ data?: VideoNode[] }>(config, `${config.accountPath}/advideos`, {
+        fields: "id,source,picture,length",
+        filtering: JSON.stringify([{ field: "id", operator: "IN", value: [video.id] }]),
+      });
+      return body.data?.find((v) => v.id === video.id);
+    },
+  ];
+  for (const poging of pogingen) {
+    try {
+      const node = await poging();
+      if (node?.source?.startsWith("https://")) {
+        return {
+          source: node.source,
+          picture: node.picture?.startsWith("https://") ? node.picture : video.poster,
+          length: typeof node.length === "number" ? node.length : null,
+        };
+      }
+    } catch (error) {
+      console.error(`[paid-ads] meta video ${video.id} van advertentie ${adId} niet opgehaald`, error);
+    }
+  }
+  return null;
+}
+
 /** Zoveel posts tegelijk opvragen voor advertenties die op een bestaande post draaien. */
 const POST_CONCURRENCY = 4;
 

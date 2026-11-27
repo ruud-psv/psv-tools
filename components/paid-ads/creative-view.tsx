@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   adsByAdSet,
@@ -29,7 +29,8 @@ import {
 } from "./shared";
 import type { PaidViewProps } from "./shared";
 import { AdHoverPreview } from "./ad-preview";
-import { CreativeCopy, useMetaCreativeCopy } from "./creative-copy";
+import { CreativeCopy, CreativeVideoPlayer, useMetaCreativeCopy } from "./creative-copy";
+import type { CreativeDetails } from "@/lib/meta-ads/creative";
 import { cn } from "@/lib/utils";
 
 /** Zoveel advertentiesets staan er standaard; de rest achter "Toon alle". */
@@ -202,7 +203,8 @@ function AdGallery({
                 key={`${ad.platform}-${ad.id}`}
                 ad={ad}
                 adSetName={setNames.get(`${ad.platform}:${ad.adSetId}`) ?? null}
-                copy={<CreativeCopy details={copy.get(ad)} loading={copy.loading} />}
+                details={copy.get(ad)}
+                loading={copy.loading}
               />
             ))}
           </div>
@@ -245,15 +247,30 @@ function ImageWarnings({ warnings }: { warnings: PaidAdsWarning[] }) {
 function AdPreview({
   ad,
   adSetName,
-  copy,
+  details,
+  loading,
 }: {
   ad: PaidAdsAd;
   adSetName: string | null;
-  copy: ReactNode;
+  details: CreativeDetails | null;
+  loading: boolean;
 }) {
   const d = derive(ad.metrics);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const videos = details?.videoLijst ?? [];
   return (
     <figure className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-border">
+      {playing != null && videos.length > 0 ? (
+        <CreativeVideoPlayer
+          adId={ad.id}
+          videos={videos}
+          index={playing}
+          poster={ad.thumbnailUrl}
+          onSelect={setPlaying}
+          onClose={() => setPlaying(null)}
+        />
+      ) : (
+      <div className="relative">
       <a
         href={ad.thumbnailUrl ?? undefined}
         target="_blank"
@@ -269,6 +286,20 @@ function AdPreview({
           />
         </AdHoverPreview>
       </a>
+      {videos.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setPlaying(0)}
+          className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-sm bg-psv-red-primary py-1 pl-1 pr-2 font-heading text-[11px] uppercase tracking-wide text-psv-white shadow hover:bg-psv-red-secondary"
+          title="Speel de video af"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icons/psv/WHITE/ICON_PSV_white_video_PSV-play_button.svg" alt="" className="h-5 w-5" />
+          {videos.length > 1 ? `${videos.length} video's` : "Video"}
+        </button>
+      )}
+      </div>
+      )}
       <figcaption className="flex flex-1 flex-col gap-2 p-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium" title={ad.name}>
@@ -283,7 +314,7 @@ function AdPreview({
             </span>
           </p>
         </div>
-        {copy}
+        <CreativeCopy details={details} loading={loading} />
         <dl className="mt-auto grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs tabular-nums">
           <Stat label="Besteed" value={eur(ad.metrics.spend)} />
           <Stat label="CTR" value={pct(d.ctr)} />

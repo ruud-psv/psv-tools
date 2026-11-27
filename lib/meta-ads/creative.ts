@@ -95,6 +95,12 @@ export interface CreativeKaart {
   video: boolean;
 }
 
+/** Een video in de creative; `poster` is een tijdelijke URL van Meta. */
+export interface CreativeVideo {
+  id: string;
+  poster: string | null;
+}
+
 /** De creative in één vorm. Lijsten bevatten elke variant één keer. */
 export interface CreativeDetails {
   soort: CreativeSoort;
@@ -113,6 +119,11 @@ export interface CreativeDetails {
   /** Aantal afbeeldingen en video's in de creative (bij dynamisch alle varianten). */
   afbeeldingen: number;
   videos: number;
+  /**
+   * De video's zelf, in volgorde (bij een carrousel in kaartvolgorde). Het
+   * bestand haal je op met het ID; zie `fetchMetaVideo` in Paid Ads.
+   */
+  videoLijst: CreativeVideo[];
   /** De post achter de advertentie, als Meta die noemt. */
   postId: string | null;
 }
@@ -202,6 +213,17 @@ export function normaliseerCreative(raw: MetaCreativeRaw | undefined | null): Cr
     c.link_url,
   ]);
 
+  const videoLijst: CreativeVideo[] = [];
+  const voegVideoToe = (id: string | undefined, poster: string | undefined) => {
+    if (id && /^\d{1,30}$/.test(id) && !videoLijst.some((v) => v.id === id)) {
+      videoLijst.push({ id, poster: poster?.startsWith("https://") ? poster : null });
+    }
+  };
+  voegVideoToe(video?.video_id, video?.image_url);
+  for (const k of kinderen) voegVideoToe(k.video_id, k.picture);
+  for (const v of feed?.videos ?? []) voegVideoToe(v.video_id, v.thumbnail_url);
+  voegVideoToe(c.video_id, c.thumbnail_url);
+
   const kaarten: CreativeKaart[] = kinderen.map((k) => ({
     kop: k.name?.trim() || null,
     beschrijving: k.description?.trim() || null,
@@ -253,6 +275,7 @@ export function normaliseerCreative(raw: MetaCreativeRaw | undefined | null): Cr
     kaarten,
     afbeeldingen,
     videos,
+    videoLijst,
     postId: c.effective_object_story_id ?? null,
   };
 }
@@ -304,6 +327,9 @@ export function creativeTekst(details: CreativeDetails): string[] {
   lijst("Beschrijving", details.beschrijvingen);
   lijst("Knop", details.ctas.map((c) => `${ctaLabel(c)} (${c})`));
   lijst("Link", details.links);
+  if (details.videoLijst.length > 0) {
+    regels.push(`Video-ID's: ${details.videoLijst.map((v) => v.id).join(", ")}`);
+  }
   details.kaarten.forEach((k, i) => {
     const delen = [k.kop, k.beschrijving, k.link, k.video ? "video" : null].filter(Boolean);
     regels.push(`Kaart ${i + 1}: ${delen.join(" · ") || "(geen tekst)"}`);
