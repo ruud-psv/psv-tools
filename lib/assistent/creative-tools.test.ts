@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { normaliseerCreative } from "../meta-ads/creative";
-import { creativeTools, leesCreatives, type AssistentCreative } from "./creative-tools";
+import { creativeTools, eerdereCreativesContext, leesCreatives, type AssistentCreative } from "./creative-tools";
 import { ToolFout } from "./toegang";
 
 const details = normaliseerCreative({
@@ -53,4 +53,37 @@ test("leesCreatives laat alleen geldige kaarten door", () => {
   const goed: AssistentCreative = { platform: "meta", adId: "11", naam: null, campagne: null, details };
   assert.deepEqual(leesCreatives([goed, { platform: "meta", adId: "x/../", details }, null, "x"]), [goed]);
   assert.deepEqual(leesCreatives(undefined), []);
+});
+
+test("beeld voor een stuk: één kopie per advertentie, mislukte meldt een wens", async () => {
+  const gekopieerd: string[] = [];
+  const tools = creativeTools({
+    haal: async () => new Map(),
+    onGetoond: () => undefined,
+    async beeldVoorStuk(id) {
+      gekopieerd.push(id);
+      if (id === "2") throw new Error("geen beeld");
+      return `https://cdn.example/stukken/${id}.jpg`;
+    },
+  });
+  const beeld = tools.find((t) => t.name === "meta_creative_beelden")!;
+  assert.equal(beeld.geenBron, true);
+  const tekst = await beeld.run({ advertentie_ids: ["1", "2"] });
+  assert.match(tekst, /1: https:\/\/cdn\.example\/stukken\/1\.jpg/);
+  assert.match(tekst, /2: geen beeld/);
+  await beeld.run({ advertentie_ids: ["1"] });
+  assert.deepEqual(gekopieerd, ["1", "2"]);
+  await assert.rejects(beeld.run({ advertentie_ids: ["2"] }), ToolFout);
+});
+
+test("zonder beeldVoorStuk geen beeldtool", () => {
+  const tools = creativeTools({ haal: async () => new Map(), onGetoond: () => undefined });
+  assert.deepEqual(tools.map((t) => t.name), ["meta_creatives_tonen"]);
+});
+
+test("eerdere kaarten als context voor het model", () => {
+  const c = (adId: string, naam: string): AssistentCreative => ({ platform: "meta", adId, naam, campagne: "Guus", details });
+  assert.equal(eerdereCreativesContext([{}, { creatives: [] }]), null);
+  const tekst = eerdereCreativesContext([{ creatives: [c("11", "Snack | 3")] }, { creatives: [c("12", "Tess"), c("11", "Snack | 3")] }])!;
+  assert.match(tekst, /- 11: Snack \| 3, campagne Guus\n- 12: Tess/);
 });

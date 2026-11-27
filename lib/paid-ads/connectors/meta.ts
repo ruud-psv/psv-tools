@@ -823,6 +823,19 @@ function failureMessage(error: unknown, signal?: AbortSignal): string {
 
 /* ------------------------------------------------------- creatives -- */
 
+/** Alleen bestanden van Meta zelf (fbcdn of facebook.com) ophalen of doorgeven. */
+export function isMetaCdnUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return (
+      protocol === "https:" &&
+      (hostname.endsWith(".fbcdn.net") || hostname === "facebook.com" || hostname.endsWith(".facebook.com"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Graph-ID's zijn cijfers; alles anders hoort niet in een URL-pad naar Meta. */
 export function isMetaId(value: string): boolean {
   return /^\d{1,30}$/.test(value);

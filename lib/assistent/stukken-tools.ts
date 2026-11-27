@@ -28,11 +28,12 @@ const OPMAAK_SCHEMA = {
 const BLOK_SCHEMA = {
   type: "object",
   description:
-    "Eén blok. Velden per type: kop {tekst}; tekst {tekst, met **vet** en regels die met \"- \" beginnen}; kerngetallen {items: [{label, waarde, toelichting?}] (1-6), bron}; tabel {titel?, kolommen (1-8), rijen (lijsten met evenveel cellen als kolommen, hooguit 40), bron}; grafiek {titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden (getallen, evenveel als labels)}] (1-4), eenheid?, bron}; conclusie {punten (1-6)}; afbeelding {wens: wat er op de foto moet, bijvoorbeeld \"Een vol Philips Stadion bij avond\", bijschrift?, alt?}: een lege plek waar de collega een foto in zet; geef nooit een url. bron is verplicht bij kerngetallen, tabel en grafiek: de bron en de periode, bijvoorbeeld \"Google Analytics psv.nl, 1 t/m 30 oktober 2026\". Elk blok kan opmaak hebben.",
+    "Eén blok. Velden per type: kop {tekst}; tekst {tekst, met **vet** en regels die met \"- \" beginnen}; kerngetallen {items: [{label, waarde, toelichting?}] (1-6), bron}; tabel {titel?, kolommen (1-8), rijen (lijsten met evenveel cellen als kolommen, hooguit 40), bron}; grafiek {titel, soort: lijn|staaf, labels, reeksen: [{naam, waarden (getallen, evenveel als labels)}] (1-4), eenheid?, bron}; conclusie {punten (1-6)}; afbeelding {wens: wat er op de foto moet, bijvoorbeeld \"Een vol Philips Stadion bij avond\", bijschrift?, alt?, url?}: zonder url een lege plek waar de collega een foto in zet. Geef alleen een url die je van meta_creative_beelden kreeg; verzin nooit een url. bron is verplicht bij kerngetallen, tabel en grafiek: de bron en de periode, bijvoorbeeld \"Google Analytics psv.nl, 1 t/m 30 oktober 2026\". Elk blok kan opmaak hebben.",
   properties: {
     opmaak: OPMAAK_SCHEMA,
     type: { type: "string", enum: ["kop", "tekst", "kerngetallen", "tabel", "grafiek", "conclusie", "afbeelding"] },
     wens: { type: "string" },
+    url: { type: "string" },
     bijschrift: { type: "string" },
     alt: { type: "string" },
     tekst: { type: "string" },
@@ -74,14 +75,14 @@ const TITELBEELD_SCHEMA = {
 const SLIDE_SCHEMA = {
   type: "object",
   description:
-    'Eén slide in het PowerPoint-template van PSV. layout bepaalt de vorm en welke velden er staan: welkom {titel, subkop?} (opening); hoofdstuk {titel, subkop?} (begin van een onderdeel); tekst {titel, subkop?, tekst, foto?}; tekst-2 {titel, subkop?, tekst, tekst2, foto?}; beeld {titel, subkop?, tekst, foto, vlak?} (tekst links, foto rechts); speciaal {titel, tekst?, foto} (foto groot met rode schuine vorm, tekst in een wit vak); quote {quote, naam?, foto?}; foto {foto} (alleen een foto); grafiek {titel, subkop?, tekst (2-3 punten uitleg), grafiek, nadruk?, foto?}; tabel {titel, subkop?, tekst, tabel, nadruk?, foto?}; cijfers {titel, kerngetallen, nadruk?, foto?}; rood / zwart {titel, tekst?}; afsluiting {}. titel staat wit op een zwart blok en moet op één regel passen: kort, een stelling. tekst: "- " voor een opsomming, **vet**. foto: {wens} met wat erop moet; de collega kiest de foto (geef nooit een url). Tekst, tekst-2, beeld, grafiek, tabel en cijfers hebben rechts de schuine vorm uit het template: met foto staat de foto erin, anders is hij grijs. vlak: waar die vorm begint, in px van 1280 (207 breed, 574 half, 939 smal; zonder: de plek uit het template). grafiek, tabel en kerngetallen: dezelfde velden als bij de blokken, met bron.',
+    'Eén slide in het PowerPoint-template van PSV. layout bepaalt de vorm en welke velden er staan: welkom {titel, subkop?} (opening); hoofdstuk {titel, subkop?} (begin van een onderdeel); tekst {titel, subkop?, tekst, foto?}; tekst-2 {titel, subkop?, tekst, tekst2, foto?}; beeld {titel, subkop?, tekst, foto, vlak?} (tekst links, foto rechts); speciaal {titel, tekst?, foto} (foto groot met rode schuine vorm, tekst in een wit vak); quote {quote, naam?, foto?}; foto {foto} (alleen een foto); grafiek {titel, subkop?, tekst (2-3 punten uitleg), grafiek, nadruk?, foto?}; tabel {titel, subkop?, tekst, tabel, nadruk?, foto?}; cijfers {titel, kerngetallen, nadruk?, foto?}; rood / zwart {titel, tekst?}; afsluiting {}. titel staat wit op een zwart blok en moet op één regel passen: kort, een stelling. tekst: "- " voor een opsomming, **vet**. foto: {wens} met wat erop moet; de collega kiest de foto. Alleen voor het beeld van een Meta-advertentie geef je {wens, url} met de url van meta_creative_beelden; verzin nooit een url. Tekst, tekst-2, beeld, grafiek, tabel en cijfers hebben rechts de schuine vorm uit het template: met foto staat de foto erin, anders is hij grijs. vlak: waar die vorm begint, in px van 1280 (207 breed, 574 half, 939 smal; zonder: de plek uit het template). grafiek, tabel en kerngetallen: dezelfde velden als bij de blokken, met bron.',
   properties: {
     layout: { type: "string", enum: ["welkom", "hoofdstuk", "tekst", "tekst-2", "beeld", "speciaal", "quote", "foto", "grafiek", "tabel", "cijfers", "rood", "zwart", "afsluiting"] },
     titel: { type: "string" },
     subkop: { type: "string" },
     tekst: { type: "string" },
     tekst2: { type: "string" },
-    foto: { type: "object", properties: { wens: { type: "string" } } },
+    foto: { type: "object", properties: { wens: { type: "string" }, url: { type: "string" } } },
     vlak: { type: "integer", minimum: 100, maximum: 1150 },
     quote: { type: "string" },
     naam: { type: "string" },

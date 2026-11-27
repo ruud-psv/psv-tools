@@ -7,7 +7,8 @@ import { alsChatTool, ToolFout, toolsVoor, type ChatTool } from "@/lib/assistent
 import { ASSISTENT_TOOLS } from "@/lib/assistent/tools";
 import { mcpToolsVoor } from "@/lib/mcp/assistent";
 import { stukTools } from "@/lib/assistent/stukken-tools";
-import { creativeTools, MAX_CREATIVES, type AssistentCreative } from "@/lib/assistent/creative-tools";
+import { creativeTools, eerdereCreativesContext, MAX_CREATIVES, type AssistentCreative } from "@/lib/assistent/creative-tools";
+import { creativeBeeldVoorStuk } from "@/lib/stukken/creative-beeld";
 import { fetchMetaAdCreatives, isMetaConfigured } from "@/lib/paid-ads/connectors/meta";
 import { maakTitel } from "@/lib/assistent/titel";
 import { inhoudVan, samenvatting, type Stuk } from "@/lib/stukken/model";
@@ -64,6 +65,7 @@ Een stuk maken: vraagt de collega om een rapport, een one-pager, een presentatie
 - Rapport: met kopjes per onderdeel. Een one-pager is een kort rapport: hooguit 8 blokken, begin met kerngetallen en een conclusie, en zet tekst en conclusie met grootte "half" naast elkaar.
 - Deck: maak slides in het PowerPoint-template van PSV (soort "deck" met slides). Begin met welkom, gebruik hoofdstuk voor elk onderdeel en eindig met afsluiting. Eén boodschap per slide; de titel is een korte stelling die op één regel past ("Nog 312 stoelen te koop", niet "Aanbod per dag"). Cijfers op een grafiek-, tabel- of cijfersslide, met in tekst twee of drie punten uitleg. Wissel af met beeld (tekst met een foto rechts, varieer fotoBreedte), speciaal, quote of foto, zodat het deck levendig blijft: hooguit twee tekstslides achter elkaar. Hooguit 12 slides. Een bestaand rapport omzetten: soort "deck" in stuk_bijwerken maakt de slides uit de blokken; stel ze daarna bij met slide_wijzigen.
 - Vraagt de collega iets aan een slide ("slide 4", "de grafiekslide"), gebruik dan het slide-id uit de lijst van het stuk.
+- Meta-advertenties in een stuk: zijn er in dit gesprek advertenties besproken of als kaart getoond (de beste, een vergelijking), zet hun beeld dan in het stuk. Haal met meta_creative_beelden per advertentie een url op en gebruik die als url van een afbeelding-blok (rapport) of van de foto van een beeld-, speciaal- of fotoslide (deck), met in het bijschrift of de tekst de naam, de kerncijfers en de kern van de copy. Een video staat er als stilstaand beeld in. Dit is de enige url die je mag geven.
 - Foto's: je kunt zelf geen foto kiezen of maken, maar je zet wel altijd plekken voor foto's neer, met een korte wens van wat erop moet in woorden die in de beeldbank voorkomen (spelersnaam, wedstrijd, tribune, supporters, Philips Stadion). De collega kiest de foto in FileFlow of uploadt er een. Een deck krijgt altijd foto's: minstens een derde van de inhoudslides, via een beeld-, speciaal-, quote- of fotoslide, of een foto in het vlak rechts van een tekst-, grafiek-, tabel- of cijfersslide (foto {wens}). Een rapport krijgt een titelbeeld {wens} en waar het past een blok afbeelding. Zeg in je antwoord dat er foto's klaarstaan om te kiezen. Verzin nooit een url.
 - Vorm: vraagt de collega om iets groter, kleiner, op een andere kleur, naast elkaar of uitgelicht, gebruik dan de actie "opmaken" en laat de inhoud staan. Gebruik nadruk om de belangrijkste reeks, rij of het belangrijkste kerngetal te laten opvallen. Rood en zwart zijn voor nadruk, niet voor elk blok.
 - Schrijf zoals in de chat: kort, Nederlands, zonder em-dash. Bedragen als "€ 374.610", percentages als "12,4%".
@@ -187,9 +189,16 @@ export async function POST(req: NextRequest) {
       ? creativeTools({
           haal: (ids) => fetchMetaAdCreatives(ids, afgebroken.signal),
           onGetoond: (creatives) => meldCreatives(creatives),
+          beeldVoorStuk: creativeBeeldVoorStuk,
         })
       : []),
   ];
+  // De advertenties die eerder als kaart zijn getoond, zodat het model ze in een stuk kan zetten.
+  const creativesContext = metCreatives
+    ? await getGesprek(auth.email, gesprekId)
+        .then((g) => eerdereCreativesContext(g?.berichten ?? []))
+        .catch(() => null)
+    : null;
   const stukContext = huidigStuk
     ? `Er is al een stuk bij dit gesprek. ${samenvatting(huidigStuk)}\nDe volledige inhoud: ${JSON.stringify(inhoudVan(huidigStuk)).slice(0, 40_000)}`
     : null;
@@ -242,6 +251,7 @@ export async function POST(req: NextRequest) {
               { type: "text", text: INSTRUCTIES, cache_control: { type: "ephemeral" } },
               { type: "text", text: `Vandaag is het ${todayInAmsterdam()}.` },
               ...(stukContext ? [{ type: "text" as const, text: stukContext }] : []),
+              ...(creativesContext ? [{ type: "text" as const, text: creativesContext }] : []),
             ],
             tools: toolParams(tools),
             messages,

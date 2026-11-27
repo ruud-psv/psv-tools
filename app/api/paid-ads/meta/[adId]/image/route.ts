@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
-import { fetchMetaCreativeImageUrls, isMetaId } from "@/lib/paid-ads/connectors/meta";
+import { fetchMetaCreativeImageUrls, isMetaCdnUrl, isMetaId } from "@/lib/paid-ads/connectors/meta";
 
 /**
  * De afbeelding van één Meta-advertentie, via de server. De URL's van Meta
@@ -9,19 +9,6 @@ import { fetchMetaCreativeImageUrls, isMetaId } from "@/lib/paid-ads/connectors/
  */
 
 export const dynamic = "force-dynamic";
-
-/** Alleen afbeeldingen van Meta zelf doorgeven. */
-function isMetaImageHost(url: string): boolean {
-  try {
-    const { protocol, hostname } = new URL(url);
-    return (
-      protocol === "https:" &&
-      (hostname.endsWith(".fbcdn.net") || hostname === "facebook.com" || hostname.endsWith(".facebook.com"))
-    );
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ adId: string }> }) {
   const session = requireEmail(req);
@@ -40,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ adId
     return NextResponse.json({ error: "Afbeelding niet opgehaald bij Meta." }, { status: 502 });
   }
 
-  for (const url of urls.filter(isMetaImageHost)) {
+  for (const url of urls.filter(isMetaCdnUrl)) {
     try {
       const res = await fetch(url, { cache: "no-store" });
       const type = res.headers.get("content-type") ?? "";

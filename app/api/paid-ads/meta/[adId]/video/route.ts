@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireEmail } from "@/lib/api-session";
-import { fetchMetaVideo, isMetaId } from "@/lib/paid-ads/connectors/meta";
+import { fetchMetaVideo, isMetaCdnUrl, isMetaId } from "@/lib/paid-ads/connectors/meta";
 
 /**
  * De video van een Meta-advertentie. `?n=` kiest de video (vanaf 0) bij een
@@ -13,19 +13,6 @@ import { fetchMetaVideo, isMetaId } from "@/lib/paid-ads/connectors/meta";
  */
 
 export const dynamic = "force-dynamic";
-
-/** Alleen doorsturen naar Meta zelf. */
-function isMetaVideoHost(url: string): boolean {
-  try {
-    const { protocol, hostname } = new URL(url);
-    return (
-      protocol === "https:" &&
-      (hostname.endsWith(".fbcdn.net") || hostname === "facebook.com" || hostname.endsWith(".facebook.com"))
-    );
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ adId: string }> }) {
   const session = requireEmail(req);
@@ -45,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ adId
     console.error(`[paid-ads] meta video ${n} van advertentie ${adId} niet opgehaald`, error);
     return NextResponse.json({ error: "Video niet opgehaald bij Meta." }, { status: 502 });
   }
-  if (!video || !isMetaVideoHost(video.source)) {
+  if (!video || !isMetaCdnUrl(video.source)) {
     return NextResponse.json(
       {
         error:
