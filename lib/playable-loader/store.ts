@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { get, list, put } from "@vercel/blob";
 import { bundlePath, type PageSource } from "./bundle";
+import { PAGES_MAP, leesCampagneMappen } from "./bunny";
 
 /**
  * Opslag van de Playable loader. De bundel gaat naar Bunny (daar laadt
@@ -82,6 +83,37 @@ export async function purgeBundle(url: string): Promise<boolean> {
     throw new Error(`Cache van Bunny legen mislukt (${res.status}): ${text.slice(0, 200)}`);
   }
   return true;
+}
+
+/**
+ * De campagnes die volgens het stramien op Bunny staan: met een map
+ * `playable/pages/<campagne-ID>`. Alleen die zijn te openen in de Playable
+ * loader. De opslag-API van Bunny geeft de lijst zonder cache.
+ */
+export async function campagnesOpBunny(): Promise<number[]> {
+  const { zone, key, host } = bunnyConfig();
+  const res = await fetch(`https://${host}/${zone}/${PAGES_MAP}/`, {
+    headers: { AccessKey: key, Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`Bunny gaf de lijst met campagnes niet (${res.status}).`);
+  return leesCampagneMappen(await res.json());
+}
+
+/** Zet een geüpload bestand op Bunny (zie `editorPad`) en geeft het CDN-adres terug. */
+export async function uploadEditorBestand(pad: string, type: string, data: ArrayBuffer): Promise<string> {
+  const { zone, key, cdn, host } = bunnyConfig();
+  const res = await fetch(`https://${host}/${zone}/${pad}`, {
+    method: "PUT",
+    headers: { AccessKey: key, "Content-Type": type },
+    body: data,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Uploaden naar Bunny mislukt (${res.status}): ${text.slice(0, 200)}`);
+  }
+  return `${cdn}/${pad}`;
 }
 
 export async function readPublished(campaignId: number): Promise<PublishedPage | null> {

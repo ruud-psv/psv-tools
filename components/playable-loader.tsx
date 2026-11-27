@@ -10,6 +10,8 @@ import {
   FolderOpen,
   Loader2,
   MousePointerClick,
+  Paperclip,
+  Pencil,
   RefreshCw,
   Send,
   Undo2,
@@ -24,7 +26,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlayableLoaderPreview, type PreviewHandle } from "@/components/playable-loader-preview";
 import { StappenBalk, type Stap, type StapId } from "@/components/playable-loader-steps";
-import { zonderKit, type PageSource } from "@/lib/playable-loader/bundle";
+import { uploadNaarBunny } from "@/components/playable-loader-bewerken";
+import { parseCampaignId, zonderKit, type PageSource } from "@/lib/playable-loader/bundle";
+import { EDITOR_MAP, PAGES_MAP, UPLOAD_ACCEPT, isAfbeelding, type BunnyCampagne } from "@/lib/playable-loader/bunny";
 import type { PlayableCampaign } from "@/lib/playable-loader/playable";
 import { selectieNotitie, type Aanwijzing, type Selectie } from "@/lib/playable-loader/selectie";
 import type { BundleStatus } from "@/lib/playable-loader/status";
@@ -33,10 +37,14 @@ import { cn } from "@/lib/utils";
 
 /**
  * Playable loader (beta), in stappen zoals een flow in Maileon:
- * 1. Campagne: ID invullen of een recente kiezen; PSV Tools controleert of
- *    Playable de campagne kent en of Bunny de laatste versie geeft.
+ * 1. Campagne: ID invullen of een campagne kiezen. Alleen campagnes die
+ *    volgens het stramien op Bunny staan (een map `playable/pages/<ID>`) zijn
+ *    te openen. PSV Tools controleert of Playable de campagne kent en of
+ *    Bunny de laatste versie geeft.
  * 2. Aanpassen: met Claude, naast een voorbeeld van het concept. In het
- *    voorbeeld kun je een onderdeel aanwijzen; dat gaat mee met de vraag.
+ *    voorbeeld kun je een onderdeel aanwijzen (dat gaat mee met de vraag) of
+ *    zelf bewerken: tekst, foto, link, verplaatsen. Bestanden voor de pagina
+ *    gaan naar Bunny, in `playable/editor`.
  * 3. Publiceren: het concept live zetten.
  * 4. Code: de HTML, CSS en JS zelf, en het vaste stukje voor Playable.
  */
@@ -66,6 +74,8 @@ interface ChatBericht {
   selectie?: Selectie;
   wijzigingen?: Wijziging[];
   fout?: boolean;
+  /** Een eigen wijziging in het voorbeeld; gaat niet mee naar Claude. */
+  eigen?: boolean;
 }
 
 const FIELDS: { key: keyof PageSource; label: string; rows: number }[] = [
@@ -286,6 +296,8 @@ export function PlayableLoader() {
   const [source, setSource] = useState<PageSource>({ html: "", css: "", js: "" });
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentCampaign[] | null>(null);
+  const [opBunny, setOpBunny] = useState<BunnyCampagne[] | null>(null);
+  const [opBunnyFout, setOpBunnyFout] = useState<string | null>(null);
 
   const [publishing, setPublishing] = useState(false);
   const [justPublished, setJustPublished] = useState<PublishedPage | null>(null);
@@ -296,6 +308,12 @@ export function PlayableLoader() {
   const [bezig, setBezig] = useState(false);
   const [geschiedenis, setGeschiedenis] = useState<PageSource[]>([]);
   const [aanwijzing, setAanwijzing] = useState<Aanwijzing | null>(null);
+  const [upload, setUpload] = useState<{ bezig: boolean; fout: string | null; klaar: string | null }>({
+    bezig: false,
+    fout: null,
+    klaar: null,
+  });
+  const bestandVeld = useRef<HTMLInputElement>(null);
   const chatEinde = useRef<HTMLDivElement>(null);
   const voorbeeld = useRef<PreviewHandle>(null);
   const vraagVeld = useRef<HTMLTextAreaElement>(null);
@@ -313,10 +331,23 @@ export function PlayableLoader() {
     }
   }
 
-  // Bij openen: de recente campagnes, en een campagne uit de adresbalk
+  /** De campagnes die volgens het stramien op Bunny staan: alleen die zijn te openen. */
+  async function laadOpBunny() {
+    try {
+      const res = await json<{ campagnes: BunnyCampagne[] }>(await fetch("/api/playable-loader/campagnes"));
+      setOpBunny(res.campagnes);
+      setOpBunnyFout(null);
+    } catch (err) {
+      setOpBunny(null);
+      setOpBunnyFout(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Bij openen: de campagnes, en een campagne uit de adresbalk
   // (zo blijft hij open na verversen).
   useEffect(() => {
     laadRecent();
+    laadOpBunny();
     const uitAdres = new URLSearchParams(window.location.search).get("campagne");
     if (uitAdres) openCampagne(uitAdres);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -338,6 +369,7 @@ export function PlayableLoader() {
       setChat([]);
       setGeschiedenis([]);
       setAanwijzing(null);
+      setUpload({ bezig: false, fout: null, klaar: null });
       setStap("aanpassen");
       window.history.replaceState(null, "", `?campagne=${loaded.campaignId}`);
     } catch (err) {
@@ -357,6 +389,7 @@ export function PlayableLoader() {
     const nieuw: ChatBericht[] = [...chat, { rol: "gebruiker", tekst: tekst.trim(), selectie }];
     setChat(nieuw);
     setVraag("");
+    setUpload((u) => ({ ...u, fout: null, klaar: null }));
     setBezig(true);
     try {
       const res = await json<{ antwoord: string; bron: PageSource | null; wijzigingen: Wijziging[] }>(
@@ -365,11 +398,12 @@ export function PlayableLoader() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             campaignId: data.campaignId,
-            // Foutmeldingen horen niet bij het gesprek met Claude. Bij eerdere
-            // vragen staat kort wat er toen was aangewezen; het hele onderdeel
-            // gaat alleen mee met de nieuwe vraag.
+            // Foutmeldingen en eigen wijzigingen horen niet bij het gesprek met
+            // Claude (de code krijgt hij toch). Bij eerdere vragen staat kort
+            // wat er toen was aangewezen; het hele onderdeel gaat alleen mee
+            // met de nieuwe vraag.
             berichten: nieuw
-              .filter((b) => !b.fout)
+              .filter((b) => !b.fout && !b.eigen)
               .map(({ rol, tekst, selectie: s }, i, alle) => ({
                 rol,
                 tekst: s && i < alle.length - 1 ? `${tekst}\n\n${selectieNotitie(s)}` : tekst,
@@ -396,6 +430,30 @@ export function PlayableLoader() {
     setAanwijzing(null);
   }
 
+  /** Een wijziging die de collega zelf in het voorbeeld deed. */
+  function eigenWijziging(nieuw: PageSource, omschrijving: string) {
+    setGeschiedenis((g) => [...g, source]);
+    setSource(nieuw);
+    setChat((c) => [...c, { rol: "assistent", tekst: omschrijving, eigen: true }]);
+  }
+
+  /** Een bestand naar Bunny; het adres komt in de vraag, zodat Claude het kan gebruiken. */
+  async function uploadBestand(bestand: File | undefined) {
+    if (!data || !bestand) return;
+    setUpload({ bezig: true, fout: null, klaar: null });
+    try {
+      const { url, naam } = await uploadNaarBunny(data.campaignId, bestand);
+      const regel = `${isAfbeelding(bestand.name) ? "Foto" : "Bestand"}: ${url}`;
+      setVraag((v) => (v.trim() ? `${v.trimEnd()}\n${regel}` : `${regel}\n`));
+      setUpload({ bezig: false, fout: null, klaar: naam });
+      vraagVeld.current?.focus({ preventScroll: true });
+    } catch (err) {
+      setUpload({ bezig: false, fout: err instanceof Error ? err.message : String(err), klaar: null });
+    } finally {
+      if (bestandVeld.current) bestandVeld.current.value = "";
+    }
+  }
+
   function ongedaan() {
     const vorige = geschiedenis[geschiedenis.length - 1];
     if (!vorige) return;
@@ -420,6 +478,7 @@ export function PlayableLoader() {
       setJustPublished(res.published);
       setData({ ...data, published: res.published, loader: res.loader, bundleStatus: res.bundleStatus });
       laadRecent();
+      laadOpBunny();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -446,6 +505,12 @@ export function PlayableLoader() {
       setCacheBezig(false);
     }
   }
+
+  const toegestaan = opBunny ? new Set(opBunny.map((c) => c.campaignId)) : null;
+  const getyptId = parseCampaignId(campaign);
+  const idGeblokkeerd = toegestaan !== null && getyptId !== null && !toegestaan.has(getyptId);
+  const recentIds = new Set((recent ?? []).map((r) => r.campaignId));
+  const andereOpBunny = (opBunny ?? []).filter((c) => !recentIds.has(c.campaignId));
 
   const published = data?.published ?? null;
   const conceptAfwijkend = !!data && (!published || !zelfde(source, published.source));
@@ -528,7 +593,7 @@ export function PlayableLoader() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              openCampagne(campaign);
+              if (!idGeblokkeerd) openCampagne(campaign);
             }}
           >
             <label htmlFor="loader-campaign" className="form-label">
@@ -543,16 +608,29 @@ export function PlayableLoader() {
                 inputMode="numeric"
                 autoComplete="off"
                 disabled={loading}
+                aria-invalid={idGeblokkeerd || undefined}
+                aria-describedby="loader-campaign-hint"
               />
-              <Button type="submit" disabled={loading || campaign.trim() === ""} className="shrink-0">
+              <Button
+                type="submit"
+                disabled={loading || campaign.trim() === "" || idGeblokkeerd}
+                className="shrink-0"
+              >
                 {loading ? <Loader2 className="animate-spin" /> : <FolderOpen />}
                 Openen
               </Button>
             </div>
-            <p className="form-hint">
-              Het ID staat in Playable in de adresbalk en in Landingspagina&apos;s. PSV Tools controleert of
-              Playable de campagne kent en welke versie de demo krijgt.
-            </p>
+            {idGeblokkeerd ? (
+              <p id="loader-campaign-hint" className="form-error">
+                Campagne {getyptId} staat niet op Bunny volgens het stramien: er is geen map {PAGES_MAP}/{getyptId}.
+                Alleen de campagnes hieronder kun je openen.
+              </p>
+            ) : (
+              <p id="loader-campaign-hint" className="form-hint">
+                Alleen campagnes die volgens het stramien op Bunny staan (een map {PAGES_MAP}/&lt;ID&gt;) kun je
+                openen. PSV Tools controleert dan of Playable de campagne kent en welke versie de demo krijgt.
+              </p>
+            )}
           </form>
 
           <div>
@@ -567,26 +645,92 @@ export function PlayableLoader() {
               </p>
             ) : (
               <ul className="divide-y divide-border border-y border-border">
-                {recent.map((r) => (
-                  <li key={r.campaignId}>
+                {recent.map((r) => {
+                  const nietOpBunny = toegestaan !== null && !toegestaan.has(r.campaignId);
+                  return (
+                    <li key={r.campaignId}>
+                      <button
+                        type="button"
+                        onClick={() => openCampagne(String(r.campaignId))}
+                        disabled={loading || nietOpBunny}
+                        title={nietOpBunny ? `Er is geen map ${PAGES_MAP}/${r.campaignId} op Bunny` : undefined}
+                        className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 py-3 text-left text-sm transition-colors enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span>
+                          <span className="font-mono text-muted-foreground">{r.campaignId}</span>
+                          <span className="ml-3 font-semibold">{r.campaignName ?? "Naam onbekend"}</span>
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {nietOpBunny ? "Niet op Bunny" : `Door jou gepubliceerd ${formatDate(r.publishedAt)}`}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="form-label !mb-0">
+                {recent && recent.length > 0 ? "Andere campagnes op Bunny" : "Campagnes op Bunny"}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOpBunny(null);
+                  setOpBunnyFout(null);
+                  laadOpBunny();
+                }}
+                disabled={opBunny === null && !opBunnyFout}
+                title="De lijst opnieuw ophalen van Bunny"
+              >
+                <RefreshCw />
+                Vernieuwen
+              </Button>
+            </div>
+            {opBunnyFout ? (
+              <p className="text-sm text-warning">
+                {opBunnyFout} Typ het ID hierboven; PSV Tools controleert het bij het openen.
+              </p>
+            ) : opBunny === null ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Laden…
+              </p>
+            ) : andereOpBunny.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {opBunny.length === 0 ? "Er staan nog geen campagnes op Bunny." : "Geen andere campagnes."}
+              </p>
+            ) : (
+              <ul className="divide-y divide-border border-y border-border">
+                {andereOpBunny.map((c) => (
+                  <li key={c.campaignId}>
                     <button
                       type="button"
-                      onClick={() => openCampagne(String(r.campaignId))}
+                      onClick={() => openCampagne(String(c.campaignId))}
                       disabled={loading}
                       className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 py-3 text-left text-sm transition-colors hover:bg-muted"
                     >
                       <span>
-                        <span className="font-mono text-muted-foreground">{r.campaignId}</span>
-                        <span className="ml-3 font-semibold">{r.campaignName ?? "Naam onbekend"}</span>
+                        <span className="font-mono text-muted-foreground">{c.campaignId}</span>
+                        <span className="ml-3 font-semibold">{c.campaignName ?? "Naam onbekend"}</span>
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Door jou gepubliceerd {formatDate(r.publishedAt)}
+                        {c.publishedAt
+                          ? `Gepubliceerd ${formatDate(c.publishedAt)} door ${c.doorJou ? "jou" : c.publishedByName}`
+                          : "Nog niet gepubliceerd vanuit PSV Tools"}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
             )}
+            <p className="form-hint">
+              Staat een campagne er niet bij? Maak dan in Bunny de map {PAGES_MAP}/&lt;campagne-ID&gt; aan.
+            </p>
           </div>
         </Card>
       )}
@@ -620,28 +764,35 @@ export function PlayableLoader() {
                   ))}
                 </div>
               )}
-              {chat.map((b, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "max-w-[90%] px-3 py-2 text-sm whitespace-pre-wrap",
-                    b.rol === "gebruiker"
-                      ? "ml-auto bg-primary text-primary-foreground"
-                      : b.fout
-                        ? "alert alert--error !mb-0"
-                        : "border border-border bg-muted"
-                  )}
-                >
-                  {b.tekst}
-                  {b.selectie && (
-                    <span className="mt-1 flex items-center gap-1 text-xs opacity-80">
-                      <MousePointerClick className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      <span className="truncate font-mono">{b.selectie.pad.split(" > ").pop()}</span>
-                    </span>
-                  )}
-                  {b.wijzigingen && b.wijzigingen.length > 0 && <WijzigingenLijst wijzigingen={b.wijzigingen} />}
-                </div>
-              ))}
+              {chat.map((b, i) =>
+                b.eigen ? (
+                  <p key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <Pencil className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="break-words">{b.tekst}</span>
+                  </p>
+                ) : (
+                  <div
+                    key={i}
+                    className={cn(
+                      "max-w-[90%] px-3 py-2 text-sm whitespace-pre-wrap",
+                      b.rol === "gebruiker"
+                        ? "ml-auto bg-primary text-primary-foreground"
+                        : b.fout
+                          ? "alert alert--error !mb-0"
+                          : "border border-border bg-muted"
+                    )}
+                  >
+                    {b.tekst}
+                    {b.selectie && (
+                      <span className="mt-1 flex items-center gap-1 text-xs opacity-80">
+                        <MousePointerClick className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        <span className="truncate font-mono">{b.selectie.pad.split(" > ").pop()}</span>
+                      </span>
+                    )}
+                    {b.wijzigingen && b.wijzigingen.length > 0 && <WijzigingenLijst wijzigingen={b.wijzigingen} />}
+                  </div>
+                )
+              )}
               {bezig && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -665,9 +816,10 @@ export function PlayableLoader() {
                   onWis={wisAanwijzing}
                 />
               ) : (
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MousePointerClick className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  Tip: met Aanwijzen klik je in het voorbeeld aan waar je vraag over gaat.
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <MousePointerClick className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Tip: met Aanwijzen klik je in het voorbeeld aan waar je vraag over gaat. Met Bewerken pas je zelf een
+                  tekst, foto of link aan.
                 </p>
               )}
               <Textarea
@@ -689,17 +841,44 @@ export function PlayableLoader() {
                 disabled={bezig}
                 aria-label="Wat moet er anders?"
               />
+              {upload.fout && <p className="form-error !mt-0">{upload.fout}</p>}
+              {upload.klaar && (
+                <p className="form-hint !mt-0" role="status">
+                  {upload.klaar} staat op Bunny in {EDITOR_MAP}; het adres staat in je vraag.
+                </p>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={ongedaan}
-                  disabled={bezig || geschiedenis.length === 0}
-                >
-                  <Undo2 />
-                  Ongedaan maken
-                </Button>
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={ongedaan}
+                    disabled={bezig || geschiedenis.length === 0}
+                  >
+                    <Undo2 />
+                    Ongedaan maken
+                  </Button>
+                  <input
+                    ref={bestandVeld}
+                    type="file"
+                    accept={UPLOAD_ACCEPT}
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(e) => uploadBestand(e.target.files?.[0])}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => bestandVeld.current?.click()}
+                    disabled={upload.bezig}
+                    title={`Een foto of bestand op Bunny zetten (${EDITOR_MAP}), hooguit 4 MB`}
+                  >
+                    {upload.bezig ? <Loader2 className="animate-spin" /> : <Paperclip />}
+                    Bestand
+                  </Button>
+                </div>
                 <Button type="submit" disabled={bezig || !vraag.trim()}>
                   {bezig ? <Loader2 className="animate-spin" /> : <Send />}
                   Versturen
@@ -724,6 +903,10 @@ export function PlayableLoader() {
             <PlayableLoaderPreview
               ref={voorbeeld}
               bron={source}
+              campaignId={data.campaignId}
+              onBewerking={eigenWijziging}
+              onOngedaan={ongedaan}
+              kanOngedaan={!bezig && geschiedenis.length > 0}
               aanwijzing={aanwijzing}
               onAanwijzing={(a, klik) => {
                 setAanwijzing(a);
@@ -756,7 +939,7 @@ export function PlayableLoader() {
             {geschiedenis.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 In dit concept: {geschiedenis.length === 1 ? "1 wijziging" : `${geschiedenis.length} wijzigingen`} via
-                de chat.
+                de chat of zelf in het voorbeeld.
               </p>
             )}
           </div>

@@ -10,9 +10,11 @@ import {
 import { KIT_VERSIE, STARTER_HTML } from "@/lib/playable-loader/kit";
 import { lookupCampaign } from "@/lib/playable-loader/playable";
 import { checkBundle } from "@/lib/playable-loader/status";
+import { PAGES_MAP } from "@/lib/playable-loader/bunny";
 import {
   BunnyConfigError,
   bundleUrl,
+  campagnesOpBunny,
   purgeBundle,
   readPublished,
   rememberPublished,
@@ -39,6 +41,34 @@ function configError(err: unknown) {
 }
 
 /**
+ * Alleen campagnes die volgens het stramien op Bunny staan (een map
+ * `playable/pages/<ID>`), zijn te openen en te publiceren. Geeft de fout, of
+ * null als het mag.
+ */
+async function nietOpBunny(campaignId: number): Promise<NextResponse | null> {
+  let ids: number[];
+  try {
+    ids = await campagnesOpBunny();
+  } catch (err) {
+    if (err instanceof BunnyConfigError) throw err;
+    console.error("[playable-loader] Bunny controleren mislukt:", err);
+    return NextResponse.json(
+      { error: "Bunny kon niet worden gecontroleerd. Probeer het zo opnieuw." },
+      { status: 502 }
+    );
+  }
+  if (ids.includes(campaignId)) return null;
+  return NextResponse.json(
+    {
+      error:
+        `Campagne ${campaignId} staat niet op Bunny volgens het stramien (geen map ${PAGES_MAP}/${campaignId}). ` +
+        "Alleen zulke campagnes kun je hier openen.",
+    },
+    { status: 403 }
+  );
+}
+
+/**
  * Een campagne openen: de huidige bron (of de startpagina van de kit), het
  * stukje code voor Playable, en de controle: bestaat de campagne in Playable,
  * en geeft Bunny dezelfde versie als PSV Tools.
@@ -52,6 +82,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = bundleUrl(campaignId);
+    const geweigerd = await nietOpBunny(campaignId);
+    if (geweigerd) return geweigerd;
     const [published, lookup] = await Promise.all([readPublished(campaignId), lookupCampaign(campaignId)]);
     // Een tikfout in het ID wil je meteen zien; staat er al een pagina in PSV
     // Tools, dan mag hij open, ook als Playable hem niet (meer) kent.
@@ -98,6 +130,8 @@ export async function POST(req: NextRequest) {
   };
 
   try {
+    const geweigerd = await nietOpBunny(campaignId);
+    if (geweigerd) return geweigerd;
     const page = preparePage(source);
     const publishedAt = new Date().toISOString();
     const bundle = buildBundle(page, { campaignId, publishedAt });

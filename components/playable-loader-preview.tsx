@@ -6,12 +6,33 @@ import {
   Minimize2,
   Monitor,
   MousePointerClick,
+  Pencil,
   Smartphone,
   Tablet,
+  Undo2,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BewerkBalk, FotoVenster, LinkVenster, type BewerkActie } from "@/components/playable-loader-bewerken";
 import { buildBundle, preparePage, PageSourceError, type PageSource } from "@/lib/playable-loader/bundle";
+import {
+  dupliceerElement,
+  leesAttribuut,
+  leesBewerkKeuze,
+  leesKnopen,
+  leesPlek,
+  markeer,
+  mogelijkheden,
+  pasTekstToe,
+  scanTags,
+  verplaatsElement,
+  verwijderElement,
+  zetAchtergrond,
+  zetFoto,
+  zetLink,
+  type BewerkKeuze,
+  type Plek,
+} from "@/lib/playable-loader/bewerken";
 import { AANWIJZER_JS, leesAanwijzing, type Aanwijzing } from "@/lib/playable-loader/selectie";
 import { cn } from "@/lib/utils";
 
@@ -28,9 +49,17 @@ import { cn } from "@/lib/utils";
  * De hoogte volgt het scherm. "Groot scherm" legt het voorbeeld over de hele
  * pagina.
  *
- * Aanwijzen: in die stand tekent het voorbeeld een kader om wat onder de muis
- * zit, en een klik kiest dat onderdeel voor de volgende vraag aan Claude (zie
- * `lib/playable-loader/selectie.ts`).
+ * Twee standen om in het voorbeeld te klikken:
+ * - Aanwijzen: een klik kiest een onderdeel voor de volgende vraag aan Claude
+ *   (zie `lib/playable-loader/selectie.ts`).
+ * - Bewerken: een klik kiest een onderdeel en zet er een werkbalk bij om het
+ *   zelf aan te passen: tekst, foto, link, verplaatsen, dupliceren,
+ *   verwijderen (zie `lib/playable-loader/bewerken.ts`). In het voorbeeld
+ *   draagt elk element daarvoor zijn nummer uit de bron.
+ *
+ * Na een wijziging bouwt het voorbeeld opnieuw op; de scrollpositie en het
+ * gekozen onderdeel komen terug. Een getypte tekst staat al in het voorbeeld,
+ * dus dan bouwt het alleen opnieuw op als er elementen bij of af kwamen.
  */
 
 const PLAYABLE_BASE = "https://psv-eindhoven.campaign.playable.com/";
@@ -43,6 +72,7 @@ const RUIMTE_GROOT_SCHERM = 150;
 
 type Apparaat = "desktop" | "tablet" | "mobiel";
 type Breedte = number | "passend";
+type Stand = "uit" | "aanwijzen" | "bewerken";
 
 const APPARATEN: Record<
   Apparaat,
@@ -120,7 +150,11 @@ function inline(js: string): string {
 
 function voorbeeldDocument(bron: PageSource, fonts: string): { html: string; fout: string | null } {
   try {
-    const bundle = buildBundle(preparePage(bron), { campaignId: 0, publishedAt: "voorbeeld" });
+    // Elk element krijgt zijn nummer uit de bron, voor de bewerkstand. Alleen hier, niet op Bunny.
+    const bundle = buildBundle(preparePage({ ...bron, html: markeer(bron.html) }), {
+      campaignId: 0,
+      publishedAt: "voorbeeld",
+    });
     return {
       html: `<!doctype html><html lang="nl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -142,42 +176,88 @@ export interface PreviewHandle {
   wis: () => void;
 }
 
+type VensterStaat =
+  | { soort: "foto"; doel: number; fotoSoort: "img" | "achtergrond"; url: string; alt: string | null }
+  | { soort: "link"; doel: number; href: string; nieuwTabblad: boolean };
+
 export function PlayableLoaderPreview({
   bron,
+  campaignId,
   aanwijzing,
   onAanwijzing,
+  onBewerking,
+  onOngedaan,
+  kanOngedaan = false,
   ref,
 }: {
   bron: PageSource;
+  campaignId: number;
   aanwijzing: Aanwijzing | null;
   /** `klik`: de collega klikte zelf iets aan (geen herstel na een wijziging). */
   onAanwijzing: (aanwijzing: Aanwijzing | null, klik: boolean) => void;
+  /** Een eigen wijziging in de bewerkstand, met een korte omschrijving voor de chat. */
+  onBewerking: (bron: PageSource, omschrijving: string) => void;
+  onOngedaan?: () => void;
+  kanOngedaan?: boolean;
   ref?: Ref<PreviewHandle>;
 }) {
   const [fonts, setFonts] = useState("");
   const [apparaat, setApparaat] = useState<Apparaat>("desktop");
   const [breedte, setBreedte] = useState<Breedte>("passend");
   const [uitgesteld, setUitgesteld] = useState(bron);
+  const [versie, setVersie] = useState(0);
   const [kolom, setKolom] = useState(0);
   const [schermHoogte, setSchermHoogte] = useState(900);
-  const [aanwijzen, setAanwijzen] = useState(false);
+  const [stand, setStand] = useState<Stand>("uit");
   const [grootScherm, setGrootScherm] = useState(false);
+  const [keuze, setKeuze] = useState<BewerkKeuze | null>(null);
+  /** Apart van de keuze: verandert bij elke scrollbeweging. */
+  const [plek, setPlek] = useState<Plek | null>(null);
+  const [tekstBezig, setTekstBezig] = useState(false);
+  const [melding, setMelding] = useState<string | null>(null);
+  const [venster, setVenster] = useState<VensterStaat | null>(null);
   const kolomRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  /** De bron die het voorbeeld nu toont (ook na een getypte tekst zonder opnieuw opbouwen). */
+  const getoond = useRef(bron);
+  /** De bron na onze eigen laatste wijziging: dan blijft de keuze staan. */
+  const eigen = useRef<PageSource | null>(null);
+  /** Na een eigen wijziging meteen opnieuw opbouwen, niet pas na het typen. */
+  const meteen = useRef(false);
+  /** Het onderdeel dat na het opnieuw opbouwen weer gekozen wordt. */
+  const keuzeNummer = useRef<number | null>(null);
+  const scrollY = useRef(0);
+
   // De berichtenluisteraar staat er één keer; hij leest de laatste stand hier.
-  const laatste = useRef({ aanwijzen, aanwijzing, grootScherm, onAanwijzing });
+  const laatste = useRef({ stand, aanwijzing, grootScherm, onAanwijzing, onBewerking, bron });
   useEffect(() => {
-    laatste.current = { aanwijzen, aanwijzing, grootScherm, onAanwijzing };
+    laatste.current = { stand, aanwijzing, grootScherm, onAanwijzing, onBewerking, bron };
   });
 
   useEffect(() => {
-    fontCss().then(setFonts);
+    fontCss().then((f) => {
+      setUitgesteld(getoond.current);
+      setFonts(f);
+    });
   }, []);
 
   // Bij typen in de codevelden niet bij elke toets opnieuw opbouwen.
   useEffect(() => {
-    const t = setTimeout(() => setUitgesteld(bron), 400);
+    if (bron === getoond.current) return;
+    if (bron !== eigen.current) {
+      // Claude, ongedaan maken of de codevelden: de nummers kloppen dan niet meer.
+      keuzeNummer.current = null;
+      setKeuze(null);
+      setTekstBezig(false);
+    }
+    const wacht = meteen.current ? 0 : 400;
+    meteen.current = false;
+    const t = setTimeout(() => {
+      getoond.current = bron;
+      setUitgesteld(bron);
+      setVersie((v) => v + 1);
+    }, wacht);
     return () => clearTimeout(t);
   }, [bron]);
 
@@ -201,11 +281,43 @@ export function PlayableLoaderPreview({
     iframeRef.current?.contentWindow?.postMessage({ ...bericht, bron: "psvk-aanwijzer-ouder" }, "*");
   }, []);
 
-  /** Esc: eerst het grote scherm dicht, anders stoppen met aanwijzen. */
+  /** Esc: eerst het grote scherm dicht, anders de stand uit. */
   const escape = useCallback(() => {
     if (laatste.current.grootScherm) setGrootScherm(false);
-    else setAanwijzen(false);
+    else setStand("uit");
   }, []);
+
+  /** Herbouwt het voorbeeld uit de bron, als het niet meer klopt met wat er staat. */
+  const herlaad = useCallback(() => {
+    getoond.current = laatste.current.bron;
+    setUitgesteld(laatste.current.bron);
+    setVersie((v) => v + 1);
+  }, []);
+
+  /** Zet een eigen wijziging door naar de chat en het concept. */
+  const pasAan = useCallback(
+    (html: string, omschrijving: string, opties: { nummer: number | null; stil?: boolean }) => {
+      const nieuw = { ...laatste.current.bron, html };
+      eigen.current = nieuw;
+      keuzeNummer.current = opties.nummer;
+      if (opties.stil) {
+        getoond.current = nieuw;
+      } else {
+        // Tot het nieuwe voorbeeld er staat, kloppen de nummers in het oude niet meer.
+        meteen.current = true;
+        setKeuze(null);
+      }
+      setMelding(null);
+      laatste.current.onBewerking(nieuw, omschrijving);
+    },
+    []
+  );
+
+  const startTekst = useCallback(() => {
+    // Eerst het voorbeeld de focus geven: anders mag het de tekst niet selecteren.
+    iframeRef.current?.focus();
+    stuur({ actie: "tekst-start" });
+  }, [stuur]);
 
   useEffect(() => {
     function ontvang(e: MessageEvent) {
@@ -214,35 +326,79 @@ export function PlayableLoaderPreview({
       if (!d || d.bron !== "psvk-aanwijzer") return;
       const nu = laatste.current;
       if (d.type === "gereed") {
-        // Een nieuw voorbeeld (na een wijziging): stand en keuze terugzetten.
-        if (nu.aanwijzen) stuur({ actie: "aan" });
+        // Een nieuw voorbeeld (na een wijziging): stand, plek en keuzes terugzetten.
+        stuur({ actie: "stand", stand: nu.stand });
+        if (scrollY.current > 0) stuur({ actie: "scroll", y: scrollY.current });
         if (nu.aanwijzing) {
           const { wijzer, niveau, niveaus } = nu.aanwijzing;
           stuur({ actie: "herstel", wijzer, niveau, niveaus });
         }
+        if (nu.stand === "bewerken" && keuzeNummer.current !== null) {
+          stuur({ actie: "kies-nummer", nummer: keuzeNummer.current });
+        }
       } else if (d.type === "selectie") {
         // Op groot scherm is de chat niet te zien; dan geen focus erheen.
         nu.onAanwijzing(d.leeg ? null : leesAanwijzing(d), d.klik === true && !nu.grootScherm);
+      } else if (d.type === "bewerk-keuze") {
+        // Een late melding nadat de bewerkstand uit ging, telt niet.
+        if (nu.stand !== "bewerken") return;
+        const k = d.leeg ? null : leesBewerkKeuze(d);
+        keuzeNummer.current = k?.bron ?? null;
+        setKeuze(k);
+        setPlek(k?.plek ?? null);
+        setMelding(null);
+        if (k?.dubbel) {
+          const kan = mogelijkheden(nu.bron.html, k).tekst;
+          if (kan === null) startTekst();
+          else if (kan) setMelding(kan);
+        }
+      } else if (d.type === "plek") {
+        const p = leesPlek(d.plek);
+        if (p) setPlek(p);
+      } else if (d.type === "tekst-bezig") {
+        setTekstBezig(true);
+        setMelding(null);
+      } else if (d.type === "tekst-klaar") {
+        setTekstBezig(false);
+        if (d.geannuleerd) return;
+        const knopen = leesKnopen(d.knopen);
+        const nummer = typeof d.nummer === "number" ? d.nummer : null;
+        if (!knopen || nummer === null) return;
+        try {
+          const uit = pasTekstToe(nu.bron.html, nummer, knopen);
+          if (uit.veranderd) pasAan(uit.html, "Tekst aangepast in het voorbeeld.", { nummer, stil: uit.zelfdeOpbouw });
+        } catch (err) {
+          setMelding(err instanceof Error ? err.message : String(err));
+          herlaad();
+        }
+      } else if (d.type === "scroll") {
+        if (typeof d.y === "number" && Number.isFinite(d.y)) scrollY.current = d.y;
       } else if (d.type === "escape") {
         escape();
       }
     }
     window.addEventListener("message", ontvang);
     return () => window.removeEventListener("message", ontvang);
-  }, [stuur, escape]);
+  }, [stuur, escape, herlaad, pasAan, startTekst]);
 
   useEffect(() => {
-    stuur({ actie: aanwijzen ? "aan" : "uit" });
-  }, [aanwijzen, stuur]);
+    stuur({ actie: "stand", stand });
+    if (stand !== "bewerken") {
+      keuzeNummer.current = null;
+      setKeuze(null);
+      setTekstBezig(false);
+      setMelding(null);
+    }
+  }, [stand, stuur]);
 
   useEffect(() => {
-    if (!aanwijzen && !grootScherm) return;
+    if (stand === "uit" && !grootScherm) return;
     const toets = (e: KeyboardEvent) => {
       if (e.key === "Escape") escape();
     };
     window.addEventListener("keydown", toets);
     return () => window.removeEventListener("keydown", toets);
-  }, [aanwijzen, grootScherm, escape]);
+  }, [stand, grootScherm, escape]);
 
   useImperativeHandle(
     ref,
@@ -253,6 +409,91 @@ export function PlayableLoaderPreview({
     [stuur]
   );
 
+  const kan = useMemo(() => (keuze ? mogelijkheden(bron.html, keuze) : null), [bron.html, keuze]);
+
+  /** Voert een knop uit de werkbalk uit. */
+  function actie(soort: BewerkActie) {
+    if (!keuze || !kan) return;
+    setMelding(null);
+    try {
+      switch (soort) {
+        case "tekst":
+          startTekst();
+          return;
+        case "ouder":
+          stuur({ actie: "kies-ouder" });
+          return;
+        case "foto": {
+          if (!kan.foto || kan.foto.doel === null) return;
+          const tag = scanTags(bron.html)[kan.foto.doel];
+          setVenster({
+            soort: "foto",
+            doel: kan.foto.doel,
+            fotoSoort: kan.foto.soort,
+            url: kan.foto.url,
+            alt: kan.foto.soort === "img" && tag ? leesAttribuut(tag, "alt") : null,
+          });
+          return;
+        }
+        case "link": {
+          if (!kan.link || kan.link.doel === null) return;
+          const tag = scanTags(bron.html)[kan.link.doel];
+          setVenster({
+            soort: "link",
+            doel: kan.link.doel,
+            href: (tag && leesAttribuut(tag, "href")) ?? keuze.link?.href ?? "",
+            nieuwTabblad: !!tag && leesAttribuut(tag, "target") === "_blank",
+          });
+          return;
+        }
+        case "omhoog":
+        case "omlaag": {
+          const uit = verplaatsElement(bron.html, keuze.bron, soort === "omhoog" ? -1 : 1);
+          pasAan(uit.html, `${keuze.naam} ${soort} verplaatst in het voorbeeld.`, { nummer: uit.nieuweId });
+          return;
+        }
+        case "dupliceren": {
+          const uit = dupliceerElement(bron.html, keuze.bron);
+          pasAan(uit.html, `${keuze.naam} gedupliceerd in het voorbeeld.`, { nummer: uit.nieuweId });
+          return;
+        }
+        case "verwijderen":
+          pasAan(verwijderElement(bron.html, keuze.bron), `${keuze.naam} verwijderd uit het voorbeeld.`, { nummer: null });
+          return;
+      }
+    } catch (err) {
+      setMelding(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function kiesFoto(src: string, alt?: string) {
+    if (venster?.soort !== "foto") return;
+    try {
+      const html =
+        venster.fotoSoort === "img"
+          ? zetFoto(bron.html, venster.doel, src, alt)
+          : zetAchtergrond(bron.html, venster.doel, src);
+      pasAan(html, venster.fotoSoort === "img" ? "Andere foto gekozen in het voorbeeld." : "Andere achtergrond gekozen in het voorbeeld.", {
+        nummer: keuzeNummer.current,
+      });
+    } catch (err) {
+      setMelding(err instanceof Error ? err.message : String(err));
+    }
+    setVenster(null);
+  }
+
+  function kiesLink(href: string, nieuwTabblad: boolean) {
+    if (venster?.soort !== "link") return;
+    try {
+      pasAan(zetLink(bron.html, venster.doel, href, nieuwTabblad), `Link aangepast in het voorbeeld: ${href}`, {
+        nummer: keuzeNummer.current,
+      });
+    } catch (err) {
+      setMelding(err instanceof Error ? err.message : String(err));
+    }
+    setVenster(null);
+  }
+
   const doc = useMemo(() => voorbeeldDocument(uitgesteld, fonts), [uitgesteld, fonts]);
   const echteBreedte = breedte === "passend" ? Math.max(320, Math.floor(kolom || 1280)) : breedte;
   const schaal = kolom > 0 ? Math.min(1, kolom / echteBreedte) : 1;
@@ -260,11 +501,25 @@ export function PlayableLoaderPreview({
     MIN_HOOGTE,
     Math.min(grootScherm ? Infinity : MAX_HOOGTE, schermHoogte - (grootScherm ? RUIMTE_GROOT_SCHERM : RUIMTE_NAAST_CHAT))
   );
+  const zichtbareBreedte = Math.min(kolom || echteBreedte, echteBreedte * schaal);
 
   function kiesApparaat(a: Apparaat) {
     setApparaat(a);
     setBreedte(APPARATEN[a].standaard);
   }
+
+  const hint =
+    stand === "aanwijzen"
+      ? grootScherm
+        ? "Klik een onderdeel aan; je stelt je vraag na Terug. Esc stopt."
+        : "Klik het onderdeel aan waar je vraag over gaat. Links doen nu niets; Esc stopt."
+      : stand === "bewerken"
+        ? tekstBezig
+          ? "Typ de nieuwe tekst. Enter bewaart, Esc annuleert, Shift+Enter is een nieuwe regel."
+          : keuze
+            ? null
+            : "Klik een onderdeel aan om het zelf aan te passen; dubbelklik op een tekst om hem meteen te typen. Esc stopt."
+        : null;
 
   return (
     <div
@@ -282,14 +537,38 @@ export function PlayableLoaderPreview({
           <Button
             type="button"
             size="sm"
-            variant={aanwijzen ? "default" : "outline"}
-            onClick={() => setAanwijzen(!aanwijzen)}
-            aria-pressed={aanwijzen}
+            variant={stand === "aanwijzen" ? "default" : "outline"}
+            onClick={() => setStand(stand === "aanwijzen" ? "uit" : "aanwijzen")}
+            aria-pressed={stand === "aanwijzen"}
             title="Klik een onderdeel aan in het voorbeeld; Claude krijgt het mee bij je volgende vraag"
           >
             <MousePointerClick />
             Aanwijzen
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={stand === "bewerken" ? "default" : "outline"}
+            onClick={() => setStand(stand === "bewerken" ? "uit" : "bewerken")}
+            aria-pressed={stand === "bewerken"}
+            title="Zelf een tekst, foto of link aanpassen, of een onderdeel verplaatsen, dupliceren of weghalen"
+          >
+            <Pencil />
+            Bewerken
+          </Button>
+          {stand === "bewerken" && onOngedaan && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onOngedaan}
+              disabled={!kanOngedaan || tekstBezig}
+              title="De laatste wijziging terugdraaien"
+            >
+              <Undo2 />
+              <span className="sr-only">Ongedaan maken</span>
+            </Button>
+          )}
           <div className="flex gap-1" role="group" aria-label="Soort scherm">
             {(Object.keys(APPARATEN) as Apparaat[]).map((a) => {
               const { label, icon: Icon } = APPARATEN[a];
@@ -350,7 +629,6 @@ export function PlayableLoaderPreview({
         </span>
       </div>
 
-
       <div ref={kolomRef}>
         {doc.fout ? (
           <div className="alert alert--error !mb-0">{doc.fout}</div>
@@ -358,22 +636,43 @@ export function PlayableLoaderPreview({
           <div
             className={cn(
               "relative mx-auto overflow-hidden border bg-muted",
-              aanwijzen ? "border-primary ring-2 ring-primary/30" : "border-border"
+              stand !== "uit" ? "border-primary ring-2 ring-primary/30" : "border-border"
             )}
-            style={{ width: Math.min(kolom || echteBreedte, echteBreedte * schaal), height: hoogte }}
+            style={{ width: zichtbareBreedte, height: hoogte }}
           >
             {/* Zwevend, zodat het voorbeeld niet van hoogte verandert. */}
-            {aanwijzen && (
+            {hint && (
               <p
                 className="pointer-events-none absolute bottom-3 left-1/2 z-10 w-max max-w-[calc(100%_-_1.5rem)] -translate-x-1/2 border-l-4 border-primary bg-psv-neutralDark/90 px-3 py-1.5 text-xs text-white shadow-card"
                 role="status"
               >
-                {grootScherm
-                  ? "Klik een onderdeel aan; je stelt je vraag na Terug. Esc stopt."
-                  : "Klik het onderdeel aan waar je vraag over gaat. Links doen nu niets; Esc stopt."}
+                {hint}
               </p>
             )}
+            {stand === "bewerken" && keuze && kan && plek && (
+              <BewerkBalk
+                keuze={keuze}
+                plek={plek}
+                kan={kan}
+                schaal={schaal}
+                breedte={zichtbareBreedte}
+                hoogte={hoogte}
+                tekstBezig={tekstBezig}
+                melding={melding}
+                onActie={actie}
+                onMelding={setMelding}
+                onTekstStop={(bewaar) => stuur({ actie: "tekst-stop", bewaar })}
+                onTekstWacht={() => stuur({ actie: "tekst-wacht" })}
+                onSluit={() => {
+                  stuur({ actie: "bewerk-wis" });
+                  keuzeNummer.current = null;
+                  setKeuze(null);
+                  setMelding(null);
+                }}
+              />
+            )}
             <iframe
+              key={versie}
               ref={iframeRef}
               title="Voorbeeld van de pagina"
               sandbox="allow-scripts allow-popups"
@@ -389,11 +688,35 @@ export function PlayableLoaderPreview({
           </div>
         )}
       </div>
+      {melding && !(stand === "bewerken" && keuze) && (
+        <p className="form-error !mt-0" role="status">
+          {melding}
+        </p>
+      )}
       {!grootScherm && (
         <p className="form-hint !mt-0">
           Lijkt op de echte pagina, maar zonder de opmaak van Playable zelf. Kijk na het publiceren altijd even op
           de demo.
         </p>
+      )}
+
+      {venster?.soort === "foto" && (
+        <FotoVenster
+          campaignId={campaignId}
+          huidig={venster.url}
+          soort={venster.fotoSoort}
+          alt={venster.alt}
+          onSluit={() => setVenster(null)}
+          onKies={kiesFoto}
+        />
+      )}
+      {venster?.soort === "link" && (
+        <LinkVenster
+          href={venster.href}
+          nieuwTabblad={venster.nieuwTabblad}
+          onSluit={() => setVenster(null)}
+          onKies={kiesLink}
+        />
       )}
     </div>
   );

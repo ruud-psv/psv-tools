@@ -1,3 +1,4 @@
+import { PAGES_MAP } from "./bunny";
 import { FRAMEWORK_CSS, FRAMEWORK_JS, KIT_VERSIE } from "./kit";
 
 /**
@@ -233,7 +234,7 @@ export function loaderFields(campaignId: number, bundleUrl: string): PageSource 
 
 /** Het pad op Bunny, binnen de map `playable` waar ook de achtergronden staan. */
 export function bundlePath(campaignId: number): string {
-  return `playable/pages/${campaignId}/page.js`;
+  return `${PAGES_MAP}/${campaignId}/page.js`;
 }
 
 export function parseCampaignId(raw: unknown): number | null {
