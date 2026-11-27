@@ -17,6 +17,30 @@ import { FRAMEWORK_CSS, FRAMEWORK_JS, KIT_VERSIE } from "./kit";
 /** Het element in Playable waar de pagina in komt. */
 export const MOUNT_ID = "psvk-mount";
 
+/**
+ * Meer html-blokken. Staat er in Playable iets tussen de pagina, zoals een
+ * formulier, dan is de pagina daar verdeeld over meer html-elementen. In PSV
+ * Tools is het één HTML, met deze scheiding tussen de blokken. Blok 1 komt in
+ * `#psvk-mount`, blok 2 in `#psvk-mount-2`, enzovoort. CSS en JavaScript
+ * zijn er één keer, voor alle blokken samen.
+ */
+export const DEEL_SCHEIDING = "<!-- psvk-deel -->";
+const DEEL_RE = /<!--\s*psvk-deel\b[\s\S]*?-->/gi;
+
+/** De html-blokken van de pagina, van boven naar beneden. Altijd minstens één. */
+export function splitsDelen(html: string): string[] {
+  return html.split(DEEL_RE).map((d) => d.trim());
+}
+
+export function voegDelenSamen(delen: string[]): string {
+  return delen.map((d) => d.trim()).join(`\n\n${DEEL_SCHEIDING}\n\n`);
+}
+
+/** Het element in Playable voor blok `i` (vanaf 0). */
+export function mountId(i: number): string {
+  return i === 0 ? MOUNT_ID : `${MOUNT_ID}-${i + 1}`;
+}
+
 /** Ruim boven een echte pagina (de kit zelf is zo'n 40.000 tekens), maar niet onbeperkt. */
 export const MAX_FIELD_CHARS = 400_000;
 
@@ -35,7 +59,8 @@ export type KitMatch = "eigen" | "andere-versie" | "geen";
 
 export function splitKit(code: string, framework: string): { rest: string; kit: KitMatch } {
   const kit = framework.trim();
-  if (code.includes(kit)) return { rest: code.replace(kit, "").trim(), kit: "eigen" };
+  // Elke kopie eruit: bij meer html-elementen in Playable stond de Kit er soms in elk.
+  if (code.includes(kit)) return { rest: code.split(kit).join("").trim(), kit: "eigen" };
   if (/PSV CAMPAIGN KIT/i.test(code)) return { rest: code.trim(), kit: "andere-versie" };
   return { rest: code.trim(), kit: "geen" };
 }
@@ -55,6 +80,8 @@ export function zonderKit(bron: PageSource): PageSource {
 
 export interface PreparedPage {
   html: string;
+  /** De html-blokken, elk voor een eigen element in Playable. */
+  delen: string[];
   /** Alle CSS: de kit plus de pagina-eigen CSS. */
   css: string;
   /** De kit-JS, of leeg als de geplakte JS zelf een andere versie van de kit bevat. */
@@ -94,6 +121,10 @@ export function preparePage(source: PageSource): PreparedPage {
   if (!/id\s*=\s*["']?psvk-app\b/.test(html)) {
     warnings.push("De HTML heeft geen element met id=\"psvk-app\". Daar zoekt de kit naar; zonder doet de kit niets.");
   }
+  const delen = splitsDelen(html);
+  delen.forEach((deel, i) => {
+    if (!deel) warnings.push(`Html-blok ${i + 1} is leeg.`);
+  });
 
   const css = splitKit(source.css, FRAMEWORK_CSS);
   const fullCss =
@@ -112,7 +143,7 @@ export function preparePage(source: PageSource): PreparedPage {
   }
 
   checkSyntax(js.rest, "De JavaScript");
-  return { html, css: fullCss, kitJs, pageJs: js.rest, warnings };
+  return { html, delen, css: fullCss, kitJs, pageJs: js.rest, warnings };
 }
 
 export interface BundleMeta {
@@ -121,11 +152,18 @@ export interface BundleMeta {
 }
 
 /**
- * De bundel. Hij wacht op `#psvk-mount`, zet de CSS in de `<head>` en de HTML
- * in de mount, voert de pagina-JS één keer uit (die luistert naar
- * `psvk:ready`) en start de kit. Bouwt Playable de pagina opnieuw op en is
- * de inhoud weg, dan zet hij hem terug en start de kit opnieuw, zodat
- * filters, uitklappers en tellers blijven werken.
+ * De bundel. Hij wacht op `#psvk-mount` (en `#psvk-mount-2` enzovoort bij meer
+ * html-blokken), zet de CSS in de `<head>` en elk blok in zijn eigen mount,
+ * voert de pagina-JS één keer uit (die luistert naar `psvk:ready`) en start
+ * de kit. Bouwt Playable de pagina opnieuw op en is de inhoud weg, dan zet hij
+ * hem terug en start de kit opnieuw, zodat filters, uitklappers en tellers
+ * blijven werken.
+ *
+ * De kit start op het eerste `#psvk-app` van de pagina. Heeft elk blok een
+ * eigen `#psvk-app`, dan start de bundel de kit voor elk blok apart: de
+ * andere heten heel even anders, zodat de kit dit blok vindt. Zo werken ook
+ * de uitklappers onder een formulier. `psvk:ready` komt dan per blok, met dat
+ * blok in `e.detail.root`.
  *
  * Geen `'use strict'` om de pagina-JS heen: die is geschreven voor het
  * JS-veld van Playable en hoeft daar niet aan te voldoen.
@@ -156,7 +194,7 @@ function rawBundle(page: PreparedPage, meta: BundleMeta): string {
   var MOUNT_ID = ${JSON.stringify(MOUNT_ID)};
   var STIJL_ID = "psvk-bundel-stijl";
   var CSS = ${JSON.stringify(page.css)};
-  var HTML = ${JSON.stringify(page.html)};
+  var DELEN = ${JSON.stringify(page.delen)};
 
   function paginaJs() {
 ${page.pageJs}
@@ -168,6 +206,10 @@ ${page.kitJs}
 
   var paginaGestart = false;
 
+  function mountId(i) {
+    return i === 0 ? MOUNT_ID : MOUNT_ID + "-" + (i + 1);
+  }
+
   function zetStijl() {
     if (document.getElementById(STIJL_ID)) return;
     var stijl = document.createElement("style");
@@ -176,18 +218,35 @@ ${page.kitJs}
     (document.head || document.documentElement).appendChild(stijl);
   }
 
+  function startKit() {
+    var wortels = Array.prototype.slice.call(document.querySelectorAll('[id="psvk-app"]'));
+    wortels.forEach(function (wortel) {
+      if (wortel.__psvkGestart || !wortel.closest("[data-psvk-bundel]")) return;
+      wortel.__psvkGestart = true;
+      var anderen = wortels.filter(function (w) { return w !== wortel; });
+      anderen.forEach(function (w) { w.id = "psvk-app-wacht"; });
+      try { kit(); } catch (e) { console.error("[psvk] kit", e); }
+      anderen.forEach(function (w) { w.id = "psvk-app"; });
+    });
+  }
+
   function plaats() {
-    var mount = document.getElementById(MOUNT_ID);
-    if (!mount) return;
-    zetStijl();
-    if (mount.querySelector("[data-psvk-bundel]")) return;
-    mount.innerHTML = '<div data-psvk-bundel="${meta.campaignId}">' + HTML + "</div>";
-    mount.setAttribute("data-psvk-geladen", "");
+    var nieuw = false;
+    for (var i = 0; i < DELEN.length; i++) {
+      var mount = document.getElementById(mountId(i));
+      if (!mount) continue;
+      zetStijl();
+      if (mount.querySelector("[data-psvk-bundel]")) continue;
+      mount.innerHTML = '<div data-psvk-bundel="${meta.campaignId}" data-psvk-deel="' + (i + 1) + '">' + DELEN[i] + "</div>";
+      mount.setAttribute("data-psvk-geladen", "");
+      nieuw = true;
+    }
+    if (!nieuw) return;
     if (!paginaGestart) {
       paginaGestart = true;
       try { paginaJs(); } catch (e) { console.error("[psvk] pagina-JavaScript", e); }
     }
-    try { kit(); } catch (e) { console.error("[psvk] kit", e); }
+    startKit();
   }
 
   var gepland = false;
@@ -212,6 +271,11 @@ ${page.kitJs}
  * oude versie bewaart. Bunny negeert de `?v=`; daar leegt PSV Tools de cache na
  * elke publicatie (`purgeBundle`).
  */
+/** Wat er in het html-element van blok `i` (vanaf 1) komt: alleen de plek voor dat blok. */
+export function mountHtml(i: number): string {
+  return `<div id="${mountId(i)}"></div>`;
+}
+
 export function loaderFields(campaignId: number, bundleUrl: string): PageSource {
   return {
     html: `<div id="${MOUNT_ID}"></div>`,

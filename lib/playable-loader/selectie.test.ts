@@ -19,6 +19,7 @@ const AANWIJZING = {
   niveaus: ["section.psvk-section.psvk-red", "div.psvk-wrap", "h1.psvk-hero-title"],
   niveau: 2,
   wijzer: [1, 0, 0],
+  deel: 0,
 };
 
 test("leesSelectie: alleen pad, tekst en html, ingekort", () => {
@@ -43,6 +44,9 @@ test("leesSelectie: niets bruikbaars geeft null", () => {
 test("leesAanwijzing: niveaus, niveau en wijzer moeten kloppen", () => {
   assert.deepEqual(leesAanwijzing(AANWIJZING), AANWIJZING);
   assert.deepEqual(leesAanwijzing({ ...AANWIJZING, niveau: 0 })?.niveau, 0);
+  assert.equal(leesAanwijzing({ ...AANWIJZING, deel: 1 })?.deel, 1);
+  assert.equal(leesAanwijzing({ ...AANWIJZING, deel: undefined })?.deel, 0, "oude meldingen: blok 1");
+  assert.equal(leesAanwijzing({ ...AANWIJZING, deel: -2 })?.deel, 0);
   assert.equal(leesAanwijzing({ ...AANWIJZING, niveau: 3 }), null);
   assert.equal(leesAanwijzing({ ...AANWIJZING, niveau: -1 }), null);
   assert.equal(leesAanwijzing({ ...AANWIJZING, wijzer: [1, 0] }), null);

@@ -30,6 +30,42 @@ die, dan publiceert PSV Tools wel maar meldt het dat de cache niet is geleegd;
 leeg hem dan in Bunny bij de pull zone onder Purge, met het adres van
 `page.js`.
 
+## Meer html-blokken, bijvoorbeeld met een formulier ertussen
+
+Staat er in Playable iets van Playable zelf tussen de pagina, zoals een
+formulier, dan is de pagina daar verdeeld over meer html-elementen (boven en
+onder het formulier). In PSV Tools is dat één HTML met **html-blokken**,
+gescheiden door `<!-- psvk-deel -->`. In de stap Code heeft elk blok een eigen
+veld, met **Html-blok toevoegen**; CSS en JavaScript zijn er één keer, voor
+alle blokken samen.
+
+- Blok 1 komt in `#psvk-mount` (het eerste html-element, met het script dat
+  de bundel laadt), blok 2 in `#psvk-mount-2`, enzovoort. In de andere
+  html-elementen staat alleen die ene `div`; hun CSS- en JS-veld zijn leeg.
+  Onder **Eenmalig in Playable** staat per html-element wat erin moet.
+- Laadt Playable een blok later, of bouwt het een blok opnieuw op, dan zet de
+  bundel het (terug) zodra de `div` er is.
+- De Kit start op het eerste `#psvk-app` van de pagina. Heeft elk blok een
+  eigen `#psvk-app`, dan start de bundel de Kit voor elk blok apart (de andere
+  heten daarvoor heel even anders). Zo werken ook de uitklappers onder het
+  formulier. `psvk:ready` komt dan per blok, met dat blok in `e.detail.root`.
+- Stond de Kit in Playable in de JS of CSS van elk html-element, dan haalt
+  PSV Tools elke kopie eruit en zet hem er één keer bij.
+- Het voorbeeld toont de blokken onder elkaar, met een grijs vak waar in
+  Playable het formulier staat. Aanwijzen en Bewerken werken in elk blok;
+  Claude krijgt bij een aangewezen onderdeel "html-blok 2" mee en laat de
+  scheidingen staan.
+
+Een pagina met een formulier toevoegen, zoals 243381:
+
+1. Maak op Bunny de map `playable/pages/<campagne-ID>` aan en open de
+   campagne in PSV Tools (Vernieuwen in de eerste stap).
+2. Stap Code: plak het bovenste html-element in html-blok 1, klik op
+   **Html-blok toevoegen** en plak het onderste in html-blok 2. De CSS en JS
+   van beide elementen onder elkaar in CSS en JavaScript. Publiceer.
+3. Zet in Playable per html-element de code van **Eenmalig in Playable**, en
+   laat het formulier ertussen staan. Kijk op de demo.
+
 ## Stappen
 
 De pagina werkt in vier stappen, naar het voorbeeld van een flow in Maileon.

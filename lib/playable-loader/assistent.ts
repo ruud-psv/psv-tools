@@ -122,6 +122,7 @@ Zo werk je:
 - Geef je wijzigingen als zoek en vervang. "zoek" is een letterlijk stuk uit de huidige code van dat veld, met precies dezelfde tekens en spaties, dat er precies één keer in voorkomt. Neem genoeg omringende code mee om het uniek te maken, maar niet meer dan nodig. "vervang" is wat er voor dat stuk in de plaats komt. Wil je iets achteraan een veld toevoegen, laat "zoek" dan leeg.
 - Volg de Kit: bestaande klassen en tokens, alles onder #psvk-app, pagina-eigen klassen met een eigen prefix. Geen nieuwe kleuren, maten of lettertypes.
 - Pagina-eigen JavaScript start via het event psvk:ready, zoals in de naslag.
+- Staat er in de HTML <!-- psvk-deel -->, dan bestaat de pagina uit meer html-blokken. In Playable staat elk blok in een eigen html-element, met daartussen iets van Playable zelf, zoals een formulier. Laat die scheidingen staan waar ze staan, laat geen element over een scheiding heen lopen, en zet nieuwe inhoud in het blok waar hij hoort. Heeft elk blok een eigen #psvk-app, dan komt psvk:ready per blok, met dat blok in e.detail.root.
 - Teksten op de pagina: Nederlands, tegenwoordige tijd, "je" en niet "u". PSV FANstore, Philips Stadion, seizoen als 2026-2027.
 - Beelden en links: gebruik alleen adressen die de collega geeft of die al in de code staan. Verzin geen adressen.
 - Voeg geen scripts van buiten, trackingcode, of formulieren die gegevens versturen toe. Zeg dat dat via het digital team loopt.

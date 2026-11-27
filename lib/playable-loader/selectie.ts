@@ -30,6 +30,8 @@ export interface Aanwijzing extends Selectie {
   niveau: number;
   /** Index van het kind per niveau, om het element na een herlading terug te vinden. */
   wijzer: number[];
+  /** In welk html-blok het staat (vanaf 0), bij een pagina in meer blokken. */
+  deel: number;
 }
 
 export const MAX_PAD = 600;
@@ -61,7 +63,8 @@ export function leesAanwijzing(raw: unknown): Aanwijzing | null {
   if (!Array.isArray(niveaus) || !niveaus.every((n) => typeof n === "string")) return null;
   if (!Array.isArray(wijzer) || !wijzer.every(isIndex) || wijzer.length !== niveaus.length) return null;
   if (!isIndex(niveau) || niveau >= niveaus.length) return null;
-  return { ...selectie, niveaus: niveaus as string[], niveau, wijzer: wijzer as number[] };
+  const deel = (raw as Record<string, unknown>).deel;
+  return { ...selectie, niveaus: niveaus as string[], niveau, wijzer: wijzer as number[], deel: isIndex(deel) ? deel : 0 };
 }
 
 /** Het blok dat bij de vraag aan Claude komt. */
@@ -126,8 +129,26 @@ export const AANWIJZER_JS = `(function () {
   var laatstePlek = "";
   var laag, vakGekozen, vakZweef, label, stijl;
 
-  function wortel() {
-    return document.getElementById("psvk-app") || document.querySelector("[data-psvk-bundel]") || document.body;
+  // De pagina kan uit meer html-blokken bestaan (bijvoorbeeld boven en onder een
+  // formulier van Playable). Elk blok heeft een eigen wortel: het #psvk-app erin,
+  // of anders het blok zelf.
+  function wortels() {
+    var blokken = document.querySelectorAll("[data-psvk-bundel]");
+    var uit = [];
+    for (var i = 0; i < blokken.length; i++) uit.push(blokken[i].querySelector('[id="psvk-app"]') || blokken[i]);
+    if (!uit.length) uit.push(document.getElementById("psvk-app") || document.body);
+    return uit;
+  }
+
+  function wortelVan(el) {
+    var lijst = wortels();
+    for (var i = 0; i < lijst.length; i++) if (lijst[i].contains(el)) return lijst[i];
+    return null;
+  }
+
+  /** Het hoeveelste blok (vanaf 0) waar het element in staat. */
+  function deelVan(el) {
+    return Math.max(0, wortels().indexOf(wortelVan(el)));
   }
 
   function post(data) {
@@ -175,8 +196,8 @@ export const AANWIJZER_JS = `(function () {
   function geldig(el) {
     if (!el || el.nodeType !== 1) return null;
     if (laag && laag.contains(el)) return null;
-    var top = wortel();
-    if (!top || el === top || !top.contains(el)) return null;
+    var top = wortelVan(el);
+    if (!top || el === top) return null;
     return el;
   }
 
@@ -187,7 +208,7 @@ export const AANWIJZER_JS = `(function () {
 
   /** Het dichtstbijzijnde element uit de bron; wat de JavaScript zelf maakt, telt niet. */
   function metBron(el) {
-    var top = wortel();
+    var top = wortelVan(el);
     for (var n = geldig(el); n && n !== top && n.nodeType === 1; n = n.parentElement) {
       if (bronVan(n) !== null) return n;
     }
@@ -200,9 +221,9 @@ export const AANWIJZER_JS = `(function () {
 
   /** Het element en zijn voorouders tot aan de wortel, van buiten naar binnen. */
   function keten(el) {
-    var top = wortel();
+    var top = el ? wortelVan(el) : null;
     var lijst = [];
-    if (!el || !top || !top.contains(el)) return lijst;
+    if (!top) return lijst;
     for (var n = el; n && n !== top && n.nodeType === 1; n = n.parentElement) lijst.unshift(n);
     return lijst;
   }
@@ -213,13 +234,14 @@ export const AANWIJZER_JS = `(function () {
     });
   }
 
-  function volg(wijzer) {
-    var n = wortel();
+  function volg(wijzer, deel) {
+    var top = wortels()[deel || 0];
+    var n = top;
     for (var i = 0; i < wijzer.length; i++) {
       if (!n || !n.children[wijzer[i]]) return null;
       n = n.children[wijzer[i]];
     }
-    return n === wortel() ? null : n;
+    return n === top ? null : n;
   }
 
   /** "(nummer 2 van 4)" als er meer van hetzelfde naast staan. */
@@ -277,15 +299,17 @@ export const AANWIJZER_JS = `(function () {
     var heleKeten = keten(bodem && bodem.isConnected ? bodem : gekozen);
     var niveau = heleKeten.indexOf(gekozen);
     if (niveau === -1) { heleKeten = pad; niveau = pad.length - 1; }
+    var deel = deelVan(gekozen);
     post({
       type: "selectie",
-      pad: pad.map(naam).join(" > ") + positie(gekozen),
+      pad: (wortels().length > 1 ? "html-blok " + (deel + 1) + " > " : "") + pad.map(naam).join(" > ") + positie(gekozen),
       tekst: (gekozen.textContent || "").replace(/\\s+/g, " ").trim().slice(0, ${MAX_TEKST}),
       // Zonder de nummers van de bewerkstand: die zegt Claude niets.
       html: (gekozen.outerHTML || "").replace(/ ${BRON_ATTR}="\\d+"/g, "").slice(0, ${MAX_SELECTIE_HTML}),
       niveaus: heleKeten.map(naam),
       niveau: niveau,
       wijzer: wijzerVan(heleKeten),
+      deel: deel,
       klik: !!klik
     });
   }
@@ -321,7 +345,7 @@ export const AANWIJZER_JS = `(function () {
 
   function linkVan(el) {
     var a = el.closest ? el.closest("a[href]") : null;
-    return a && a !== wortel() && wortel().contains(a) ? a : null;
+    return geldig(a);
   }
 
   function meldPlek() {
@@ -571,7 +595,7 @@ export const AANWIJZER_JS = `(function () {
       // Na een wijziging staat er een nieuwe pagina. Zelfde plek en dezelfde
       // soorten elementen onderweg: dan is het hetzelfde onderdeel. Anders
       // niets kiezen, liever dan het verkeerde.
-      var terug = keten(volg(d.wijzer || []));
+      var terug = keten(volg(d.wijzer || [], d.deel));
       var tags = (d.niveaus || []).map(function (n) { return String(n).split(/[.#]/)[0]; });
       var klopt = terug.length > 0 && terug.length === tags.length && terug.every(function (n, i) {
         return n.tagName.toLowerCase() === tags[i];
@@ -581,8 +605,8 @@ export const AANWIJZER_JS = `(function () {
       teken();
       meld();
     } else if (d.actie === "kies-nummer") {
-      var el = typeof d.nummer === "number" ? wortel().querySelector("[" + BRON + '="' + d.nummer + '"]') : null;
-      kiesBewerk(el && el !== wortel() ? el : null, false);
+      var el = typeof d.nummer === "number" ? document.querySelector("[data-psvk-bundel] [" + BRON + '="' + d.nummer + '"]') : null;
+      kiesBewerk(geldig(el), false);
     } else if (d.actie === "kies-ouder") {
       if (keuze) kiesBewerk(metBron(keuze.parentElement), false);
     } else if (d.actie === "bewerk-wis") {
